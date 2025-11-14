@@ -136,7 +136,7 @@ export default function CheckoutPage() {
             </div>
 
             <div className="flex items-center justify-center gap-4 mt-6 text-xs text-tis-text-muted">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" alt="Stripe" className="h-6 opacity-50" />
+              <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDI0IDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNCIgaGVpZ2h0PSI4IiBmaWxsPSJjdXJyZW50Q29sb3IiIG9wYWNpdHk9IjAuNSIvPgo8L3N2Zz4=" alt="Stripe" className="h-6 opacity-50" />
               <span>·</span>
               <span>Visa</span>
               <span>·</span>
