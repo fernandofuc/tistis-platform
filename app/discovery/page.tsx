@@ -1,20 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-  // eslint-disable-next-line react-hooks/exhaustive-deps
 import { useRouter } from 'next/navigation';
 import { Message, QuestionnaireAnswers, AIAnalysis } from '@/types';
 import ChatInterface from '@/components/chat/ChatInterface';
 import QuestionnaireForm from '@/components/questionnaire/QuestionnaireForm';
+import Container from '@/components/layout/Container';
 
 export default function DiscoveryPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswers>({});
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [currentStep, setCurrentStep] = useState<'chat' | 'form'>('chat');
 
-  // Definir sendMessageToAI con useCallback para evitar recrearla en cada render
+  // Definir sendMessageToAI con useCallback
   const sendMessageToAI = useCallback(async (conversationHistory: Message[]) => {
     setIsLoading(true);
 
@@ -67,8 +67,8 @@ export default function DiscoveryPage() {
   }, []);
 
   // Cargar mensaje inicial de la landing page
-  useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
     const initialMessage = sessionStorage.getItem('initial_message');
     if (initialMessage) {
       // Agregar mensaje del usuario
@@ -113,39 +113,55 @@ export default function DiscoveryPage() {
     await sendMessageToAI(updatedMessages);
   };
 
-  const handleAnswersChange = (answers: QuestionnaireAnswers) => {
-    setQuestionnaireAnswers(answers);
-  };
-
-  const handleProposalGenerated = (proposal: AIAnalysis) => {
-    setAiAnalysis(proposal);
-    // Guardar propuesta en sessionStorage
-    sessionStorage.setItem('proposal', JSON.stringify(proposal));
-    // Redirigir a página de propuesta
+  const handleQuestionnaireComplete = (answers: QuestionnaireAnswers) => {
+    // Guardar respuestas en sessionStorage
+    sessionStorage.setItem('questionnaire_answers', JSON.stringify(answers));
+    
+    // Redirigir a propuesta
     router.push('/proposal');
   };
 
+  if (aiAnalysis) {
+    return (
+      <div className="min-h-screen bg-tis-bg-primary py-12">
+        <Container>
+          <div className="text-center">
+            <h1 className="text-4xl font-bold mb-4">Análisis Completado</h1>
+            <p className="text-tis-text-secondary mb-8">
+              Redirigiendo a tu propuesta personalizada...
+            </p>
+          </div>
+        </Container>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-tis-bg-primary py-12">
-      {!aiAnalysis ? (
-        <>
-          <ChatInterface 
-            messages={messages} 
-            isLoading={isLoading}
-            onSendMessage={handleSendMessage}
-          />
+      <Container>
+        {currentStep === 'chat' ? (
+          <>
+            <ChatInterface 
+              messages={messages} 
+              isLoading={isLoading}
+              onSendMessage={handleSendMessage}
+            />
+            <div className="text-center mt-8">
+              <button
+                onClick={() => setCurrentStep('form')}
+                className="px-6 py-3 bg-tis-coral text-white rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Continuar al Cuestionario
+              </button>
+            </div>
+          </>
+        ) : (
           <QuestionnaireForm
-            onAnswersChange={handleAnswersChange}
-            onProposalGenerated={handleProposalGenerated}
-            answersCount={Object.keys(questionnaireAnswers).length}
+            onComplete={handleQuestionnaireComplete}
+            disabled={isLoading}
           />
-        </>
-      ) : (
-        <div className="text-center">
-          <h1>Propuesta generada</h1>
-          <p>Redirigiendo...</p>
-        </div>
-      )}
+        )}
+      </Container>
     </div>
   );
 }
