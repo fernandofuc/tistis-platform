@@ -17,13 +17,19 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-lovable flex items-center justify-center p-4">
-      <div className="max-w-3xl w-full text-center">
-        <h1 className="text-5xl md:text-6xl font-bold mb-6 text-tis-text-primary">
-          Implementa un <span className="text-transparent bg-clip-text bg-gradient-primary">cerebro</span> a tu negocio
+      <div className="max-w-4xl w-full text-center">
+        {/* Tagline con emoji */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm mb-8">
+          <span className="text-2xl">🧠</span>
+          <span className="text-sm font-medium text-gray-700">El cerebro digital que tu negocio necesita</span>
+        </div>
+
+        <h1 className="text-5xl lg:text-6xl font-bold leading-tight mb-6">
+          Implementa el mejor <span className="text-[#7C5CFC]">cerebro</span> para tu negocio y vuélvelo autónomo
         </h1>
 
-        <p className="text-xl text-tis-text-secondary mb-12">
-          Tu negocio en piloto automático mientras haces lo importante.
+        <p className="text-xl text-gray-600 leading-relaxed mb-12">
+          Tu negocio en piloto automático mientras haces lo importante: expandir, innovar, vivir.
         </p>
 
         <form onSubmit={handleSubmit} className="mb-8">

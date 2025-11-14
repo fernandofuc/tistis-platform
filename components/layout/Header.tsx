@@ -33,16 +33,16 @@ export default function Header() {
             <Image
               src="/logos/tis-brain-logo.png"
               alt="TIS TIS Brain Logo"
-              width={40}
-              height={40}
-              className="h-10 w-auto object-contain"
+              width={48}
+              height={48}
+              className="h-12 w-auto object-contain"
             />
             <Image
               src="/logos/tis-text-logo.png"
               alt="TIS TIS"
               width={80}
               height={32}
-              className="h-7 w-auto"
+              className="h-8 w-auto object-contain"
             />
           </Link>
 
