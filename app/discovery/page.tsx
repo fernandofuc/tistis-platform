@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 import { useRouter } from 'next/navigation';
 import { Message, QuestionnaireAnswers, AIAnalysis } from '@/types';
 import ChatInterface from '@/components/chat/ChatInterface';
@@ -67,6 +68,7 @@ export default function DiscoveryPage() {
 
   // Cargar mensaje inicial de la landing page
   useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
     const initialMessage = sessionStorage.getItem('initial_message');
     if (initialMessage) {
       // Agregar mensaje del usuario
