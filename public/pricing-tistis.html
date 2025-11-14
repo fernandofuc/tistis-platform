@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TIS TIS - Planes y Precios</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-gradient: linear-gradient(135deg, #7C5CFC 0%, #667eea 100%);
+            --secondary-gradient: linear-gradient(135deg, #DF7373 0%, #C23350 100%);
+            --accent-blue: #7C5CFC;
+            --accent-purple: #C23350;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --bg-light: #f6f6f6;
+            --border-color: #e2e8f0;
+            --success-green: #9DB8A1;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            color: var(--text-primary);
+            background: #ffffff;
+            line-height: 1.6;
+            font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+            font-optical-sizing: auto;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo img {
+            height: auto;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-blue);
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 4rem 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            color: var(--accent-purple);
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Configurator Section */
+        .configurator {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 3rem;
+            align-items: start;
+        }
+
+        /* Plans Grid */
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .plan-card {
+            background: white;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .plan-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15);
+        }
+
+        .plan-card.selected {
+            border-color: var(--accent-blue);
+            background: linear-gradient(135deg, #667eea05 0%, #764ba205 100%);
+            box-shadow: 0 8px 30px rgba(102, 126, 234, 0.2);
+        }
+
+        .plan-card.recommended::before {
+            content: 'RECOMENDADO';
+            position: absolute;
+            top: -12px;
+            right: 20px;
+            background: var(--primary-gradient);
+            color: white;
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .plan-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--accent-blue);
+            margin-bottom: 0.25rem;
+        }
+
+        .plan-period {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-features {
+            list-style: none;
+            margin-top: 1.5rem;
+        }
+
+        .plan-features li {
+            padding: 0.5rem 0;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: start;
+            gap: 0.5rem;
+        }
+
+        .plan-features li::before {
+            content: '✓';
+            color: var(--success-green);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* Branch Selector */
+        .section-config {
+            background: white;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .branch-selector {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .branch-counter {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: var(--bg-light);
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+        }
+
+        .branch-btn {
+            background: white;
+            border: 2px solid var(--border-color);
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            font-weight: 700;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .branch-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+        
+        .branch-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+        
+        .branch-btn:disabled:hover {
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .branch-count {
+            font-size: 1.5rem;
+            font-weight: 700;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        /* Add-ons */
+        .addons-grid {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .addon-item {
+            background: white;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .addon-item:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .addon-item.selected {
+            border-color: var(--accent-blue);
+            background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%);
+        }
+
+        .addon-item.blocked {
+            opacity: 0.6;
+            cursor: not-allowed !important;
+            background: var(--bg-light);
+        }
+
+        .addon-item.blocked:hover {
+            border-color: var(--border-color);
+            transform: none;
+        }
+
+        .addon-item.discounted {
+            border-color: var(--success-green);
+            background: linear-gradient(135deg, #48bb7808 0%, #48bb7805 100%);
+        }
+
+        .addon-info {
+            flex: 1;
+        }
+
+        .addon-name {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .addon-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .addon-price {
+            font-weight: 700;
+            color: var(--accent-blue);
+            font-size: 1.1rem;
+            white-space: nowrap;
+            margin-left: 1rem;
+        }
+
+        /* Summary Panel */
+        .summary-panel {
+            background: white;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            position: sticky;
+            top: 100px;
+        }
+
+        .summary-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .summary-item:last-of-type {
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 1rem;
+        }
+
+        .summary-label {
+            color: var(--text-secondary);
+        }
+
+        .summary-value {
+            font-weight: 700;
+        }
+
+        .total-section {
+            background: linear-gradient(135deg, #667eea10 0%, #764ba210 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
+        }
+
+        .total-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .total-price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--accent-blue);
+        }
+
+        .discount-badge {
+            background: var(--success-green);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            display: inline-block;
+        }
+
+        .activation-info {
+            background: var(--bg-light);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        .activation-price {
+            font-weight: 700;
+            color: var(--accent-blue);
+            font-size: 1.25rem;
+            margin: 0.5rem 0;
+        }
+
+        .cta-button {
+            width: 100%;
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 1rem;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        /* Credits Section */
+        .credits-section {
+            background: white;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+
+        .credits-info {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .credit-option {
+            background: var(--bg-light);
+            padding: 1rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .credit-label {
+            font-weight: 600;
+        }
+
+        .credit-price {
+            color: var(--accent-blue);
+            font-weight: 700;
+        }
+
+        /* Referral Section */
+        .referral-section {
+            max-width: 1400px;
+            margin: 4rem auto;
+            padding: 3rem 2rem;
+            background: var(--primary-gradient);
+            border-radius: 24px;
+            color: white;
+            text-align: center;
+        }
+
+        .referral-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .referral-subtitle {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .referral-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-top: 3rem;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .referral-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .referral-step {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+
+        .referral-card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .referral-card-text {
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        .referral-commission {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .commission-amount {
+            font-size: 3rem;
+            font-weight: 800;
+            margin: 1rem 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .configurator {
+                grid-template-columns: 1fr;
+            }
+
+            .summary-panel {
+                position: static;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .plans-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .referral-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero p {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav">
+            <div class="logo">
+                <img src="/logos/tis-brain-logo.png" alt="TIS TIS" style="width: 40px; height: 40px;">
+                <img src="/logos/tis-text-logo.png" alt="TIS TIS" style="height: 32px; width: auto;">
+            </div>
+            <ul class="nav-links">
+                <li><a href="#planes">Planes</a></li>
+                <li><a href="#referidos">Programa de Referidos</a></li>
+                <li><a href="#contacto">Contacto</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-badge">🚀 Automatización Nivel Silicon Valley, Precios Sonora</div>
+        <h1>Deja de Administrar. Empieza a Crecer.</h1>
+        <p>Tu negocio en piloto automático mientras haces lo importante: expandir, innovar, vivir. Recupera 40-60 hrs/semana que gastas en tareas rutinarias. Configura tu sistema y ve el precio en tiempo real.</p>
+    </section>
+
+    <!-- Main Configurator -->
+    <section id="planes" class="configurator">
+        <!-- Left Column: Plans and Add-ons -->
+        <div>
+            <!-- Plans Grid -->
+            <div class="plans-grid" id="plansGrid">
+                <!-- Plans will be generated by JavaScript -->
+            </div>
+
+            <!-- Branch Selector -->
+            <div class="section-config">
+                <h3 class="section-title">🏢 Sucursales</h3>
+                <div class="branch-selector">
+                    <span class="summary-label">Número de sucursales:</span>
+                    <div class="branch-counter">
+                        <button class="branch-btn" onclick="updateBranches(-1)">−</button>
+                        <span class="branch-count" id="branchCount">1</span>
+                        <button class="branch-btn" onclick="updateBranches(1)">+</button>
+                    </div>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                    <span id="extraBranchCost">$0</span> por cada sucursal adicional
+                </p>
+            </div>
+
+            <!-- Add-ons -->
+            <div class="section-config">
+                <h3 class="section-title">⚡ Add-ons y Especialidades</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    <strong>Add-ons Esenciales:</strong> Disponibles para todos los planes con descuentos progresivos. Los planes Growth y Scale incluyen Facturación y Voz-IA.<br>
+                    <strong>Especialidades:</strong> Requieren plan Growth o superior. Solo puedes seleccionar 1 especialidad diseñada para tu tipo de negocio. Ahorro de hasta 46%.
+                </p>
+                <div class="addons-grid" id="addonsGrid">
+                    <!-- Add-ons will be generated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Credits Info -->
+            <div class="credits-section">
+                <h3 class="section-title">💳 Sistema de Créditos</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Los créditos te permiten evolucionar tu cerebro digital. 1 crédito = 1 hora de desarrollo.
+                </p>
+                <div class="credits-info">
+                    <div class="credit-option">
+                        <span class="credit-label">Precio unitario</span>
+                        <span class="credit-price">$1,200/crédito</span>
+                    </div>
+                    <div class="credit-option">
+                        <span class="credit-label">Bolsa de 10 créditos</span>
+                        <span class="credit-price">$10,000 ($1,000/crédito)</span>
+                    </div>
+                    <div class="credit-option">
+                        <span class="credit-label">Bolsa de 20 créditos</span>
+                        <span class="credit-price">$18,000 ($900/crédito)</span>
+                    </div>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 1rem;">
+                    ℹ️ Tu plan incluye créditos mensuales. Lo operativo crítico (monitoreo, bugs, cambios &lt;30min) no consume créditos.
+                </p>
+            </div>
+        </div>
+
+        <!-- Right Column: Summary -->
+        <div class="summary-panel" id="summaryPanel">
+            <h3 class="summary-title">📋 Resumen de Tu Inversión</h3>
+            
+            <div class="summary-item">
+                <span class="summary-label">Plan seleccionado:</span>
+                <span class="summary-value" id="summaryPlan">Ninguno</span>
+            </div>
+            
+            <div class="summary-item">
+                <span class="summary-label">Sucursales:</span>
+                <span class="summary-value" id="summaryBranches">1</span>
+            </div>
+            
+            <div class="summary-item">
+                <span class="summary-label">Costo sucursales extra:</span>
+                <span class="summary-value" id="summaryBranchCost">$0</span>
+            </div>
+            
+            <div class="summary-item">
+                <span class="summary-label">Add-ons seleccionados:</span>
+                <span class="summary-value" id="summaryAddonsCount">0</span>
+            </div>
+            
+            <div class="summary-item">
+                <span class="summary-label">Costo add-ons:</span>
+                <span class="summary-value" id="summaryAddonsCost">$0</span>
+            </div>
+
+            <div class="total-section">
+                <div class="total-label">Inversión Mensual Total</div>
+                <div class="total-price" id="totalMonthly">$0</div>
+                <div class="discount-badge">✨ Primeros 2 meses al 50%</div>
+            </div>
+
+            <div class="activation-info">
+                <div style="font-weight: 700; margin-bottom: 0.5rem;">🚀 Activación (Pago Único)</div>
+                <div class="activation-price" id="activationFee">$0</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    Cubre el 50% de tus primeros 2 meses (hasta el tope del plan)
+                </div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); padding: 1.5rem; border-radius: 12px; margin: 1rem 0; border: 2px solid var(--accent-blue);">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; color: var(--accent-blue); font-size: 1.1rem;">💰 Pago Inicial Total</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--accent-blue);" id="initialPayment">$0</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    Incluye: Activación + Primer Mes (con descuento del 50%)
+                </div>
+            </div>
+
+            <div style="background: var(--bg-light); padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 0.85rem;">
+                <div style="font-weight: 700; margin-bottom: 0.5rem;">💰 Desglose de Primeros Meses</div>
+                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
+                    <span>Mes 1:</span>
+                    <span style="font-weight: 700;" id="month1Cost">$0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
+                    <span>Mes 2:</span>
+                    <span style="font-weight: 700;" id="month2Cost">$0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
+                    <span>Mes 3+:</span>
+                    <span style="font-weight: 700;" id="month3Cost">$0</span>
+                </div>
+            </div>
+
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin: 1rem 0;">
+                <strong>📦 Tu plan incluye:</strong><br>
+                <span id="includedCredits">0</span> créditos mensuales para evolución continua
+            </div>
+
+            <button class="cta-button" onclick="contactSales()">
+                🧠 Reservar Mi Cerebro Digital
+            </button>
+
+            <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+                ⏰ Core Live en 21 días o menos<br>
+                🎯 IVA incluido
+            </div>
+        </div>
+    </section>
+
+    <!-- Enterprise Plan Section -->
+    <section style="max-width: 1400px; margin: 4rem auto; padding: 0 2rem;">
+        <div style="text-align: center; margin-bottom: 3rem;">
+            <div style="display: inline-block; background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%); color: var(--accent-purple); padding: 0.5rem 1.5rem; border-radius: 50px; font-weight: 600; font-size: 0.9rem; margin-bottom: 1rem;">
+                💎 ENTERPRISE
+            </div>
+            <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem;">Transformación Digital Completa</h2>
+            <p style="font-size: 1.25rem; color: var(--text-secondary); max-width: 700px; margin: 0 auto;">
+                Para organizaciones con 10+ sucursales que requieren soluciones a escala
+            </p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+            <div style="background: white; border: 2px solid var(--border-color); border-radius: 16px; padding: 2rem; text-align: center;">
+                <div style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 0.5rem;">10-20 sucursales</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent-blue);">$49,990</div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">por mes</div>
+            </div>
+            <div style="background: white; border: 2px solid var(--border-color); border-radius: 16px; padding: 2rem; text-align: center;">
+                <div style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 0.5rem;">21-40 sucursales</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent-blue);">$69,990</div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">por mes</div>
+            </div>
+            <div style="background: white; border: 2px solid var(--border-color); border-radius: 16px; padding: 2rem; text-align: center;">
+                <div style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 0.5rem;">41-70 sucursales</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent-blue);">$89,990</div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">por mes</div>
+            </div>
+            <div style="background: white; border: 2px solid var(--border-color); border-radius: 16px; padding: 2rem; text-align: center;">
+                <div style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 0.5rem;">71-100 sucursales</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent-blue);">$99,990</div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">por mes</div>
+            </div>
+        </div>
+
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 24px; padding: 3rem; color: white;">
+            <h3 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem; text-align: center;">✨ Todo Incluido en Enterprise</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+                <div>
+                    <div style="font-weight: 700; margin-bottom: 0.5rem;">🎯 Sin Límites</div>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Todos los add-ons incluidos</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Créditos ilimitados</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ API calls ilimitados</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Usuarios ilimitados</li>
+                    </ul>
+                </div>
+                <div>
+                    <div style="font-weight: 700; margin-bottom: 0.5rem;">👥 Equipo Dedicado</div>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ 3 personas dedicadas</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ SLA de 2 horas</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Training ilimitado</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Auditorías trimestrales</li>
+                    </ul>
+                </div>
+                <div>
+                    <div style="font-weight: 700; margin-bottom: 0.5rem;">🏢 Enterprise Features</div>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Integración SAP/Oracle</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Compliance regulatorio</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Disaster recovery (RTO 4h)</li>
+                        <li style="padding: 0.25rem 0; opacity: 0.9;">✓ Ambientes dev/staging/prod</li>
+                    </ul>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 2rem;">
+                <button class="cta-button" style="display: inline-block; background: white; color: var(--accent-purple);" onclick="contactSales()">
+                    💼 Solicitar Cotización Enterprise
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Referral Program -->
+    <section id="referidos" class="referral-section">
+        <h2 class="referral-title">💰 Programa de Referidos</h2>
+        <p class="referral-subtitle">Gana 5% de comisión del primer año por cada cliente que refieras</p>
+
+        <div class="referral-grid">
+            <div class="referral-card">
+                <div class="referral-step">1</div>
+                <div class="referral-card-title">Refiere</div>
+                <div class="referral-card-text">Comparte tu link único o registra el lead en tu dashboard</div>
+            </div>
+            <div class="referral-card">
+                <div class="referral-step">2</div>
+                <div class="referral-card-title">Cierra</div>
+                <div class="referral-card-text">Tu referido contrata cualquier plan y paga la activación</div>
+            </div>
+            <div class="referral-card">
+                <div class="referral-step">3</div>
+                <div class="referral-card-title">Gana</div>
+                <div class="referral-card-text">Recibe 5% de todas las mensualidades del primer año</div>
+            </div>
+        </div>
+
+        <div class="referral-commission">
+            <div style="font-size: 1.1rem; opacity: 0.9;">Ejemplo: Referido con Plan Growth</div>
+            <div class="commission-amount">$8,994/año</div>
+            <div style="opacity: 0.9;">$749.50 por mes durante 12 meses</div>
+            <div style="font-size: 0.9rem; margin-top: 1rem; opacity: 0.8;">
+                ✨ Mínimo 3 referidos activos para bonos especiales
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // Plans data with new strategic pricing 2025
+        const plans = [
+            {
+                id: 'starter',
+                name: 'Starter',
+                subtitle: 'Para Empezar (1 Sucursal)',
+                price: 3490,
+                branchExtra: 1590,
+                activation: 5590,
+                credits: 5,
+                creditPrice: 1390,
+                sla: '72h',
+                addonDiscounts: {
+                    esenciales: 0,
+                    packs: 0
+                },
+                packsAllowed: false,
+                features: [
+                    'Panel de control básico (1 sucursal)',
+                    'Asistente automatizado 24/7. 2500 mensajes/mes',
+                    'Alertas de inventario básicas',
+                    'Reportes diarios automáticos',
+                    'Soporte por email'
+                ]
+            },
+            {
+                id: 'essentials',
+                name: 'Essentials',
+                subtitle: 'Multi-Sucursal con Automatización',
+                price: 7490,
+                branchExtra: 1990,
+                branchExtraProgressive: [
+                    { qty: 2, price: 1990 },
+                    { qty: 3, price: 1790 },
+                    { qty: 4, price: 1590 },
+                    { qty: 5, price: 1490 }
+                ],
+                activation: 8990,
+                credits: 8,
+                creditPrice: 1390,
+                sla: '48h',
+                addonDiscounts: {
+                    esenciales: 0.10,
+                    packs: 0
+                },
+                packsAllowed: false,
+                features: [
+                    'Todo lo de Starter más:',
+                    '✨ Facturación CFDI 4.0 Automática incluida',
+                    'Auto-reorden 3 productos clave',
+                    'Cierre diario con IA (30 seg)',
+                    'Reportes semanales personalizados',
+                    'Tokens lealtad básico',
+                    'Detección anomalías básicas',
+                    '5 usuarios | Backup diario',
+                    'Soporte email + chat'
+                ]
+            },
+            {
+                id: 'growth',
+                name: 'Growth',
+                subtitle: 'Recomendado - Operación Inteligente',
+                price: 12490,
+                branchExtra: 2890,
+                branchExtraProgressive: [
+                    { qty: 2, price: 2890 },
+                    { qty: 3, price: 2490 },
+                    { qty: 4, price: 1990 },
+                    { qty: 5, price: 1590 }
+                ],
+                activation: 12490,
+                credits: 13,
+                creditPrice: 1390,
+                sla: '24h',
+                recommended: true,
+                addonDiscounts: {
+                    esenciales: 0.20,
+                    packs: 0.15
+                },
+                packsAllowed: true,
+                features: [
+                    'Todo lo de Essentials más:',
+                    'Auto-reorden inteligente ilimitado',
+                    'Predicción demanda ML básico',
+                    'Anomalías tiempo real',
+                    'Campañas WhatsApp segmentadas',
+                    'Dashboard multi-sucursal unificado',
+                    'Voz-IA avanzado (reservas + pedidos)',
+                    'Soporte email + chat + teléfono',
+                    'Automatizaciones ilimitadas'
+                ]
+            },
+            {
+                id: 'scale',
+                name: 'Scale',
+                subtitle: 'Enterprise - Máxima Capacidad',
+                price: 19990,
+                branchExtra: 3590,
+                branchExtraProgressive: [
+                    { qty: 2, price: 3590 },
+                    { qty: 3, price: 2890 },
+                    { qty: 4, price: 2490 },
+                    { qty: 5, price: 1990 }
+                ],
+                activation: 24990,
+                credits: 25,
+                creditPrice: 1390,
+                sla: '8h',
+                addonDiscounts: {
+                    esenciales: 0.30,
+                    packs: 0.25
+                },
+                packsAllowed: true,
+                features: [
+                    'Todo lo de Growth más:',
+                    'ML predicción avanzada multi-variable',
+                    'Optimización tiempo real',
+                    'BI con insights accionables automáticos',
+                    'Automatización end-to-end',
+                    'Personalización de automatización ilimitada',
+                    'Asistente automatizado 24/7 PRO. 7500 mensajes/mes',
+                    'Consultoría estratégica mensual (2h)',
+                    'Training on-site trimestral',
+                    'Account Manager dedicado',
+                    'Integraciones ilimitadas',
+                    'Staging/producción separados',
+                    'Disaster recovery incluido'
+                ]
+            }
+        ];
+
+        // Add-ons data - Essential and Specialized with new pricing
+        const addons = [
+            // ESSENTIAL ADD-ONS (Available for all plans with progressive discounts)
+            {
+                id: 'facturacion',
+                name: 'Sistema de Facturación en Automático',
+                price: 1990,
+                category: 'esencial',
+                description: 'Cada venta genera su CFDI sola. Tus clientes se auto-facturan sin llamarte. Complementos de pago sincronizados. SAT nunca rechaza. Ahorra 35-40 hrs/mes.'
+            },
+            {
+                id: 'cotizaciones',
+                name: 'Cotizaciones Automáticas',
+                price: 1990,
+                category: 'esencial',
+                description: 'Cotizaciones profesionales en 30 seg. Sistema avisa cuando cliente abre y cuántas veces revisa. Firma electrónica incluida. +23% tasa conversión promedio.'
+            },
+            {
+                id: 'analytics-pro',
+                name: 'Reportes Diarios de Tu Negocio Automatizados',
+                price: 2990,
+                category: 'esencial',
+                description: 'Cada mañana: reporte de 3 acciones que más dinero salvan HOY. Detecta: "Vendiste 15% menos", "Producto por agotarse", "$28K inventario muerto". Estimación de ahorro en Sonora de $12K-$35K/mes.'
+            },
+            {
+                id: 'campanas-wa',
+                name: 'Marketing Personalizado Sin Spam',
+                price: 1490,
+                category: 'esencial',
+                description: 'Ofertas solo a quien le interesan. Segmentación por: qué compró, cuándo, cuánto gastó. Activa clientes dormidos en días y ofrece ofertas personalizadas conforme a los gustos de tu cliente.'
+            },
+            {
+                id: 'voz-basico',
+                name: 'Asistente Virtual por Voz, 24/7',
+                price: 2290,
+                category: 'esencial',
+                description: 'Contestas 100% llamadas, 24/7, sin contratar. IA toma reservas, agenda citas, responde preguntas. 500 min/mes (~180 llamadas). Restaurant pierde 8-12 reservas/semana por no contestar = $15K-$22K/mes.'
+            },
+            {
+                id: 'digitalizador-pacientes',
+                name: 'Documentación Automatizada en 3 Seg',
+                price: 4490,
+                category: 'esencial',
+                description: 'Fotografía receta/estudio con celular. IA extrae datos y organiza en expediente. Cero captura manual. Clínica 100 pac/mes ahorra 90 hrs/mes = 1.5 empleados ($18,894/mes).'
+            },
+            
+            // SPECIALIZED PACKS (Only for GROWTH and SCALE with additional discounts)
+            {
+                id: 'especialidad-industrial',
+                name: 'Especialidad Industrial',
+                price: 9590,
+                category: 'especialidad',
+                packValue: 14890,
+                savings: 35,
+                requiresGrowth: true,
+                description: '🚀 Manufactura Siglo XXI: Predice fallas máquinas 7-14 días antes. Optimiza rutas ML (reduce ciclo 18-25%). Compliance ISO 9001 automático. Dashboard OEE tiempo real. Paro no planeado = $8K-$18K/día. Se paga en 28 días.'
+            },
+            {
+                id: 'especialidad-salud',
+                name: 'Especialidad Salud',
+                price: 8790,
+                category: 'especialidad',
+                packValue: 16490,
+                savings: 46,
+                requiresGrowth: true,
+                description: '🚀 Clínica/Farmacia en Piloto Automático: Compliance COFEPRIS 100% auto. Expedientes digitales OCR médico. Seguimiento post-consulta. Farmacia pierde $12K-$25K/año en caducados. Clínica recupera 20% pacientes = $27K/mes. Se paga en 12 días.'
+            },
+            {
+                id: 'especialidad-restaurant',
+                name: 'Especialidad Restaurant',
+                price: 6390,
+                category: 'especialidad',
+                packValue: 8890,
+                savings: 27,
+                requiresGrowth: true,
+                description: '🚀 Restaurant que Se Opera Solo: Comandas inteligentes. Menú dinámico pricing (como Uber). Forecast insumos (reservas + clima). Anti-merma. Restaurant $400K/mes pierde $26K merma. Ahorra $14,800/mes + $32K-$48K menú dinámico. Se paga en 3 días.'
+            },
+            {
+                id: 'especialidad-retail',
+                name: 'Especialidad Retail',
+                price: 5590,
+                category: 'especialidad',
+                packValue: 8490,
+                savings: 33,
+                requiresGrowth: true,
+                description: '🚀 Retail Inteligente Como Amazon: Pricing dinámico escanea competencia 24/7. Heat maps optimiza layout. RFM identifica mejores clientes. Tienda $650K/mes recupera $55K-$75K/mes pricing + $78K-$117K/mes heat maps. Se paga en 1 día.'
+            }
+        ];
+
+        // State
+        let selectedPlan = null;
+        let branches = 1;
+        let selectedAddons = new Set();
+
+        // Format currency
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        // Initialize
+        function init() {
+            renderPlans();
+            renderAddons();
+            updateBranchButtons();
+            updateSummary();
+        }
+
+        // Render plans
+        function renderPlans() {
+            const grid = document.getElementById('plansGrid');
+            grid.innerHTML = plans.map(plan => `
+                <div class="plan-card ${plan.recommended ? 'recommended' : ''}" onclick="selectPlan('${plan.id}')">
+                    <div class="plan-name">${plan.name}</div>
+                    <div class="plan-subtitle" style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">${plan.subtitle}</div>
+                    <div class="plan-price">${formatCurrency(plan.price)}</div>
+                    <div class="plan-period">por mes</div>
+                    <div style="background: var(--bg-light); padding: 0.5rem; border-radius: 8px; margin: 1rem 0; text-align: center;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Activación</div>
+                        <div style="font-weight: 700; color: var(--accent-blue);">${formatCurrency(plan.activation)}</div>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                        ⚡ ${plan.credits} créditos/mes incluidos
+                    </div>
+                    <ul class="plan-features">
+                        ${plan.features.map(f => `<li>${f}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('');
+        }
+
+        // Render add-ons with new discount system
+        function renderAddons() {
+            const grid = document.getElementById('addonsGrid');
+            
+            grid.innerHTML = addons.map(addon => {
+                let priceDisplay = formatCurrency(addon.price) + '/mes';
+                let extraClass = '';
+                let blockMessage = '';
+                let discountBadge = '';
+                let isBlocked = false;
+                let borderColor = 'var(--border-color)';
+                
+                // Check if addon is INCLUDED in Essentials/Growth/Scale
+                if (selectedPlan && (selectedPlan.id === 'essentials' || selectedPlan.id === 'growth' || selectedPlan.id === 'scale')) {
+                    if (addon.id === 'facturacion') {
+                        isBlocked = true;
+                        extraClass = ' included';
+                        blockMessage = '<div style="color: var(--success-green); font-weight: 600; font-size: 0.85rem; margin-top: 0.5rem;">✅ Ya incluido en tu plan</div>';
+                        priceDisplay = '<span style="color: var(--success-green); font-weight: 700;">Incluido</span>';
+                        borderColor = 'var(--success-green)';
+                    }
+                }
+                
+                // Check if voz-basico is INCLUDED in Growth/Scale (advanced version)
+                if (selectedPlan && (selectedPlan.id === 'growth' || selectedPlan.id === 'scale')) {
+                    if (addon.id === 'voz-basico') {
+                        isBlocked = true;
+                        extraClass = ' included';
+                        blockMessage = '<div style="color: var(--success-green); font-weight: 600; font-size: 0.85rem; margin-top: 0.5rem;">✅ Ya incluido en tu plan</div>';
+                        priceDisplay = '<span style="color: var(--success-green); font-weight: 700;">Incluido</span>';
+                        borderColor = 'var(--success-green)';
+                    }
+                }
+                
+                // Check if especialidad is blocked (only available for GROWTH+)
+                if (addon.category === 'especialidad' && selectedPlan && !selectedPlan.packsAllowed) {
+                    isBlocked = true;
+                    extraClass = ' blocked';
+                    blockMessage = '<div style="color: #f5576c; font-weight: 600; font-size: 0.85rem; margin-top: 0.5rem;">🔒 Requiere plan Growth o superior</div>';
+                    priceDisplay = '<span style="text-decoration: line-through; opacity: 0.5;">' + formatCurrency(addon.price) + '/mes</span>';
+                }
+                
+                // Especialidades use orange color
+                if (addon.category === 'especialidad' && !isBlocked) {
+                    borderColor = '#ff6b35'; // Orange
+                }
+                
+                // Calculate discount if plan is selected and addon is not blocked/included
+                if (!isBlocked && selectedPlan && selectedPlan.addonDiscounts && addon.id !== 'facturacion' && addon.id !== 'voz-basico') {
+                    const discountRate = addon.category === 'especialidad' 
+                        ? selectedPlan.addonDiscounts.packs 
+                        : selectedPlan.addonDiscounts.esenciales;
+                    
+                    if (discountRate > 0) {
+                        const discountedPrice = addon.price * (1 - discountRate);
+                        const savingsPercent = Math.round(discountRate * 100);
+                        
+                        extraClass = ' discounted';
+                        const badgeColor = addon.category === 'especialidad' ? '#ff6b35' : 'var(--success-green)';
+                        discountBadge = `<div style="background: ${badgeColor}; color: white; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; display: inline-block; margin-bottom: 0.5rem;">-${savingsPercent}% PLAN ${selectedPlan.name.toUpperCase()}</div>`;
+                        priceDisplay = `<div><span style="text-decoration: line-through; opacity: 0.5; font-size: 0.9rem;">${formatCurrency(addon.price)}</span><br><span style="color: ${badgeColor}; font-weight: 700;">${formatCurrency(discountedPrice)}/mes</span></div>`;
+                        blockMessage = `<div style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.5rem; font-style: italic;">💡 Descuento por plan ${selectedPlan.name}</div>`;
+                    }
+                }
+                
+                // Show especialidad savings
+                if (addon.category === 'especialidad' && addon.savings && !isBlocked) {
+                    blockMessage += `<div style="color: #ff6b35; font-size: 0.85rem; margin-top: 0.5rem; font-weight: 600;">✨ Ahorra ${addon.savings}% vs compra individual</div>`;
+                }
+                
+                // Check if another especialidad is already selected
+                const isEspecialidad = addon.category === 'especialidad';
+                const otherEspecialidadSelected = isEspecialidad && !isBlocked && Array.from(selectedAddons).some(id => {
+                    const a = addons.find(x => x.id === id);
+                    return a && a.category === 'especialidad' && a.id !== addon.id;
+                });
+                
+                if (otherEspecialidadSelected) {
+                    isBlocked = true;
+                    extraClass += ' blocked-especialidad';
+                    blockMessage = '<div style="color: #ff6b35; font-weight: 600; font-size: 0.85rem; margin-top: 0.5rem;">⚠️ Ya seleccionaste una especialidad</div>';
+                }
+                
+                return `
+                    <div class="addon-item${extraClass}" onclick="${isBlocked ? '' : `toggleAddon('${addon.id}')`}" style="border-color: ${borderColor}; ${isBlocked && !extraClass.includes('included') ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                        <div class="addon-info">
+                            ${discountBadge}
+                            <div class="addon-name">${addon.name}</div>
+                            <div class="addon-description">${addon.description}</div>
+                            ${blockMessage}
+                        </div>
+                        <div class="addon-price">${priceDisplay}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Select plan
+        function selectPlan(planId) {
+            selectedPlan = plans.find(p => p.id === planId);
+            
+            // Reset branches to 1 if switching to Starter
+            if (selectedPlan.id === 'starter' && branches > 1) {
+                branches = 1;
+                document.getElementById('branchCount').textContent = branches;
+            }
+            
+            // Update UI
+            document.querySelectorAll('.plan-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+            
+            // Update branch cost display
+            document.getElementById('extraBranchCost').textContent = formatCurrency(selectedPlan.branchExtra);
+            
+            // Update branch buttons based on plan
+            updateBranchButtons();
+            
+            // Clear especialidad selections if switching to plan that doesn't allow them
+            if (!selectedPlan.packsAllowed) {
+                addons.forEach(addon => {
+                    if (addon.category === 'especialidad') {
+                        selectedAddons.delete(addon.id);
+                    }
+                });
+            }
+            
+            // Clear included addons if they're selected
+            if (selectedPlan.id === 'essentials' || selectedPlan.id === 'growth' || selectedPlan.id === 'scale') {
+                selectedAddons.delete('facturacion'); // Included in Essentials, Growth, and Scale
+            }
+            
+            if (selectedPlan.id === 'growth' || selectedPlan.id === 'scale') {
+                selectedAddons.delete('voz-basico'); // Included (advanced) in Growth and Scale
+            }
+            
+            // Re-render addons to show discounts/restrictions
+            renderAddons();
+            
+            updateSummary();
+        }
+
+        // Toggle addon
+        function toggleAddon(addonId) {
+            const addon = addons.find(a => a.id === addonId);
+            
+            // Check if addon is blocked because it's included in plan
+            if (selectedPlan && (selectedPlan.id === 'essentials' || selectedPlan.id === 'growth' || selectedPlan.id === 'scale')) {
+                // Block facturacion as it's included in Essentials, Growth, and Scale
+                if (addon.id === 'facturacion') {
+                    return; // Already included in plan
+                }
+            }
+            
+            // Check if voz-basico is blocked in Growth/Scale (they have advanced version)
+            if (selectedPlan && (selectedPlan.id === 'growth' || selectedPlan.id === 'scale')) {
+                if (addon.id === 'voz-basico') {
+                    return; // Already included (advanced version) in plan
+                }
+            }
+            
+            // Check if especialidad is blocked (requires Growth+)
+            if (addon.category === 'especialidad' && selectedPlan && !selectedPlan.packsAllowed) {
+                return; // Don't allow toggling blocked especialidades
+            }
+            
+            // If selecting an especialidad, deselect other especialidades first
+            if (addon.category === 'especialidad' && !selectedAddons.has(addonId)) {
+                // Remove any other selected especialidad
+                addons.forEach(a => {
+                    if (a.category === 'especialidad' && selectedAddons.has(a.id)) {
+                        selectedAddons.delete(a.id);
+                    }
+                });
+            }
+            
+            if (selectedAddons.has(addonId)) {
+                selectedAddons.delete(addonId);
+            } else {
+                selectedAddons.add(addonId);
+            }
+            
+            // Update UI
+            renderAddons();
+            
+            updateSummary();
+        }
+
+        // Update branches
+        function updateBranches(delta) {
+            const newCount = branches + delta;
+            
+            // Starter plan: max 1 branch
+            if (selectedPlan && selectedPlan.id === 'starter' && newCount > 1) {
+                return; // Don't allow more than 1 branch for Starter
+            }
+            
+            branches = Math.max(1, newCount);
+            document.getElementById('branchCount').textContent = branches;
+            
+            // Update button states
+            updateBranchButtons();
+            updateSummary();
+        }
+        
+        // Update branch button states
+        function updateBranchButtons() {
+            const minusBtn = document.querySelector('.branch-controls button:first-child');
+            const plusBtn = document.querySelector('.branch-controls button:last-child');
+            
+            // Disable minus if at 1
+            if (minusBtn) minusBtn.disabled = branches <= 1;
+            
+            // Disable plus if Starter plan and at 1 branch
+            if (plusBtn && selectedPlan && selectedPlan.id === 'starter') {
+                plusBtn.disabled = branches >= 1;
+            } else if (plusBtn) {
+                plusBtn.disabled = false;
+            }
+        }
+
+        // Update summary with new discount system
+        function updateSummary() {
+            if (!selectedPlan) {
+                document.getElementById('summaryPlan').textContent = 'Ninguno';
+                document.getElementById('totalMonthly').textContent = '$0';
+                document.getElementById('activationFee').textContent = '$0';
+                document.getElementById('includedCredits').textContent = '0';
+                document.getElementById('month1Cost').textContent = '$0';
+                document.getElementById('month2Cost').textContent = '$0';
+                document.getElementById('month3Cost').textContent = '$0';
+                document.getElementById('initialPayment').textContent = '$0';
+                return;
+            }
+
+            // Calculate base cost
+            const baseCost = selectedPlan.price;
+            
+            // Calculate branch costs with progressive pricing
+            let branchCost = 0;
+            if (branches > 1) {
+                if (selectedPlan.branchExtraProgressive) {
+                    // Progressive pricing: each additional branch has its own price
+                    for (let i = 2; i <= branches; i++) {
+                        const tierInfo = selectedPlan.branchExtraProgressive.find(t => t.qty === i);
+                        if (tierInfo) {
+                            branchCost += tierInfo.price;
+                        } else {
+                            // Use qty=5 price for branches 5+
+                            const tier5 = selectedPlan.branchExtraProgressive.find(t => t.qty === 5);
+                            branchCost += tier5 ? tier5.price : selectedPlan.branchExtra;
+                        }
+                    }
+                } else {
+                    // Flat pricing (Starter plan)
+                    branchCost = (branches - 1) * selectedPlan.branchExtra;
+                }
+            }
+            
+            // Calculate addons cost with discounts
+            let addonsCost = 0;
+            selectedAddons.forEach(addonId => {
+                const addon = addons.find(a => a.id === addonId);
+                if (addon) {
+                    // Skip if addon is included in plan
+                    if (selectedPlan && (selectedPlan.id === 'essentials' || selectedPlan.id === 'growth' || selectedPlan.id === 'scale')) {
+                        if (addon.id === 'facturacion') {
+                            return; // Skip facturacion - included in Essentials, Growth, and Scale
+                        }
+                    }
+                    
+                    // Skip voz-basico in Growth/Scale (they have advanced version)
+                    if (selectedPlan && (selectedPlan.id === 'growth' || selectedPlan.id === 'scale')) {
+                        if (addon.id === 'voz-basico') {
+                            return; // Skip voz-basico - included (advanced) in Growth and Scale
+                        }
+                    }
+                    
+                    // Apply discount based on addon category and plan
+                    const discountRate = addon.category === 'especialidad' 
+                        ? (selectedPlan.addonDiscounts.packs || 0)
+                        : (selectedPlan.addonDiscounts.esenciales || 0);
+                    
+                    const finalPrice = addon.price * (1 - discountRate);
+                    addonsCost += finalPrice;
+                }
+            });
+
+            const monthlyTotal = baseCost + branchCost + addonsCost;
+            const activationFee = selectedPlan.activation;
+            const activationCap = activationFee / 2;
+            
+            // Calculate discounted months
+            const discount = Math.min(monthlyTotal * 0.5, activationCap);
+            const month1 = monthlyTotal - discount;
+            const month2 = monthlyTotal - discount;
+            const month3Plus = monthlyTotal;
+            
+            // Calculate initial payment (activation + first month)
+            const initialPayment = activationFee + month1;
+
+            // Update UI
+            document.getElementById('summaryPlan').textContent = `${selectedPlan.name} - ${selectedPlan.subtitle}`;
+            document.getElementById('summaryBranches').textContent = branches;
+            document.getElementById('summaryBranchCost').textContent = formatCurrency(branchCost);
+            document.getElementById('summaryAddonsCount').textContent = selectedAddons.size;
+            document.getElementById('summaryAddonsCost').textContent = formatCurrency(addonsCost);
+            document.getElementById('totalMonthly').textContent = formatCurrency(monthlyTotal);
+            document.getElementById('activationFee').textContent = formatCurrency(activationFee);
+            document.getElementById('includedCredits').textContent = selectedPlan.credits;
+            document.getElementById('month1Cost').textContent = formatCurrency(month1);
+            document.getElementById('month2Cost').textContent = formatCurrency(month2);
+            document.getElementById('month3Cost').textContent = formatCurrency(month3Plus);
+            document.getElementById('initialPayment').textContent = formatCurrency(initialPayment);
+        }
+
+        // Contact sales
+        function contactSales() {
+            if (!selectedPlan) {
+                alert('Por favor selecciona un plan primero');
+                return;
+            }
+
+            const message = `¡Hola! Me interesa el plan ${selectedPlan.name} con ${branches} sucursal(es) y ${selectedAddons.size} add-on(s). ¿Pueden contactarme?`;
+            
+            // In production, this would open WhatsApp or a contact form
+            alert(message + '\n\n(En producción esto abriría WhatsApp o un formulario de contacto)');
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>
