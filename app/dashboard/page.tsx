@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Sparkles, Settings, BarChart3, MessageSquare, Rocket } from 'lucide-react';
 import Container from '@/components/layout/Container';
@@ -42,8 +42,10 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-tis-bg-primary">
-      {/* Handler for search params (SSR safe) */}
-      <DashboardWelcomeHandler onWelcomeDetected={setShowWelcomeModal} />
+      {/* Handler for search params wrapped in Suspense */}
+      <Suspense fallback={null}>
+        <DashboardWelcomeHandler onWelcomeDetected={setShowWelcomeModal} />
+      </Suspense>
 
       {/* Welcome Modal */}
       <Modal
