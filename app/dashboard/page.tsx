@@ -9,8 +9,20 @@ import Button from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 
-export default function DashboardPage() {
+function DashboardWelcomeHandler({ onWelcomeDetected }: { onWelcomeDetected: (show: boolean) => void }) {
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const welcome = searchParams.get('welcome');
+    if (welcome === 'true') {
+      onWelcomeDetected(true);
+    }
+  }, [searchParams, onWelcomeDetected]);
+
+  return null;
+}
+
+export default function DashboardPage() {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [formData, setFormData] = useState({
     businessName: '',
@@ -18,13 +30,6 @@ export default function DashboardPage() {
     hours: '',
     whatsapp: ''
   });
-
-  useEffect(() => {
-    const welcome = searchParams.get('welcome');
-    if (welcome === 'true') {
-      setShowWelcomeModal(true);
-    }
-  }, [searchParams]);
 
   const handleSubmitOnboarding = () => {
     // Aquí iría la lógica para guardar en Supabase y notificar al equipo
@@ -37,6 +42,9 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-tis-bg-primary">
+      {/* Handler for search params (SSR safe) */}
+      <DashboardWelcomeHandler onWelcomeDetected={setShowWelcomeModal} />
+
       {/* Welcome Modal */}
       <Modal
         show={showWelcomeModal}
