@@ -74,22 +74,30 @@ export default function DiscoveryPage() {
       const decoder = new TextDecoder();
       let accumulatedText = '';
 
+      console.log('🔄 Iniciando lectura de stream...');
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.log('✅ Stream completado. Texto total:', accumulatedText);
+          break;
+        }
 
         const chunk = decoder.decode(value, { stream: true });
         accumulatedText += chunk;
+        console.log('📦 Chunk recibido:', chunk, '| Acumulado:', accumulatedText.substring(0, 50) + '...');
 
         // Actualizar el último mensaje con el texto acumulado
         setMessages(prev => {
           const newMessages = [...prev];
           const lastMessageIndex = newMessages.findIndex(m => m.id === aiMessageId);
+          console.log('🔍 Buscando mensaje con ID:', aiMessageId, '| Encontrado en índice:', lastMessageIndex);
           if (lastMessageIndex !== -1) {
             newMessages[lastMessageIndex] = {
               ...newMessages[lastMessageIndex],
               content: accumulatedText
             };
+            console.log('✏️ Mensaje actualizado:', newMessages[lastMessageIndex]);
           }
           return newMessages;
         });
