@@ -4,7 +4,7 @@ import Container from './Container';
 
 export default function Footer() {
   return (
-    <footer className="bg-tis-text-primary text-white py-12 mt-24">
+    <footer className="bg-tis-text-primary text-white py-12">
       <Container>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Logo y descripción */}
@@ -13,9 +13,9 @@ export default function Footer() {
               <Image
                 src="/logos/tis-brain-logo.png"
                 alt="TIS TIS"
-                width={40}
-                height={40}
-                className="w-10 h-10"
+                width={48}
+                height={48}
+                className="h-12 w-auto object-contain"
               />
               <Image
                 src="/logos/tis-text-logo.png"
@@ -43,11 +43,6 @@ export default function Footer() {
               <li>
                 <Link href="/#como-funciona" className="text-gray-400 hover:text-white transition-colors">
                   Cómo Funciona
-                </Link>
-              </li>
-              <li>
-                <Link href="/#casos" className="text-gray-400 hover:text-white transition-colors">
-                  Casos de Éxito
                 </Link>
               </li>
             </ul>

@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('🚀 Iniciando stream con Claude...');
+    console.log('📝 Messages enviados:', JSON.stringify(messages, null, 2));
 
     // Crear stream con Anthropic
     const stream = await anthropic.messages.stream({
@@ -86,21 +87,30 @@ export async function POST(req: NextRequest) {
       messages: messages as any,
     });
 
+    console.log('✅ Stream creado, comenzando a leer chunks...');
+
     // Convertir el stream de Anthropic a un ReadableStream web
     const encoder = new TextEncoder();
+    let chunkCount = 0;
     const readable = new ReadableStream({
       async start(controller) {
         try {
+          console.log('🔄 Iniciando lectura de chunks...');
           for await (const chunk of stream) {
+            chunkCount++;
+            console.log(`📦 Chunk #${chunkCount}:`, chunk.type);
+
             if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
               const text = chunk.delta.text;
+              console.log(`📤 Enviando texto (${text.length} chars):`, text);
               controller.enqueue(encoder.encode(text));
             }
           }
           controller.close();
-          console.log('✅ Stream completado exitosamente');
+          console.log(`✅ Stream completado exitosamente. Total chunks: ${chunkCount}`);
         } catch (streamError) {
           console.error('❌ Error en stream:', streamError);
+          console.error('Stack:', (streamError as Error).stack);
           controller.error(streamError);
         }
       },

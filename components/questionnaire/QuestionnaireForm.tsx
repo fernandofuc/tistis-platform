@@ -43,15 +43,6 @@ export default function QuestionnaireForm({
   return (
     <div className="h-full overflow-y-auto p-6 bg-tis-bg-primary">
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-6">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-3">
-            Cuéntanos más sobre tu negocio
-          </h2>
-          <p className="text-tis-text-secondary">
-            Esta información nos ayuda a crear la propuesta perfecta para ti
-          </p>
-        </div>
-
         {/* Pregunta 1: Tipo de Negocio */}
         <Card className="p-6">
           <label className="block text-base font-semibold text-tis-text-primary mb-4">

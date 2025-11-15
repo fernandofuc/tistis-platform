@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Message, QuestionnaireAnswers } from '@/types';
 import QuestionnaireForm from '@/components/questionnaire/QuestionnaireForm';
 import Image from 'next/image';
-import { Send } from 'lucide-react';
+import { Send, Paperclip, Mic } from 'lucide-react';
 
 export default function DiscoveryPage() {
   const router = useRouter();
@@ -213,7 +213,26 @@ export default function DiscoveryPage() {
 
         {/* Input Bar */}
         <form onSubmit={handleSendMessage} className="p-6 border-t border-gray-200 bg-white">
-          <div className="flex items-end gap-3">
+          <div className="flex items-center gap-2 border border-gray-300 rounded-lg p-3 focus-within:ring-2 focus-within:ring-[#DF7373] focus-within:border-transparent">
+            {/* Botón de Archivo */}
+            <button
+              type="button"
+              className="text-gray-500 hover:text-gray-700 transition-colors p-1"
+              title="Adjuntar archivo"
+            >
+              <Paperclip className="w-5 h-5" />
+            </button>
+
+            {/* Botón de Voz */}
+            <button
+              type="button"
+              className="text-gray-500 hover:text-gray-700 transition-colors p-1"
+              title="Grabar voz"
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+
+            {/* Textarea */}
             <textarea
               value={currentInput}
               onChange={(e) => setCurrentInput(e.target.value)}
@@ -224,14 +243,16 @@ export default function DiscoveryPage() {
                 }
               }}
               placeholder="Escribe tu respuesta..."
-              className="flex-1 border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#DF7373] focus:border-transparent resize-none"
+              className="flex-1 text-sm focus:outline-none resize-none border-0 p-0"
               rows={2}
               disabled={isLoading}
             />
+
+            {/* Botón de Enviar */}
             <button
               type="submit"
               disabled={!currentInput.trim() || isLoading}
-              className="p-3 bg-[#DF7373] text-white rounded-lg hover:bg-[#C23350] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-[#DF7373] text-white rounded-lg hover:bg-[#C23350] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-5 h-5" />
             </button>

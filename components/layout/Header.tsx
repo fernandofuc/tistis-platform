@@ -40,9 +40,9 @@ export default function Header() {
             <Image
               src="/logos/tis-text-logo.png"
               alt="TIS TIS"
-              width={80}
-              height={32}
-              className="h-8 w-auto object-contain"
+              width={60}
+              height={24}
+              className="h-6 w-auto object-contain"
             />
           </Link>
 
@@ -59,12 +59,6 @@ export default function Header() {
               className="text-tis-text-primary hover:text-tis-coral transition-colors font-medium"
             >
               Cómo funciona
-            </Link>
-            <Link
-              href="/#casos"
-              className="text-tis-text-primary hover:text-tis-coral transition-colors font-medium"
-            >
-              Casos de éxito
             </Link>
           </div>
 
