@@ -35,6 +35,7 @@ export default function DiscoveryPage() {
     try {
       console.log('📤 Enviando mensaje a IA...');
 
+      console.log('📤 Enviando solicitud a API...');
       const response = await fetch('/api/chat/discovery', {
         method: 'POST',
         headers: {
@@ -48,8 +49,15 @@ export default function DiscoveryPage() {
         }),
       });
 
+      console.log('📨 Respuesta recibida, status:', response.status);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        let errorData: any = {};
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { error: await response.text() };
+        }
         console.error('❌ API Error:', errorData);
         throw new Error(errorData.error || 'Error en la respuesta del chat');
       }
@@ -68,42 +76,47 @@ export default function DiscoveryPage() {
       };
 
       setMessages(prev => [...prev, aiMessage]);
+      console.log('✏️ Mensaje asistente creado con ID:', aiMessageId);
 
       // Leer stream progresivamente
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulatedText = '';
+      let chunkCount = 0;
 
       console.log('🔄 Iniciando lectura de stream...');
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          console.log('✅ Stream completado. Texto total:', accumulatedText);
+          console.log('✅ Stream completado. Texto total recibido:', accumulatedText.length, 'chars');
+          console.log('Contenido:', accumulatedText);
           break;
         }
 
+        chunkCount++;
         const chunk = decoder.decode(value, { stream: true });
         accumulatedText += chunk;
-        console.log('📦 Chunk recibido:', chunk, '| Acumulado:', accumulatedText.substring(0, 50) + '...');
+        console.log(`📦 Chunk #${chunkCount} (${chunk.length} chars):`, chunk.substring(0, 50));
 
         // Actualizar el último mensaje con el texto acumulado
         setMessages(prev => {
           const newMessages = [...prev];
           const lastMessageIndex = newMessages.findIndex(m => m.id === aiMessageId);
-          console.log('🔍 Buscando mensaje con ID:', aiMessageId, '| Encontrado en índice:', lastMessageIndex);
           if (lastMessageIndex !== -1) {
             newMessages[lastMessageIndex] = {
               ...newMessages[lastMessageIndex],
               content: accumulatedText
             };
-            console.log('✏️ Mensaje actualizado:', newMessages[lastMessageIndex]);
+            console.log(`✏️ Actualizando mensaje en índice ${lastMessageIndex}, contenido: ${accumulatedText.length} chars`);
+          } else {
+            console.log('🔍 ⚠️ No se encontró mensaje con ID:', aiMessageId);
           }
           return newMessages;
         });
       }
 
-      console.log('✅ Stream completado');
+      console.log('✅ Lectura completada');
 
     } catch (error) {
       console.error('❌ Error sending message to AI:', error);

@@ -89,18 +89,19 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ Stream creado, comenzando a leer chunks...');
 
-    // Convertir el stream de Anthropic a un ReadableStream web
+    // Usar TransformStream en lugar de ReadableStream
     const encoder = new TextEncoder();
     let chunkCount = 0;
+
     const readable = new ReadableStream({
       async start(controller) {
         try {
           console.log('🔄 Iniciando lectura de chunks...');
           for await (const chunk of stream) {
             chunkCount++;
-            console.log(`📦 Chunk #${chunkCount}:`, chunk.type);
+            console.log(`📦 Chunk #${chunkCount}:`, JSON.stringify(chunk));
 
-            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+            if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
               const text = chunk.delta.text;
               console.log(`📤 Enviando texto (${text.length} chars):`, text);
               controller.enqueue(encoder.encode(text));
@@ -110,17 +111,19 @@ export async function POST(req: NextRequest) {
           console.log(`✅ Stream completado exitosamente. Total chunks: ${chunkCount}`);
         } catch (streamError) {
           console.error('❌ Error en stream:', streamError);
-          console.error('Stack:', (streamError as Error).stack);
-          controller.error(streamError);
+          console.error('Error details:', JSON.stringify(streamError));
+          controller.close();
         }
       },
     });
 
     return new Response(readable, {
+      status: 200,
       headers: {
-        'Content-Type': 'text/event-stream',
+        'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'Transfer-Encoding': 'chunked',
       },
     });
 
