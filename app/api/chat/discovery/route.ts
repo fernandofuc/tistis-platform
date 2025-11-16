@@ -89,41 +89,37 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ Stream creado, comenzando a leer chunks...');
 
-    // Usar TransformStream en lugar de ReadableStream
-    const encoder = new TextEncoder();
+    // Acumular todo el texto primero (más simple para Edge Runtime)
+    let accumulatedText = '';
     let chunkCount = 0;
 
-    const readable = new ReadableStream({
-      async start(controller) {
-        try {
-          console.log('🔄 Iniciando lectura de chunks...');
-          for await (const chunk of stream) {
-            chunkCount++;
-            console.log(`📦 Chunk #${chunkCount}:`, JSON.stringify(chunk));
+    try {
+      console.log('🔄 Iniciando lectura de chunks...');
+      for await (const chunk of stream) {
+        chunkCount++;
+        console.log(`📦 Chunk #${chunkCount}:`, chunk.type);
 
-            if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-              const text = chunk.delta.text;
-              console.log(`📤 Enviando texto (${text.length} chars):`, text);
-              controller.enqueue(encoder.encode(text));
-            }
-          }
-          controller.close();
-          console.log(`✅ Stream completado exitosamente. Total chunks: ${chunkCount}`);
-        } catch (streamError) {
-          console.error('❌ Error en stream:', streamError);
-          console.error('Error details:', JSON.stringify(streamError));
-          controller.close();
+        if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+          const text = chunk.delta.text;
+          accumulatedText += text;
+          console.log(`📤 Texto recibido (${text.length} chars):`, text);
         }
-      },
-    });
+      }
+      console.log(`✅ Stream completado exitosamente. Total chunks: ${chunkCount}, texto: ${accumulatedText.length} chars`);
+    } catch (streamError) {
+      console.error('❌ Error en stream:', streamError);
+      console.error('Error details:', JSON.stringify(streamError));
+    }
 
-    return new Response(readable, {
+    // Retornar el texto acumulado como stream simple
+    const encoder = new TextEncoder();
+    const textBuffer = encoder.encode(accumulatedText);
+
+    return new Response(textBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Transfer-Encoding': 'chunked',
       },
     });
 
