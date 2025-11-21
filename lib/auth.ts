@@ -1,12 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 
-// Browser client
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Browser client - lazy initialization to avoid build-time errors
+let supabaseInstance: SupabaseClient | null = null;
+
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    if (!supabaseInstance) {
+      supabaseInstance = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+    }
+    return (supabaseInstance as any)[prop];
+  }
+});
 
 // Types
 export interface AuthState {
