@@ -8,11 +8,13 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
 
-// Create Supabase client for edge runtime
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Create Supabase client lazily to avoid build-time errors
+function getSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 // Parse AI analysis from response
 function parseAIAnalysis(content: string): any | null {
@@ -146,6 +148,7 @@ export async function POST(req: NextRequest) {
         const isComplete = aiAnalysis !== null;
 
         // Update or create session
+        const supabase = getSupabaseClient();
         const { data: existingSession } = await supabase
           .from('discovery_sessions')
           .select('id')
