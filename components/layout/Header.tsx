@@ -6,9 +6,14 @@ import Link from 'next/link';
 import { Gift } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Container from './Container';
+import { AuthModal } from '@/components/auth/AuthModal';
+import { useAuth } from '@/lib/auth';
 
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalView, setAuthModalView] = useState<'signup' | 'login'>('signup');
+  const { user, signOut, loading } = useAuth();
 
   // Detectar scroll (opcional para efectos)
   useEffect(() => {
@@ -18,6 +23,16 @@ export default function Header() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const openSignup = () => {
+    setAuthModalView('signup');
+    setAuthModalOpen(true);
+  };
+
+  const openLogin = () => {
+    setAuthModalView('login');
+    setAuthModalOpen(true);
+  };
 
   return (
     <header
@@ -70,18 +85,43 @@ export default function Header() {
             >
               <Gift className="w-5 h-5 text-tis-text-primary" />
             </button>
-            <Button variant="ghost" size="sm">
-              Iniciar Sesión
-            </Button>
-            <Button variant="primary" size="sm">
-              Crear Cuenta
-            </Button>
+
+            {loading ? (
+              <div className="w-20 h-8 bg-gray-100 animate-pulse rounded-lg" />
+            ) : user ? (
+              <>
+                <Link href="/dashboard">
+                  <Button variant="ghost" size="sm">
+                    Dashboard
+                  </Button>
+                </Link>
+                <Button variant="primary" size="sm" onClick={signOut}>
+                  Cerrar Sesión
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={openLogin}>
+                  Iniciar Sesión
+                </Button>
+                <Button variant="primary" size="sm" onClick={openSignup}>
+                  Crear Cuenta
+                </Button>
+              </>
+            )}
           </div>
         </nav>
       </Container>
 
       {/* Border bottom */}
       <div className="absolute bottom-0 left-0 right-0 h-px bg-black/5" />
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialView={authModalView}
+      />
     </header>
   );
 }

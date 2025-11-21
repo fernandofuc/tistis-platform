@@ -1,11 +1,32 @@
 import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'edge';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
+
+// Create Supabase client for edge runtime
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// Parse AI analysis from response
+function parseAIAnalysis(content: string): any | null {
+  const analysisMatch = content.match(/ANALYSIS_COMPLETE::({[\s\S]*})/);
+  if (analysisMatch) {
+    try {
+      return JSON.parse(analysisMatch[1]);
+    } catch (e) {
+      console.error('Error parsing AI analysis:', e);
+      return null;
+    }
+  }
+  return null;
+}
 
 const DISCOVERY_SYSTEM_PROMPT = `Eres un consultor de negocios de TIS TIS, especializado en identificar ineficiencias operativas y puntos de dolor en empresas.
 
@@ -57,9 +78,9 @@ Envía este JSON cuando detectes que tienes suficiente información para hacer u
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    const { messages, sessionToken } = await req.json();
 
-    console.log('📨 Chat request received:', { messageCount: messages.length });
+    console.log('📨 Chat request received:', { messageCount: messages.length, sessionToken });
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(
@@ -109,6 +130,60 @@ export async function POST(req: NextRequest) {
     } catch (streamError) {
       console.error('❌ Error en stream:', streamError);
       console.error('Error details:', JSON.stringify(streamError));
+    }
+
+    // Save to database if sessionToken provided
+    if (sessionToken && accumulatedText) {
+      try {
+        // Build conversation history with the new assistant message
+        const updatedHistory = [
+          ...messages,
+          { role: 'assistant', content: accumulatedText }
+        ];
+
+        // Check if analysis is complete
+        const aiAnalysis = parseAIAnalysis(accumulatedText);
+        const isComplete = aiAnalysis !== null;
+
+        // Update or create session
+        const { data: existingSession } = await supabase
+          .from('discovery_sessions')
+          .select('id')
+          .eq('session_token', sessionToken)
+          .single();
+
+        if (existingSession) {
+          // Update existing session
+          await supabase
+            .from('discovery_sessions')
+            .update({
+              conversation_history: updatedHistory,
+              ai_analysis: aiAnalysis,
+              status: isComplete ? 'completed' : 'active',
+              completed_at: isComplete ? new Date().toISOString() : null,
+              business_type: aiAnalysis?.business_type || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('session_token', sessionToken);
+        } else {
+          // Create new session
+          await supabase
+            .from('discovery_sessions')
+            .insert({
+              session_token: sessionToken,
+              conversation_history: updatedHistory,
+              ai_analysis: aiAnalysis,
+              status: isComplete ? 'completed' : 'active',
+              completed_at: isComplete ? new Date().toISOString() : null,
+              business_type: aiAnalysis?.business_type || null,
+            });
+        }
+
+        console.log('💾 Session saved to database:', { sessionToken, isComplete });
+      } catch (dbError) {
+        console.error('❌ Error saving to database:', dbError);
+        // Don't fail the request if DB save fails
+      }
     }
 
     // Retornar el texto acumulado como stream simple

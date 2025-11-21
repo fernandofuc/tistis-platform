@@ -7,11 +7,17 @@ import QuestionnaireForm from '@/components/questionnaire/QuestionnaireForm';
 import Image from 'next/image';
 import { Send, Paperclip, Mic } from 'lucide-react';
 
+// Generate a unique session token
+function generateSessionToken(): string {
+  return `ds_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
 export default function DiscoveryPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentInput, setCurrentInput] = useState('');
+  const [sessionToken] = useState(() => generateSessionToken());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +51,8 @@ export default function DiscoveryPage() {
           messages: conversationHistory.map(m => ({
             role: m.role,
             content: m.content
-          }))
+          })),
+          sessionToken, // Include session token for database persistence
         }),
       });
 
@@ -130,7 +137,7 @@ export default function DiscoveryPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [sessionToken]);
 
   // Cargar mensaje inicial de la landing page
   useEffect(() => {
@@ -177,6 +184,7 @@ export default function DiscoveryPage() {
 
   const handleQuestionnaireComplete = (answers: QuestionnaireAnswers) => {
     sessionStorage.setItem('questionnaire_answers', JSON.stringify(answers));
+    sessionStorage.setItem('discovery_session_token', sessionToken);
     router.push('/proposal');
   };
 

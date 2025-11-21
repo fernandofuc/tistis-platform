@@ -11,7 +11,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
     "@stripe/stripe-js": "^8.4.0",
-    "@supabase/supabase-js": "^2.81.1",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/supabase-js": "^2.83.0",
     "axios": "^1.7.9",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",

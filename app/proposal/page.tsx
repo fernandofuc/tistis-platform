@@ -11,6 +11,7 @@ import ROICalculator from '@/components/proposal/ROICalculator';
 import Timeline from '@/components/proposal/Timeline';
 import PlanCard from '@/components/proposal/PlanCard';
 import { AIAnalysis, QuestionnaireAnswers } from '@/types';
+import { supabase } from '@/lib/auth';
 
 // Datos de planes (hardcoded por ahora, vendrían de pricing)
 const PLANS = {
@@ -72,18 +73,62 @@ export default function ProposalPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Cargar datos de sessionStorage
-    const savedAnalysis = sessionStorage.getItem('ai_analysis');
-    const savedAnswers = sessionStorage.getItem('questionnaire_answers');
+    const loadData = async () => {
+      // First try to get from sessionStorage
+      const savedAnswers = sessionStorage.getItem('questionnaire_answers');
+      const sessionToken = sessionStorage.getItem('discovery_session_token');
 
-    if (savedAnalysis && savedAnswers) {
-      setAnalysis(JSON.parse(savedAnalysis));
+      if (!savedAnswers) {
+        router.push('/discovery');
+        return;
+      }
+
       setAnswers(JSON.parse(savedAnswers));
-      setLoading(false);
-    } else {
-      // Si no hay datos, redirigir a discovery
-      router.push('/discovery');
-    }
+
+      // Try to get analysis from database if we have a session token
+      if (sessionToken) {
+        try {
+          const { data: session, error } = await supabase
+            .from('discovery_sessions')
+            .select('ai_analysis')
+            .eq('session_token', sessionToken)
+            .single();
+
+          if (!error && session?.ai_analysis) {
+            setAnalysis(session.ai_analysis as AIAnalysis);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error('Error fetching session:', e);
+        }
+      }
+
+      // Fallback to sessionStorage
+      const savedAnalysis = sessionStorage.getItem('ai_analysis');
+      if (savedAnalysis) {
+        setAnalysis(JSON.parse(savedAnalysis));
+        setLoading(false);
+      } else {
+        // Generate default analysis based on answers
+        const parsedAnswers = JSON.parse(savedAnswers);
+        const defaultAnalysis: AIAnalysis = {
+          business_type: parsedAnswers.business_type || 'restaurante',
+          primary_pain: 'Ineficiencias operativas generales',
+          financial_impact: 15000,
+          time_impact: 20,
+          urgency_score: 7,
+          recommended_plan: 'essentials',
+          recommended_addons: [],
+          recommended_especialidad: parsedAnswers.business_type || null,
+          reasoning: 'Plan recomendado basado en el tamaño y necesidades de tu negocio.'
+        };
+        setAnalysis(defaultAnalysis);
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, [router]);
 
   if (loading || !analysis || !answers) {
@@ -104,10 +149,60 @@ export default function ProposalPage() {
   const hoursRecovered = analysis.time_impact || 20;
   const paybackMonths = Math.ceil(plan.price / (monthlySavings * 0.3));
 
-  const handleCheckout = () => {
-    // Guardar plan seleccionado
+  const handleCheckout = async () => {
+    // Guardar plan seleccionado en sessionStorage
     sessionStorage.setItem('selected_plan', analysis.recommended_plan);
     sessionStorage.setItem('total_price', plan.price.toString());
+
+    // Save proposal to database
+    const sessionToken = sessionStorage.getItem('discovery_session_token');
+
+    try {
+      // Get or create session ID
+      let sessionId = null;
+      if (sessionToken) {
+        const { data: session } = await supabase
+          .from('discovery_sessions')
+          .select('id')
+          .eq('session_token', sessionToken)
+          .single();
+        sessionId = session?.id;
+      }
+
+      // Create proposal in database
+      const { data: proposal, error } = await supabase
+        .from('proposals')
+        .insert({
+          session_id: sessionId,
+          recommended_plan: analysis.recommended_plan,
+          recommended_addons: analysis.recommended_addons,
+          financial_analysis: {
+            monthly_savings: monthlySavings,
+            hours_recovered: hoursRecovered,
+            payback_months: paybackMonths,
+            financial_impact: analysis.financial_impact,
+            time_impact: analysis.time_impact,
+          },
+          pricing_snapshot: {
+            plan_name: plan.name,
+            monthly_price: plan.price,
+            setup_fee: plan.price * 0.5,
+            features: plan.features,
+          },
+          reasoning: analysis.reasoning,
+          status: 'generated',
+        })
+        .select('id')
+        .single();
+
+      if (!error && proposal) {
+        sessionStorage.setItem('proposal_id', proposal.id);
+        console.log('💾 Proposal saved:', proposal.id);
+      }
+    } catch (e) {
+      console.error('Error saving proposal:', e);
+    }
+
     router.push('/checkout');
   };
 
