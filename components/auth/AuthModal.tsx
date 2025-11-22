@@ -143,11 +143,11 @@ export function AuthModal({ isOpen, onClose, initialView = 'signup' }: AuthModal
         aria-labelledby="auth-modal-title"
         className={`
           fixed z-[9999] bg-white shadow-2xl
-          w-full max-w-[456px] p-10
+          w-[calc(100%-2rem)] max-w-[456px] p-10
           top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
           rounded-2xl
-          md:w-[456px]
-          max-md:w-full max-md:h-full max-md:max-w-none max-md:rounded-none max-md:p-6 max-md:top-0 max-md:left-0 max-md:translate-x-0 max-md:translate-y-0
+          sm:w-[456px]
+          max-sm:w-[calc(100%-2rem)] max-sm:p-6 max-sm:max-h-[90vh] max-sm:overflow-y-auto
           transition-all duration-300 ease-out
           ${isAnimating ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.96]'}
         `}
