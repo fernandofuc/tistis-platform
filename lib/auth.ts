@@ -5,15 +5,24 @@ import type { User, Session } from '@supabase/supabase-js';
 // Browser client - lazy initialization to avoid build-time errors
 let supabaseInstance: SupabaseClient | null = null;
 
+function getSupabaseClient(): SupabaseClient {
+  if (!supabaseInstance) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!url || !key) {
+      throw new Error('Supabase environment variables not configured');
+    }
+
+    supabaseInstance = createClient(url, key);
+  }
+  return supabaseInstance;
+}
+
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop) {
-    if (!supabaseInstance) {
-      supabaseInstance = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-    }
-    return (supabaseInstance as any)[prop];
+    const client = getSupabaseClient();
+    return (client as any)[prop];
   }
 });
 
