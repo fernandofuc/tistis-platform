@@ -11,7 +11,12 @@ function getSupabaseClient(): SupabaseClient {
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!url || !key) {
-      throw new Error('Supabase environment variables not configured');
+      console.error('Missing env vars:', {
+        hasUrl: !!url,
+        hasKey: !!key,
+        url: url ? url.substring(0, 20) + '...' : 'undefined'
+      });
+      throw new Error('Supabase environment variables not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.');
     }
 
     supabaseInstance = createClient(url, key);
