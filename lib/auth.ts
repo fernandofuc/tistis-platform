@@ -2,34 +2,30 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 
-// Browser client - lazy initialization to avoid build-time errors
-let supabaseInstance: SupabaseClient | null = null;
+// Browser client - direct initialization
+// Environment variables are inlined at build time by Next.js
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-function getSupabaseClient(): SupabaseClient {
-  if (!supabaseInstance) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!url || !key) {
-      console.error('Missing env vars:', {
-        hasUrl: !!url,
-        hasKey: !!key,
-        url: url ? url.substring(0, 20) + '...' : 'undefined'
-      });
-      throw new Error('Supabase environment variables not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.');
-    }
-
-    supabaseInstance = createClient(url, key);
-  }
-  return supabaseInstance;
+// Log at module load for debugging
+if (typeof window !== 'undefined') {
+  console.log('🔧 Supabase config:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    urlPreview: supabaseUrl ? supabaseUrl.substring(0, 30) : 'NOT SET'
+  });
 }
 
-export const supabase = new Proxy({} as SupabaseClient, {
-  get(_, prop) {
-    const client = getSupabaseClient();
-    return (client as any)[prop];
-  }
-});
+// Create client - will work without throwing if vars are empty (for static pages)
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
+);
+
+// Helper to check if Supabase is properly configured
+export function isSupabaseConfigured(): boolean {
+  return !!supabaseUrl && !!supabaseAnonKey;
+}
 
 // Types
 export interface AuthState {
