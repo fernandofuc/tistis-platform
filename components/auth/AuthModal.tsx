@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import Image from 'next/image';
 import { supabase } from '@/lib/auth';
@@ -20,6 +21,12 @@ export function AuthModal({ isOpen, onClose, initialView = 'signup' }: AuthModal
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure we're on the client for Portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -122,21 +129,23 @@ export function AuthModal({ isOpen, onClose, initialView = 'signup' }: AuthModal
     }, 150);
   }, []);
 
-  if (!isOpen) return null;
+  // Don't render on server or if modal is closed
+  if (!mounted || !isOpen) return null;
 
   const isSignup = currentView === 'signup' || currentView === 'email-signup';
   const isEmailView = currentView === 'email-signup' || currentView === 'email-login';
 
-  return (
+  // Use createPortal to render modal at document.body level
+  return createPortal(
     <>
-      {/* Overlay */}
+      {/* Overlay - covers entire viewport */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Modal */}
+      {/* Modal - centered in viewport */}
       <div
         role="dialog"
         aria-modal="true"
@@ -399,6 +408,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'signup' }: AuthModal
           </p>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
