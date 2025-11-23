@@ -8,7 +8,22 @@ const protectedRoutes = ['/dashboard'];
 // Routes that should redirect to dashboard if already logged in
 const authRoutes = ['/auth/login', '/auth/signup'];
 
+// Routes that should bypass middleware (OAuth callbacks, etc)
+const bypassRoutes = ['/auth/callback'];
+
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // CRITICAL: Bypass middleware for OAuth callback to allow session exchange
+  const isBypassRoute = bypassRoutes.some(route =>
+    pathname.startsWith(route)
+  );
+
+  if (isBypassRoute) {
+    console.log('🟡 Middleware: Bypassing auth check for callback route:', pathname);
+    return NextResponse.next();
+  }
+
   let res = NextResponse.next({
     request: {
       headers: req.headers,
@@ -72,8 +87,6 @@ export async function middleware(req: NextRequest) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
-  const { pathname } = req.nextUrl;
 
   // Check if it's a protected route
   const isProtectedRoute = protectedRoutes.some(route =>
