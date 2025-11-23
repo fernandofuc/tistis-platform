@@ -58,15 +58,31 @@ export function AuthModal({ isOpen, onClose, initialView = 'signup' }: AuthModal
     setIsLoading(true);
     setError(null);
     try {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      console.log('🔵 Initiating Google OAuth flow');
+      console.log('Redirect URL:', redirectUrl);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
         },
       });
-      if (error) throw error;
+
+      if (error) {
+        console.error('🔴 Google OAuth Error:', {
+          message: error.message,
+          status: (error as any).status,
+          cause: (error as any).cause,
+        });
+        throw error;
+      }
+
+      console.log('🟡 Google OAuth initiated - redirecting to provider');
     } catch (err: any) {
-      setError(err.message || 'Error al conectar con Google');
+      const errorMsg = err.message || 'Error al conectar con Google';
+      console.error('🔴 Google Auth Exception:', errorMsg, err);
+      setError(errorMsg);
       setIsLoading(false);
     }
   };
@@ -75,15 +91,31 @@ export function AuthModal({ isOpen, onClose, initialView = 'signup' }: AuthModal
     setIsLoading(true);
     setError(null);
     try {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      console.log('🔵 Initiating GitHub OAuth flow');
+      console.log('Redirect URL:', redirectUrl);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
         },
       });
-      if (error) throw error;
+
+      if (error) {
+        console.error('🔴 GitHub OAuth Error:', {
+          message: error.message,
+          status: (error as any).status,
+          cause: (error as any).cause,
+        });
+        throw error;
+      }
+
+      console.log('🟡 GitHub OAuth initiated - redirecting to provider');
     } catch (err: any) {
-      setError(err.message || 'Error al conectar con GitHub');
+      const errorMsg = err.message || 'Error al conectar con GitHub';
+      console.error('🔴 GitHub Auth Exception:', errorMsg, err);
+      setError(errorMsg);
       setIsLoading(false);
     }
   };
