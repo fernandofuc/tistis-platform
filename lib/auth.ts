@@ -60,41 +60,82 @@ export function useAuth() {
   const [client, setClient] = useState<Client | null>(null);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      setState(prev => ({
-        ...prev,
-        session,
-        user: session?.user ?? null,
-        loading: false,
-        error: error?.message ?? null,
-      }));
+    let mounted = true;
 
-      // Fetch client data if logged in
-      if (session?.user) {
-        fetchClient(session.user.id);
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (mounted) {
+          if (error) {
+            console.error('🔴 Error getting session:', error);
+            setState(prev => ({
+              ...prev,
+              loading: false,
+              error: error.message,
+            }));
+          } else {
+            console.log('🟢 Session fetched:', {
+              hasSession: !!session,
+              userId: session?.user?.id,
+              email: session?.user?.email,
+            });
+
+            setState(prev => ({
+              ...prev,
+              session,
+              user: session?.user ?? null,
+              loading: false,
+              error: null,
+            }));
+
+            // Fetch client data if logged in
+            if (session?.user) {
+              await fetchClient(session.user.id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('🔴 Exception getting session:', err);
+        if (mounted) {
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          }));
+        }
       }
-    });
+    };
+
+    getInitialSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setState(prev => ({
-          ...prev,
-          session,
-          user: session?.user ?? null,
-          loading: false,
-        }));
+        console.log('🔵 Auth state changed:', { event, hasSession: !!session });
 
-        if (session?.user) {
-          await fetchClient(session.user.id);
-        } else {
-          setClient(null);
+        if (mounted) {
+          setState(prev => ({
+            ...prev,
+            session,
+            user: session?.user ?? null,
+            loading: false,
+          }));
+
+          if (session?.user) {
+            await fetchClient(session.user.id);
+          } else {
+            setClient(null);
+          }
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchClient = async (userId: string) => {

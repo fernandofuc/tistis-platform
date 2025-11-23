@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     try {
       console.log('🟡 Exchanging authorization code for session...');
 
-      const cookieStore = cookies();
+      const cookieStore = await cookies();
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -58,10 +58,19 @@ export async function GET(request: NextRequest) {
               return cookieStore.get(name)?.value;
             },
             set(name: string, value: string, options: CookieOptions) {
-              cookieStore.set({ name, value, ...options });
+              try {
+                cookieStore.set({ name, value, ...options });
+              } catch (e) {
+                // Cookie setting might fail in some contexts, log but continue
+                console.warn('⚠️ Failed to set cookie in request:', name);
+              }
             },
             remove(name: string, options: CookieOptions) {
-              cookieStore.set({ name, value: '', ...options });
+              try {
+                cookieStore.set({ name, value: '', ...options });
+              } catch (e) {
+                console.warn('⚠️ Failed to remove cookie in request:', name);
+              }
             },
           },
         }
@@ -87,10 +96,38 @@ export async function GET(request: NextRequest) {
           email: data.session.user.email,
           timestamp: new Date().toISOString(),
         });
+
+        // CRITICAL: Set response cookies to persist session
+        const response = NextResponse.redirect(new URL('/dashboard', request.url));
+
+        // Set session cookies in response headers
+        if (data.session.access_token) {
+          response.cookies.set('sb-access-token', data.session.access_token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 365, // 1 year
+            path: '/',
+          });
+        }
+
+        if (data.session.refresh_token) {
+          response.cookies.set('sb-refresh-token', data.session.refresh_token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 365 * 7, // 7 years
+            path: '/',
+          });
+        }
+
+        return response;
       }
 
-      // Redirect to dashboard after successful auth
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      console.warn('⚠️ No session returned from code exchange');
+      return NextResponse.redirect(
+        new URL('/?error=no_session', request.url)
+      );
     } catch (error) {
       console.error('🔴 Callback Handler Exception:', {
         message: error instanceof Error ? error.message : String(error),
