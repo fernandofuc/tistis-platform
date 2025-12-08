@@ -51,35 +51,6 @@ async function getAuthenticatedContext(request: NextRequest) {
   };
 }
 
-type SupabaseClientAny = ReturnType<typeof createClient>;
-
-// =====================================================
-// Helper: Verify patient belongs to user's tenant
-// =====================================================
-async function verifyPatientAccess(
-  supabase: SupabaseClientAny,
-  patientId: string,
-  userTenantId: string | null,
-  isServiceCall: boolean
-) {
-  const { data: patient, error } = await supabase
-    .from('patients')
-    .select('id, tenant_id')
-    .eq('id', patientId)
-    .single();
-
-  if (error || !patient) {
-    return { error: 'Patient not found', status: 404 };
-  }
-
-  const patientData = patient as { id: string; tenant_id: string };
-
-  if (!isServiceCall && patientData.tenant_id !== userTenantId) {
-    return { error: 'Access denied to this patient', status: 403 };
-  }
-
-  return { tenantId: patientData.tenant_id };
-}
 
 // =====================================================
 // GET /api/patients/[id] - Get single patient with full details
@@ -111,12 +82,25 @@ export async function GET(
 
     const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
 
-    // Verify access to this patient
-    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify access to this patient (inline)
+    const { data: patientCheck, error: checkError } = await supabase
+      .from('patients')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !patientCheck) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Patient not found' },
+        { status: 404 }
+      );
+    }
+
+    const patientData = patientCheck as { id: string; tenant_id: string };
+    if (!isServiceCall && patientData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this patient' },
+        { status: 403 }
       );
     }
 
@@ -213,12 +197,25 @@ export async function PATCH(
 
     const { client: supabase, tenantId: userTenantId, user, isServiceCall } = authContext;
 
-    // Verify access
-    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify access (inline)
+    const { data: patientCheck, error: checkError } = await supabase
+      .from('patients')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !patientCheck) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Patient not found' },
+        { status: 404 }
+      );
+    }
+
+    const patientData = patientCheck as { id: string; tenant_id: string };
+    if (!isServiceCall && patientData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this patient' },
+        { status: 403 }
       );
     }
 
@@ -364,12 +361,25 @@ export async function DELETE(
       );
     }
 
-    // Verify access
-    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify access (inline)
+    const { data: patientCheck, error: checkError } = await supabase
+      .from('patients')
+      .select('id, tenant_id')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !patientCheck) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Patient not found' },
+        { status: 404 }
+      );
+    }
+
+    const patientData = patientCheck as { id: string; tenant_id: string };
+    if (!isServiceCall && patientData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this patient' },
+        { status: 403 }
       );
     }
 
