@@ -86,16 +86,19 @@ export default function InboxPage() {
     fetchConversations();
   }, []);
 
+  // Get conversation ID for dependency
+  const selectedConversationId = selectedConversation?.id;
+
   // Fetch messages when conversation is selected
   useEffect(() => {
     async function fetchMessages() {
-      if (!selectedConversation) return;
+      if (!selectedConversationId) return;
 
       try {
         const { data, error } = await supabase
           .from('messages')
           .select('*')
-          .eq('conversation_id', selectedConversation.id)
+          .eq('conversation_id', selectedConversationId)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -106,7 +109,7 @@ export default function InboxPage() {
     }
 
     fetchMessages();
-  }, [selectedConversation?.id]);
+  }, [selectedConversationId]);
 
   // Filter conversations
   const filteredConversations = useMemo(() => {

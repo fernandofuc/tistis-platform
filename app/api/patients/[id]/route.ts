@@ -51,11 +51,14 @@ async function getAuthenticatedContext(request: NextRequest) {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseClientAny = ReturnType<typeof createClient<any, any, any>>;
+
 // =====================================================
 // Helper: Verify patient belongs to user's tenant
 // =====================================================
 async function verifyPatientAccess(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClientAny,
   patientId: string,
   userTenantId: string | null,
   isServiceCall: boolean
