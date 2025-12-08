@@ -3,6 +3,8 @@
 // Prepared for WhatsApp Business API & n8n Integration
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
 

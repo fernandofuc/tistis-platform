@@ -2,6 +2,8 @@
 // TIS TIS PLATFORM - Appointments API Route
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
 

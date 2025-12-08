@@ -1,7 +1,12 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Create Stripe client lazily
+function getStripeClient() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!);
+}
 
 // Plan prices in MXN centavos
 const PLAN_PRICES: Record<string, { monthly: number; name: string }> = {
@@ -15,6 +20,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { plan, customerEmail, customerName, metadata } = body;
+    const stripe = getStripeClient();
 
     if (!plan || !PLAN_PRICES[plan]) {
       return NextResponse.json(

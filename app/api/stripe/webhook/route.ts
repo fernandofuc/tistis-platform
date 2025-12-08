@@ -1,18 +1,26 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Create Stripe client lazily
+function getStripeClient() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!);
+}
 
-// Use service role for webhook (server-side only)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Create Supabase client lazily to avoid build-time errors
+function getSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const signature = req.headers.get('stripe-signature');
+  const stripe = getStripeClient();
 
   if (!signature) {
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
@@ -94,6 +102,7 @@ export async function POST(req: NextRequest) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('✅ Checkout completed:', session.id);
+  const supabase = getSupabaseClient();
 
   const { plan, customerName, proposalId } = session.metadata || {};
   const customerEmail = session.customer_email || session.customer_details?.email;
@@ -154,6 +163,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   console.log('🆕 Subscription created:', subscription.id);
+  const stripe = getStripeClient();
+  const supabase = getSupabaseClient();
 
   const { plan, customerName } = subscription.metadata || {};
   const customerId = subscription.customer as string;
@@ -208,6 +219,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   console.log('🔄 Subscription updated:', subscription.id);
+  const supabase = getSupabaseClient();
 
   const status = subscription.status === 'active' ? 'active' :
                  subscription.status === 'past_due' ? 'past_due' :
@@ -230,6 +242,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   console.log('❌ Subscription deleted:', subscription.id);
+  const supabase = getSupabaseClient();
 
   await supabase
     .from('subscriptions')
