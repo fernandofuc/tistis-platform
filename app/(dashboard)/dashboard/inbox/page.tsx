@@ -171,7 +171,7 @@ export default function InboxPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto" padding="none">
+            <CardContent className="flex-1 overflow-y-auto p-0">
               {loading ? (
                 <div className="p-4 space-y-3">
                   {[1, 2, 3, 4, 5].map((i) => (
