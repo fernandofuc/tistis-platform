@@ -50,7 +50,7 @@ const PLAN_DETAILS: Record<string, { name: string; price: number; features: stri
   },
 };
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -306,5 +306,24 @@ export default function CheckoutPage() {
         </div>
       </Container>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-tis-bg-primary py-12 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tis-coral mx-auto mb-4"></div>
+        <p className="text-tis-text-secondary">Cargando checkout...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <CheckoutContent />
+    </Suspense>
   );
 }
