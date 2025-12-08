@@ -4,11 +4,11 @@ import Stripe from 'stripe';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 // Plan prices in MXN centavos
-const PLAN_PRICES: Record<string, { monthly: number; setup: number; name: string }> = {
-  starter: { monthly: 599000, setup: 299500, name: 'TIS TIS Starter' },
-  essentials: { monthly: 899000, setup: 449500, name: 'TIS TIS Essentials' },
-  growth: { monthly: 1499000, setup: 749500, name: 'TIS TIS Growth' },
-  scale: { monthly: 2499000, setup: 1249500, name: 'TIS TIS Scale' },
+const PLAN_PRICES: Record<string, { monthly: number; name: string }> = {
+  starter: { monthly: 599000, name: 'TIS TIS Starter' },
+  essentials: { monthly: 899000, name: 'TIS TIS Essentials' },
+  growth: { monthly: 1499000, name: 'TIS TIS Growth' },
+  scale: { monthly: 2499000, name: 'TIS TIS Scale' },
 };
 
 export async function POST(req: NextRequest) {
@@ -55,27 +55,12 @@ export async function POST(req: NextRequest) {
           customerName: customerName || '',
           ...metadata,
         },
-        // Add setup fee to first invoice
-        add_invoice_items: [
-          {
-            price_data: {
-              currency: 'mxn',
-              product_data: {
-                name: 'Configuración Inicial',
-                description: 'Cargo único de configuración e integración',
-              },
-              unit_amount: planConfig.setup,
-            },
-            quantity: 1,
-          },
-        ],
       },
       success_url: `${origin}/dashboard?welcome=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout?cancelled=true`,
       metadata: {
         plan,
         customerName: customerName || '',
-        setupFee: planConfig.setup.toString(),
         ...metadata,
       },
     });

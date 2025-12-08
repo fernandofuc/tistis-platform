@@ -84,8 +84,6 @@ function CheckoutContent() {
   }, [searchParams]);
 
   const plan = PLAN_DETAILS[planId] || PLAN_DETAILS.essentials;
-  const activationFee = Math.ceil(plan.price * 0.5);
-  const totalToday = plan.price + activationFee;
 
   const handleCheckout = async () => {
     if (!customerEmail) {
@@ -169,19 +167,15 @@ function CheckoutContent() {
                 <span className="text-tis-text-secondary">Plan {plan.name}</span>
                 <span className="font-semibold">${plan.price.toLocaleString('es-MX')} MXN/mes</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-tis-text-secondary">Configuración inicial</span>
-                <span className="font-semibold">${activationFee.toLocaleString('es-MX')} MXN</span>
-              </div>
               <div className="border-t pt-4">
                 <div className="flex justify-between text-lg">
-                  <span className="font-bold">Total hoy</span>
+                  <span className="font-bold">Total mensual</span>
                   <span className="font-bold text-tis-coral">
-                    ${totalToday.toLocaleString('es-MX')} MXN
+                    ${plan.price.toLocaleString('es-MX')} MXN
                   </span>
                 </div>
                 <p className="text-sm text-tis-text-muted mt-2">
-                  Luego ${plan.price.toLocaleString('es-MX')} MXN/mes
+                  Cobro recurrente cada mes
                 </p>
               </div>
             </div>
