@@ -70,11 +70,13 @@ async function verifyPatientAccess(
     return { error: 'Patient not found', status: 404 };
   }
 
-  if (!isServiceCall && patient.tenant_id !== userTenantId) {
+  const patientData = patient as { id: string; tenant_id: string };
+
+  if (!isServiceCall && patientData.tenant_id !== userTenantId) {
     return { error: 'Access denied to this patient', status: 403 };
   }
 
-  return { tenantId: patient.tenant_id };
+  return { tenantId: patientData.tenant_id };
 }
 
 // =====================================================

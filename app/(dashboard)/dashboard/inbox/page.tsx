@@ -72,9 +72,9 @@ export default function InboxPage() {
         if (error) throw error;
         setConversations(data as ConversationWithLead[]);
 
-        // Auto-select first conversation
-        if (data && data.length > 0 && !selectedConversation) {
-          setSelectedConversation(data[0] as ConversationWithLead);
+        // Auto-select first conversation if none selected
+        if (data && data.length > 0) {
+          setSelectedConversation((prev) => prev || (data[0] as ConversationWithLead));
         }
       } catch (error) {
         console.error('Error fetching conversations:', error);
