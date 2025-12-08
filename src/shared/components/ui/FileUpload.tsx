@@ -396,6 +396,7 @@ export function FileUpload({
             >
               {/* Preview or Icon */}
               {showPreview && previews[index] ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={previews[index]}
                   alt={file.name}

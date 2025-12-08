@@ -260,19 +260,121 @@ export function Header({ onMenuClick }: HeaderProps) {
               className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
             >
               {icons.bell}
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-xs font-medium rounded-full">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200">
-                <div className="p-4 border-b border-gray-100">
-                  <h3 className="font-semibold text-gray-900">Notificaciones</h3>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  <div className="p-4 text-center text-gray-500 text-sm">
-                    No hay notificaciones nuevas
+              <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Notificaciones</h3>
+                    {unreadCount > 0 && (
+                      <p className="text-xs text-gray-500">{unreadCount} sin leer</p>
+                    )}
                   </div>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Marcar todas leídas
+                    </button>
+                  )}
                 </div>
+
+                {/* Notifications List */}
+                <div className="max-h-[400px] overflow-y-auto">
+                  {notificationsLoading ? (
+                    <div className="p-8 text-center">
+                      <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <div className="w-12 h-12 mx-auto mb-3 text-gray-300">
+                        {icons.bell}
+                      </div>
+                      <p className="text-gray-500 text-sm">No hay notificaciones</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          onClick={() => {
+                            if (!notification.read) {
+                              markAsRead(notification.id);
+                            }
+                            if (notification.action_url) {
+                              router.push(notification.action_url);
+                              setShowNotifications(false);
+                            }
+                          }}
+                          className={cn(
+                            'w-full p-4 text-left hover:bg-gray-50 transition-colors flex gap-3',
+                            !notification.read && 'bg-blue-50/50'
+                          )}
+                        >
+                          {/* Icon */}
+                          <div className={cn(
+                            'flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center',
+                            getNotificationIconBg(notification.priority)
+                          )}>
+                            {getNotificationIcon(notification.type)}
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className={cn(
+                                'text-sm',
+                                notification.read ? 'text-gray-600' : 'text-gray-900 font-medium'
+                              )}>
+                                {notification.title}
+                              </p>
+                              <span className="text-xs text-gray-400 flex-shrink-0">
+                                {formatTimeAgo(notification.created_at)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">
+                              {notification.message}
+                            </p>
+                            {notification.action_label && (
+                              <span className="inline-flex items-center text-xs text-blue-600 font-medium mt-1">
+                                {notification.action_label}
+                                <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Unread indicator */}
+                          {!notification.read && (
+                            <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-blue-500" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                {notifications.length > 0 && (
+                  <div className="p-3 border-t border-gray-100 bg-gray-50">
+                    <Link
+                      href="/dashboard/settings/notifications"
+                      onClick={() => setShowNotifications(false)}
+                      className="block text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Ver todas las notificaciones
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -52,34 +52,6 @@ async function getAuthenticatedContext(request: NextRequest) {
 }
 
 // =====================================================
-// Helper: Verify quote belongs to user's tenant
-// =====================================================
-async function verifyQuoteAccess(
-  supabase: ReturnType<typeof createClient>,
-  quoteId: string,
-  userTenantId: string | null,
-  isServiceCall: boolean
-) {
-  const { data: quote, error } = await supabase
-    .from('quotes')
-    .select('id, tenant_id, status')
-    .eq('id', quoteId)
-    .single();
-
-  if (error || !quote) {
-    return { error: 'Quote not found', status: 404 };
-  }
-
-  const quoteData = quote as { id: string; tenant_id: string; status: string };
-
-  if (!isServiceCall && quoteData.tenant_id !== userTenantId) {
-    return { error: 'Access denied to this quote', status: 403 };
-  }
-
-  return { tenantId: quoteData.tenant_id, currentStatus: quoteData.status };
-}
-
-// =====================================================
 // GET /api/quotes/[id] - Get single quote with full details
 // =====================================================
 export async function GET(
@@ -108,11 +80,26 @@ export async function GET(
 
     const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
 
-    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify quote access (inline)
+    const { data: quoteCheck, error: checkError } = await supabase
+      .from('quotes')
+      .select('id, tenant_id, status')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !quoteCheck) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Quote not found' },
+        { status: 404 }
+      );
+    }
+
+    const quoteCheckData = quoteCheck as { id: string; tenant_id: string; status: string };
+
+    if (!isServiceCall && quoteCheckData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this quote' },
+        { status: 403 }
       );
     }
 
@@ -186,17 +173,34 @@ export async function PATCH(
 
     const { client: supabase, tenantId: userTenantId, user, isServiceCall } = authContext;
 
-    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify quote access (inline)
+    const { data: quoteCheck, error: checkError } = await supabase
+      .from('quotes')
+      .select('id, tenant_id, status')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !quoteCheck) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Quote not found' },
+        { status: 404 }
       );
     }
 
+    const quoteCheckData = quoteCheck as { id: string; tenant_id: string; status: string };
+
+    if (!isServiceCall && quoteCheckData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this quote' },
+        { status: 403 }
+      );
+    }
+
+    const currentStatus = quoteCheckData.status;
+
     // Cannot modify sent/accepted/rejected quotes (only certain fields)
     const lockedStatuses = ['sent', 'accepted', 'rejected', 'expired'];
-    const isLocked = lockedStatuses.includes(accessCheck.currentStatus);
+    const isLocked = lockedStatuses.includes(currentStatus);
 
     const allowedFields = isLocked
       ? ['status', 'notes'] // Only allow status changes and notes for locked quotes
@@ -236,16 +240,16 @@ export async function PATCH(
         cancelled: ['draft'],
       };
 
-      const allowed = validTransitions[accessCheck.currentStatus] || [];
+      const allowed = validTransitions[currentStatus] || [];
       if (!allowed.includes(body.status)) {
         return NextResponse.json(
-          { error: `Cannot transition from ${accessCheck.currentStatus} to ${body.status}` },
+          { error: `Cannot transition from ${currentStatus} to ${body.status}` },
           { status: 400 }
         );
       }
 
       // Set sent_at when transitioning to sent
-      if (body.status === 'sent' && accessCheck.currentStatus !== 'sent') {
+      if (body.status === 'sent' && currentStatus !== 'sent') {
         updateData.sent_at = new Date().toISOString();
       }
 
@@ -344,16 +348,31 @@ export async function DELETE(
       );
     }
 
-    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify quote access (inline)
+    const { data: quoteCheck, error: checkError } = await supabase
+      .from('quotes')
+      .select('id, tenant_id, status')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !quoteCheck) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Quote not found' },
+        { status: 404 }
+      );
+    }
+
+    const quoteCheckData = quoteCheck as { id: string; tenant_id: string; status: string };
+
+    if (!isServiceCall && quoteCheckData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this quote' },
+        { status: 403 }
       );
     }
 
     // Cannot cancel already accepted quotes
-    if (accessCheck.currentStatus === 'accepted') {
+    if (quoteCheckData.status === 'accepted') {
       return NextResponse.json(
         { error: 'Cannot cancel an accepted quote' },
         { status: 400 }
