@@ -167,7 +167,7 @@ export default function LeadsPage() {
 
       {/* Leads List */}
       <Card variant="bordered">
-        <CardContent padding="none">
+        <CardContent className="p-0">
           {loading ? (
             <div className="p-8 space-y-4">
               {[1, 2, 3, 4, 5].map((i) => (

@@ -86,7 +86,7 @@ export default function SettingsPage() {
         {/* Sidebar */}
         <div className="lg:col-span-1">
           <Card variant="bordered">
-            <CardContent padding="none">
+            <CardContent className="p-0">
               <nav className="p-2">
                 {tabs.map((tab) => (
                   <button
