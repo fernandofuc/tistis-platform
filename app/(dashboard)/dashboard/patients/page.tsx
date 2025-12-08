@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, UserCheck, UserX, Archive } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Search, UserCheck, UserX, Archive } from 'lucide-react';
 
 interface Patient {
   id: string;
@@ -24,51 +24,114 @@ interface Patient {
   created_at: string;
 }
 
+interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('active');
   const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
 
-  useEffect(() => {
-    fetchPatients();
-  }, [statusFilter, page]);
+  // Debounce search to avoid excessive API calls
+  const debouncedSearch = useDebounce(searchTerm, 300);
 
-  const fetchPatients = async () => {
+  // Abort controller ref for cancelling requests
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const fetchPatients = useCallback(async (searchValue: string, statusValue: string, pageValue: number) => {
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+
     setLoading(true);
+    setError(null);
+
     try {
       const params = new URLSearchParams({
-        page: page.toString(),
+        page: pageValue.toString(),
         limit: '20',
       });
 
-      if (statusFilter !== 'all') {
-        params.append('status', statusFilter);
+      if (statusValue !== 'all') {
+        params.append('status', statusValue);
       }
 
-      if (searchTerm) {
-        params.append('search', searchTerm);
+      if (searchValue.trim()) {
+        params.append('search', searchValue.trim());
       }
 
-      const response = await fetch(`/api/patients?${params}`);
+      const response = await fetch(`/api/patients?${params}`, {
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch patients');
+      }
+
       const data = await response.json();
 
-      if (data.patients) {
-        setPatients(data.patients);
+      setPatients(data.patients || []);
+      setPagination(data.pagination || null);
+    } catch (err) {
+      // Don't set error if request was aborted
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching patients:', error);
+      console.error('Error fetching patients:', err);
+      setError(err instanceof Error ? err.message : 'Error loading patients');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Fetch on filter/page changes
+  useEffect(() => {
+    fetchPatients(debouncedSearch, statusFilter, page);
+  }, [debouncedSearch, statusFilter, page, fetchPatients]);
+
+  // Reset page when filter or search changes
+  useEffect(() => {
     setPage(1);
-    fetchPatients();
-  };
+  }, [debouncedSearch, statusFilter]);
+
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -108,75 +171,61 @@ export default function PatientsPage() {
     return age;
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'Activo';
+      case 'inactive':
+        return 'Inactivo';
+      case 'archived':
+        return 'Archivado';
+      default:
+        return status;
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-tis-text-primary mb-2">Pacientes</h1>
-        <p className="text-tis-text-secondary">Gestión de pacientes registrados</p>
+        <p className="text-tis-text-secondary">Gestion de pacientes registrados</p>
       </div>
 
       {/* Actions Bar */}
       <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1 max-w-md">
+          <div className="flex-1 max-w-md">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Buscar por nombre, teléfono o número de paciente..."
+                placeholder="Buscar por nombre, telefono o numero de paciente..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent"
               />
             </div>
-          </form>
+          </div>
 
           {/* Filters and Actions */}
           <div className="flex gap-2">
             {/* Status Filter */}
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  statusFilter === 'all'
-                    ? 'bg-white text-tis-text-primary shadow-sm'
-                    : 'text-tis-text-secondary hover:text-tis-text-primary'
-                }`}
-              >
-                Todos
-              </button>
-              <button
-                onClick={() => setStatusFilter('active')}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  statusFilter === 'active'
-                    ? 'bg-white text-tis-text-primary shadow-sm'
-                    : 'text-tis-text-secondary hover:text-tis-text-primary'
-                }`}
-              >
-                Activos
-              </button>
-              <button
-                onClick={() => setStatusFilter('inactive')}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  statusFilter === 'inactive'
-                    ? 'bg-white text-tis-text-primary shadow-sm'
-                    : 'text-tis-text-secondary hover:text-tis-text-primary'
-                }`}
-              >
-                Inactivos
-              </button>
-              <button
-                onClick={() => setStatusFilter('archived')}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  statusFilter === 'archived'
-                    ? 'bg-white text-tis-text-primary shadow-sm'
-                    : 'text-tis-text-secondary hover:text-tis-text-primary'
-                }`}
-              >
-                Archivados
-              </button>
+              {(['all', 'active', 'inactive', 'archived'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    statusFilter === status
+                      ? 'bg-white text-tis-text-primary shadow-sm'
+                      : 'text-tis-text-secondary hover:text-tis-text-primary'
+                  }`}
+                >
+                  {status === 'all' ? 'Todos' : status === 'active' ? 'Activos' : status === 'inactive' ? 'Inactivos' : 'Archivados'}
+                </button>
+              ))}
             </div>
 
             {/* Add Patient Button */}
@@ -187,6 +236,19 @@ export default function PatientsPage() {
           </div>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-800">{error}</p>
+          <button
+            onClick={() => fetchPatients(debouncedSearch, statusFilter, page)}
+            className="mt-2 text-red-600 hover:text-red-800 font-medium"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {/* Patients Table */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -199,15 +261,17 @@ export default function PatientsPage() {
           <div className="p-12 text-center">
             <UserCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-tis-text-primary mb-2">
-              No hay pacientes registrados
+              {searchTerm ? 'No se encontraron resultados' : 'No hay pacientes registrados'}
             </h3>
             <p className="text-tis-text-secondary mb-4">
-              Comienza agregando tu primer paciente
+              {searchTerm ? 'Intenta con otros terminos de busqueda' : 'Comienza agregando tu primer paciente'}
             </p>
-            <button className="px-4 py-2 bg-gradient-primary text-white rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-2">
-              <Plus className="w-5 h-5" />
-              Agregar Paciente
-            </button>
+            {!searchTerm && (
+              <button className="px-4 py-2 bg-gradient-primary text-white rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-2">
+                <Plus className="w-5 h-5" />
+                Agregar Paciente
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -265,7 +329,7 @@ export default function PatientsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-tis-text-primary">
-                        {patient.date_of_birth ? `${calculateAge(patient.date_of_birth)} años` : 'N/A'}
+                        {patient.date_of_birth ? `${calculateAge(patient.date_of_birth)} anos` : 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -287,7 +351,7 @@ export default function PatientsPage() {
                         )}`}
                       >
                         {getStatusIcon(patient.status)}
-                        {patient.status === 'active' ? 'Activo' : patient.status === 'inactive' ? 'Inactivo' : 'Archivado'}
+                        {getStatusLabel(patient.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -302,10 +366,10 @@ export default function PatientsPage() {
       </div>
 
       {/* Pagination */}
-      {!loading && patients.length > 0 && (
+      {!loading && patients.length > 0 && pagination && (
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm text-tis-text-secondary">
-            Mostrando {patients.length} pacientes
+            Mostrando {patients.length} de {pagination.total} pacientes (Pagina {pagination.page} de {pagination.totalPages})
           </div>
           <div className="flex gap-2">
             <button
@@ -317,7 +381,7 @@ export default function PatientsPage() {
             </button>
             <button
               onClick={() => setPage((p) => p + 1)}
-              disabled={patients.length < 20}
+              disabled={page >= (pagination?.totalPages || 1)}
               className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Siguiente

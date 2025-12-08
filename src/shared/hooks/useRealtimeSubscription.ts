@@ -3,7 +3,7 @@
 // =====================================================
 
 import { useEffect, useRef, useCallback } from 'react';
-import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, ESVA_TENANT_ID } from '@/src/shared/lib/supabase';
 
 type RealtimeEvent = 'INSERT' | 'UPDATE' | 'DELETE' | '*';
@@ -15,12 +15,18 @@ interface SubscriptionConfig {
   filter?: string;
 }
 
+interface RealtimePayload<T> {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: T;
+  old: T;
+}
+
 interface UseRealtimeSubscriptionOptions<T extends Record<string, unknown>> {
   config: SubscriptionConfig;
   onInsert?: (payload: T) => void;
   onUpdate?: (payload: { old: T; new: T }) => void;
   onDelete?: (payload: T) => void;
-  onChange?: (payload: RealtimePostgresChangesPayload<T>) => void;
+  onChange?: (payload: RealtimePayload<T>) => void;
   enabled?: boolean;
 }
 
@@ -44,42 +50,45 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>({
       ? `${config.filter},tenant_id=eq.${ESVA_TENANT_ID}`
       : `tenant_id=eq.${ESVA_TENANT_ID}`;
 
-    channelRef.current = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: config.event || '*',
-          schema: config.schema || 'public',
-          table: config.table,
-          filter,
-        },
-        (payload: RealtimePostgresChangesPayload<T>) => {
-          console.log(`[Realtime] ${config.table}:`, payload.eventType);
+    const channel = supabase.channel(channelName);
 
-          // Call general onChange handler
-          onChange?.(payload);
+    channel.on(
+      'postgres_changes' as never,
+      {
+        event: config.event || '*',
+        schema: config.schema || 'public',
+        table: config.table,
+        filter,
+      } as never,
+      (payload: RealtimePayload<T>) => {
+        console.log(`[Realtime] ${config.table}:`, payload.eventType);
 
-          // Call specific event handlers
-          switch (payload.eventType) {
-            case 'INSERT':
-              onInsert?.(payload.new as T);
-              break;
-            case 'UPDATE':
-              onUpdate?.({
-                old: payload.old as T,
-                new: payload.new as T,
-              });
-              break;
-            case 'DELETE':
-              onDelete?.(payload.old as T);
-              break;
-          }
+        // Call general onChange handler
+        onChange?.(payload);
+
+        // Call specific event handlers
+        switch (payload.eventType) {
+          case 'INSERT':
+            onInsert?.(payload.new as T);
+            break;
+          case 'UPDATE':
+            onUpdate?.({
+              old: payload.old as T,
+              new: payload.new as T,
+            });
+            break;
+          case 'DELETE':
+            onDelete?.(payload.old as T);
+            break;
         }
-      )
-      .subscribe((status) => {
-        console.log(`[Realtime] ${config.table} subscription:`, status);
-      });
+      }
+    );
+
+    channel.subscribe((status) => {
+      console.log(`[Realtime] ${config.table} subscription:`, status);
+    });
+
+    channelRef.current = channel;
   }, [config, onInsert, onUpdate, onDelete, onChange, enabled]);
 
   useEffect(() => {

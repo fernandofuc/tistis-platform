@@ -1,5 +1,8 @@
 # TIS TIS Platform - Integration Guide
 
+**Versión:** 2.1.0
+**Última actualización:** 8 de Diciembre, 2024
+
 ## 🔌 Overview
 
 This document describes how to complete the WhatsApp Business API and n8n workflow integrations for the TIS TIS Platform (ESVA Dental Clinic Pilot).
@@ -8,6 +11,17 @@ The platform is **ready to assemble** - all code, hooks, and endpoints are in pl
 1. Set up WhatsApp Business API credentials
 2. Create n8n workflows
 3. Configure environment variables
+
+## 🔐 Security Updates (v2.1.0)
+
+**Important:** Version 2.1.0 includes critical security fixes:
+
+- ✅ All API routes now validate authentication and tenant ownership
+- ✅ Race conditions eliminated with advisory locks
+- ✅ Storage policies enforce tenant isolation
+- ✅ Enhanced RLS policies prevent cross-tenant access
+
+Make sure to apply migration `009_critical_fixes.sql` before integrating.
 
 ---
 

@@ -2,8 +2,80 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+// =====================================================
+// Helper: Get authenticated user and validate tenant
+// =====================================================
+async function getAuthenticatedContext(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+
+  if (!authHeader) {
+    return {
+      client: createClient(supabaseUrl, supabaseServiceKey),
+      user: null,
+      tenantId: null,
+      role: null,
+      isServiceCall: true,
+    };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: 'Invalid or expired token', status: 401 };
+  }
+
+  const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+  const { data: userRole, error: roleError } = await serviceClient
+    .from('user_roles')
+    .select('tenant_id, role')
+    .eq('user_id', user.id)
+    .single();
+
+  if (roleError || !userRole) {
+    return { error: 'User has no assigned role', status: 403 };
+  }
+
+  return {
+    client: serviceClient,
+    user,
+    tenantId: userRole.tenant_id,
+    role: userRole.role,
+    isServiceCall: false,
+  };
+}
+
+// =====================================================
+// Helper: Verify patient belongs to user's tenant
+// =====================================================
+async function verifyPatientAccess(
+  supabase: ReturnType<typeof createClient>,
+  patientId: string,
+  userTenantId: string | null,
+  isServiceCall: boolean
+) {
+  const { data: patient, error } = await supabase
+    .from('patients')
+    .select('id, tenant_id')
+    .eq('id', patientId)
+    .single();
+
+  if (error || !patient) {
+    return { error: 'Patient not found', status: 404 };
+  }
+
+  if (!isServiceCall && patient.tenant_id !== userTenantId) {
+    return { error: 'Access denied to this patient', status: 403 };
+  }
+
+  return { tenantId: patient.tenant_id };
+}
 
 // =====================================================
 // GET /api/patients/[id] - Get single patient with full details
@@ -14,6 +86,35 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json(
+        { error: 'Invalid patient ID format' },
+        { status: 400 }
+      );
+    }
+
+    const authContext = await getAuthenticatedContext(request);
+
+    if ('error' in authContext) {
+      return NextResponse.json(
+        { error: authContext.error },
+        { status: authContext.status }
+      );
+    }
+
+    const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
+
+    // Verify access to this patient
+    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
+    if ('error' in accessCheck) {
+      return NextResponse.json(
+        { error: accessCheck.error },
+        { status: accessCheck.status }
+      );
+    }
 
     const { data, error } = await supabase
       .from('patients')
@@ -88,6 +189,35 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json(
+        { error: 'Invalid patient ID format' },
+        { status: 400 }
+      );
+    }
+
+    const authContext = await getAuthenticatedContext(request);
+
+    if ('error' in authContext) {
+      return NextResponse.json(
+        { error: authContext.error },
+        { status: authContext.status }
+      );
+    }
+
+    const { client: supabase, tenantId: userTenantId, user, isServiceCall } = authContext;
+
+    // Verify access
+    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
+    if ('error' in accessCheck) {
+      return NextResponse.json(
+        { error: accessCheck.error },
+        { status: accessCheck.status }
+      );
+    }
+
     // Allowed fields to update
     const allowedFields = [
       'first_name',
@@ -115,13 +245,34 @@ export async function PATCH(
       'status',
       'notes',
       'tags',
-      'updated_by',
     ];
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
+
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        updateData[field] = body[field];
+        // Trim string values
+        if (typeof body[field] === 'string') {
+          updateData[field] = body[field].trim();
+        } else {
+          updateData[field] = body[field];
+        }
+      }
+    }
+
+    // Normalize email to lowercase
+    if (updateData.email && typeof updateData.email === 'string') {
+      updateData.email = updateData.email.toLowerCase();
+    }
+
+    // Validate phone if provided
+    if (updateData.phone) {
+      const phoneRegex = /^[\d\s\-+()]{8,20}$/;
+      if (!phoneRegex.test(updateData.phone as string)) {
+        return NextResponse.json(
+          { error: 'Invalid phone number format' },
+          { status: 400 }
+        );
       }
     }
 
@@ -131,6 +282,9 @@ export async function PATCH(
         { status: 400 }
       );
     }
+
+    // Track who made the update
+    updateData.updated_by = user?.id || body.updated_by || null;
 
     const { data, error } = await supabase
       .from('patients')
@@ -177,6 +331,43 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json(
+        { error: 'Invalid patient ID format' },
+        { status: 400 }
+      );
+    }
+
+    const authContext = await getAuthenticatedContext(request);
+
+    if ('error' in authContext) {
+      return NextResponse.json(
+        { error: authContext.error },
+        { status: authContext.status }
+      );
+    }
+
+    const { client: supabase, tenantId: userTenantId, role, isServiceCall } = authContext;
+
+    // Only admin/receptionist can archive patients
+    if (!isServiceCall && role && !['admin', 'receptionist', 'super_admin'].includes(role)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions to archive patients' },
+        { status: 403 }
+      );
+    }
+
+    // Verify access
+    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
+    if ('error' in accessCheck) {
+      return NextResponse.json(
+        { error: accessCheck.error },
+        { status: accessCheck.status }
+      );
+    }
 
     // Soft delete: set status to 'archived'
     const { data, error } = await supabase

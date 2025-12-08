@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+// Create a single instance for the hook
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface Notification {
@@ -18,7 +20,7 @@ interface Notification {
   read: boolean;
   read_at?: string;
   created_at: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 interface UseNotificationsOptions {
@@ -39,6 +41,7 @@ interface UseNotificationsReturn {
 
 /**
  * Hook for managing user notifications with real-time updates
+ * Optimized to prevent memory leaks and unnecessary re-renders
  */
 export function useNotifications(
   options: UseNotificationsOptions = {}
@@ -53,24 +56,48 @@ export function useNotifications(
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const channelRef = useRef<any>(null);
-  const userId = useRef<string | null>(null);
 
-  // Fetch notifications
+  // Use refs to avoid stale closures in callbacks
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  const onNewNotificationRef = useRef(onNewNotification);
+  const autoMarkAsReadRef = useRef(autoMarkAsRead);
+  const limitRef = useRef(limit);
+  const isMountedRef = useRef(true);
+
+  // Update refs when props change
+  useEffect(() => {
+    onNewNotificationRef.current = onNewNotification;
+  }, [onNewNotification]);
+
+  useEffect(() => {
+    autoMarkAsReadRef.current = autoMarkAsRead;
+  }, [autoMarkAsRead]);
+
+  useEffect(() => {
+    limitRef.current = limit;
+  }, [limit]);
+
+  // Fetch notifications - memoized and stable
   const fetchNotifications = useCallback(async () => {
+    if (!isMountedRef.current) return;
+
     try {
       setLoading(true);
       setError(null);
 
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
+
+      if (!isMountedRef.current) return;
+
       if (!user) {
         setError('User not authenticated');
         setLoading(false);
         return;
       }
 
-      userId.current = user.id;
+      userIdRef.current = user.id;
 
       // Fetch notifications
       const { data, error: fetchError } = await supabase
@@ -79,7 +106,9 @@ export function useNotifications(
         .eq('user_id', user.id)
         .eq('archived', false)
         .order('created_at', { ascending: false })
-        .limit(limit);
+        .limit(limitRef.current);
+
+      if (!isMountedRef.current) return;
 
       if (fetchError) {
         console.error('Error fetching notifications:', fetchError);
@@ -87,32 +116,40 @@ export function useNotifications(
         return;
       }
 
-      setNotifications(data || []);
+      const notificationData = data || [];
+      setNotifications(notificationData);
 
       // Calculate unread count
-      const unread = (data || []).filter((n) => !n.read).length;
+      const unread = notificationData.filter((n) => !n.read).length;
       setUnreadCount(unread);
     } catch (err) {
+      if (!isMountedRef.current) return;
       console.error('Error in fetchNotifications:', err);
       setError('Failed to fetch notifications');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, [limit]);
+  }, []); // No dependencies - uses refs internally
 
-  // Mark notification as read
+  // Mark notification as read - stable callback
   const markAsRead = useCallback(async (notificationId: string) => {
+    if (!userIdRef.current) return;
+
     try {
       const { error: updateError } = await supabase
         .from('notifications')
         .update({ read: true, read_at: new Date().toISOString() })
         .eq('id', notificationId)
-        .eq('user_id', userId.current);
+        .eq('user_id', userIdRef.current);
 
       if (updateError) {
         console.error('Error marking notification as read:', updateError);
         return;
       }
+
+      if (!isMountedRef.current) return;
 
       // Update local state
       setNotifications((prev) =>
@@ -129,13 +166,15 @@ export function useNotifications(
     }
   }, []);
 
-  // Mark all notifications as read
+  // Mark all notifications as read - stable callback
   const markAllAsRead = useCallback(async () => {
+    if (!userIdRef.current) return;
+
     try {
       const { error: updateError } = await supabase
         .from('notifications')
         .update({ read: true, read_at: new Date().toISOString() })
-        .eq('user_id', userId.current)
+        .eq('user_id', userIdRef.current)
         .eq('read', false);
 
       if (updateError) {
@@ -143,12 +182,15 @@ export function useNotifications(
         return;
       }
 
+      if (!isMountedRef.current) return;
+
       // Update local state
+      const now = new Date().toISOString();
       setNotifications((prev) =>
         prev.map((n) => ({
           ...n,
           read: true,
-          read_at: n.read ? n.read_at : new Date().toISOString(),
+          read_at: n.read ? n.read_at : now,
         }))
       );
 
@@ -158,17 +200,27 @@ export function useNotifications(
     }
   }, []);
 
-  // Set up real-time subscription
+  // Setup realtime subscription - runs once on mount
   useEffect(() => {
+    isMountedRef.current = true;
+
+    // Initial fetch
     fetchNotifications();
 
     // Set up realtime subscription
     const setupRealtime = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+
+      if (!user || !isMountedRef.current) return;
+
+      // Clean up any existing channel
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
 
       const channel = supabase
-        .channel('notifications-channel')
+        .channel(`notifications-${user.id}`)
         .on(
           'postgres_changes',
           {
@@ -178,24 +230,46 @@ export function useNotifications(
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
+            if (!isMountedRef.current) return;
+
             const newNotification = payload.new as Notification;
 
             // Add to notifications
-            setNotifications((prev) => [newNotification, ...prev].slice(0, limit));
+            setNotifications((prev) =>
+              [newNotification, ...prev].slice(0, limitRef.current)
+            );
 
             // Increment unread count
             if (!newNotification.read) {
               setUnreadCount((prev) => prev + 1);
             }
 
-            // Call callback
-            if (onNewNotification) {
-              onNewNotification(newNotification);
+            // Call callback using ref to avoid stale closure
+            if (onNewNotificationRef.current) {
+              onNewNotificationRef.current(newNotification);
             }
 
             // Auto mark as read if enabled
-            if (autoMarkAsRead) {
-              markAsRead(newNotification.id);
+            if (autoMarkAsReadRef.current) {
+              // Use setTimeout to avoid blocking the update
+              setTimeout(() => {
+                supabase
+                  .from('notifications')
+                  .update({ read: true, read_at: new Date().toISOString() })
+                  .eq('id', newNotification.id)
+                  .then(() => {
+                    if (isMountedRef.current) {
+                      setNotifications((prev) =>
+                        prev.map((n) =>
+                          n.id === newNotification.id
+                            ? { ...n, read: true, read_at: new Date().toISOString() }
+                            : n
+                        )
+                      );
+                      setUnreadCount((prev) => Math.max(0, prev - 1));
+                    }
+                  });
+              }, 0);
             }
           }
         )
@@ -208,20 +282,21 @@ export function useNotifications(
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
+            if (!isMountedRef.current) return;
+
             const updatedNotification = payload.new as Notification;
 
-            // Update in notifications
-            setNotifications((prev) =>
-              prev.map((n) =>
+            // Update in notifications and recalculate unread in single update
+            setNotifications((prev) => {
+              const updated = prev.map((n) =>
                 n.id === updatedNotification.id ? updatedNotification : n
-              )
-            );
+              );
 
-            // Recalculate unread count
-            setNotifications((notifications) => {
-              const unread = notifications.filter((n) => !n.read).length;
-              setUnreadCount(unread);
-              return notifications;
+              // Recalculate unread count based on updated list
+              const newUnreadCount = updated.filter((n) => !n.read).length;
+              setUnreadCount(newUnreadCount);
+
+              return updated;
             });
           }
         )
@@ -232,27 +307,40 @@ export function useNotifications(
 
     setupRealtime();
 
-    // Cleanup
+    // Cleanup function
     return () => {
+      isMountedRef.current = false;
+
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [fetchNotifications, onNewNotification, autoMarkAsRead, markAsRead, limit]);
+  }, [fetchNotifications]); // Only depends on fetchNotifications which is stable
 
-  return {
-    notifications,
-    unreadCount,
-    loading,
-    error,
-    markAsRead,
-    markAllAsRead,
-    refreshNotifications: fetchNotifications,
-  };
+  // Memoize the return value to prevent unnecessary re-renders
+  return useMemo(
+    () => ({
+      notifications,
+      unreadCount,
+      loading,
+      error,
+      markAsRead,
+      markAllAsRead,
+      refreshNotifications: fetchNotifications,
+    }),
+    [notifications, unreadCount, loading, error, markAsRead, markAllAsRead, fetchNotifications]
+  );
 }
 
-// Helper function to create notification (call from API routes)
+// =====================================================
+// Helper functions for server-side notification creation
+// =====================================================
+
+/**
+ * Create a notification for a specific user
+ * Call from API routes only - uses service role key
+ */
 export async function createNotification(
   tenantId: string,
   userId: string,
@@ -265,15 +353,20 @@ export async function createNotification(
     relatedEntityId?: string;
     actionUrl?: string;
     actionLabel?: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   } = {}
 ) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  // This should only be called from server-side (API routes)
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const { data, error } = await supabase
+  if (!serviceKey) {
+    console.error('SUPABASE_SERVICE_ROLE_KEY not available');
+    return null;
+  }
+
+  const serviceClient = createClient(supabaseUrl, serviceKey);
+
+  const { data, error } = await serviceClient
     .from('notifications')
     .insert({
       tenant_id: tenantId,
@@ -300,7 +393,10 @@ export async function createNotification(
   return data;
 }
 
-// Helper function to broadcast notification to multiple users
+/**
+ * Broadcast a notification to multiple users
+ * Call from API routes only - uses service role key
+ */
 export async function broadcastNotification(
   tenantId: string,
   userIds: string[],
@@ -313,13 +409,18 @@ export async function broadcastNotification(
     relatedEntityId?: string;
     actionUrl?: string;
     actionLabel?: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   } = {}
 ) {
-  const promises = userIds.map((userId) =>
-    createNotification(tenantId, userId, type, title, message, options)
+  const results = await Promise.allSettled(
+    userIds.map((userId) =>
+      createNotification(tenantId, userId, type, title, message, options)
+    )
   );
 
-  const results = await Promise.all(promises);
-  return results.filter((r) => r !== null);
+  return results
+    .filter((r): r is PromiseFulfilledResult<Notification> =>
+      r.status === 'fulfilled' && r.value !== null
+    )
+    .map((r) => r.value);
 }
