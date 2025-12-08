@@ -52,40 +52,6 @@ async function getAuthenticatedContext(request: NextRequest) {
 }
 
 // =====================================================
-// Helper: Verify quote access and get status
-// =====================================================
-async function verifyQuoteAccess(
-  supabase: ReturnType<typeof createClient>,
-  quoteId: string,
-  userTenantId: string | null,
-  isServiceCall: boolean
-) {
-  const { data: quote, error } = await supabase
-    .from('quotes')
-    .select('id, tenant_id, status')
-    .eq('id', quoteId)
-    .single();
-
-  if (error || !quote) {
-    return { error: 'Quote not found', status: 404 };
-  }
-
-  const quoteData = quote as { id: string; tenant_id: string; status: string };
-
-  if (!isServiceCall && quoteData.tenant_id !== userTenantId) {
-    return { error: 'Access denied to this quote', status: 403 };
-  }
-
-  // Cannot modify items for non-draft quotes
-  const lockedStatuses = ['sent', 'accepted', 'rejected', 'expired', 'cancelled'];
-  if (lockedStatuses.includes(quoteData.status)) {
-    return { error: `Cannot modify items for ${quoteData.status} quote`, status: 400 };
-  }
-
-  return { tenantId: quoteData.tenant_id, status: quoteData.status };
-}
-
-// =====================================================
 // GET /api/quotes/[id]/items - Get quote items
 // =====================================================
 export async function GET(
@@ -194,11 +160,35 @@ export async function POST(
 
     const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
 
-    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify quote access (inline)
+    const { data: quote, error: quoteError } = await supabase
+      .from('quotes')
+      .select('id, tenant_id, status')
+      .eq('id', id)
+      .single();
+
+    if (quoteError || !quote) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Quote not found' },
+        { status: 404 }
+      );
+    }
+
+    const quoteData = quote as { id: string; tenant_id: string; status: string };
+
+    if (!isServiceCall && quoteData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this quote' },
+        { status: 403 }
+      );
+    }
+
+    // Cannot modify items for non-draft quotes
+    const lockedStatuses = ['sent', 'accepted', 'rejected', 'expired', 'cancelled'];
+    if (lockedStatuses.includes(quoteData.status)) {
+      return NextResponse.json(
+        { error: `Cannot modify items for ${quoteData.status} quote` },
+        { status: 400 }
       );
     }
 
@@ -309,11 +299,35 @@ export async function DELETE(
 
     const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
 
-    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
-    if ('error' in accessCheck) {
+    // Verify quote access (inline)
+    const { data: quote, error: quoteError } = await supabase
+      .from('quotes')
+      .select('id, tenant_id, status')
+      .eq('id', id)
+      .single();
+
+    if (quoteError || !quote) {
       return NextResponse.json(
-        { error: accessCheck.error },
-        { status: accessCheck.status }
+        { error: 'Quote not found' },
+        { status: 404 }
+      );
+    }
+
+    const quoteData = quote as { id: string; tenant_id: string; status: string };
+
+    if (!isServiceCall && quoteData.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this quote' },
+        { status: 403 }
+      );
+    }
+
+    // Cannot modify items for non-draft quotes
+    const lockedStatuses = ['sent', 'accepted', 'rejected', 'expired', 'cancelled'];
+    if (lockedStatuses.includes(quoteData.status)) {
+      return NextResponse.json(
+        { error: `Cannot modify items for ${quoteData.status} quote` },
+        { status: 400 }
       );
     }
 

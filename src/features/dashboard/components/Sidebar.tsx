@@ -76,6 +76,7 @@ const navItems: NavItem[] = [
   { name: 'Calendario', href: '/dashboard/calendario', icon: icons.calendar },
   { name: 'Leads', href: '/dashboard/leads', icon: icons.leads },
   { name: 'Pacientes', href: '/dashboard/patients', icon: icons.patients },
+  { name: 'Cotizaciones', href: '/dashboard/quotes', icon: icons.quotes },
   { name: 'Inbox', href: '/dashboard/inbox', icon: icons.inbox },
   { name: 'Analytics', href: '/dashboard/analytics', icon: icons.analytics },
   { name: 'Configuración', href: '/dashboard/settings', icon: icons.settings },
