@@ -51,38 +51,36 @@ async function getAuthenticatedContext(request: NextRequest) {
   };
 }
 
-type SupabaseClientAny = ReturnType<typeof createClient>;
-
 // =====================================================
-// Helper: Verify patient belongs to user's tenant
+// Helper: Verify quote belongs to user's tenant
 // =====================================================
-async function verifyPatientAccess(
-  supabase: SupabaseClientAny,
-  patientId: string,
+async function verifyQuoteAccess(
+  supabase: ReturnType<typeof createClient>,
+  quoteId: string,
   userTenantId: string | null,
   isServiceCall: boolean
 ) {
-  const { data: patient, error } = await supabase
-    .from('patients')
-    .select('id, tenant_id')
-    .eq('id', patientId)
+  const { data: quote, error } = await supabase
+    .from('quotes')
+    .select('id, tenant_id, status')
+    .eq('id', quoteId)
     .single();
 
-  if (error || !patient) {
-    return { error: 'Patient not found', status: 404 };
+  if (error || !quote) {
+    return { error: 'Quote not found', status: 404 };
   }
 
-  const patientData = patient as { id: string; tenant_id: string };
+  const quoteData = quote as { id: string; tenant_id: string; status: string };
 
-  if (!isServiceCall && patientData.tenant_id !== userTenantId) {
-    return { error: 'Access denied to this patient', status: 403 };
+  if (!isServiceCall && quoteData.tenant_id !== userTenantId) {
+    return { error: 'Access denied to this quote', status: 403 };
   }
 
-  return { tenantId: patientData.tenant_id };
+  return { tenantId: quoteData.tenant_id, currentStatus: quoteData.status };
 }
 
 // =====================================================
-// GET /api/patients/[id] - Get single patient with full details
+// GET /api/quotes/[id] - Get single quote with full details
 // =====================================================
 export async function GET(
   request: NextRequest,
@@ -91,11 +89,10 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return NextResponse.json(
-        { error: 'Invalid patient ID format' },
+        { error: 'Invalid quote ID format' },
         { status: 400 }
       );
     }
@@ -111,8 +108,7 @@ export async function GET(
 
     const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
 
-    // Verify access to this patient
-    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
+    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
     if ('error' in accessCheck) {
       return NextResponse.json(
         { error: accessCheck.error },
@@ -121,60 +117,38 @@ export async function GET(
     }
 
     const { data, error } = await supabase
-      .from('patients')
+      .from('quotes')
       .select(`
         *,
-        preferred_branch:branches!preferred_branch_id(id, name, address, phone, city, state),
-        assigned_dentist:staff_members!assigned_dentist_id(id, first_name, last_name, role, phone, email),
-        lead:leads!lead_id(id, name, status, classification, score, source, services_interested, notes),
-        clinical_history(
-          id,
-          visit_date,
-          chief_complaint,
-          diagnosis,
-          treatment_provided,
-          dentist:staff_members!dentist_id(first_name, last_name),
-          branch:branches!branch_id(name)
+        patient:patients!patient_id(
+          id, patient_number, first_name, last_name, phone, email,
+          address_street, address_city, address_state, address_postal_code
         ),
-        patient_files(
-          id,
-          file_name,
-          file_type,
-          file_category,
-          description,
-          created_at
+        lead:leads!lead_id(id, name, phone, email, classification, services_interested),
+        created_by_user:staff_members!created_by(id, first_name, last_name, email),
+        quote_items(
+          id, service_id, service_name, description, quantity, unit_price,
+          discount_percentage, discount_amount, subtotal, sort_order
+        ),
+        quote_payment_plans(
+          id, plan_name, number_of_payments, payment_frequency, down_payment,
+          monthly_payment, total_amount, interest_rate, is_default
         )
       `)
       .eq('id', id)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return NextResponse.json(
-          { error: 'Patient not found' },
-          { status: 404 }
-        );
-      }
-      console.error('Error fetching patient:', error);
+      console.error('Error fetching quote:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch patient', details: error.message },
+        { error: 'Failed to fetch quote', details: error.message },
         { status: 500 }
       );
     }
 
-    // Get appointment statistics
-    if (data.lead_id) {
-      const { count: appointmentsCount } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('lead_id', data.lead_id);
-
-      data.total_appointments = appointmentsCount || 0;
-    }
-
-    return NextResponse.json({ patient: data });
+    return NextResponse.json({ quote: data });
   } catch (error) {
-    console.error('Error in GET /api/patients/[id]:', error);
+    console.error('Error in GET /api/quotes/[id]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -183,7 +157,7 @@ export async function GET(
 }
 
 // =====================================================
-// PATCH /api/patients/[id] - Update patient
+// PATCH /api/quotes/[id] - Update quote
 // =====================================================
 export async function PATCH(
   request: NextRequest,
@@ -193,11 +167,10 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return NextResponse.json(
-        { error: 'Invalid patient ID format' },
+        { error: 'Invalid quote ID format' },
         { status: 400 }
       );
     }
@@ -213,8 +186,7 @@ export async function PATCH(
 
     const { client: supabase, tenantId: userTenantId, user, isServiceCall } = authContext;
 
-    // Verify access
-    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
+    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
     if ('error' in accessCheck) {
       return NextResponse.json(
         { error: accessCheck.error },
@@ -222,41 +194,30 @@ export async function PATCH(
       );
     }
 
-    // Allowed fields to update
-    const allowedFields = [
-      'first_name',
-      'last_name',
-      'email',
-      'phone',
-      'date_of_birth',
-      'gender',
-      'address_street',
-      'address_city',
-      'address_state',
-      'address_postal_code',
-      'address_country',
-      'blood_type',
-      'allergies',
-      'medical_conditions',
-      'current_medications',
-      'emergency_contact_name',
-      'emergency_contact_phone',
-      'emergency_contact_relationship',
-      'preferred_branch_id',
-      'assigned_dentist_id',
-      'insurance_provider',
-      'insurance_policy_number',
-      'status',
-      'notes',
-      'tags',
-    ];
+    // Cannot modify sent/accepted/rejected quotes (only certain fields)
+    const lockedStatuses = ['sent', 'accepted', 'rejected', 'expired'];
+    const isLocked = lockedStatuses.includes(accessCheck.currentStatus);
+
+    const allowedFields = isLocked
+      ? ['status', 'notes'] // Only allow status changes and notes for locked quotes
+      : [
+          'patient_id',
+          'lead_id',
+          'status',
+          'valid_until',
+          'currency',
+          'discount_percentage',
+          'discount_amount',
+          'tax_percentage',
+          'notes',
+          'terms_and_conditions',
+        ];
 
     const updateData: Record<string, unknown> = {};
 
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        // Trim string values
-        if (typeof body[field] === 'string') {
+        if (typeof body[field] === 'string' && ['notes', 'terms_and_conditions'].includes(field)) {
           updateData[field] = body[field].trim();
         } else {
           updateData[field] = body[field];
@@ -264,17 +225,44 @@ export async function PATCH(
       }
     }
 
-    // Normalize email to lowercase
-    if (updateData.email && typeof updateData.email === 'string') {
-      updateData.email = updateData.email.toLowerCase();
+    // Validate status transitions
+    if (body.status) {
+      const validTransitions: Record<string, string[]> = {
+        draft: ['sent', 'cancelled'],
+        sent: ['accepted', 'rejected', 'expired', 'draft'],
+        accepted: ['cancelled'],
+        rejected: ['draft'],
+        expired: ['draft'],
+        cancelled: ['draft'],
+      };
+
+      const allowed = validTransitions[accessCheck.currentStatus] || [];
+      if (!allowed.includes(body.status)) {
+        return NextResponse.json(
+          { error: `Cannot transition from ${accessCheck.currentStatus} to ${body.status}` },
+          { status: 400 }
+        );
+      }
+
+      // Set sent_at when transitioning to sent
+      if (body.status === 'sent' && accessCheck.currentStatus !== 'sent') {
+        updateData.sent_at = new Date().toISOString();
+      }
+
+      // Set accepted_at when transitioning to accepted
+      if (body.status === 'accepted') {
+        updateData.accepted_at = new Date().toISOString();
+      }
     }
 
-    // Validate phone if provided
-    if (updateData.phone) {
-      const phoneRegex = /^[\d\s\-+()]{8,20}$/;
-      if (!phoneRegex.test(updateData.phone as string)) {
+    // Validate patient_id XOR lead_id
+    if (updateData.patient_id !== undefined || updateData.lead_id !== undefined) {
+      const hasPatient = updateData.patient_id !== null && updateData.patient_id !== undefined;
+      const hasLead = updateData.lead_id !== null && updateData.lead_id !== undefined;
+
+      if (hasPatient && hasLead) {
         return NextResponse.json(
-          { error: 'Invalid phone number format' },
+          { error: 'Quote cannot have both patient_id and lead_id' },
           { status: 400 }
         );
       }
@@ -287,38 +275,31 @@ export async function PATCH(
       );
     }
 
-    // Track who made the update
     updateData.updated_by = user?.id || body.updated_by || null;
 
     const { data, error } = await supabase
-      .from('patients')
+      .from('quotes')
       .update(updateData)
       .eq('id', id)
       .select(`
         *,
-        preferred_branch:branches!preferred_branch_id(id, name, address),
-        assigned_dentist:staff_members!assigned_dentist_id(id, first_name, last_name, role),
-        lead:leads!lead_id(id, name, status, classification)
+        patient:patients!patient_id(id, patient_number, first_name, last_name, phone, email),
+        lead:leads!lead_id(id, name, phone, email, classification),
+        quote_items(id, service_name, quantity, unit_price, subtotal)
       `)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return NextResponse.json(
-          { error: 'Patient not found' },
-          { status: 404 }
-        );
-      }
-      console.error('Error updating patient:', error);
+      console.error('Error updating quote:', error);
       return NextResponse.json(
-        { error: 'Failed to update patient', details: error.message },
+        { error: 'Failed to update quote', details: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ patient: data });
+    return NextResponse.json({ quote: data });
   } catch (error) {
-    console.error('Error in PATCH /api/patients/[id]:', error);
+    console.error('Error in PATCH /api/quotes/[id]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -327,7 +308,7 @@ export async function PATCH(
 }
 
 // =====================================================
-// DELETE /api/patients/[id] - Soft delete (archive) patient
+// DELETE /api/quotes/[id] - Cancel quote (soft delete)
 // =====================================================
 export async function DELETE(
   request: NextRequest,
@@ -336,11 +317,10 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return NextResponse.json(
-        { error: 'Invalid patient ID format' },
+        { error: 'Invalid quote ID format' },
         { status: 400 }
       );
     }
@@ -356,16 +336,15 @@ export async function DELETE(
 
     const { client: supabase, tenantId: userTenantId, role, isServiceCall } = authContext;
 
-    // Only admin/receptionist can archive patients
+    // Only admin/receptionist can cancel quotes
     if (!isServiceCall && role && !['admin', 'receptionist', 'super_admin'].includes(role)) {
       return NextResponse.json(
-        { error: 'Insufficient permissions to archive patients' },
+        { error: 'Insufficient permissions to cancel quotes' },
         { status: 403 }
       );
     }
 
-    // Verify access
-    const accessCheck = await verifyPatientAccess(supabase, id, userTenantId, isServiceCall);
+    const accessCheck = await verifyQuoteAccess(supabase, id, userTenantId, isServiceCall);
     if ('error' in accessCheck) {
       return NextResponse.json(
         { error: accessCheck.error },
@@ -373,34 +352,35 @@ export async function DELETE(
       );
     }
 
-    // Soft delete: set status to 'archived'
+    // Cannot cancel already accepted quotes
+    if (accessCheck.currentStatus === 'accepted') {
+      return NextResponse.json(
+        { error: 'Cannot cancel an accepted quote' },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase
-      .from('patients')
-      .update({ status: 'archived' })
+      .from('quotes')
+      .update({ status: 'cancelled' })
       .eq('id', id)
       .select()
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return NextResponse.json(
-          { error: 'Patient not found' },
-          { status: 404 }
-        );
-      }
-      console.error('Error archiving patient:', error);
+      console.error('Error cancelling quote:', error);
       return NextResponse.json(
-        { error: 'Failed to archive patient', details: error.message },
+        { error: 'Failed to cancel quote', details: error.message },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
-      message: 'Patient archived successfully',
-      patient: data,
+      message: 'Quote cancelled successfully',
+      quote: data,
     });
   } catch (error) {
-    console.error('Error in DELETE /api/patients/[id]:', error);
+    console.error('Error in DELETE /api/quotes/[id]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
