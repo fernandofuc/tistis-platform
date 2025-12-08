@@ -63,8 +63,9 @@ export default function CheckoutPage() {
   const cancelled = searchParams.get('cancelled');
 
   useEffect(() => {
-    // Get plan from sessionStorage
-    const savedPlan = sessionStorage.getItem('selected_plan') || 'essentials';
+    // Get plan from URL first, then sessionStorage
+    const urlPlan = searchParams.get('plan');
+    const savedPlan = urlPlan || sessionStorage.getItem('selected_plan') || 'essentials';
     setPlanId(savedPlan);
 
     // Get contact info from questionnaire if available
@@ -80,7 +81,7 @@ export default function CheckoutPage() {
         console.error('Error parsing questionnaire answers:', e);
       }
     }
-  }, []);
+  }, [searchParams]);
 
   const plan = PLAN_DETAILS[planId] || PLAN_DETAILS.essentials;
   const activationFee = Math.ceil(plan.price * 0.5);

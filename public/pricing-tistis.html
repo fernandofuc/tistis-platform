@@ -1433,17 +1433,30 @@
             document.getElementById('initialPayment').textContent = formatCurrency(initialPayment);
         }
 
-        // Contact sales
-        function contactSales() {
+        // Contact sales - Redirect to Stripe checkout
+        async function contactSales() {
             if (!selectedPlan) {
                 alert('Por favor selecciona un plan primero');
                 return;
             }
 
-            const message = `¡Hola! Me interesa el plan ${selectedPlan.name} con ${branches} sucursal(es) y ${selectedAddons.size} add-on(s). ¿Pueden contactarme?`;
-            
-            // In production, this would open WhatsApp or a contact form
-            alert(message + '\n\n(En producción esto abriría WhatsApp o un formulario de contacto)');
+            // Map plan names to plan IDs
+            const planIdMap = {
+                'Starter': 'starter',
+                'Essentials': 'essentials',
+                'Growth': 'growth',
+                'Scale': 'scale'
+            };
+
+            const planId = planIdMap[selectedPlan.name] || 'essentials';
+
+            // Store selected plan info in sessionStorage for checkout page
+            sessionStorage.setItem('selected_plan', planId);
+            sessionStorage.setItem('pricing_branches', branches.toString());
+            sessionStorage.setItem('pricing_addons', JSON.stringify([...selectedAddons]));
+
+            // Redirect to checkout page
+            window.parent.location.href = '/checkout?plan=' + planId;
         }
 
         // Initialize on load
