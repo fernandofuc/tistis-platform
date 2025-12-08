@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Paperclip, Mic } from 'lucide-react';
 
@@ -12,13 +12,13 @@ export default function LandingPage() {
   const [charIndex, setCharIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const placeholders = [
+  const placeholders = useMemo(() => [
     'Tengo un restaurante con 3 sucursales y necesito automatizar reservaciones...',
     'Quiero un sistema que maneje inventario y facturación automática...',
     'Necesito un asistente virtual que responda WhatsApp 24/7...',
     'Busco automatizar mi clínica dental, citas y recordatorios...',
     'Tengo una tienda de ropa y quiero controlar ventas en tiempo real...'
-  ];
+  ], []);
 
   // Animación del placeholder
   useEffect(() => {

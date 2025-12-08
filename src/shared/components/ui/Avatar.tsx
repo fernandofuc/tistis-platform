@@ -3,6 +3,7 @@
 // =====================================================
 
 import { forwardRef, type HTMLAttributes } from 'react';
+import Image from 'next/image';
 import { cn, initials } from '@/shared/utils';
 
 // ======================
@@ -65,12 +66,18 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
     const displayInitials = initials(name);
     const bgColor = getAvatarColor(name);
 
+    // Size mapping for Image component
+    const sizeMap = { xs: 24, sm: 32, md: 40, lg: 48, xl: 64 };
+    const imageSize = sizeMap[size];
+
     return (
       <div ref={ref} className={cn('relative inline-flex', className)} {...props}>
         {src ? (
-          <img
+          <Image
             src={src}
             alt={name}
+            width={imageSize}
+            height={imageSize}
             className={cn(
               'rounded-full object-cover',
               sizeStyles[size]

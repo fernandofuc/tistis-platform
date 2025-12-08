@@ -1,0 +1,80 @@
+Estructura del Proyecto TIS TIS Platform
+=========================================
+
+tistis-platform/
+│
+├── 📄 Documentación Principal
+│   ├── ENTREGA_CLIENTE.md          ← Documentación completa
+│   ├── GUIA_VISUAL.md              ← Guía visual
+│   ├── README.md                    ← Setup técnico
+│   └── CLAUDE.md                    ← Principios de desarrollo
+│
+├── 📂 app/                          ← Next.js App Router
+│   ├── (dashboard)/                ← Dashboard routes
+│   │   └── dashboard/
+│   │       ├── page.tsx            ← Overview
+│   │       ├── leads/              ← Gestión de Leads
+│   │       ├── calendario/         ← Calendario
+│   │       ├── inbox/              ← Conversaciones
+│   │       ├── analytics/          ← Analytics
+│   │       └── settings/           ← Settings
+│   │
+│   └── api/                        ← API Routes
+│       ├── leads/                  ← CRUD Leads
+│       ├── appointments/           ← CRUD Citas
+│       ├── conversations/          ← CRUD Conversaciones
+│       ├── webhook/                ← WhatsApp + n8n
+│       ├── dashboard/stats/        ← Stats
+│       ├── branches/               ← Sucursales
+│       ├── staff/                  ← Personal
+│       └── services/               ← Servicios
+│
+├── 📂 src/                         ← Código fuente
+│   ├── features/                   ← Módulos
+│   │   ├── auth/                   ← Autenticación
+│   │   └── dashboard/              ← Dashboard
+│   │
+│   └── shared/                     ← Compartido
+│       ├── components/ui/          ← UI Components
+│       ├── hooks/                  ← Custom Hooks
+│       │   ├── useRealtimeDashboard.ts
+│       │   ├── useRealtimeSubscription.ts
+│       │   └── useIntegrations.ts
+│       ├── lib/                    ← Clientes
+│       │   ├── supabase.ts
+│       │   ├── whatsapp.ts
+│       │   └── n8n.ts
+│       ├── stores/                 ← Estado (Zustand)
+│       ├── types/                  ← Types
+│       └── utils/                  ← Utilidades
+│
+├── 📂 supabase/migrations/         ← Database
+│   ├── 003_esva_schema_v2.sql     ← Schema
+│   └── 004_esva_seed_data.sql     ← Seed Data
+│
+├── 📂 docs/                        ← Docs técnicas
+│   └── INTEGRATION_GUIDE.md       ← Integración WhatsApp/n8n
+│
+└── 📄 .env.local                   ← Variables de entorno
+
+Archivos Clave:
+===============
+
+Para Cliente:
+  📄 ENTREGA_CLIENTE.md           - Documentación completa
+  📄 GUIA_VISUAL.md               - Guía de navegación
+  📄 DEPLOYMENT_CHECKLIST.md      - Checklist deployment
+
+Para Desarrolladores:
+  📄 CLAUDE.md                     - Convenciones de código
+  📄 README.md                     - Setup técnico
+  📂 docs/INTEGRATION_GUIDE.md    - Guía integraciones
+
+Database:
+  📄 003_esva_schema_v2.sql       - Schema completo
+  📄 004_esva_seed_data.sql       - Datos ESVA
+
+Integraciones:
+  📄 src/shared/lib/whatsapp.ts   - Cliente WhatsApp
+  📄 src/shared/lib/n8n.ts        - Cliente n8n
+  📄 app/api/webhook/route.ts     - Webhook endpoint

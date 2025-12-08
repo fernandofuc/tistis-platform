@@ -22,3 +22,10 @@ export {
 
 // Integrations (WhatsApp & n8n)
 export { useIntegrations } from './useIntegrations';
+
+// Notifications
+export {
+  useNotifications,
+  createNotification,
+  broadcastNotification,
+} from './useNotifications';

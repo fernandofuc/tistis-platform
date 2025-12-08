@@ -15,7 +15,7 @@ interface SubscriptionConfig {
   filter?: string;
 }
 
-interface UseRealtimeSubscriptionOptions<T> {
+interface UseRealtimeSubscriptionOptions<T extends Record<string, unknown>> {
   config: SubscriptionConfig;
   onInsert?: (payload: T) => void;
   onUpdate?: (payload: { old: T; new: T }) => void;
