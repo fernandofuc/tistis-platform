@@ -104,13 +104,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   // Find or create client
-  let { data: client } = await supabase
+  let { data: existingClient } = await supabase
     .from('clients')
     .select('id, user_id')
     .eq('contact_email', customerEmail)
     .single();
 
-  if (!client) {
+  let clientId: string | null = existingClient?.id || null;
+
+  if (!existingClient) {
     // Create new client
     const { data: newClient, error } = await supabase
       .from('clients')
@@ -127,13 +129,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       console.error('Error creating client:', error);
       return;
     }
-    client = newClient;
+    clientId = newClient?.id || null;
   } else {
     // Update existing client to active
     await supabase
       .from('clients')
       .update({ status: 'active' })
-      .eq('id', client.id);
+      .eq('id', existingClient.id);
   }
 
   // Update proposal if exists
@@ -147,7 +149,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       .eq('id', proposalId);
   }
 
-  console.log('✅ Client updated/created:', client.id);
+  console.log('✅ Client updated/created:', clientId);
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
