@@ -5,10 +5,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 // Plan prices in MXN centavos
 const PLAN_PRICES: Record<string, { monthly: number; name: string }> = {
-  starter: { monthly: 599000, name: 'TIS TIS Starter' },
-  essentials: { monthly: 899000, name: 'TIS TIS Essentials' },
-  growth: { monthly: 1499000, name: 'TIS TIS Growth' },
-  scale: { monthly: 2499000, name: 'TIS TIS Scale' },
+  starter: { monthly: 349000, name: 'TIS TIS Starter' },
+  essentials: { monthly: 749000, name: 'TIS TIS Essentials' },
+  growth: { monthly: 1249000, name: 'TIS TIS Growth' },
+  scale: { monthly: 1999000, name: 'TIS TIS Scale' },
 };
 
 export async function POST(req: NextRequest) {

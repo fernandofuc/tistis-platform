@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/Card';
 const PLAN_DETAILS: Record<string, { name: string; price: number; features: string[] }> = {
   starter: {
     name: 'Starter',
-    price: 5990,
+    price: 3490,
     features: [
       'Asistente IA 24/7 en WhatsApp',
       'Hasta 500 conversaciones/mes',
@@ -20,7 +20,7 @@ const PLAN_DETAILS: Record<string, { name: string; price: number; features: stri
   },
   essentials: {
     name: 'Essentials',
-    price: 8990,
+    price: 7490,
     features: [
       'Todo lo de Starter',
       'Hasta 2,000 conversaciones/mes',
@@ -30,7 +30,7 @@ const PLAN_DETAILS: Record<string, { name: string; price: number; features: stri
   },
   growth: {
     name: 'Growth',
-    price: 14990,
+    price: 12490,
     features: [
       'Todo lo de Essentials',
       'Conversaciones ilimitadas',
@@ -40,7 +40,7 @@ const PLAN_DETAILS: Record<string, { name: string; price: number; features: stri
   },
   scale: {
     name: 'Scale',
-    price: 24990,
+    price: 19990,
     features: [
       'Todo lo de Growth',
       'IA entrenada con tus datos',
