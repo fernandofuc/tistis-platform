@@ -96,17 +96,16 @@ async function handleWhatsAppWebhook(
 ): Promise<NextResponse> {
   try {
     // Parse WhatsApp webhook structure
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const entries = (body.entry as any[]) || [];
+    const entries = (body.entry as Record<string, unknown>[]) || [];
 
     for (const entry of entries) {
-      const changes = entry.changes || [];
+      const changes = (entry.changes as Record<string, unknown>[]) || [];
 
       for (const change of changes) {
         if (change.field === 'messages') {
-          const value = change.value;
-          const messages = value.messages || [];
-          const contacts = value.contacts || [];
+          const value = change.value as Record<string, unknown>;
+          const messages = (value.messages as Record<string, unknown>[]) || [];
+          const contacts = (value.contacts as Record<string, unknown>[]) || [];
 
           for (const message of messages) {
             await processIncomingWhatsAppMessage(supabase, message, contacts);
@@ -130,14 +129,12 @@ async function handleWhatsAppWebhook(
 // ======================
 async function processIncomingWhatsAppMessage(
   supabase: ReturnType<typeof createServerClient>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  message: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contacts: any[]
+  message: Record<string, unknown>,
+  contacts: Record<string, unknown>[]
 ): Promise<void> {
-  const phone = message.from;
-  const messageType = message.type;
-  const timestamp = message.timestamp;
+  const phone = message.from as string;
+  const messageType = message.type as string;
+  const timestamp = message.timestamp as string;
 
   // Normalize phone number
   let normalizedPhone = phone.replace(/[^\d+]/g, '');
@@ -157,23 +154,25 @@ async function processIncomingWhatsAppMessage(
 
   switch (messageType) {
     case 'text':
-      content = message.text?.body || '';
+      content = (message.text as Record<string, unknown>)?.body as string || '';
       break;
     case 'image':
-      content = message.image?.caption || '[Imagen]';
-      mediaUrl = message.image?.id; // Will need to fetch actual URL
+      content = (message.image as Record<string, unknown>)?.caption as string || '[Imagen]';
+      mediaUrl = (message.image as Record<string, unknown>)?.id as string;
       break;
     case 'document':
-      content = message.document?.filename || '[Documento]';
-      mediaUrl = message.document?.id;
+      content = (message.document as Record<string, unknown>)?.filename as string || '[Documento]';
+      mediaUrl = (message.document as Record<string, unknown>)?.id as string;
       break;
     case 'audio':
       content = '[Audio]';
-      mediaUrl = message.audio?.id;
+      mediaUrl = (message.audio as Record<string, unknown>)?.id as string;
       break;
-    case 'location':
-      content = `[Ubicación: ${message.location?.latitude}, ${message.location?.longitude}]`;
+    case 'location': {
+      const location = message.location as Record<string, unknown>;
+      content = `[Ubicación: ${location?.latitude}, ${location?.longitude}]`;
       break;
+    }
     default:
       content = `[${messageType}]`;
   }
@@ -187,7 +186,7 @@ async function processIncomingWhatsAppMessage(
     message_type: messageType,
     media_url: mediaUrl,
     metadata: {
-      whatsapp_message_id: message.id,
+      whatsapp_message_id: message.id as string,
       timestamp,
     },
     status: 'received',
@@ -210,8 +209,7 @@ async function processIncomingWhatsAppMessage(
 async function findOrCreateLead(
   supabase: ReturnType<typeof createServerClient>,
   phone: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contacts: any[]
+  contacts: Record<string, unknown>[]
 ): Promise<{ id: string; name: string }> {
   // Check existing lead
   const { data: existingLead } = await supabase
@@ -227,7 +225,8 @@ async function findOrCreateLead(
 
   // Get name from contacts if available
   const contact = contacts.find((c) => c.wa_id === phone.replace('+', ''));
-  const name = contact?.profile?.name || 'Unknown';
+  const profile = contact?.profile as Record<string, unknown> | undefined;
+  const name = (profile?.name as string) || 'Unknown';
 
   // Create new lead
   const { data: newLead, error } = await supabase
