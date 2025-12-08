@@ -183,6 +183,9 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const priceAmount = subscription.items.data[0]?.price?.unit_amount || 0;
 
   // Create subscription record
+  const periodStart = (subscription as any).current_period_start;
+  const periodEnd = (subscription as any).current_period_end;
+
   const { error } = await supabase.from('subscriptions').insert({
     client_id: client.id,
     stripe_customer_id: customerId,
@@ -192,8 +195,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     monthly_amount: priceAmount / 100,
     currency: 'MXN',
     status: subscription.status === 'active' ? 'active' : 'pending',
-    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+    current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+    current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
   });
 
   if (error) {
@@ -210,12 +213,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
                  subscription.status === 'past_due' ? 'past_due' :
                  subscription.status === 'canceled' ? 'cancelled' : 'pending';
 
+  // Cast to any to access current_period_start/end which exist at runtime but have type issues
+  const periodStart = (subscription as any).current_period_start;
+  const periodEnd = (subscription as any).current_period_end;
+
   await supabase
     .from('subscriptions')
     .update({
       status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+      current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       updated_at: new Date().toISOString(),
     })
     .eq('stripe_subscription_id', subscription.id);
