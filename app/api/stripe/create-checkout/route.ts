@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const planConfig = PLAN_PRICES[plan];
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_URL;
 
-    // Create Stripe Checkout Session
+    // Create Stripe Checkout Session with setup fee included in first invoice
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'subscription',
@@ -49,17 +49,26 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      // Add setup fee as a one-time payment
       subscription_data: {
         metadata: {
           plan,
           customerName: customerName || '',
           ...metadata,
         },
-      },
-      // Add setup fee
-      invoice_creation: {
-        enabled: false,
+        // Add setup fee to first invoice
+        add_invoice_items: [
+          {
+            price_data: {
+              currency: 'mxn',
+              product_data: {
+                name: 'Configuración Inicial',
+                description: 'Cargo único de configuración e integración',
+              },
+              unit_amount: planConfig.setup,
+            },
+            quantity: 1,
+          },
+        ],
       },
       success_url: `${origin}/dashboard?welcome=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout?cancelled=true`,
