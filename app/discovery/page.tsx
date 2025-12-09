@@ -18,6 +18,8 @@ export default function DiscoveryPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentInput, setCurrentInput] = useState('');
   const [sessionToken] = useState(() => generateSessionToken());
+  const [streamingContent, setStreamingContent] = useState<string>('');
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -32,16 +34,19 @@ export default function DiscoveryPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   // Enviar mensaje con streaming progresivo
   const sendMessageToAI = useCallback(async (conversationHistory: Message[]) => {
     setIsLoading(true);
+    setStreamingContent('');
+
+    const aiMessageId = `ai_${Date.now()}`;
+    setStreamingMessageId(aiMessageId);
 
     try {
       console.log('📤 Enviando mensaje a IA...');
 
-      console.log('📤 Enviando solicitud a API...');
       const response = await fetch('/api/chat/discovery', {
         method: 'POST',
         headers: {
@@ -52,7 +57,7 @@ export default function DiscoveryPage() {
             role: m.role,
             content: m.content
           })),
-          sessionToken, // Include session token for database persistence
+          sessionToken,
         }),
       });
 
@@ -73,57 +78,40 @@ export default function DiscoveryPage() {
         throw new Error('No se recibió stream del servidor');
       }
 
-      // Crear mensaje vacío que se irá llenando
-      const aiMessageId = Date.now().toString();
-      const aiMessage: Message = {
-        id: aiMessageId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-      console.log('✏️ Mensaje asistente creado con ID:', aiMessageId);
-
-      // Leer stream progresivamente
+      // Leer stream progresivamente usando estado dedicado
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulatedText = '';
-      let chunkCount = 0;
 
       console.log('🔄 Iniciando lectura de stream...');
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          console.log('✅ Stream completado. Texto total recibido:', accumulatedText.length, 'chars');
-          console.log('Contenido:', accumulatedText);
+          console.log('✅ Stream completado. Texto:', accumulatedText.substring(0, 100));
           break;
         }
 
-        chunkCount++;
         const chunk = decoder.decode(value, { stream: true });
         accumulatedText += chunk;
-        console.log(`📦 Chunk #${chunkCount} (${chunk.length} chars):`, chunk.substring(0, 50));
 
-        // Actualizar el último mensaje con el texto acumulado
-        setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMessageIndex = newMessages.findIndex(m => m.id === aiMessageId);
-          if (lastMessageIndex !== -1) {
-            newMessages[lastMessageIndex] = {
-              ...newMessages[lastMessageIndex],
-              content: accumulatedText
-            };
-            console.log(`✏️ Actualizando mensaje en índice ${lastMessageIndex}, contenido: ${accumulatedText.length} chars`);
-          } else {
-            console.log('🔍 ⚠️ No se encontró mensaje con ID:', aiMessageId);
-          }
-          return newMessages;
-        });
+        // Actualizar el contenido de streaming directamente
+        setStreamingContent(accumulatedText);
       }
 
-      console.log('✅ Lectura completada');
+      // Al terminar el stream, agregar mensaje completo a la lista
+      const finalMessage: Message = {
+        id: aiMessageId,
+        role: 'assistant',
+        content: accumulatedText,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, finalMessage]);
+      setStreamingContent('');
+      setStreamingMessageId(null);
+
+      console.log('✅ Mensaje agregado a la lista');
 
     } catch (error) {
       console.error('❌ Error sending message to AI:', error);
@@ -134,6 +122,8 @@ export default function DiscoveryPage() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+      setStreamingContent('');
+      setStreamingMessageId(null);
     } finally {
       setIsLoading(false);
     }
@@ -231,12 +221,22 @@ export default function DiscoveryPage() {
                 }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                {msg.role === 'assistant' && isLoading && msg.content === '' && (
-                  <span className="inline-block w-2 h-4 bg-tis-text-secondary animate-pulse ml-1">|</span>
-                )}
               </div>
             </div>
           ))}
+
+          {/* Mensaje de streaming en tiempo real */}
+          {isLoading && streamingMessageId && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-gray-100 text-tis-text-primary">
+                <p className="text-sm whitespace-pre-wrap">
+                  {streamingContent || ''}
+                  <span className="inline-block w-2 h-4 bg-tis-text-secondary animate-pulse ml-1">|</span>
+                </p>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 

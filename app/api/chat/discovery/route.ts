@@ -99,40 +99,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log('🚀 Iniciando stream con Claude...');
+    console.log('🚀 Iniciando llamada a Claude...');
     console.log('📝 Messages enviados:', JSON.stringify(messages, null, 2));
 
-    // Crear stream con Anthropic
-    const stream = await anthropic.messages.stream({
+    // Usar create() en lugar de stream() para Edge Runtime (más estable)
+    const response_ai = await anthropic.messages.create({
       model: 'claude-3-5-haiku-20241022',
-      max_tokens: 300,
+      max_tokens: 500,
       system: DISCOVERY_SYSTEM_PROMPT,
       messages: messages as any,
     });
 
-    console.log('✅ Stream creado, comenzando a leer chunks...');
+    console.log('✅ Respuesta de Claude recibida');
+    console.log('📦 Response:', JSON.stringify(response_ai, null, 2));
 
-    // Acumular todo el texto primero (más simple para Edge Runtime)
+    // Extraer texto de la respuesta
     let accumulatedText = '';
-    let chunkCount = 0;
 
-    try {
-      console.log('🔄 Iniciando lectura de chunks...');
-      for await (const chunk of stream) {
-        chunkCount++;
-        console.log(`📦 Chunk #${chunkCount}:`, chunk.type);
-
-        if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-          const text = chunk.delta.text;
-          accumulatedText += text;
-          console.log(`📤 Texto recibido (${text.length} chars):`, text);
+    if (response_ai.content && response_ai.content.length > 0) {
+      for (const block of response_ai.content) {
+        if (block.type === 'text') {
+          accumulatedText += block.text;
         }
       }
-      console.log(`✅ Stream completado exitosamente. Total chunks: ${chunkCount}, texto: ${accumulatedText.length} chars`);
-    } catch (streamError) {
-      console.error('❌ Error en stream:', streamError);
-      console.error('Error details:', JSON.stringify(streamError));
     }
+
+    console.log(`✅ Texto extraído: ${accumulatedText.length} chars`);
+    console.log('📄 Contenido:', accumulatedText.substring(0, 200));
 
     // Save to database if sessionToken provided
     if (sessionToken && accumulatedText) {
