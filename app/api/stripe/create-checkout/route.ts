@@ -12,20 +12,17 @@ function getStripeClient() {
 const PLAN_CONFIG: Record<string, {
   monthly: number;
   name: string;
-  activation: number;
   branchExtra: number;
   branchExtraProgressive?: { qty: number; price: number }[];
 }> = {
   starter: {
     monthly: 349000,
     name: 'TIS TIS Starter',
-    activation: 559000,
     branchExtra: 159000,
   },
   essentials: {
     monthly: 749000,
     name: 'TIS TIS Essentials',
-    activation: 899000,
     branchExtra: 199000,
     branchExtraProgressive: [
       { qty: 2, price: 199000 },
@@ -37,7 +34,6 @@ const PLAN_CONFIG: Record<string, {
   growth: {
     monthly: 1249000,
     name: 'TIS TIS Growth',
-    activation: 1249000,
     branchExtra: 289000,
     branchExtraProgressive: [
       { qty: 2, price: 289000 },
@@ -49,7 +45,6 @@ const PLAN_CONFIG: Record<string, {
   scale: {
     monthly: 1999000,
     name: 'TIS TIS Scale',
-    activation: 2499000,
     branchExtra: 359000,
     branchExtraProgressive: [
       { qty: 2, price: 359000 },
@@ -147,18 +142,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Activation fee (one-time)
-    lineItems.push({
-      price_data: {
-        currency: 'mxn',
-        product_data: {
-          name: 'Activacion TIS TIS',
-          description: 'Pago unico de configuracion inicial - Cubre 50% de los primeros 2 meses',
-        },
-        unit_amount: planConfig.activation,
-      },
-      quantity: 1,
-    });
+    // NOTE: Activation fee removed - no longer charged
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({

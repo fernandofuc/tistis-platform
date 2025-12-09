@@ -11,7 +11,6 @@ import { Card } from '@/components/ui/Card';
 const PLAN_CONFIG: Record<string, {
   name: string;
   price: number;
-  activation: number;
   branchExtra: number;
   branchExtraProgressive?: { qty: number; price: number }[];
   features: string[];
@@ -19,7 +18,6 @@ const PLAN_CONFIG: Record<string, {
   starter: {
     name: 'Starter',
     price: 3490,
-    activation: 5590,
     branchExtra: 1590,
     features: [
       'Asistente IA 24/7 en WhatsApp',
@@ -31,7 +29,6 @@ const PLAN_CONFIG: Record<string, {
   essentials: {
     name: 'Essentials',
     price: 7490,
-    activation: 8990,
     branchExtra: 1990,
     branchExtraProgressive: [
       { qty: 2, price: 1990 },
@@ -50,7 +47,6 @@ const PLAN_CONFIG: Record<string, {
   growth: {
     name: 'Growth',
     price: 12490,
-    activation: 12490,
     branchExtra: 2890,
     branchExtraProgressive: [
       { qty: 2, price: 2890 },
@@ -69,7 +65,6 @@ const PLAN_CONFIG: Record<string, {
   scale: {
     name: 'Scale',
     price: 19990,
-    activation: 24990,
     branchExtra: 3590,
     branchExtraProgressive: [
       { qty: 2, price: 3590 },
@@ -162,12 +157,6 @@ function CheckoutContent() {
   const extraBranches = Math.max(0, branches - 1);
   const branchCost = calculateBranchCost(plan, branches);
   const monthlyTotal = plan.price + branchCost;
-
-  // Calculate first payment (activation + first month with 50% discount)
-  const activationCap = plan.activation / 2;
-  const monthlyDiscount = Math.min(monthlyTotal * 0.5, activationCap);
-  const firstMonthDiscounted = monthlyTotal - monthlyDiscount;
-  const initialPayment = plan.activation + firstMonthDiscounted;
 
   const handleCheckout = async () => {
     if (!customerEmail) {
@@ -263,35 +252,16 @@ function CheckoutContent() {
                 </div>
               )}
 
-              {/* Monthly subtotal */}
+              {/* Total mensual */}
               <div className="border-t pt-4">
-                <div className="flex justify-between">
-                  <span className="font-semibold">Total Mensual</span>
-                  <span className="font-bold">${monthlyTotal.toLocaleString('es-MX')} MXN/mes</span>
-                </div>
-              </div>
-
-              {/* Activation fee */}
-              <div className="bg-purple-50 rounded-lg p-4 mt-4">
-                <div className="flex justify-between mb-2">
-                  <span className="text-purple-800">Activacion (pago unico)</span>
-                  <span className="font-semibold text-purple-800">${plan.activation.toLocaleString('es-MX')} MXN</span>
-                </div>
-                <p className="text-xs text-purple-600">
-                  Cubre 50% de tus primeros 2 meses (hasta ${activationCap.toLocaleString('es-MX')} MXN/mes)
-                </p>
-              </div>
-
-              {/* Total today */}
-              <div className="border-t pt-4 mt-4">
                 <div className="flex justify-between text-lg">
-                  <span className="font-bold">Total hoy</span>
+                  <span className="font-bold">Total Mensual</span>
                   <span className="font-bold text-tis-coral">
-                    ${initialPayment.toLocaleString('es-MX')} MXN
+                    ${monthlyTotal.toLocaleString('es-MX')} MXN/mes
                   </span>
                 </div>
                 <p className="text-sm text-tis-text-muted mt-2">
-                  Luego ${monthlyTotal.toLocaleString('es-MX')} MXN/mes
+                  Suscripcion mensual - puedes cancelar cuando quieras
                 </p>
               </div>
             </div>

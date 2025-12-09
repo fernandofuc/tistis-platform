@@ -694,19 +694,13 @@
                 <div class="discount-badge">✨ Primeros 2 meses al 50%</div>
             </div>
 
-            <div class="activation-info">
-                <div style="font-weight: 700; margin-bottom: 0.5rem;">🚀 Activación (Pago Único)</div>
-                <div class="activation-price" id="activationFee">$0</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                    Cubre el 50% de tus primeros 2 meses (hasta el tope del plan)
-                </div>
-            </div>
+            <!-- Activation fee removed from pricing page - shown in checkout -->
 
             <div style="background: linear-gradient(135deg, #7C5CFC15 0%, #C2335015 100%); padding: 1.5rem; border-radius: 12px; margin: 1rem 0; border: 2px solid var(--accent-coral);">
-                <div style="font-weight: 700; margin-bottom: 0.5rem; color: var(--accent-coral); font-size: 1.1rem;">💰 Pago Inicial Total</div>
+                <div style="font-weight: 700; margin-bottom: 0.5rem; color: var(--accent-coral); font-size: 1.1rem;">✨ Precio Mensual</div>
                 <div style="font-size: 2rem; font-weight: 800; color: var(--accent-coral);" id="initialPayment">$0</div>
                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                    Incluye: Activación + Primer Mes (con descuento del 50%)
+                    Sin costo de activación - Solo pagas tu mensualidad
                 </div>
             </div>
 
@@ -830,7 +824,7 @@
             <div class="referral-card">
                 <div class="referral-step">2</div>
                 <div class="referral-card-title">Cierra</div>
-                <div class="referral-card-text">Tu referido contrata cualquier plan y paga la activación</div>
+                <div class="referral-card-text">Tu referido contrata cualquier plan</div>
             </div>
             <div class="referral-card">
                 <div class="referral-step">3</div>
@@ -858,7 +852,7 @@
                 subtitle: 'Para Empezar (1 Sucursal)',
                 price: 3490,
                 branchExtra: 1590,
-                activation: 5590,
+                // activation removed
                 credits: 5,
                 creditPrice: 1390,
                 sla: '72h',
@@ -887,7 +881,7 @@
                     { qty: 4, price: 1590 },
                     { qty: 5, price: 1490 }
                 ],
-                activation: 8990,
+                // activation removed
                 credits: 8,
                 creditPrice: 1390,
                 sla: '48h',
@@ -920,7 +914,7 @@
                     { qty: 4, price: 1990 },
                     { qty: 5, price: 1590 }
                 ],
-                activation: 12490,
+                // activation removed
                 credits: 13,
                 creditPrice: 1390,
                 sla: '24h',
@@ -954,7 +948,7 @@
                     { qty: 4, price: 2490 },
                     { qty: 5, price: 1990 }
                 ],
-                activation: 24990,
+                // activation removed
                 credits: 25,
                 creditPrice: 1390,
                 sla: '8h',
@@ -1102,11 +1096,7 @@
                     <div class="plan-subtitle" style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">${plan.subtitle}</div>
                     <div class="plan-price">${formatCurrency(plan.price)}</div>
                     <div class="plan-period">por mes</div>
-                    <div style="background: var(--bg-light); padding: 0.5rem; border-radius: 8px; margin: 1rem 0; text-align: center;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Activación</div>
-                        <div style="font-weight: 700; color: var(--accent-coral);">${formatCurrency(plan.activation)}</div>
-                    </div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin: 1rem 0 0.5rem 0;">
                         ⚡ ${plan.credits} créditos/mes incluidos
                     </div>
                     <ul class="plan-features">
@@ -1343,7 +1333,6 @@
             if (!selectedPlan) {
                 document.getElementById('summaryPlan').textContent = 'Ninguno';
                 document.getElementById('totalMonthly').textContent = '$0';
-                document.getElementById('activationFee').textContent = '$0';
                 document.getElementById('includedCredits').textContent = '0';
                 document.getElementById('month1Cost').textContent = '$0';
                 document.getElementById('month2Cost').textContent = '$0';
@@ -1406,17 +1395,11 @@
             });
 
             const monthlyTotal = baseCost + branchCost + addonsCost;
-            const activationFee = selectedPlan.activation;
-            const activationCap = activationFee / 2;
-            
-            // Calculate discounted months
-            const discount = Math.min(monthlyTotal * 0.5, activationCap);
-            const month1 = monthlyTotal - discount;
-            const month2 = monthlyTotal - discount;
+
+            // No activation fee - just show monthly total
+            const month1 = monthlyTotal;
+            const month2 = monthlyTotal;
             const month3Plus = monthlyTotal;
-            
-            // Calculate initial payment (activation + first month)
-            const initialPayment = activationFee + month1;
 
             // Update UI
             document.getElementById('summaryPlan').textContent = `${selectedPlan.name} - ${selectedPlan.subtitle}`;
@@ -1425,12 +1408,12 @@
             document.getElementById('summaryAddonsCount').textContent = selectedAddons.size;
             document.getElementById('summaryAddonsCost').textContent = formatCurrency(addonsCost);
             document.getElementById('totalMonthly').textContent = formatCurrency(monthlyTotal);
-            document.getElementById('activationFee').textContent = formatCurrency(activationFee);
             document.getElementById('includedCredits').textContent = selectedPlan.credits;
             document.getElementById('month1Cost').textContent = formatCurrency(month1);
             document.getElementById('month2Cost').textContent = formatCurrency(month2);
             document.getElementById('month3Cost').textContent = formatCurrency(month3Plus);
-            document.getElementById('initialPayment').textContent = formatCurrency(initialPayment);
+            // Show monthly total instead of initial payment (activation shown in checkout)
+            document.getElementById('initialPayment').textContent = formatCurrency(monthlyTotal);
         }
 
         // Contact sales - Redirect to Stripe checkout
