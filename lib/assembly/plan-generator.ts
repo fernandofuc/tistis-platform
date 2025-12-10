@@ -85,11 +85,11 @@ export async function generateDeploymentPlan(
 
   // 6. Post deployment
   const manualSteps = deploymentSteps.filter(s => s.requires_manual);
-  const postDeployment = {
+  const postDeployment: DeploymentPlan['post_deployment'] = {
     verification_checks: generateVerificationChecks(components, clientConfig),
     client_notifications: [
       {
-        type: 'email' as const,
+        type: 'email',
         template: 'deployment_complete',
         variables: {
           client_name: proposal?.clients?.business_name || 'Cliente',
@@ -98,7 +98,7 @@ export async function generateDeploymentPlan(
         }
       },
       {
-        type: 'whatsapp' as const,
+        type: 'whatsapp',
         template: 'deployment_welcome',
         variables: {
           client_name: proposal?.clients?.business_name || 'Cliente'
