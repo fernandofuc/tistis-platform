@@ -104,13 +104,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('✅ Checkout completed:', session.id);
   const supabase = getSupabaseClient();
 
-  const { plan, customerName, proposalId } = session.metadata || {};
+  const { plan, customerName, proposalId, branches, addons } = session.metadata || {};
   const customerEmail = session.customer_email || session.customer_details?.email;
 
   if (!customerEmail) {
     console.error('No customer email found in session');
     return;
   }
+
+  console.log('📋 Checkout metadata:', { plan, customerName, branches, addons, proposalId });
 
   // Find or create client
   let { data: existingClient } = await supabase
@@ -130,6 +132,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         contact_name: customerName,
         business_name: customerName,
         status: 'active',
+        locations_count: branches ? parseInt(branches) : 1,
       })
       .select('id')
       .single();
@@ -139,12 +142,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       return;
     }
     clientId = newClient?.id || null;
+    console.log('✅ New client created:', clientId);
   } else {
     // Update existing client to active
     await supabase
       .from('clients')
-      .update({ status: 'active' })
+      .update({
+        status: 'active',
+        locations_count: branches ? parseInt(branches) : 1,
+      })
       .eq('id', existingClient.id);
+    console.log('✅ Existing client updated:', existingClient.id);
   }
 
   // Update proposal if exists
@@ -156,9 +164,27 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         accepted_at: new Date().toISOString(),
       })
       .eq('id', proposalId);
+    console.log('✅ Proposal marked as accepted:', proposalId);
   }
 
-  console.log('✅ Client updated/created:', clientId);
+  // Create onboarding data record for the new client
+  if (clientId) {
+    const { error: onboardingError } = await supabase
+      .from('onboarding_data')
+      .upsert({
+        client_id: clientId,
+        business_name: customerName,
+        completed: false,
+      }, { onConflict: 'client_id' });
+
+    if (onboardingError) {
+      console.error('Error creating onboarding data:', onboardingError);
+    } else {
+      console.log('✅ Onboarding data created for client:', clientId);
+    }
+  }
+
+  console.log('✅ Checkout processing complete for client:', clientId);
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
@@ -166,8 +192,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
-  const { plan, customerName } = subscription.metadata || {};
+  const { plan, customerName, branches, addons, vertical, proposalId } = subscription.metadata || {};
   const customerId = subscription.customer as string;
+
+  console.log('📋 Subscription metadata:', { plan, customerName, branches, addons });
 
   // Get customer email from Stripe
   const customer = await stripe.customers.retrieve(customerId);
@@ -190,8 +218,23 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     return;
   }
 
-  // Get price amount
-  const priceAmount = subscription.items.data[0]?.price?.unit_amount || 0;
+  // Calculate total monthly amount from all line items
+  let totalMonthlyAmount = 0;
+  for (const item of subscription.items.data) {
+    const unitAmount = item.price?.unit_amount || 0;
+    const quantity = item.quantity || 1;
+    totalMonthlyAmount += unitAmount * quantity;
+  }
+
+  // Parse addons
+  let parsedAddons: string[] = [];
+  if (addons) {
+    try {
+      parsedAddons = JSON.parse(addons);
+    } catch {
+      parsedAddons = [];
+    }
+  }
 
   // Create subscription record
   const periodStart = (subscription as any).current_period_start;
@@ -203,7 +246,9 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     stripe_subscription_id: subscription.id,
     stripe_price_id: subscription.items.data[0]?.price?.id,
     plan: plan || 'essentials',
-    monthly_amount: priceAmount / 100,
+    addons: parsedAddons,
+    branches: branches ? parseInt(branches) : 1,
+    monthly_amount: totalMonthlyAmount / 100,
     currency: 'MXN',
     status: subscription.status === 'active' ? 'active' : 'pending',
     current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
@@ -212,9 +257,29 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
   if (error) {
     console.error('Error creating subscription:', error);
-  } else {
-    console.log('✅ Subscription record created');
+    return;
   }
+
+  console.log('✅ Subscription record created for client:', client.id);
+  console.log('   Plan:', plan, '| Branches:', branches, '| Amount:', totalMonthlyAmount / 100, 'MXN');
+
+  // Get the newly created subscription ID
+  const { data: newSubscription } = await supabase
+    .from('subscriptions')
+    .select('id')
+    .eq('stripe_subscription_id', subscription.id)
+    .single();
+
+  // 🚀 TRIGGER ASSEMBLY ENGINE - Auto-provision micro-app
+  await triggerAssemblyEngine({
+    client_id: client.id,
+    subscription_id: newSubscription?.id,
+    vertical: vertical || 'dental', // Use vertical from metadata, default to dental
+    plan: (plan as 'starter' | 'essentials' | 'growth' | 'scale') || 'essentials',
+    addons: parsedAddons,
+    branches: branches ? parseInt(branches) : 1,
+    proposal_id: proposalId
+  });
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
@@ -252,4 +317,84 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       updated_at: new Date().toISOString(),
     })
     .eq('stripe_subscription_id', subscription.id);
+}
+
+// ============================================
+// ASSEMBLY ENGINE TRIGGER
+// Automatically provisions micro-app for new clients
+// ============================================
+
+interface AssemblyTriggerParams {
+  client_id: string;
+  subscription_id?: string;
+  vertical: string;
+  plan: 'starter' | 'essentials' | 'growth' | 'scale';
+  addons: string[];
+  branches: number;
+  proposal_id?: string;
+}
+
+async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
+  console.log('🚀 [AssemblyTrigger] Starting micro-app provisioning...');
+  console.log('📋 [AssemblyTrigger] Params:', params);
+
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+
+    const response = await fetch(`${baseUrl}/api/assemble`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: params.client_id,
+        subscription_id: params.subscription_id,
+        vertical: params.vertical,
+        plan: params.plan,
+        addons: params.addons,
+        branches: params.branches,
+        proposal_id: params.proposal_id
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ [AssemblyTrigger] Assembly Engine failed:', {
+        status: response.status,
+        error: errorData
+      });
+
+      // Notify team of assembly failure (non-blocking)
+      const supabase = getSupabaseClient();
+      await supabase.from('notification_queue').insert({
+        type: 'assembly_failed',
+        recipient_type: 'internal',
+        recipient_id: 'team',
+        payload: {
+          client_id: params.client_id,
+          error: errorData,
+          params: params
+        },
+        priority: 'urgent'
+      });
+
+      return;
+    }
+
+    const result = await response.json();
+    console.log('✅ [AssemblyTrigger] Assembly Engine succeeded:', {
+      deployment_id: result.data?.deployment_id,
+      components_count: result.data?.components_count,
+      estimated_minutes: result.data?.estimated_duration_minutes
+    });
+
+    // TODO: Trigger n8n Master Deployment workflow here
+    // This will be implemented when n8n webhook is configured
+    // await triggerN8nDeployment(result.data?.deployment_id);
+
+  } catch (error) {
+    console.error('💥 [AssemblyTrigger] Unexpected error:', error);
+  }
 }

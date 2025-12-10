@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
       customerName,
       branches = 1,
       addons = [],
+      vertical = 'dental', // Default vertical
+      proposalId,
       metadata,
     } = body;
     const stripe = getStripeClient();
@@ -157,16 +159,20 @@ export async function POST(req: NextRequest) {
           branches: branches.toString(),
           addons: JSON.stringify(addons),
           customerName: customerName || '',
+          vertical, // Include vertical for Assembly Engine
+          proposalId: proposalId || '',
           ...metadata,
         },
       },
-      success_url: `${origin}/dashboard?welcome=true&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/onboarding/welcome?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout?cancelled=true`,
       metadata: {
         plan,
         branches: branches.toString(),
         addons: JSON.stringify(addons),
         customerName: customerName || '',
+        vertical,
+        proposalId: proposalId || '',
         ...metadata,
       },
     });
