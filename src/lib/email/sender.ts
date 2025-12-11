@@ -6,8 +6,10 @@
 import { Resend } from 'resend';
 import type { SendEmailParams, EmailResult } from './types';
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend client lazily to avoid build-time errors
+function getResendClient() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 // Default sender configuration
 const DEFAULT_FROM = {
@@ -38,6 +40,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   const recipients = Array.isArray(to) ? to : [to];
 
   try {
+    const resend = getResendClient();
     const { data, error } = await resend.emails.send({
       from: typeof from === 'string' ? from : `${from.name} <${from.email}>`,
       to: recipients.map((r) => (typeof r === 'string' ? r : r.email)),
