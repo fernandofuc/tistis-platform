@@ -1,0 +1,346 @@
+{
+  "name": "ESVA_Weekly_Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Monday 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calcular rango de fechas de la semana pasada\nconst now = new Date();\n\n// Inicio de semana pasada (lunes pasado)\nconst startOfWeek = new Date(now);\nstartOfWeek.setDate(now.getDate() - now.getDay() - 6); // Lunes de semana pasada\nstartOfWeek.setHours(0, 0, 0, 0);\n\n// Fin de semana pasada (domingo pasado)\nconst endOfWeek = new Date(now);\nendOfWeek.setDate(now.getDate() - now.getDay());\nendOfWeek.setHours(23, 59, 59, 999);\n\n// Formatear fechas\nconst formatDate = (date) => date.toISOString().split('T')[0];\n\nreturn {\n  json: {\n    startDate: formatDate(startOfWeek),\n    endDate: formatDate(endOfWeek),\n    weekStartFormatted: `${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1}`,\n    weekEndFormatted: `${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}/${endOfWeek.getFullYear()}`\n  }\n};"
+      },
+      "id": "calculate-date-range",
+      "name": "Calculate Date Range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,appointment_date,appointment_time,status,branch_id,branches(name),leads(classification)"
+            },
+            {
+              "name": "tenant_id",
+              "value": "eq.a0000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "and",
+              "value": "(appointment_date.gte.{{ $json.startDate }},appointment_date.lte.{{ $json.endDate }})"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-week-appointments",
+      "name": "Get Week Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,classification,source,status,created_at"
+            },
+            {
+              "name": "tenant_id",
+              "value": "eq.a0000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "and",
+              "value": "(created_at.gte.{{ $('Calculate Date Range').item.json.startDate }},created_at.lte.{{ $('Calculate Date Range').item.json.endDate }}T23:59:59)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-week-leads",
+      "name": "Get Week Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,appointment_date,appointment_time,status,branch_id,branches(name),leads(full_name,classification)"
+            },
+            {
+              "name": "tenant_id",
+              "value": "eq.a0000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "and",
+              "value": "(appointment_date.gte.{{ $now.toFormat('yyyy-MM-dd') }},appointment_date.lte.{{ $now.plus({days: 7}).toFormat('yyyy-MM-dd') }})"
+            },
+            {
+              "name": "status",
+              "value": "in.(PENDING,CONFIRMED)"
+            },
+            {
+              "name": "order",
+              "value": "appointment_date.asc,appointment_time.asc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-upcoming-appointments",
+      "name": "Get Upcoming Week Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compilar estadísticas de la semana\nconst dateRange = $('Calculate Date Range').item.json;\nconst appointments = $('Get Week Appointments').item.json || [];\nconst leads = $('Get Week Leads').item.json || [];\nconst upcomingApts = $('Get Upcoming Week Appointments').item.json || [];\n\n// Estadísticas de citas de la semana pasada\nconst aptStats = {\n  total: appointments.length,\n  completed: appointments.filter(a => a.status === 'COMPLETED').length,\n  cancelled: appointments.filter(a => a.status === 'CANCELLED').length,\n  noShow: appointments.filter(a => a.status === 'NO_SHOW').length,\n  pending: appointments.filter(a => ['PENDING', 'CONFIRMED'].includes(a.status)).length\n};\n\n// Por sucursal\nconst byBranch = {};\nappointments.forEach(apt => {\n  const branchName = apt.branches?.name || 'Sin asignar';\n  if (!byBranch[branchName]) {\n    byBranch[branchName] = { total: 0, completed: 0 };\n  }\n  byBranch[branchName].total++;\n  if (apt.status === 'COMPLETED') byBranch[branchName].completed++;\n});\n\n// Por clasificación de leads\nconst byClassification = {\n  HOT: appointments.filter(a => a.leads?.classification === 'HOT').length,\n  WARM: appointments.filter(a => a.leads?.classification === 'WARM').length,\n  COLD: appointments.filter(a => a.leads?.classification === 'COLD').length\n};\n\n// Estadísticas de leads nuevos\nconst leadStats = {\n  total: leads.length,\n  hot: leads.filter(l => l.classification === 'HOT').length,\n  warm: leads.filter(l => l.classification === 'WARM').length,\n  cold: leads.filter(l => l.classification === 'COLD').length,\n  converted: leads.filter(l => l.status === 'APPOINTMENT_BOOKED').length,\n  bySource: {}\n};\n\nleads.forEach(lead => {\n  const source = lead.source || 'unknown';\n  leadStats.bySource[source] = (leadStats.bySource[source] || 0) + 1;\n});\n\n// Próximas citas de la semana\nconst upcomingList = upcomingApts.slice(0, 10).map(apt => {\n  const fecha = new Date(apt.appointment_date);\n  const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];\n  return {\n    fecha: `${diasSemana[fecha.getDay()]} ${fecha.getDate()}/${fecha.getMonth() + 1}`,\n    hora: apt.appointment_time.substring(0, 5),\n    paciente: apt.leads?.full_name || 'Sin nombre',\n    sucursal: apt.branches?.name || 'Sin asignar',\n    clasificacion: apt.leads?.classification || 'N/A'\n  };\n});\n\n// Calcular tasa de conversión\nconst conversionRate = leadStats.total > 0 \n  ? Math.round((leadStats.converted / leadStats.total) * 100) \n  : 0;\n\n// Calcular tasa de asistencia\nconst attendanceRate = aptStats.total > 0 \n  ? Math.round((aptStats.completed / aptStats.total) * 100) \n  : 0;\n\nreturn {\n  json: {\n    dateRange: dateRange,\n    appointments: aptStats,\n    appointmentsByBranch: byBranch,\n    appointmentsByClassification: byClassification,\n    leads: leadStats,\n    conversionRate: conversionRate,\n    attendanceRate: attendanceRate,\n    upcomingAppointments: upcomingList,\n    upcomingTotal: upcomingApts.length\n  }\n};"
+      },
+      "id": "compile-stats",
+      "name": "Compile Statistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construir mensaje del reporte semanal\nconst stats = $input.item.json;\nconst dr = stats.dateRange;\n\n// Construir resumen por sucursal\nlet branchSummary = '';\nObject.entries(stats.appointmentsByBranch).forEach(([branch, data]) => {\n  branchSummary += `   • ${branch}: ${data.completed}/${data.total} completadas\\n`;\n});\n\n// Construir lista de próximas citas\nlet upcomingList = '';\nif (stats.upcomingAppointments.length > 0) {\n  stats.upcomingAppointments.slice(0, 5).forEach(apt => {\n    const emoji = apt.clasificacion === 'HOT' ? '🔴' : apt.clasificacion === 'WARM' ? '🟡' : '🔵';\n    upcomingList += `   ${emoji} ${apt.fecha} ${apt.hora} - ${apt.paciente} (${apt.sucursal})\\n`;\n  });\n} else {\n  upcomingList = '   Sin citas programadas';\n}\n\n// Construir mensaje\nconst mensaje = `📊 *REPORTE SEMANAL ESVA*\n📅 Semana: ${dr.weekStartFormatted} - ${dr.weekEndFormatted}\n\n━━━━━━━━━━━━━━━━━━━━━\n📋 RESUMEN DE CITAS\n━━━━━━━━━━━━━━━━━━━━━\nTotal de citas: ${stats.appointments.total}\n✅ Completadas: ${stats.appointments.completed}\n❌ Canceladas: ${stats.appointments.cancelled}\n🚫 No asistieron: ${stats.appointments.noShow}\n\n📈 Tasa de asistencia: ${stats.attendanceRate}%\n\n*Por sucursal:*\n${branchSummary || '   Sin datos'}\n\n*Por tipo de paciente:*\n   🔴 Calientes (HOT): ${stats.appointmentsByClassification.HOT}\n   🟡 Neutrales (WARM): ${stats.appointmentsByClassification.WARM}\n   🔵 Fríos (COLD): ${stats.appointmentsByClassification.COLD}\n\n━━━━━━━━━━━━━━━━━━━━━\n👥 NUEVOS LEADS\n━━━━━━━━━━━━━━━━━━━━━\nTotal nuevos: ${stats.leads.total}\n   🔴 Calientes: ${stats.leads.hot}\n   🟡 Neutrales: ${stats.leads.warm}\n   🔵 Fríos: ${stats.leads.cold}\n\n📈 Tasa de conversión: ${stats.conversionRate}%\n(Leads que agendaron cita)\n\n━━━━━━━━━━━━━━━━━━━━━\n📅 PRÓXIMAS CITAS (${stats.upcomingTotal})\n━━━━━━━━━━━━━━━━━━━━━\n${upcomingList}\n\n━━━━━━━━━━━━━━━━━━━━━\n🦷 ESVA Dental - Reporte Automático\n¡Excelente semana!`;\n\nreturn {\n  json: {\n    mensaje: mensaje,\n    stats: stats\n  }\n};"
+      },
+      "id": "build-report",
+      "name": "Build Report Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "+526621111111",
+        "textBody": "={{ $json.mensaje }}",
+        "additionalFields": {}
+      },
+      "id": "send-to-dr-estrella",
+      "name": "Send to Dr. Estrella",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1100, 400],
+      "credentials": {
+        "whatsAppBusinessApi": {
+          "id": "whatsapp-credentials",
+          "name": "WhatsApp Business API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/notifications_log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"a0000000-0000-0000-0000-000000000001\",\n  \"recipient_type\": \"staff\",\n  \"recipient_id\": \"c0000000-0000-0000-0000-000000000001\",\n  \"recipient_contact\": \"+526621111111\",\n  \"channel\": \"whatsapp\",\n  \"notification_type\": \"weekly_report\",\n  \"content\": \"Reporte semanal enviado\",\n  \"variables\": {{ JSON.stringify($('Build Report Message').item.json.stats) }},\n  \"status\": \"SENT\",\n  \"sent_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "log-report",
+      "name": "Log Report Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "## 📊 ESVA Weekly Report\n\n**Función:** Genera y envía reporte semanal\n\n**Ejecución:** Cada lunes a las 8:00 AM\n\n**Destinatario:** Dr. Estrella (+526621111111)\n\n**Contenido del reporte:**\n- Resumen de citas de la semana pasada\n- Citas por sucursal\n- Citas por clasificación de lead\n- Nuevos leads y conversión\n- Próximas citas de la semana\n\n**Métricas calculadas:**\n- Tasa de asistencia\n- Tasa de conversión\n- Distribución por sucursal",
+        "height": 380,
+        "width": 320,
+        "color": 5
+      },
+      "id": "sticky-note",
+      "name": "Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-300, 150]
+    }
+  ],
+  "connections": {
+    "Every Monday 8 AM": {
+      "main": [
+        [
+          {
+            "node": "Calculate Date Range",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Date Range": {
+      "main": [
+        [
+          {
+            "node": "Get Week Appointments",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Week Leads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Upcoming Week Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Week Appointments": {
+      "main": [
+        [
+          {
+            "node": "Compile Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Week Leads": {
+      "main": [
+        [
+          {
+            "node": "Compile Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Upcoming Week Appointments": {
+      "main": [
+        [
+          {
+            "node": "Compile Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Statistics": {
+      "main": [
+        [
+          {
+            "node": "Build Report Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Dr. Estrella",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Dr. Estrella": {
+      "main": [
+        [
+          {
+            "node": "Log Report Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "esva-weekly-report-v1"
+  },
+  "tags": [
+    {
+      "name": "ESVA"
+    },
+    {
+      "name": "Report"
+    },
+    {
+      "name": "Scheduled"
+    }
+  ]
+}

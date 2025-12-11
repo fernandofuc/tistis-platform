@@ -1,0 +1,66 @@
+{
+  "name": "ESVA_Tool_Obtener_Ubicacion",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener información de ubicación de las sucursales\nconst sucursal = ($input.item.json.sucursal || '').toLowerCase().trim();\n\n// Base de datos de sucursales\nconst sucursales = {\n  'nogales': {\n    id: 'b0000000-0000-0000-0000-000000000001',\n    nombre: 'ESVA Nogales',\n    ciudad: 'Nogales, Sonora',\n    direccion: 'Boulevard Luis Donaldo Colosio #123, Col. Centro',\n    telefono: '+52 631 600 1234',\n    whatsapp: '+52 631 600 1234',\n    googleMapsUrl: 'https://maps.app.goo.gl/6CKXWxat9CLqyL4g9',\n    coordenadas: {\n      lat: 31.3086,\n      lng: -110.9441\n    },\n    horarios: {\n      lunes_viernes: '9:30 AM - 6:00 PM',\n      sabado: '10:00 AM - 2:00 PM',\n      domingo: 'Cerrado'\n    },\n    caracteristicas: [\n      'Sucursal principal',\n      'A 5 minutos de la frontera con Arizona',\n      'Ideal para pacientes de USA',\n      'Estacionamiento gratuito'\n    ],\n    es_headquarters: true\n  },\n  'hermosillo': {\n    id: 'b0000000-0000-0000-0000-000000000003',\n    nombre: 'ESVA Hermosillo',\n    ciudad: 'Hermosillo, Sonora',\n    direccion: 'Boulevard Solidaridad #789, Col. Las Quintas',\n    telefono: '+52 662 198 7654',\n    whatsapp: '+52 662 198 7654',\n    googleMapsUrl: 'https://maps.app.goo.gl/9ra9fYwLuJeZWFFq5',\n    coordenadas: {\n      lat: 29.0729,\n      lng: -110.9559\n    },\n    horarios: {\n      lunes_viernes: '9:30 AM - 6:00 PM',\n      sabado: '10:00 AM - 2:00 PM',\n      domingo: 'Cerrado'\n    },\n    caracteristicas: [\n      'Ubicación céntrica',\n      'Fácil acceso',\n      'Estacionamiento disponible'\n    ],\n    es_headquarters: false\n  }\n};\n\n// Verificar si se solicitó una sucursal específica o todas\nif (!sucursal || sucursal === 'todas' || sucursal === 'all') {\n  // Retornar información de todas las sucursales\n  const mensaje = `📍 Nuestras sucursales:\n\n🦷 ESVA Nogales (Principal)\n${sucursales.nogales.direccion}\n📞 ${sucursales.nogales.telefono}\n🗺️ ${sucursales.nogales.googleMapsUrl}\n✨ A 5 minutos de la frontera con Arizona\n\n🦷 ESVA Hermosillo\n${sucursales.hermosillo.direccion}\n📞 ${sucursales.hermosillo.telefono}\n🗺️ ${sucursales.hermosillo.googleMapsUrl}\n\n⏰ Horarios (todas las sucursales):\nLun-Vie: 9:30 AM - 6:00 PM\nSábado: 10:00 AM - 2:00 PM\nDomingo: Cerrado`;\n\n  return {\n    json: {\n      success: true,\n      tipo: 'todas',\n      sucursales: Object.values(sucursales),\n      message: mensaje\n    }\n  };\n}\n\n// Buscar sucursal específica\nconst sucursalData = sucursales[sucursal];\n\nif (!sucursalData) {\n  return {\n    json: {\n      success: false,\n      error: 'Sucursal no encontrada',\n      message: `No encontré la sucursal \"${sucursal}\". Nuestras sucursales disponibles son Nogales y Hermosillo. ¿Cuál le gustaría consultar?`,\n      available: ['Nogales', 'Hermosillo']\n    }\n  };\n}\n\n// Construir mensaje para sucursal específica\nlet mensaje = `📍 ${sucursalData.nombre}\\n\\n`;\nmensaje += `📌 Dirección:\\n${sucursalData.direccion}\\n${sucursalData.ciudad}\\n\\n`;\nmensaje += `📞 Teléfono: ${sucursalData.telefono}\\n\\n`;\nmensaje += `🗺️ Ver en mapa:\\n${sucursalData.googleMapsUrl}\\n\\n`;\nmensaje += `⏰ Horarios:\\n`;\nmensaje += `Lun-Vie: ${sucursalData.horarios.lunes_viernes}\\n`;\nmensaje += `Sábado: ${sucursalData.horarios.sabado}\\n`;\nmensaje += `Domingo: ${sucursalData.horarios.domingo}`;\n\nif (sucursalData.caracteristicas && sucursalData.caracteristicas.length > 0) {\n  mensaje += `\\n\\n✨ `;\n  mensaje += sucursalData.caracteristicas.join('\\n✨ ');\n}\n\nreturn {\n  json: {\n    success: true,\n    tipo: 'especifica',\n    sucursal: sucursalData,\n    message: mensaje\n  }\n};"
+      },
+      "id": "get-location",
+      "name": "Get Location",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "content": "## 📍 ESVA Tool: Obtener Ubicación\n\n**Función:** Retorna información de ubicación de sucursales\n\n**Inputs:**\n- sucursal: 'nogales', 'hermosillo', 'todas' o vacío\n\n**Información incluida:**\n- Nombre y dirección completa\n- Teléfono y WhatsApp\n- Link de Google Maps\n- Coordenadas\n- Horarios de atención\n- Características especiales\n\n**Nota:** Tijuana NO incluida\n(se agregará cuando tengan la dirección)",
+        "height": 320,
+        "width": 320,
+        "color": 2
+      },
+      "id": "sticky-note",
+      "name": "Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-300, 150]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Location",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "esva-tool-obtener-ubicacion-v1"
+  },
+  "tags": [
+    {
+      "name": "ESVA"
+    },
+    {
+      "name": "Tool"
+    }
+  ]
+}

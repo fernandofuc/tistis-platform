@@ -1,0 +1,294 @@
+{
+  "name": "ESVA_Appointment_Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,appointment_date,appointment_time,lead_id,branch_id,reminder_24h_sent,reminder_2h_sent,leads(id,full_name,phone,preferred_language),branches(name,google_maps_url)"
+            },
+            {
+              "name": "tenant_id",
+              "value": "eq.a0000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "status",
+              "value": "eq.CONFIRMED"
+            },
+            {
+              "name": "and",
+              "value": "(appointment_date.gte.{{ $now.toFormat('yyyy-MM-dd') }},appointment_date.lte.{{ $now.plus({days: 1}).toFormat('yyyy-MM-dd') }})"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-upcoming-appointments",
+      "name": "Get Upcoming Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar citas y determinar cuáles necesitan recordatorio\nconst appointments = $input.all().map(item => item.json);\nconst now = new Date();\nconst hermosillo_offset = -7; // America/Hermosillo UTC-7\n\n// Ajustar a hora de Hermosillo\nconst nowHermosillo = new Date(now.getTime() + (hermosillo_offset * 60 + now.getTimezoneOffset()) * 60000);\n\nconst results = {\n  reminder_24h: [],\n  reminder_2h: []\n};\n\nfor (const apt of appointments) {\n  if (!apt.leads || !apt.leads.phone) continue;\n  \n  // Crear fecha/hora de la cita\n  const aptDateTime = new Date(`${apt.appointment_date}T${apt.appointment_time}`);\n  \n  // Calcular diferencia en horas\n  const diffMs = aptDateTime - nowHermosillo;\n  const diffHours = diffMs / (1000 * 60 * 60);\n  \n  // Recordatorio 24h: entre 23 y 25 horas antes\n  if (!apt.reminder_24h_sent && diffHours >= 23 && diffHours <= 25) {\n    results.reminder_24h.push({\n      appointmentId: apt.id,\n      leadId: apt.lead_id,\n      leadName: apt.leads.full_name || 'Paciente',\n      leadPhone: apt.leads.phone,\n      language: apt.leads.preferred_language || 'es',\n      appointmentDate: apt.appointment_date,\n      appointmentTime: apt.appointment_time,\n      branchName: apt.branches?.name || 'ESVA',\n      branchMapsUrl: apt.branches?.google_maps_url,\n      reminderType: '24h'\n    });\n  }\n  \n  // Recordatorio 2h: entre 1.5 y 2.5 horas antes\n  if (!apt.reminder_2h_sent && diffHours >= 1.5 && diffHours <= 2.5) {\n    results.reminder_2h.push({\n      appointmentId: apt.id,\n      leadId: apt.lead_id,\n      leadName: apt.leads.full_name || 'Paciente',\n      leadPhone: apt.leads.phone,\n      language: apt.leads.preferred_language || 'es',\n      appointmentDate: apt.appointment_date,\n      appointmentTime: apt.appointment_time,\n      branchName: apt.branches?.name || 'ESVA',\n      branchMapsUrl: apt.branches?.google_maps_url,\n      reminderType: '2h'\n    });\n  }\n}\n\n// Combinar todos los recordatorios para procesar\nconst allReminders = [...results.reminder_24h, ...results.reminder_2h];\n\nreturn allReminders.map(reminder => ({ json: reminder }));"
+      },
+      "id": "process-reminders",
+      "name": "Process Reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-reminders",
+              "leftValue": "={{ $json.appointmentId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-reminders",
+      "name": "Has Reminders?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construir mensaje de recordatorio\nconst data = $input.item.json;\n\n// Formatear fecha\nconst fecha = new Date(data.appointmentDate);\nconst diasSemana = {\n  es: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],\n  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']\n};\nconst meses = {\n  es: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],\n  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']\n};\n\nconst lang = data.language === 'en' ? 'en' : 'es';\nconst fechaFormateada = lang === 'es' \n  ? `${diasSemana.es[fecha.getDay()]} ${fecha.getDate()} de ${meses.es[fecha.getMonth()]}`\n  : `${diasSemana.en[fecha.getDay()]}, ${meses.en[fecha.getMonth()]} ${fecha.getDate()}`;\n\n// Formatear hora\nconst hora = data.appointmentTime;\nconst hourNum = parseInt(hora.split(':')[0]);\nconst ampm = hourNum >= 12 ? 'PM' : 'AM';\nconst hour12 = hourNum > 12 ? hourNum - 12 : hourNum;\nconst horaFormateada = `${hour12}:${hora.split(':')[1]} ${ampm}`;\n\n// Construir mensaje según idioma y tipo de recordatorio\nlet mensaje;\n\nif (data.reminderType === '24h') {\n  if (lang === 'es') {\n    mensaje = `🦷 ¡Hola ${data.leadName}!\n\nLe recordamos que tiene una cita de valoración mañana:\n\n📅 ${fechaFormateada}\n🕐 ${horaFormateada}\n📍 ${data.branchName}\n\n🗺️ Ubicación: ${data.branchMapsUrl || 'Por confirmar'}\n\n¿Podrá asistir? Responda:\n✅ SÍ - Confirmo mi asistencia\n❌ NO - Necesito reprogramar\n\n¡Lo esperamos en ESVA Dental!`;\n  } else {\n    mensaje = `🦷 Hi ${data.leadName}!\n\nThis is a reminder about your evaluation appointment tomorrow:\n\n📅 ${fechaFormateada}\n🕐 ${horaFormateada}\n📍 ${data.branchName}\n\n🗺️ Location: ${data.branchMapsUrl || 'To be confirmed'}\n\nWill you be able to attend? Reply:\n✅ YES - I confirm my attendance\n❌ NO - I need to reschedule\n\nWe look forward to seeing you at ESVA Dental!`;\n  }\n} else { // 2h reminder\n  if (lang === 'es') {\n    mensaje = `🦷 ¡Hola ${data.leadName}!\n\nSu cita en ESVA Dental es en 2 horas:\n\n🕐 ${horaFormateada}\n📍 ${data.branchName}\n\n🗺️ ${data.branchMapsUrl || ''}\n\n¡Lo esperamos! 😊`;\n  } else {\n    mensaje = `🦷 Hi ${data.leadName}!\n\nYour ESVA Dental appointment is in 2 hours:\n\n🕐 ${horaFormateada}\n📍 ${data.branchName}\n\n🗺️ ${data.branchMapsUrl || ''}\n\nSee you soon! 😊`;\n  }\n}\n\nreturn {\n  json: {\n    ...data,\n    mensaje: mensaje,\n    fechaFormateada: fechaFormateada,\n    horaFormateada: horaFormateada\n  }\n};"
+      },
+      "id": "build-reminder-message",
+      "name": "Build Reminder Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $json.leadPhone }}",
+        "textBody": "={{ $json.mensaje }}",
+        "additionalFields": {}
+      },
+      "id": "send-reminder",
+      "name": "Send WhatsApp Reminder",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1100, 300],
+      "credentials": {
+        "whatsAppBusinessApi": {
+          "id": "whatsapp-credentials",
+          "name": "WhatsApp Business API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "eq.{{ $('Build Reminder Message').item.json.appointmentId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  {{ $('Build Reminder Message').item.json.reminderType === '24h' ? '\"reminder_24h_sent\": true, \"reminder_24h_sent_at\"' : '\"reminder_2h_sent\": true, \"reminder_2h_sent_at\"' }}: \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "mark-reminder-sent",
+      "name": "Mark Reminder Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/notifications_log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"a0000000-0000-0000-0000-000000000001\",\n  \"recipient_type\": \"lead\",\n  \"recipient_id\": \"{{ $('Build Reminder Message').item.json.leadId }}\",\n  \"recipient_contact\": \"{{ $('Build Reminder Message').item.json.leadPhone }}\",\n  \"channel\": \"whatsapp\",\n  \"notification_type\": \"appointment_reminder_{{ $('Build Reminder Message').item.json.reminderType }}\",\n  \"content\": \"{{ $('Build Reminder Message').item.json.mensaje.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n') }}\",\n  \"status\": \"SENT\",\n  \"sent_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "log-notification",
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 480],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "## ⏰ ESVA Appointment Reminders\n\n**Función:** Envía recordatorios automáticos de citas\n\n**Ejecución:** Cada 30 minutos\n\n**Tipos de recordatorio:**\n- 24 horas antes (con botones confirmar/cancelar)\n- 2 horas antes (simple)\n\n**Proceso:**\n1. Obtener citas de hoy y mañana\n2. Filtrar las que necesitan recordatorio\n3. Construir mensaje (español/inglés)\n4. Enviar por WhatsApp\n5. Marcar como enviado\n6. Guardar en log\n\n**Notas:**\n- Usa timezone America/Hermosillo\n- Soporta inglés y español\n- No envía duplicados",
+        "height": 400,
+        "width": 320,
+        "color": 7
+      },
+      "id": "sticky-note",
+      "name": "Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-300, 100]
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Upcoming Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Upcoming Appointments": {
+      "main": [
+        [
+          {
+            "node": "Process Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Reminders": {
+      "main": [
+        [
+          {
+            "node": "Has Reminders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Reminders?": {
+      "main": [
+        [
+          {
+            "node": "Build Reminder Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reminder Message": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "esva-appointment-reminders-v1"
+  },
+  "tags": [
+    {
+      "name": "ESVA"
+    },
+    {
+      "name": "Reminders"
+    },
+    {
+      "name": "Scheduled"
+    }
+  ]
+}

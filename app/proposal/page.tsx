@@ -13,11 +13,12 @@ import PlanCard from '@/components/proposal/PlanCard';
 import { AIAnalysis, QuestionnaireAnswers } from '@/types';
 import { supabase } from '@/lib/auth';
 
-// Datos de planes (hardcoded por ahora, vendrían de pricing)
+// Datos de planes - PRECIOS ACTUALIZADOS 2025
+// NOTA: Estos precios DEBEN coincidir con checkout/page.tsx y Stripe
 const PLANS = {
   starter: {
     name: 'Starter',
-    price: 5990,
+    price: 3490,
     features: [
       'Asistente IA 24/7 en WhatsApp',
       'Hasta 500 conversaciones/mes',
@@ -28,19 +29,19 @@ const PLANS = {
   },
   essentials: {
     name: 'Essentials',
-    price: 8990,
+    price: 7490,
     features: [
       'Todo lo de Starter',
       'Hasta 2,000 conversaciones/mes',
       'Integración con sistemas existentes',
       'Automatización de procesos básicos',
       'Soporte prioritario',
-      'Reportes semanales'
+      'Call de configuración en 30 min'
     ]
   },
   growth: {
     name: 'Growth',
-    price: 14990,
+    price: 12490,
     features: [
       'Todo lo de Essentials',
       'Conversaciones ilimitadas',
@@ -48,12 +49,12 @@ const PLANS = {
       'Multi-canal (WhatsApp, Web, Email)',
       'Analytics avanzado',
       'Soporte 24/7',
-      'Call mensual de optimización'
+      'Call de configuración en 30 min'
     ]
   },
   scale: {
     name: 'Scale',
-    price: 24990,
+    price: 19990,
     features: [
       'Todo lo de Growth',
       'Soporte multi-sucursal',
@@ -186,7 +187,7 @@ export default function ProposalPage() {
           pricing_snapshot: {
             plan_name: plan.name,
             monthly_price: plan.price,
-            setup_fee: plan.price * 0.5,
+            setup_fee: 0, // Ya no cobramos fee de activación
             features: plan.features,
           },
           reasoning: analysis.reasoning,
@@ -306,7 +307,7 @@ export default function ProposalPage() {
               <span className="text-lg font-normal opacity-90 ml-2">/mes</span>
             </div>
             <p className="text-lg opacity-90 mb-8">
-              + ${(plan.price * 0.5).toLocaleString('es-MX')} MXN de configuración inicial (solo una vez)
+              Sin costo de activación · Cancela cuando quieras
             </p>
             <Button
               size="xl"

@@ -2,9 +2,9 @@
 
 Sistema completo de gestión dental con IA, WhatsApp Business API y automatización de procesos.
 
-**Versión:** 2.1.0
-**Estado:** 95% Fase 2 Completada
-**Última actualización:** 8 de Diciembre, 2024
+**Versión:** 2.2.0
+**Estado:** 98% Fase 2 Completada
+**Última actualización:** 10 de Diciembre, 2024
 
 ---
 
@@ -79,47 +79,56 @@ tistis-platform/
 
 ## 🗄️ Base de Datos
 
-### Schema v2.1
+### Schema v2.2
 
-- **18 tablas** principales (tenants, leads, patients, quotes, etc.)
-- **10 funciones** PostgreSQL optimizadas con advisory locks
-- **3 views** para queries complejas
+- **20 tablas** principales (tenants, leads, patients, quotes, user_roles, vertical_configs, etc.)
+- **11 funciones** PostgreSQL optimizadas con advisory locks
+- **4 views** para queries complejas (incluye staff_members)
 - **3 buckets** de Storage (patient-files, quotes-pdf, temp-uploads)
-- **RLS policies** por rol en todas las tablas
-- **20+ índices** optimizados
+- **RLS policies** corregidas usando user_roles (multi-tenant seguro)
+- **25+ índices** optimizados
 
 ### Migraciones Aplicadas
 
-1. `001_initial_schema.sql` - Schema base
-2. `002_rls_policies.sql` - Row Level Security
-3. `003_functions.sql` - Funciones PostgreSQL
-4. `004_views.sql` - Views útiles
+1. `001_initial_schema.sql` - Schema base + discovery sessions
+2. `002_add_session_token.sql` - Token de sesión para onboarding
+3. `003_esva_schema_v2.sql` - Schema multi-tenant completo
+4. `004_esva_seed_data.sql` - Datos de ESVA (tenant inicial)
 5. `005_patients_module.sql` - Módulo de pacientes
 6. `006_quotes_module.sql` - Módulo de cotizaciones
 7. `007_files_storage_setup.sql` - Storage buckets
 8. `008_notifications_module.sql` - Sistema de notificaciones
-9. `009_critical_fixes.sql` - **NUEVO** - 14 fixes críticos
+9. `009_critical_fixes.sql` - 14 fixes críticos (seguridad + performance)
+10. `010_assembly_engine.sql` - Motor de ensamblaje de propuestas
+11. `011_master_correction.sql` - **NUEVO** - Corrección master crítica
 
-### Migración 009: Fixes Críticos
+### Migración 011: Corrección Master (10 Dic 2024)
 
-**Seguridad:**
-- Advisory locks en generación de números (prevención de race conditions)
-- Validación de tenant en storage policies
-- RLS policies reforzadas para notificaciones
-- Constraints de integridad mejorados
+**CRÍTICO - Cambios de negocio y seguridad:**
 
-**Performance:**
-- Índice único para email por tenant
-- Índice compuesto para notificaciones (user_id + created_at)
-- Cleanup functions con límites
+**Precios actualizados:**
+- Starter: $799 → **$3,490/mes** (sin cuota de activación)
+- Essentials: $1,499 → **$7,490/mes** (sin cuota de activación)
+- Growth: $2,999 → **$12,490/mes** (sin cuota de activación)
+- Scale: $5,999 → **$19,990/mes** (sin cuota de activación)
+
+**Seguridad multi-tenant:**
+- ✅ Tabla `user_roles` creada (era referenciada pero no existía)
+- ✅ RLS policies corregidas: ahora usan `user_roles` en vez de JWT claims inexistentes
+- ✅ Prevención de acceso cross-tenant mejorada
+- ✅ Sincronización automática staff → user_roles
+
+**Nuevas features:**
+- ✅ Tabla `vertical_configs` para configuración por tipo de negocio (dental, restaurant, etc.)
+- ✅ VIEW `staff_members` como alias de `staff` (compatibilidad)
+- ✅ Función helper `get_user_tenant_id()` para queries
+- ✅ 6 addons actualizados con precios 2025
 
 **Correcciones:**
-- Cálculo de totales en quotes corregido
-- Trigger para subtotal de items
-- Validación de JSON en dental_chart
-- Columna converted_at en leads
+- ✅ VIEW `quotes_full` corregida (l.name → l.full_name)
+- ✅ Tabla `proposals` actualizada (activation_fee = 0)
 
-Ver detalles completos en `/supabase/migrations/009_critical_fixes.sql`
+Ver detalles completos en `/supabase/migrations/MIGRATION_NOTES.md`
 
 ## 🔌 API Routes
 
@@ -193,7 +202,7 @@ Todas las rutas validan:
 
 - `STATUS_PROYECTO.md` - Estado completo del proyecto
 - `INTEGRATION_GUIDE.md` - Guía de integraciones (WhatsApp, n8n)
-- `supabase/migrations/README.md` - Guía de migraciones
+- `supabase/migrations/MIGRATION_NOTES.md` - **NUEVO** - Guía completa de migración 011
 - `.claude/docs/` - Documentación técnica adicional
 
 ## 🧪 Testing

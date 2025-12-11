@@ -1,0 +1,962 @@
+{
+  "name": "ESVA_WhatsApp_Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["messages"],
+        "options": {}
+      },
+      "id": "whatsapp-trigger",
+      "name": "WhatsApp Trigger",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "webhookId": "esva-whatsapp-handler"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "filter-status-updates",
+              "leftValue": "={{ $json.messages }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-valid-messages",
+      "name": "Filter Valid Messages",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.messages[0].text?.body }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text Message"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.messages[0].button?.payload }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Button Response"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.messages[0].interactive?.button_reply }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "object",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Interactive Button"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.messages[0].type }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "Media Message"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "switch-message-type",
+      "name": "Message Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/get_or_create_lead",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_tenant_id\": \"a0000000-0000-0000-0000-000000000001\",\n  \"p_phone\": \"{{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}\",\n  \"p_source\": \"whatsapp\",\n  \"p_external_id\": \"{{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}\",\n  \"p_name\": \"{{ $('WhatsApp Trigger').item.json.contacts[0].profile.name }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "get-or-create-lead",
+      "name": "Get or Create Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "*,lead_dental_profile(*)"
+            },
+            {
+              "name": "phone_normalized",
+              "value": "eq.{{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}"
+            },
+            {
+              "name": "tenant_id",
+              "value": "eq.a0000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-lead-details",
+      "name": "Get Lead Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/conversations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "message_content,direction,created_at"
+            },
+            {
+              "name": "lead_id",
+              "value": "eq.{{ $json[0].id }}"
+            },
+            {
+              "name": "order",
+              "value": "created_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "15"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-conversation-history",
+      "name": "Get Conversation History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,appointment_date,appointment_time,status,branch_id,branches(name)"
+            },
+            {
+              "name": "lead_id",
+              "value": "eq.{{ $('Get Lead Details').item.json[0].id }}"
+            },
+            {
+              "name": "appointment_date",
+              "value": "gte.{{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "status",
+              "value": "in.(PENDING,CONFIRMED)"
+            },
+            {
+              "name": "order",
+              "value": "appointment_date.asc"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-upcoming-appointments",
+      "name": "Get Upcoming Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "formatDate",
+        "date": "={{ $now }}",
+        "format": "custom",
+        "customFormat": "EEEE, dd 'de' MMMM 'de' yyyy",
+        "options": {
+          "timezone": "America/Hermosillo"
+        }
+      },
+      "id": "format-current-date",
+      "name": "Format Current Date",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar contexto completo para el AI Agent\nconst trigger = $('WhatsApp Trigger').item.json;\nconst leadDetails = $('Get Lead Details').item.json[0];\nconst history = $('Get Conversation History').item.json || [];\nconst appointments = $('Get Upcoming Appointments').item.json || [];\nconst currentDate = $('Format Current Date').item.json.formattedDate;\nconst messageContent = trigger.messages[0].text?.body || \n                       trigger.messages[0].button?.payload ||\n                       trigger.messages[0].interactive?.button_reply?.title ||\n                       '[Mensaje multimedia]';\n\n// Determinar si es cliente nuevo o recurrente\nconst isReturningCustomer = leadDetails.total_messages > 0 || history.length > 0;\nconst hasUpcomingAppointment = appointments.length > 0;\n\n// Formatear historial de conversación para contexto\nlet conversationContext = '';\nif (history.length > 0) {\n  const reversedHistory = [...history].reverse();\n  conversationContext = reversedHistory.map(msg => {\n    const role = msg.direction === 'inbound' ? 'Paciente' : 'ESVA';\n    return `${role}: ${msg.message_content}`;\n  }).join('\\n');\n}\n\n// Formatear información de cita próxima\nlet appointmentInfo = '';\nif (hasUpcomingAppointment) {\n  const apt = appointments[0];\n  appointmentInfo = `\\n\\n📅 CITA PROGRAMADA:\\n- Fecha: ${apt.appointment_date}\\n- Hora: ${apt.appointment_time}\\n- Sucursal: ${apt.branches?.name || 'Por confirmar'}\\n- Estado: ${apt.status}`;\n}\n\n// Detectar idioma del mensaje\nconst englishPatterns = /\\b(hi|hello|good|morning|afternoon|how|much|cost|price|appointment|veneers|teeth|dental|where|when|what|can|you|the|is|are|do|have)\\b/i;\nconst detectedLanguage = englishPatterns.test(messageContent) ? 'en' : 'es';\n\nreturn {\n  json: {\n    // Información del mensaje\n    messageContent: messageContent,\n    messageType: trigger.messages[0].type,\n    \n    // Información del contacto\n    contactName: trigger.contacts[0].profile.name,\n    contactPhone: trigger.contacts[0].wa_id,\n    \n    // Información del lead\n    leadId: leadDetails.id,\n    leadScore: leadDetails.score,\n    leadClassification: leadDetails.classification,\n    leadStatus: leadDetails.status,\n    isReturningCustomer: isReturningCustomer,\n    totalMessages: leadDetails.total_messages,\n    preferredLanguage: detectedLanguage,\n    \n    // Contexto de conversación\n    conversationHistory: conversationContext,\n    historyCount: history.length,\n    \n    // Citas\n    hasUpcomingAppointment: hasUpcomingAppointment,\n    appointmentInfo: appointmentInfo,\n    \n    // Fecha actual\n    currentDate: currentDate,\n    currentDateISO: $now.format('yyyy-MM-dd'),\n    currentTime: $now.setZone('America/Hermosillo').toFormat('HH:mm'),\n    dayOfWeek: $now.setZone('America/Hermosillo').toFormat('EEEE').toLowerCase()\n  }\n};"
+      },
+      "id": "prepare-ai-context",
+      "name": "Prepare AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messageContent }}",
+        "options": {
+          "systemMessage": "=# ROL Y PERSONALIDAD\nEres el asistente virtual de ESVA Dental Clinic, una clínica dental premium especializada en carillas de porcelana Emax y estética dental. Tu personalidad es:\n\n- **Profesional y de lujo**: Transmites la calidad premium de ESVA en cada mensaje\n- **Cálido pero no excesivo**: Amable sin ser empalagoso\n- **Eficiente**: Vas al grano pero con elegancia\n- **Experto confiable**: Conoces perfectamente los servicios de ESVA\n\n# INFORMACIÓN DEL PACIENTE ACTUAL\n- **Nombre**: {{ $json.contactName }}\n- **Teléfono**: {{ $json.contactPhone }}\n- **Es cliente recurrente**: {{ $json.isReturningCustomer ? 'Sí' : 'No (primera vez que escribe)' }}\n- **Clasificación actual**: {{ $json.leadClassification }}\n- **Score**: {{ $json.leadScore }}/100\n- **Idioma detectado**: {{ $json.preferredLanguage === 'en' ? 'Inglés' : 'Español' }}\n{{ $json.appointmentInfo }}\n\n# HISTORIAL DE CONVERSACIÓN (últimos mensajes)\n{{ $json.conversationHistory || 'No hay historial previo - es un nuevo contacto.' }}\n\n# FECHA Y HORA ACTUAL\n- **Fecha**: {{ $json.currentDate }}\n- **Hora**: {{ $json.currentTime }} (America/Hermosillo)\n- **Día**: {{ $json.dayOfWeek }}\n\n# REGLAS DE COMUNICACIÓN\n\n## Si es CLIENTE NUEVO (primera vez):\nSaluda de manera profesional y acogedora, preséntate como asistente de ESVA Dental. Ejemplo:\n\"¡Bienvenido a ESVA Dental! 🦷 Soy su asistente virtual. Es un placer atenderle. ¿En qué puedo ayudarle hoy?\"\n\n## Si es CLIENTE RECURRENTE:\nSaluda de manera personalizada usando su nombre, reconociendo que ya nos conocemos. Ejemplo:\n\"¡Hola de nuevo, [Nombre]! 🦷 Qué gusto saludarle. ¿En qué puedo asistirle hoy?\"\n\n## Si tiene CITA PROGRAMADA:\nMenciona la cita si es relevante al contexto. Ejemplo:\n\"Por cierto, le recuerdo que tiene una cita de valoración programada para el [fecha] a las [hora] en nuestra sucursal de [sucursal].\"\n\n## Si escriben en INGLÉS:\nResponde TODO en inglés con el mismo nivel de profesionalismo.\n\n# INFORMACIÓN DE ESVA DENTAL\n\n## Servicios Principales:\n1. **Carillas de Porcelana Emax** (Servicio estrella)\n   - Estándar: $295 USD por diente\n   - Equipo ESVA: $395 USD por diente\n   - Exclusividad Dr. Estrella: $850 USD por diente\n   \n2. **Valoración Dental Completa** - GRATUITA\n   - Incluye: Fotografías clínicas, Diseño Digital de Sonrisa (DSD), diagnóstico y cotización\n   - Sin compromiso\n\n3. **Otros servicios**:\n   - Blanqueamiento profesional\n   - Implantes dentales\n   - Limpieza dental\n   - Ortodoncia\n\n## Sucursales (solo estas 2 por ahora):\n1. **ESVA Nogales** (Sonora) - Sucursal Principal\n   - Ubicación: https://maps.app.goo.gl/6CKXWxat9CLqyL4g9\n   - A minutos de la frontera con Arizona\n   - Ideal para pacientes de USA\n\n2. **ESVA Hermosillo** (Sonora)\n   - Ubicación: https://maps.app.goo.gl/9ra9fYwLuJeZWFFq5\n\n## Horarios (todas las sucursales):\n- Lunes a Viernes: 9:30 AM - 6:00 PM\n- Sábados: 10:00 AM - 2:00 PM\n- Domingos: Cerrado\n\n## Slots de citas disponibles:\n- 9:30, 10:30, 11:30, 12:30, 13:30, 14:30, 15:30, 16:30 (L-V)\n- 10:00, 11:00, 12:00, 13:00 (Sábados)\n- Duración: 60 minutos cada cita\n- Máximo 8 citas por día por sucursal\n- IMPORTANTE: No se puede agendar para el mismo día, mínimo 1 día de anticipación\n\n# FLUJO DE CONVERSACIÓN\n\n## Cuando pregunten PRECIOS:\n1. Si preguntan en general: \"¿Sobre qué servicio le gustaría conocer nuestros precios?\"\n2. Si preguntan carillas: Dar los 3 niveles de precio y explicar brevemente la diferencia\n3. Siempre invitar a la valoración gratuita para cotización personalizada\n\n## Cuando quieran AGENDAR:\n1. Usar la herramienta 'consultar_disponibilidad' para verificar slots\n2. Ofrecer las 2 sucursales disponibles (Nogales y Hermosillo)\n3. Solicitar datos mínimos: Nombre completo y número de teléfono (ya lo tenemos)\n4. Usar la herramienta 'agendar_cita' para confirmar\n5. Enviar mensaje de confirmación con todos los detalles\n\n## Cuando pregunten UBICACIÓN:\n- Dar las direcciones y links de Google Maps\n- Mencionar que Nogales está cerca de la frontera (para pacientes de USA)\n\n## Si el cliente NO está interesado o quiere terminar:\nDespedirse de manera profesional y elegante:\n\"Ha sido un placer atenderle. En ESVA estamos para servirle cuando lo necesite. ¡Que tenga un excelente día! 🦷\"\n\n# HERRAMIENTAS DISPONIBLES\n\n1. **consultar_disponibilidad**: Verifica qué slots hay disponibles en una fecha y sucursal\n2. **agendar_cita**: Crea una cita en el sistema\n3. **resolver_duda**: Busca en la base de conocimiento de ESVA para responder preguntas\n4. **obtener_ubicacion**: Obtiene los detalles de ubicación de una sucursal\n\n# CLASIFICACIÓN DE LEADS (para el final de la conversación)\n\nClasifica al paciente según el tipo de servicio que busca:\n- 🔵 **FRÍO**: Limpieza, consulta general, revisión de rutina (servicios básicos)\n- 🟡 **NEUTRAL**: Blanqueamiento, empastes, extracciones, endodoncia (servicios intermedios)\n- 🔴 **CALIENTE**: Carillas, implantes, coronas, diseño de sonrisa, ortodoncia (servicios de alto valor)\n\nEsta clasificación se aplica SOLO cuando el paciente agenda una cita.\n\n# FORMATO DE RESPUESTAS\n\n- Usa emojis con moderación (1-2 por mensaje máximo)\n- No uses asteriscos para negritas (WhatsApp no los procesa bien en todos los dispositivos)\n- Mantén los mensajes concisos pero completos\n- Máximo 500 caracteres por mensaje cuando sea posible\n- Usa saltos de línea para mejor legibilidad\n\n# RESTRICCIONES IMPORTANTES\n\n❌ NO inventes información que no tengas\n❌ NO prometas descuentos o promociones (ESVA no hace descuentos)\n❌ NO agendes para el mismo día\n❌ NO menciones la sucursal de Tijuana (aún no está disponible)\n❌ NO compartas precios de servicios que no sean carillas (no tenemos precios fijos para otros servicios)\n❌ NO uses lenguaje informal excesivo\n❌ NO hagas preguntas múltiples en un solo mensaje\n\n✅ SÍ invita siempre a la valoración gratuita\n✅ SÍ menciona el Diseño Digital de Sonrisa como ventaja única\n✅ SÍ destaca que fabricamos las carillas en nuestro propio laboratorio\n✅ SÍ menciona que atendemos pacientes de USA (si detectas que son de ahí)\n\n# AHORA RESPONDE AL MENSAJE DEL PACIENTE\nRecuerda: Eres el asistente de ESVA Dental. Responde de manera profesional, cálida y eficiente."
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent ESVA",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {
+          "temperature": 0.7,
+          "maxTokensToSample": 1024
+        }
+      },
+      "id": "anthropic-model",
+      "name": "Claude Sonnet 4",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [1680, 520],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-credentials",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=esva_{{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}"
+      },
+      "id": "postgres-memory",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [1800, 520],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "Supabase Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "consultar_disponibilidad",
+        "description": "Consulta los horarios disponibles para agendar una cita de valoración en una fecha y sucursal específica. Usa esta herramienta ANTES de ofrecer horarios al paciente.",
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "={{ $fromAI('fecha', 'Fecha en formato YYYY-MM-DD') }}",
+            "sucursal": "={{ $fromAI('sucursal', 'Nombre de la sucursal: nogales o hermosillo') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      },
+      "id": "tool-consultar-disponibilidad",
+      "name": "Consultar Disponibilidad",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [1920, 520]
+    },
+    {
+      "parameters": {
+        "name": "agendar_cita",
+        "description": "Agenda una cita de valoración para el paciente. Solo usar después de confirmar disponibilidad y obtener confirmación del paciente.",
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "={{ $fromAI('fecha', 'Fecha de la cita en formato YYYY-MM-DD') }}",
+            "hora": "={{ $fromAI('hora', 'Hora de la cita en formato HH:MM') }}",
+            "sucursal": "={{ $fromAI('sucursal', 'Nombre de la sucursal: nogales o hermosillo') }}",
+            "nombre_paciente": "={{ $fromAI('nombre_paciente', 'Nombre completo del paciente') }}",
+            "telefono": "={{ $fromAI('telefono', 'Número de teléfono del paciente') }}",
+            "lead_id": "={{ $('Prepare AI Context').item.json.leadId }}",
+            "clasificacion": "={{ $fromAI('clasificacion', 'Clasificación del lead: HOT, WARM, o COLD basado en el servicio de interés') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_paciente",
+              "displayName": "nombre_paciente",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "clasificacion",
+              "displayName": "clasificacion",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      },
+      "id": "tool-agendar-cita",
+      "name": "Agendar Cita",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [2040, 520]
+    },
+    {
+      "parameters": {
+        "name": "resolver_duda",
+        "description": "Busca en la base de conocimiento de ESVA para responder preguntas frecuentes sobre precios, procedimientos, ubicaciones, etc.",
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "pregunta": "={{ $fromAI('pregunta', 'La pregunta o duda del paciente') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "pregunta",
+              "displayName": "pregunta",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      },
+      "id": "tool-resolver-duda",
+      "name": "Resolver Duda",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [2160, 520]
+    },
+    {
+      "parameters": {
+        "name": "obtener_ubicacion",
+        "description": "Obtiene la dirección y link de Google Maps de una sucursal específica de ESVA.",
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sucursal": "={{ $fromAI('sucursal', 'Nombre de la sucursal: nogales o hermosillo') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      },
+      "id": "tool-obtener-ubicacion",
+      "name": "Obtener Ubicación",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [2280, 520]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}",
+        "textBody": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "id": "send-whatsapp-response",
+      "name": "Send WhatsApp Response",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1980, 300],
+      "credentials": {
+        "whatsAppBusinessApi": {
+          "id": "whatsapp-credentials",
+          "name": "WhatsApp Business API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/conversations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"a0000000-0000-0000-0000-000000000001\",\n  \"lead_id\": \"{{ $('Prepare AI Context').item.json.leadId }}\",\n  \"channel\": \"whatsapp\",\n  \"direction\": \"inbound\",\n  \"message_type\": \"text\",\n  \"message_content\": \"{{ $('Prepare AI Context').item.json.messageContent }}\",\n  \"external_message_id\": \"{{ $('WhatsApp Trigger').item.json.messages[0].id }}\",\n  \"language_detected\": \"{{ $('Prepare AI Context').item.json.preferredLanguage }}\"\n}",
+        "options": {}
+      },
+      "id": "save-inbound-message",
+      "name": "Save Inbound Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/conversations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"a0000000-0000-0000-0000-000000000001\",\n  \"lead_id\": \"{{ $('Prepare AI Context').item.json.leadId }}\",\n  \"channel\": \"whatsapp\",\n  \"direction\": \"outbound\",\n  \"message_type\": \"text\",\n  \"message_content\": {{ JSON.stringify($('AI Agent ESVA').item.json.output) }},\n  \"ai_generated\": true,\n  \"ai_model\": \"claude-sonnet-4\"\n}",
+        "options": {}
+      },
+      "id": "save-outbound-message",
+      "name": "Save Outbound Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}",
+        "textBody": "Gracias por su mensaje. Por el momento solo puedo procesar mensajes de texto. ¿Podría escribirme su consulta? 🦷",
+        "additionalFields": {}
+      },
+      "id": "handle-media-message",
+      "name": "Handle Media Message",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [660, 500],
+      "credentials": {
+        "whatsAppBusinessApi": {
+          "id": "whatsapp-credentials",
+          "name": "WhatsApp Business API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 🦷 ESVA WhatsApp Handler - Workflow Principal\n\n**Versión:** 1.0\n**Última actualización:** {{ $now.format('yyyy-MM-dd') }}\n\nEste workflow maneja todas las conversaciones de WhatsApp para ESVA Dental Clinic.\n\n### Flujo:\n1. Recibe mensaje de WhatsApp\n2. Filtra mensajes válidos (no status updates)\n3. Obtiene/crea lead en Supabase\n4. Recupera historial de conversación\n5. AI Agent procesa y responde\n6. Guarda conversación en BD\n\n### Herramientas del AI:\n- consultar_disponibilidad\n- agendar_cita\n- resolver_duda\n- obtener_ubicacion",
+        "height": 400,
+        "width": 350,
+        "color": 5
+      },
+      "id": "sticky-note-main",
+      "name": "Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-300, 100]
+    },
+    {
+      "parameters": {
+        "content": "## Contexto del AI\n\nPrepara toda la información necesaria para que el AI Agent responda correctamente:\n- Info del paciente\n- Historial de conversación\n- Citas próximas\n- Idioma detectado",
+        "height": 180,
+        "width": 280,
+        "color": 3
+      },
+      "id": "sticky-note-context",
+      "name": "Context Preparation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1320, 80]
+    },
+    {
+      "parameters": {
+        "content": "## AI Agent + Tools\n\n- Claude Sonnet 4 como modelo\n- Postgres Memory para historial\n- 4 herramientas disponibles",
+        "height": 140,
+        "width": 280,
+        "color": 4
+      },
+      "id": "sticky-note-ai",
+      "name": "AI Agent Section",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1760, 80]
+    }
+  ],
+  "connections": {
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Messages": {
+      "main": [
+        [
+          {
+            "node": "Message Type Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Type Router": {
+      "main": [
+        [
+          {
+            "node": "Get or Create Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get or Create Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get or Create Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Media Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get or Create Lead": {
+      "main": [
+        [
+          {
+            "node": "Get Lead Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lead Details": {
+      "main": [
+        [
+          {
+            "node": "Get Conversation History",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Upcoming Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Conversation History": {
+      "main": [
+        [
+          {
+            "node": "Format Current Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Upcoming Appointments": {
+      "main": [
+        [
+          {
+            "node": "Format Current Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Current Date": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent ESVA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet 4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent ESVA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent ESVA",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Disponibilidad": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent ESVA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendar Cita": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent ESVA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Duda": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent ESVA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Ubicación": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent ESVA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent ESVA": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Response": {
+      "main": [
+        [
+          {
+            "node": "Save Inbound Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Outbound Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "esva-whatsapp-handler-v1"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "tags": [
+    {
+      "name": "ESVA"
+    },
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "AI Agent"
+    }
+  ]
+}

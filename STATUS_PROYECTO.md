@@ -1,8 +1,8 @@
 # 📊 Estado del Proyecto TIS TIS Platform
 
-**Última actualización:** 8 de Diciembre, 2024
-**Versión:** 2.1.0
-**Fase actual:** Fase 2 - Core Features (95% completado)
+**Última actualización:** 10 de Diciembre, 2024
+**Versión:** 2.2.0
+**Fase actual:** Fase 2 - Core Features (98% completado)
 
 ---
 
@@ -11,13 +11,13 @@
 | Métrica | Estado |
 |---------|--------|
 | **Fase 1** | ✅ 100% Completada |
-| **Fase 2** | ✅ 95% Completada |
-| **Base de Datos** | ✅ 18 tablas creadas |
+| **Fase 2** | ✅ 98% Completada |
+| **Base de Datos** | ✅ 20 tablas creadas |
 | **API Endpoints** | ✅ 19 endpoints activos |
 | **Dashboard Pages** | ✅ 7 páginas funcionales |
-| **Migraciones aplicadas** | ✅ 9 (incluyendo 009_critical_fixes) |
-| **Seguridad** | ✅ 14 fixes críticos implementados |
-| **Listo para producción** | ✅ 95% |
+| **Migraciones aplicadas** | ✅ 11 (incluyendo 011_master_correction) |
+| **Seguridad** | ✅ Multi-tenant completamente corregido |
+| **Listo para producción** | ✅ 98% |
 
 ---
 
@@ -34,13 +34,13 @@
 
 ### 2. 🗄️ Base de Datos Completa (100%)
 
-**Schema v2.1:**
-- ✅ 18 tablas en total
-- ✅ RLS policies por rol en todas las tablas (mejoradas en migración 009)
-- ✅ Indexes optimizados (3 nuevos en 009)
-- ✅ Triggers automáticos (protección contra race conditions)
-- ✅ 10 funciones de PostgreSQL (todas optimizadas)
-- ✅ 3 views útiles
+**Schema v2.2:**
+- ✅ 20 tablas en total
+- ✅ RLS policies CORREGIDAS usando user_roles (migración 011) ⚠️ CRÍTICO
+- ✅ Indexes optimizados (5 nuevos en 011 para user_roles)
+- ✅ Triggers automáticos (protección contra race conditions + sync staff)
+- ✅ 11 funciones de PostgreSQL (todas optimizadas)
+- ✅ 4 views útiles (staff_members añadido en 011)
 - ✅ Advisory locks implementados en funciones críticas
 - ✅ Constraints de validación de datos mejorados
 
@@ -49,21 +49,24 @@
 ✅ tenants
 ✅ branches
 ✅ services
-✅ staff_members
-✅ user_roles
+✅ staff
+✅ user_roles (NUEVO - 011) ⚠️ CRÍTICO para multi-tenant
+✅ vertical_configs (NUEVO - 011)
 ✅ leads
 ✅ appointments
 ✅ conversations
 ✅ messages
 ✅ faqs
-✅ patients (NUEVO)
-✅ clinical_history (NUEVO)
-✅ patient_files (NUEVO)
-✅ quotes (NUEVO)
-✅ quote_items (NUEVO)
-✅ quote_payment_plans (NUEVO)
-✅ notifications (NUEVO)
-✅ notification_preferences (NUEVO)
+✅ patients
+✅ clinical_history
+✅ patient_files
+✅ quotes
+✅ quote_items
+✅ quote_payment_plans
+✅ notifications
+✅ notification_preferences
+✅ plans (ACTUALIZADO - precios 2025)
+✅ addons (ACTUALIZADO - precios 2025)
 ```
 
 ### 3. 🔌 API Routes Completos (100%)

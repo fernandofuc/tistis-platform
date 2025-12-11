@@ -1,0 +1,266 @@
+{
+  "name": "ESVA_Tool_Resolver_Duda",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer y normalizar la pregunta\nconst pregunta = $input.item.json.pregunta || '';\n\n// Normalizar para búsqueda\nconst normalizada = pregunta\n  .toLowerCase()\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '') // Remover acentos\n  .replace(/[^a-z0-9\\s]/g, ' ') // Solo alfanuméricos\n  .trim();\n\n// Extraer palabras clave\nconst keywords = normalizada.split(/\\s+/).filter(word => word.length > 2);\n\nreturn {\n  json: {\n    originalQuestion: pregunta,\n    normalizedQuestion: normalizada,\n    keywords: keywords,\n    keywordsForSearch: keywords.join(' | ') // Para full-text search\n  }\n};"
+      },
+      "id": "extract-keywords",
+      "name": "Extract Keywords",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/faqs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,question,answer,short_answer,category,keywords"
+            },
+            {
+              "name": "tenant_id",
+              "value": "eq.a0000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "language",
+              "value": "in.(es,en)"
+            },
+            {
+              "name": "order",
+              "value": "display_order.asc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-all-faqs",
+      "name": "Get All FAQs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Buscar la mejor coincidencia entre las FAQs\nconst faqs = $('Get All FAQs').item.json || [];\nconst searchData = $('Extract Keywords').item.json;\nconst keywords = searchData.keywords;\nconst originalQuestion = searchData.originalQuestion.toLowerCase();\n\nif (faqs.length === 0) {\n  return {\n    json: {\n      found: false,\n      message: 'No se encontró información sobre esta pregunta. Por favor, contacte con nuestro equipo para más información.'\n    }\n  };\n}\n\n// Calcular relevancia de cada FAQ\nconst scoredFaqs = faqs.map(faq => {\n  let score = 0;\n  const faqKeywords = faq.keywords || [];\n  const faqQuestion = faq.question.toLowerCase();\n  \n  // Coincidencia exacta en keywords de FAQ\n  keywords.forEach(keyword => {\n    if (faqKeywords.some(fk => fk.toLowerCase().includes(keyword))) {\n      score += 10;\n    }\n  });\n  \n  // Coincidencia en la pregunta\n  keywords.forEach(keyword => {\n    if (faqQuestion.includes(keyword)) {\n      score += 5;\n    }\n  });\n  \n  // Coincidencias específicas de alto valor\n  const highValueMatches = [\n    { pattern: /precio|costo|cuanto|cuestan/i, keyword: 'precios' },\n    { pattern: /carilla/i, keyword: 'carillas' },\n    { pattern: /duele|dolor/i, keyword: 'dolor' },\n    { pattern: /natural/i, keyword: 'natural' },\n    { pattern: /dura|tiempo|años/i, keyword: 'duracion' },\n    { pattern: /valoracion|consulta|cita/i, keyword: 'valoracion' },\n    { pattern: /diferencia|plan/i, keyword: 'diferencia' },\n    { pattern: /usa|estados|arizona|frontera/i, keyword: 'usa' },\n    { pattern: /mancha/i, keyword: 'manchan' },\n    { pattern: /ver|antes|preview/i, keyword: 'ver' },\n    { pattern: /pago|tarjeta|financ/i, keyword: 'financiamiento' },\n    { pattern: /horario|hora|abierto/i, keyword: 'horario' },\n    { pattern: /donde|direccion|ubicacion/i, keyword: 'ubicacion' }\n  ];\n  \n  highValueMatches.forEach(match => {\n    if (match.pattern.test(originalQuestion) && faqKeywords.some(fk => fk.toLowerCase().includes(match.keyword))) {\n      score += 15;\n    }\n  });\n  \n  return {\n    ...faq,\n    relevanceScore: score\n  };\n});\n\n// Ordenar por relevancia\nconst sortedFaqs = scoredFaqs\n  .filter(faq => faq.relevanceScore > 0)\n  .sort((a, b) => b.relevanceScore - a.relevanceScore);\n\nif (sortedFaqs.length === 0) {\n  // No se encontró coincidencia directa, buscar por categorías comunes\n  return {\n    json: {\n      found: false,\n      message: 'No encontré información específica sobre esa pregunta. Puedo ayudarle con información sobre:\\n\\n• Precios de carillas\\n• El procedimiento\\n• Horarios y ubicaciones\\n• Formas de pago\\n\\n¿Sobre cuál de estos temas le gustaría saber más?'\n    }\n  };\n}\n\n// Retornar la mejor coincidencia\nconst bestMatch = sortedFaqs[0];\n\nreturn {\n  json: {\n    found: true,\n    faqId: bestMatch.id,\n    category: bestMatch.category,\n    question: bestMatch.question,\n    answer: bestMatch.answer,\n    shortAnswer: bestMatch.short_answer,\n    relevanceScore: bestMatch.relevanceScore,\n    totalMatches: sortedFaqs.length,\n    // Usar respuesta corta si es muy alta la relevancia, completa si no\n    message: bestMatch.relevanceScore >= 20 ? bestMatch.short_answer : bestMatch.answer\n  }\n};"
+      },
+      "id": "find-best-match",
+      "name": "Find Best Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-found",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "faq-found",
+      "name": "FAQ Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/faqs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "eq.{{ $('Find Best Match').item.json.faqId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"last_used_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "update-faq-usage",
+      "name": "Update FAQ Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retornar la respuesta encontrada\nconst matchData = $('Find Best Match').item.json;\n\nreturn {\n  json: {\n    success: true,\n    found: true,\n    category: matchData.category,\n    answer: matchData.message,\n    fullAnswer: matchData.answer,\n    relevanceScore: matchData.relevanceScore\n  }\n};"
+      },
+      "id": "return-answer",
+      "name": "Return Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No se encontró FAQ\nconst matchData = $('Find Best Match').item.json;\n\nreturn {\n  json: {\n    success: true,\n    found: false,\n    answer: matchData.message,\n    suggestion: 'Ofrecer información general o invitar a agendar valoración'\n  }\n};"
+      },
+      "id": "return-not-found",
+      "name": "Return Not Found",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "content": "## ❓ ESVA Tool: Resolver Duda\n\n**Función:** Busca en la base de conocimiento (FAQs) de ESVA\n\n**Inputs:**\n- pregunta: La pregunta o duda del paciente\n\n**Proceso:**\n1. Extraer keywords de la pregunta\n2. Buscar todas las FAQs activas\n3. Calcular relevancia por coincidencias\n4. Retornar mejor match\n5. Actualizar contador de uso\n\n**Categorías cubiradas:**\n- Precios\n- Procedimiento\n- Consulta\n- General\n\n**Output:**\n- Respuesta de FAQ o sugerencia",
+        "height": 380,
+        "width": 320,
+        "color": 6
+      },
+      "id": "sticky-note",
+      "name": "Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-300, 100]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Keywords": {
+      "main": [
+        [
+          {
+            "node": "Get All FAQs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All FAQs": {
+      "main": [
+        [
+          {
+            "node": "Find Best Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Best Match": {
+      "main": [
+        [
+          {
+            "node": "FAQ Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ Found?": {
+      "main": [
+        [
+          {
+            "node": "Update FAQ Usage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update FAQ Usage": {
+      "main": [
+        [
+          {
+            "node": "Return Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "esva-tool-resolver-duda-v1"
+  },
+  "tags": [
+    {
+      "name": "ESVA"
+    },
+    {
+      "name": "Tool"
+    }
+  ]
+}

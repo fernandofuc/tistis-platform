@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { emailService } from '@/src/lib/email';
 
 // Create Stripe client lazily
 function getStripeClient() {
@@ -75,14 +76,13 @@ export async function POST(req: NextRequest) {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
-        console.log('💰 Payment succeeded for invoice:', invoice.id);
+        await handleInvoicePaymentSucceeded(invoice);
         break;
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
-        console.log('❌ Payment failed for invoice:', invoice.id);
-        // Could send email notification here
+        await handleInvoicePaymentFailed(invoice);
         break;
       }
 
@@ -185,6 +185,30 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   console.log('✅ Checkout processing complete for client:', clientId);
+
+  // 📧 Send Welcome Email
+  if (customerEmail && customerName) {
+    const planPrice = getPlanPrice(plan || 'essentials');
+    const dashboardUrl = `${process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com'}/dashboard`;
+
+    try {
+      const emailResult = await emailService.sendWelcome(customerEmail, {
+        customerName: customerName,
+        planName: getPlanDisplayName(plan || 'essentials'),
+        planPrice: planPrice,
+        dashboardUrl: dashboardUrl,
+        supportEmail: 'soporte@tistis.com',
+      });
+
+      if (emailResult.success) {
+        console.log('📧 Welcome email sent to:', customerEmail);
+      } else {
+        console.error('📧 Failed to send welcome email:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('📧 Error sending welcome email:', emailError);
+    }
+  }
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
@@ -307,7 +331,15 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   console.log('❌ Subscription deleted:', subscription.id);
+  const stripe = getStripeClient();
   const supabase = getSupabaseClient();
+
+  // Get subscription details before updating
+  const { data: sub } = await supabase
+    .from('subscriptions')
+    .select('plan, client_id')
+    .eq('stripe_subscription_id', subscription.id)
+    .single();
 
   await supabase
     .from('subscriptions')
@@ -317,6 +349,40 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       updated_at: new Date().toISOString(),
     })
     .eq('stripe_subscription_id', subscription.id);
+
+  // 📧 Send Cancellation Email
+  const customerId = subscription.customer as string;
+  const customer = await stripe.customers.retrieve(customerId);
+  const customerEmail = (customer as Stripe.Customer).email;
+  const customerName = (customer as Stripe.Customer).name || 'Cliente';
+
+  if (customerEmail) {
+    // Calculate end date (current period end)
+    const periodEnd = (subscription as any).current_period_end;
+    const endDate = periodEnd
+      ? new Date(periodEnd * 1000).toISOString()
+      : new Date().toISOString();
+
+    const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com';
+
+    try {
+      const emailResult = await emailService.sendSubscriptionCancelled(customerEmail, {
+        customerName: customerName,
+        planName: getPlanDisplayName(sub?.plan || 'essentials'),
+        endDate: endDate,
+        reactivateUrl: `${baseUrl}/reactivate?customer=${customerId}`,
+        feedbackUrl: `${baseUrl}/feedback?customer=${customerId}`,
+      });
+
+      if (emailResult.success) {
+        console.log('📧 Cancellation email sent to:', customerEmail);
+      } else {
+        console.error('📧 Failed to send cancellation email:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('📧 Error sending cancellation email:', emailError);
+    }
+  }
 }
 
 // ============================================
@@ -397,4 +463,183 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
   } catch (error) {
     console.error('💥 [AssemblyTrigger] Unexpected error:', error);
   }
+}
+
+// ============================================
+// INVOICE PAYMENT HANDLERS
+// ============================================
+
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+  console.log('💰 Payment succeeded for invoice:', invoice.id);
+  const stripe = getStripeClient();
+  const supabase = getSupabaseClient();
+
+  // Skip if no customer
+  if (!invoice.customer) {
+    console.log('No customer on invoice, skipping');
+    return;
+  }
+
+  // Get customer email
+  const customer = await stripe.customers.retrieve(invoice.customer as string);
+  const customerEmail = (customer as Stripe.Customer).email;
+  const customerName = (customer as Stripe.Customer).name || 'Cliente';
+
+  if (!customerEmail) {
+    console.error('No customer email found for invoice:', invoice.id);
+    return;
+  }
+
+  // Get subscription details if exists
+  let planName = 'Suscripción';
+  if (invoice.subscription) {
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('plan')
+      .eq('stripe_subscription_id', invoice.subscription as string)
+      .single();
+
+    if (sub?.plan) {
+      planName = getPlanDisplayName(sub.plan);
+    }
+  }
+
+  // Calculate next billing date
+  const nextBillingDate = invoice.next_payment_attempt
+    ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+    : undefined;
+
+  // 📧 Send Payment Confirmed Email
+  try {
+    const dashboardUrl = `${process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com'}/dashboard`;
+
+    const emailResult = await emailService.sendPaymentConfirmed(customerEmail, {
+      customerName: customerName,
+      planName: planName,
+      amount: (invoice.amount_paid || 0) / 100,
+      currency: (invoice.currency || 'MXN').toUpperCase(),
+      invoiceNumber: invoice.number || undefined,
+      nextBillingDate: nextBillingDate,
+      dashboardUrl: dashboardUrl,
+    });
+
+    if (emailResult.success) {
+      console.log('📧 Payment confirmed email sent to:', customerEmail);
+    } else {
+      console.error('📧 Failed to send payment email:', emailResult.error);
+    }
+  } catch (emailError) {
+    console.error('📧 Error sending payment email:', emailError);
+  }
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  console.log('❌ Payment failed for invoice:', invoice.id);
+  const stripe = getStripeClient();
+  const supabase = getSupabaseClient();
+
+  // Skip if no customer
+  if (!invoice.customer) {
+    console.log('No customer on invoice, skipping');
+    return;
+  }
+
+  // Get customer email
+  const customer = await stripe.customers.retrieve(invoice.customer as string);
+  const customerEmail = (customer as Stripe.Customer).email;
+  const customerName = (customer as Stripe.Customer).name || 'Cliente';
+
+  if (!customerEmail) {
+    console.error('No customer email found for invoice:', invoice.id);
+    return;
+  }
+
+  // Get subscription details if exists
+  let planName = 'Suscripción';
+  if (invoice.subscription) {
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('plan')
+      .eq('stripe_subscription_id', invoice.subscription as string)
+      .single();
+
+    if (sub?.plan) {
+      planName = getPlanDisplayName(sub.plan);
+    }
+  }
+
+  // Get failure reason from charge
+  let failureReason: string | undefined;
+  if (invoice.charge) {
+    const charge = await stripe.charges.retrieve(invoice.charge as string);
+    failureReason = charge.failure_code || undefined;
+  }
+
+  // Calculate retry date
+  const retryDate = invoice.next_payment_attempt
+    ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+    : undefined;
+
+  // 📧 Send Payment Failed Email
+  try {
+    const updatePaymentUrl = `${process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com'}/dashboard/settings/billing`;
+
+    const emailResult = await emailService.sendPaymentFailed(customerEmail, {
+      customerName: customerName,
+      planName: planName,
+      amount: (invoice.amount_due || 0) / 100,
+      currency: (invoice.currency || 'MXN').toUpperCase(),
+      failureReason: failureReason,
+      retryDate: retryDate,
+      updatePaymentUrl: updatePaymentUrl,
+      supportUrl: 'mailto:facturacion@tistis.com',
+    });
+
+    if (emailResult.success) {
+      console.log('📧 Payment failed email sent to:', customerEmail);
+    } else {
+      console.error('📧 Failed to send payment failed email:', emailResult.error);
+    }
+  } catch (emailError) {
+    console.error('📧 Error sending payment failed email:', emailError);
+  }
+
+  // Also notify internal team
+  await supabase.from('notification_queue').insert({
+    type: 'payment_failed',
+    recipient_type: 'internal',
+    recipient_id: 'team',
+    payload: {
+      customer_email: customerEmail,
+      customer_name: customerName,
+      plan: planName,
+      amount: (invoice.amount_due || 0) / 100,
+      failure_reason: failureReason,
+    },
+    priority: 'high'
+  });
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+function getPlanDisplayName(plan: string): string {
+  const planNames: Record<string, string> = {
+    starter: 'Starter',
+    essentials: 'Essentials',
+    growth: 'Growth',
+    scale: 'Scale',
+  };
+  return planNames[plan] || plan;
+}
+
+function getPlanPrice(plan: string): number {
+  const planPrices: Record<string, number> = {
+    starter: 2999,
+    essentials: 4999,
+    growth: 7999,
+    scale: 12999,
+  };
+  return planPrices[plan] || 4999;
 }

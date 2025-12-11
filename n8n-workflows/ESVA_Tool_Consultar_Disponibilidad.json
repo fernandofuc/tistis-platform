@@ -1,0 +1,205 @@
+{
+  "name": "ESVA_Tool_Consultar_Disponibilidad",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validar y normalizar los parámetros de entrada\nconst fecha = $input.item.json.fecha;\nconst sucursal = $input.item.json.sucursal?.toLowerCase();\n\n// Mapear nombre de sucursal a branch_id\nconst branchIds = {\n  'nogales': 'b0000000-0000-0000-0000-000000000001',\n  'hermosillo': 'b0000000-0000-0000-0000-000000000003'\n};\n\nconst branchId = branchIds[sucursal];\n\nif (!branchId) {\n  return {\n    json: {\n      success: false,\n      error: 'Sucursal no válida. Las sucursales disponibles son: Nogales y Hermosillo.',\n      available_branches: ['Nogales', 'Hermosillo']\n    }\n  };\n}\n\n// Validar fecha\nconst requestedDate = new Date(fecha + 'T12:00:00');\nconst today = new Date();\n\nif (isNaN(requestedDate.getTime())) {\n  return {\n    json: {\n      success: false,\n      error: 'Fecha no válida. Por favor usa el formato YYYY-MM-DD.'\n    }\n  };\n}\n\n// Comparar solo fechas (YYYY-MM-DD)\nconst todayStr = today.toISOString().split('T')[0];\nconst requestedStr = fecha;\n\n// Verificar que no sea el mismo día o pasado\nif (requestedStr <= todayStr) {\n  return {\n    json: {\n      success: false,\n      error: 'No se pueden agendar citas para hoy o días pasados. El mínimo es 1 día de anticipación.'\n    }\n  };\n}\n\n// Verificar que no sea más de 30 días en el futuro\nconst maxDate = new Date();\nmaxDate.setDate(maxDate.getDate() + 30);\nconst maxDateStr = maxDate.toISOString().split('T')[0];\nif (requestedStr > maxDateStr) {\n  return {\n    json: {\n      success: false,\n      error: 'No se pueden agendar citas con más de 30 días de anticipación.'\n    }\n  };\n}\n\n// Obtener día de la semana (0 = Domingo)\nconst dayOfWeek = requestedDate.getDay();\n\n// Verificar si es domingo (cerrado)\nif (dayOfWeek === 0) {\n  return {\n    json: {\n      success: false,\n      error: 'Los domingos estamos cerrados. Por favor elige otro día.',\n      is_sunday: true\n    }\n  };\n}\n\n// Determinar horarios según el día\nlet availableSlots;\nif (dayOfWeek === 6) {\n  // Sábado: 10:00 - 14:00\n  availableSlots = ['10:00', '11:00', '12:00', '13:00'];\n} else {\n  // Lunes a Viernes: 9:30 - 18:00 (slots de 1 hora)\n  availableSlots = ['09:30', '10:30', '11:30', '12:30', '13:30', '14:30', '15:30', '16:30'];\n}\n\nreturn {\n  json: {\n    success: true,\n    fecha: fecha,\n    sucursal: sucursal,\n    branchId: branchId,\n    dayOfWeek: dayOfWeek,\n    isSaturday: dayOfWeek === 6,\n    possibleSlots: availableSlots\n  }\n};"
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-validation",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-validation",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "appointment_time"
+            },
+            {
+              "name": "tenant_id",
+              "value": "eq.a0000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "branch_id",
+              "value": "eq.{{ $json.branchId }}"
+            },
+            {
+              "name": "appointment_date",
+              "value": "eq.{{ $json.fecha }}"
+            },
+            {
+              "name": "status",
+              "value": "in.(PENDING,CONFIRMED,CHECKED_IN,IN_PROGRESS)"
+            },
+            {
+              "name": "deleted_at",
+              "value": "is.null"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-existing-appointments",
+      "name": "Get Existing Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-auth",
+          "name": "Supabase Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener citas existentes y slots posibles\nconst existingAppointments = $('Get Existing Appointments').item.json || [];\nconst validationData = $('Validate Input').item.json;\nconst possibleSlots = validationData.possibleSlots;\n\n// Extraer horas ocupadas\nconst occupiedSlots = existingAppointments.map(apt => {\n  // Formatear hora a HH:MM\n  const time = apt.appointment_time;\n  return time.substring(0, 5);\n});\n\n// Filtrar slots disponibles\nconst availableSlots = possibleSlots.filter(slot => !occupiedSlots.includes(slot));\n\n// Verificar si hay disponibilidad\nconst hasAvailability = availableSlots.length > 0;\n\n// Formatear fecha para mostrar\nconst fecha = new Date(validationData.fecha);\nconst diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\nconst meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\nconst fechaFormateada = `${diasSemana[fecha.getDay()]} ${fecha.getDate()} de ${meses[fecha.getMonth()]}`;\n\n// Construir respuesta\nlet response;\nif (hasAvailability) {\n  const slotsFormatted = availableSlots.map(slot => {\n    const hour = parseInt(slot.split(':')[0]);\n    const ampm = hour >= 12 ? 'PM' : 'AM';\n    const hour12 = hour > 12 ? hour - 12 : hour;\n    return `${hour12}:${slot.split(':')[1]} ${ampm}`;\n  });\n  \n  response = {\n    success: true,\n    hasAvailability: true,\n    fecha: validationData.fecha,\n    fechaFormateada: fechaFormateada,\n    sucursal: validationData.sucursal.charAt(0).toUpperCase() + validationData.sucursal.slice(1),\n    availableSlots: availableSlots,\n    slotsFormatted: slotsFormatted,\n    totalAvailable: availableSlots.length,\n    message: `Para el ${fechaFormateada} en ESVA ${validationData.sucursal.charAt(0).toUpperCase() + validationData.sucursal.slice(1)} tenemos los siguientes horarios disponibles: ${slotsFormatted.join(', ')}`\n  };\n} else {\n  response = {\n    success: true,\n    hasAvailability: false,\n    fecha: validationData.fecha,\n    fechaFormateada: fechaFormateada,\n    sucursal: validationData.sucursal.charAt(0).toUpperCase() + validationData.sucursal.slice(1),\n    availableSlots: [],\n    totalAvailable: 0,\n    message: `Lo sentimos, no tenemos horarios disponibles para el ${fechaFormateada} en ESVA ${validationData.sucursal.charAt(0).toUpperCase() + validationData.sucursal.slice(1)}. ¿Le gustaría consultar otra fecha o sucursal?`\n  };\n}\n\nreturn { json: response };"
+      },
+      "id": "calculate-availability",
+      "name": "Calculate Availability",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retornar el error de validación\nconst validationError = $('Validate Input').item.json;\n\nreturn {\n  json: {\n    success: false,\n    hasAvailability: false,\n    message: validationError.error,\n    available_branches: validationError.available_branches || null\n  }\n};"
+      },
+      "id": "return-validation-error",
+      "name": "Return Validation Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "content": "## 🗓️ ESVA Tool: Consultar Disponibilidad\n\n**Función:** Verifica horarios disponibles para citas\n\n**Inputs:**\n- fecha: YYYY-MM-DD\n- sucursal: 'nogales' o 'hermosillo'\n\n**Validaciones:**\n- No mismo día\n- No domingos\n- Máximo 30 días\n- Sucursal válida\n\n**Output:**\n- Lista de slots disponibles\n- Mensaje formateado",
+        "height": 320,
+        "width": 300,
+        "color": 3
+      },
+      "id": "sticky-note",
+      "name": "Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-250, 150]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Appointments": {
+      "main": [
+        [
+          {
+            "node": "Calculate Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "esva-tool-consultar-disponibilidad-v1"
+  },
+  "tags": [
+    {
+      "name": "ESVA"
+    },
+    {
+      "name": "Tool"
+    }
+  ]
+}

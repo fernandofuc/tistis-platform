@@ -1,14 +1,17 @@
 // =====================================================
 // TIS TIS PLATFORM - Dashboard Sidebar Component
+// With Feature Flags and Multi-tenant Support
 // =====================================================
 
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
+import { useFeatureFlags, MODULE_FLAGS } from '@/src/hooks/useFeatureFlags';
+import { useTenant } from '@/src/hooks/useTenant';
 import type { SidebarProps, NavItem } from '../types';
 
 // ======================
@@ -69,18 +72,83 @@ const icons = {
 };
 
 // ======================
-// NAVIGATION CONFIG
+// NAVIGATION CONFIG WITH FEATURE FLAGS
+// Each item includes the required feature flag
 // ======================
-const navItems: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: icons.dashboard },
-  { name: 'Calendario', href: '/dashboard/calendario', icon: icons.calendar },
-  { name: 'Leads', href: '/dashboard/leads', icon: icons.leads },
-  { name: 'Pacientes', href: '/dashboard/patients', icon: icons.patients },
-  { name: 'Cotizaciones', href: '/dashboard/quotes', icon: icons.quotes },
-  { name: 'Inbox', href: '/dashboard/inbox', icon: icons.inbox },
-  { name: 'Analytics', href: '/dashboard/analytics', icon: icons.analytics },
-  { name: 'Configuración', href: '/dashboard/settings', icon: icons.settings },
+interface NavItemWithFlag extends NavItem {
+  featureFlag?: string; // Feature flag key required to show this item
+  alwaysShow?: boolean; // Always show regardless of flags
+}
+
+const navItemsConfig: NavItemWithFlag[] = [
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
+    icon: icons.dashboard,
+    alwaysShow: true, // Dashboard always visible
+  },
+  {
+    name: 'Calendario',
+    href: '/dashboard/calendario',
+    icon: icons.calendar,
+    featureFlag: 'appointments_enabled',
+  },
+  {
+    name: 'Leads',
+    href: '/dashboard/leads',
+    icon: icons.leads,
+    featureFlag: 'leads_enabled',
+  },
+  {
+    name: 'Pacientes',
+    href: '/dashboard/patients',
+    icon: icons.patients,
+    featureFlag: 'patients_enabled',
+  },
+  {
+    name: 'Cotizaciones',
+    href: '/dashboard/quotes',
+    icon: icons.quotes,
+    featureFlag: 'quotes_enabled',
+  },
+  {
+    name: 'Inbox',
+    href: '/dashboard/inbox',
+    icon: icons.inbox,
+    featureFlag: 'conversations_enabled',
+  },
+  {
+    name: 'Analytics',
+    href: '/dashboard/analytics',
+    icon: icons.analytics,
+    featureFlag: 'analytics_advanced_enabled',
+  },
+  {
+    name: 'Configuración',
+    href: '/dashboard/settings',
+    icon: icons.settings,
+    alwaysShow: true, // Settings always visible
+  },
 ];
+
+// Terminology mapping for nav items by vertical
+const navTerminology: Record<string, Record<string, string>> = {
+  dental: {
+    Pacientes: 'Pacientes',
+    Cotizaciones: 'Presupuestos',
+  },
+  clinic: {
+    Pacientes: 'Pacientes',
+    Cotizaciones: 'Cotizaciones',
+  },
+  restaurant: {
+    Pacientes: 'Clientes',
+    Calendario: 'Reservaciones',
+  },
+  gym: {
+    Pacientes: 'Miembros',
+  },
+};
 
 // ======================
 // COMPONENT
@@ -90,8 +158,53 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
 
+  // Multi-tenant hooks
+  const { tenant, isLoading: tenantLoading } = useTenant();
+  const { flags, flagsLoading, isEnabled } = useFeatureFlags();
+
   const collapsed = isCollapsed ?? sidebarCollapsed;
   const handleCollapse = onCollapse ?? setSidebarCollapsed;
+
+  // Filter nav items based on feature flags
+  const visibleNavItems = useMemo(() => {
+    // While loading, show all items (better UX than empty sidebar)
+    if (flagsLoading) {
+      return navItemsConfig;
+    }
+
+    return navItemsConfig.filter(item => {
+      // Always show items marked as alwaysShow
+      if (item.alwaysShow) return true;
+
+      // Check feature flag
+      if (item.featureFlag) {
+        return isEnabled(item.featureFlag);
+      }
+
+      // Show by default if no flag specified
+      return true;
+    });
+  }, [flags, flagsLoading, isEnabled]);
+
+  // Get display name with vertical-specific terminology
+  const getDisplayName = (item: NavItemWithFlag): string => {
+    if (!tenant?.vertical) return item.name;
+
+    const verticalTerms = navTerminology[tenant.vertical];
+    if (verticalTerms && verticalTerms[item.name]) {
+      return verticalTerms[item.name];
+    }
+
+    return item.name;
+  };
+
+  // Get tenant initial for logo
+  const getTenantInitial = () => {
+    if (tenant?.name) {
+      return tenant.name.charAt(0).toUpperCase();
+    }
+    return 'T';
+  };
 
   return (
     <aside
@@ -100,27 +213,45 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
         collapsed ? 'w-20' : 'w-64'
       )}
     >
-      {/* Logo */}
+      {/* Logo - Shows tenant name */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">E</span>
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-pink-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
             </div>
-            <span className="font-semibold text-gray-900">ESVA</span>
+            <span className="font-semibold text-gray-900 truncate max-w-[140px]">
+              {tenant?.name || 'TIS TIS'}
+            </span>
           </Link>
         )}
         {collapsed && (
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mx-auto">
-            <span className="text-white font-bold text-sm">E</span>
+          <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-pink-500 rounded-lg flex items-center justify-center mx-auto">
+            <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
           </div>
         )}
       </div>
 
+      {/* Plan badge (collapsed shows nothing, expanded shows plan) */}
+      {!collapsed && tenant?.plan && (
+        <div className="px-4 py-2 border-b border-gray-100">
+          <span className={cn(
+            'text-xs font-medium px-2 py-1 rounded-full',
+            tenant.plan === 'scale' && 'bg-purple-100 text-purple-700',
+            tenant.plan === 'growth' && 'bg-blue-100 text-blue-700',
+            tenant.plan === 'essentials' && 'bg-green-100 text-green-700',
+            tenant.plan === 'starter' && 'bg-gray-100 text-gray-700',
+          )}>
+            Plan {tenant.plan.charAt(0).toUpperCase() + tenant.plan.slice(1)}
+          </span>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="p-4 space-y-1">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const displayName = getDisplayName(item);
 
           return (
             <Link
@@ -129,15 +260,15 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
                 isActive
-                  ? 'bg-blue-50 text-blue-700'
+                  ? 'bg-purple-50 text-purple-700'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
                 collapsed && 'justify-center'
               )}
-              title={collapsed ? item.name : undefined}
+              title={collapsed ? displayName : undefined}
             >
-              <span className={cn(isActive && 'text-blue-600')}>{item.icon}</span>
+              <span className={cn(isActive && 'text-purple-600')}>{item.icon}</span>
               {!collapsed && (
-                <span className="font-medium">{item.name}</span>
+                <span className="font-medium">{displayName}</span>
               )}
               {!collapsed && item.badge && (
                 <span className="ml-auto bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
@@ -148,6 +279,16 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* Vertical indicator (dental, restaurant, etc) */}
+      {!collapsed && tenant?.vertical && (
+        <div className="absolute bottom-20 left-0 right-0 px-4">
+          <div className="text-xs text-gray-400 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-400"></span>
+            Vertical: {tenant.vertical}
+          </div>
+        </div>
+      )}
 
       {/* Collapse Button */}
       <div className="absolute bottom-4 left-0 right-0 px-4">
