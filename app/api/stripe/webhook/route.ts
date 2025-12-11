@@ -492,11 +492,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
   // Get subscription details if exists
   let planName = 'Suscripción';
-  if (invoice.subscription) {
+  const subscriptionId = (invoice as any).subscription;
+  if (subscriptionId) {
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('plan')
-      .eq('stripe_subscription_id', invoice.subscription as string)
+      .eq('stripe_subscription_id', subscriptionId as string)
       .single();
 
     if (sub?.plan) {
@@ -505,8 +506,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   }
 
   // Calculate next billing date
-  const nextBillingDate = invoice.next_payment_attempt
-    ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+  const nextPaymentAttempt = (invoice as any).next_payment_attempt;
+  const nextBillingDate = nextPaymentAttempt
+    ? new Date(nextPaymentAttempt * 1000).toISOString()
     : undefined;
 
   // 📧 Send Payment Confirmed Email
@@ -556,11 +558,12 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
   // Get subscription details if exists
   let planName = 'Suscripción';
-  if (invoice.subscription) {
+  const failedSubscriptionId = (invoice as any).subscription;
+  if (failedSubscriptionId) {
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('plan')
-      .eq('stripe_subscription_id', invoice.subscription as string)
+      .eq('stripe_subscription_id', failedSubscriptionId as string)
       .single();
 
     if (sub?.plan) {
@@ -570,14 +573,16 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
   // Get failure reason from charge
   let failureReason: string | undefined;
-  if (invoice.charge) {
-    const charge = await stripe.charges.retrieve(invoice.charge as string);
+  const chargeId = (invoice as any).charge;
+  if (chargeId) {
+    const charge = await stripe.charges.retrieve(chargeId as string);
     failureReason = charge.failure_code || undefined;
   }
 
   // Calculate retry date
-  const retryDate = invoice.next_payment_attempt
-    ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+  const failedNextPaymentAttempt = (invoice as any).next_payment_attempt;
+  const retryDate = failedNextPaymentAttempt
+    ? new Date(failedNextPaymentAttempt * 1000).toISOString()
     : undefined;
 
   // 📧 Send Payment Failed Email
