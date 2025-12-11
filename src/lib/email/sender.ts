@@ -44,7 +44,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       subject,
       html,
       text: text || stripHtml(html),
-      reply_to: typeof replyTo === 'string' ? replyTo : replyTo.email,
+      replyTo: typeof replyTo === 'string' ? replyTo : replyTo.email,
       tags: tags?.map((tag) => ({ name: 'category', value: tag })),
     });
 
