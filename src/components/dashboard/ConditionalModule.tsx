@@ -6,8 +6,8 @@ import { Lock, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 interface ConditionalModuleProps {
-  // Module name (matches MODULE_FLAGS keys)
-  moduleName: string;
+  // Module name (matches MODULE_FLAGS keys) - optional if featureFlag is provided
+  moduleName?: string;
 
   // Alternative: direct feature flag key
   featureFlag?: string;
@@ -83,7 +83,7 @@ export function ConditionalModule({
   const { flags, flagsLoading, isEnabled } = useFeatureFlags();
 
   // Determine which flag to check
-  const flagKey = featureFlag || MODULE_FLAGS[moduleName] || moduleName;
+  const flagKey = featureFlag || (moduleName ? MODULE_FLAGS[moduleName] : null) || moduleName || '';
 
   // Show loading state
   if (flagsLoading) {
@@ -102,7 +102,7 @@ export function ConditionalModule({
     return <>{fallback}</>;
   }
 
-  if (showUpgradePrompt) {
+  if (showUpgradePrompt && moduleName) {
     return <UpgradePrompt moduleName={moduleName} />;
   }
 
