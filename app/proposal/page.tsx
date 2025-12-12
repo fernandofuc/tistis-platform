@@ -13,6 +13,31 @@ import PlanCard from '@/components/proposal/PlanCard';
 import { AIAnalysis, QuestionnaireAnswers } from '@/types';
 import { supabase } from '@/lib/auth';
 
+type PlanType = 'starter' | 'essentials' | 'growth' | 'scale';
+
+// Helper: Determine recommended plan based on answers
+function getRecommendedPlan(answers: QuestionnaireAnswers): PlanType {
+  const employees = parseInt(answers.employees_count || '1');
+  const locations = parseInt(answers.locations || '1');
+
+  if (locations > 3 || employees > 50) return 'scale';
+  if (locations > 1 || employees > 15) return 'growth';
+  if (employees > 5) return 'essentials';
+  return 'starter';
+}
+
+// Helper: Generate reasoning text
+function generateReasoning(answers: QuestionnaireAnswers): string {
+  const plan = getRecommendedPlan(answers);
+  const planNames: Record<PlanType, string> = {
+    starter: 'Starter',
+    essentials: 'Essentials',
+    growth: 'Growth',
+    scale: 'Scale'
+  };
+  return `El plan ${planNames[plan]} es ideal para tu negocio de ${answers.business_type || 'servicios'} con ${answers.employees_count || '1-5'} empleados. Te permitirá automatizar la atención al cliente y optimizar tus operaciones desde el primer día.`;
+}
+
 // Datos de planes - PRECIOS ACTUALIZADOS 2025
 // NOTA: Estos precios DEBEN coincidir con checkout/page.tsx y Stripe
 const PLANS = {
@@ -153,28 +178,6 @@ export default function ProposalPage() {
     loadData();
   }, [router]);
 
-  // Helper: Determine recommended plan based on answers
-  function getRecommendedPlan(answers: QuestionnaireAnswers): string {
-    const employees = parseInt(answers.employees_count || '1');
-    const locations = parseInt(answers.locations || '1');
-
-    if (locations > 3 || employees > 50) return 'scale';
-    if (locations > 1 || employees > 15) return 'growth';
-    if (employees > 5) return 'essentials';
-    return 'starter';
-  }
-
-  // Helper: Generate reasoning text
-  function generateReasoning(answers: QuestionnaireAnswers): string {
-    const plan = getRecommendedPlan(answers);
-    const planNames: Record<string, string> = {
-      starter: 'Starter',
-      essentials: 'Essentials',
-      growth: 'Growth',
-      scale: 'Scale'
-    };
-    return `El plan ${planNames[plan]} es ideal para tu negocio de ${answers.business_type || 'servicios'} con ${answers.employees_count || '1-5'} empleados. Te permitirá automatizar la atención al cliente y optimizar tus operaciones desde el primer día.`;
-  }
 
   if (loading || !analysis || !answers) {
     return (
