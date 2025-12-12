@@ -106,41 +106,72 @@ export default function ProposalPage() {
     const loadData = async () => {
       try {
         // First try to get from sessionStorage
-        const savedAnswers = sessionStorage.getItem('questionnaire_answers');
+        let savedAnswers: string | null = null;
+
+        try {
+          savedAnswers = sessionStorage.getItem('questionnaire_answers');
+        } catch (e) {
+          console.error('Error accessing sessionStorage:', e);
+        }
 
         if (!savedAnswers) {
+          console.log('📭 No questionnaire answers found, redirecting to discovery...');
+          // Set loading to false before redirect to avoid flash
+          setLoading(false);
           router.push('/discovery');
           return;
         }
 
-        const parsedAnswers = JSON.parse(savedAnswers);
-        setAnswers(parsedAnswers);
-
-        // Try to get analysis from sessionStorage first (fastest)
-        const savedAnalysis = sessionStorage.getItem('ai_analysis');
-        if (savedAnalysis) {
-          setAnalysis(JSON.parse(savedAnalysis));
+        let parsedAnswers: QuestionnaireAnswers;
+        try {
+          parsedAnswers = JSON.parse(savedAnswers);
+        } catch (e) {
+          console.error('Error parsing questionnaire answers:', e);
           setLoading(false);
+          router.push('/discovery');
           return;
         }
 
-        // Try database only if we have session token
+        setAnswers(parsedAnswers);
+
+        // Try to get analysis from sessionStorage first (fastest)
+        try {
+          const savedAnalysis = sessionStorage.getItem('ai_analysis');
+          if (savedAnalysis) {
+            const parsed = JSON.parse(savedAnalysis);
+            setAnalysis(parsed);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error('Error parsing saved analysis:', e);
+          // Continue to other methods
+        }
+
+        // Try database only if we have session token (with timeout)
         const sessionToken = sessionStorage.getItem('discovery_session_token');
         if (sessionToken) {
           try {
-            const { data: session, error } = await supabase
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('DB timeout')), 5000)
+            );
+
+            const queryPromise = supabase
               .from('discovery_sessions')
               .select('ai_analysis')
               .eq('session_token', sessionToken)
               .single();
 
-            if (!error && session?.ai_analysis) {
-              setAnalysis(session.ai_analysis as AIAnalysis);
+            const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+
+            if (result?.data?.ai_analysis) {
+              setAnalysis(result.data.ai_analysis as AIAnalysis);
               setLoading(false);
               return;
             }
           } catch (e) {
-            console.error('Error fetching session from DB:', e);
+            console.error('Error fetching session from DB (or timeout):', e);
             // Continue to fallback
           }
         }
