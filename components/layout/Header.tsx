@@ -90,11 +90,16 @@ export default function Header() {
               <div className="w-20 h-8 bg-gray-100 animate-pulse rounded-lg" />
             ) : user ? (
               <>
-                <Link href="/dashboard">
-                  <Button variant="ghost" size="sm">
-                    Dashboard
-                  </Button>
-                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    console.log('🔵 Dashboard button clicked, navigating...');
+                    window.location.href = '/dashboard';
+                  }}
+                >
+                  Dashboard
+                </Button>
                 <Button variant="primary" size="sm" onClick={signOut}>
                   Cerrar Sesión
                 </Button>

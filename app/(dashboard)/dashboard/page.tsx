@@ -13,9 +13,9 @@ import {
   StatCard,
 } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
-import { supabase, ESVA_TENANT_ID } from '@/src/shared/lib/supabase';
+import { supabase } from '@/src/shared/lib/supabase';
 import { formatRelativeTime, formatTime } from '@/src/shared/utils';
-import type { Lead, Appointment, Conversation } from '@/src/shared/types';
+import type { Lead, Appointment } from '@/src/shared/types';
 
 // ======================
 // ICONS
@@ -75,15 +75,23 @@ export default function DashboardPage() {
   const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch dashboard data
+  // Fetch dashboard data when tenant is available
   useEffect(() => {
     async function fetchDashboardData() {
+      // Wait for tenant to be loaded
+      if (!tenant?.id) {
+        console.log('🟡 Dashboard: No tenant yet, waiting...');
+        return;
+      }
+
+      console.log('🟢 Dashboard: Fetching data for tenant:', tenant.id);
+
       try {
         // Fetch leads stats
         const { data: leads, error: leadsError } = await supabase
           .from('leads')
           .select('id, classification, status')
-          .eq('tenant_id', ESVA_TENANT_ID)
+          .eq('tenant_id', tenant.id)
           .in('status', ['new', 'contacted', 'qualified', 'appointment_scheduled']);
 
         if (!leadsError && leads) {
@@ -100,7 +108,7 @@ export default function DashboardPage() {
         const { data: recentLeadsData } = await supabase
           .from('leads')
           .select('*')
-          .eq('tenant_id', ESVA_TENANT_ID)
+          .eq('tenant_id', tenant.id)
           .order('created_at', { ascending: false })
           .limit(5);
 
@@ -116,7 +124,7 @@ export default function DashboardPage() {
         const { data: appointmentsData } = await supabase
           .from('appointments')
           .select('*, leads(name, phone)')
-          .eq('tenant_id', ESVA_TENANT_ID)
+          .eq('tenant_id', tenant.id)
           .gte('scheduled_at', startOfDay)
           .lte('scheduled_at', endOfDay)
           .order('scheduled_at');
@@ -133,7 +141,7 @@ export default function DashboardPage() {
         const { data: conversations } = await supabase
           .from('conversations')
           .select('id, status')
-          .eq('tenant_id', ESVA_TENANT_ID)
+          .eq('tenant_id', tenant.id)
           .in('status', ['active', 'waiting_response', 'escalated']);
 
         if (conversations) {
@@ -151,7 +159,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboardData();
-  }, []);
+  }, [tenant?.id]);
 
   // Greeting based on time of day
   const getGreeting = () => {
@@ -164,7 +172,7 @@ export default function DashboardPage() {
   return (
     <PageWrapper
       title={`${getGreeting()}, ${staff?.first_name || 'Usuario'}`}
-      subtitle={`Aquí está el resumen de ${tenant?.name || 'ESVA'}`}
+      subtitle={`Aquí está el resumen de ${tenant?.name || 'tu negocio'}`}
       actions={
         <Button leftIcon={icons.plus}>
           Nueva Cita
