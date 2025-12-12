@@ -167,7 +167,7 @@ export function NewAppointmentModal({
           <Button variant="outline" onClick={handleClose} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} loading={loading}>
+          <Button onClick={handleSubmit} isLoading={loading}>
             Crear Cita
           </Button>
         </>
