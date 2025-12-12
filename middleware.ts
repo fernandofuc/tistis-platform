@@ -98,9 +98,20 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith(route)
   );
 
-  // Redirect to home if accessing protected route without session
+  // Debug logging for dashboard access
+  if (isProtectedRoute) {
+    console.log('🔐 Middleware: Protected route access:', {
+      pathname,
+      hasSession: !!session,
+      userId: session?.user?.id,
+      email: session?.user?.email,
+    });
+  }
+
+  // Redirect to login if accessing protected route without session
   if (isProtectedRoute && !session) {
-    return NextResponse.redirect(new URL('/', req.url));
+    console.log('🔴 Middleware: No session, redirecting to login');
+    return NextResponse.redirect(new URL('/auth/login', req.url));
   }
 
   // Redirect to dashboard if accessing auth routes while logged in
