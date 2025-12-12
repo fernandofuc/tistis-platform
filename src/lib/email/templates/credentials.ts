@@ -158,8 +158,7 @@ export const credentialsEmailTemplate = (data: CredentialsEmailData): string => 
   `;
 
   return baseEmailTemplate({
-    preheader: 'Tus credenciales de acceso a TIS TIS están listas',
+    previewText: 'Tus credenciales de acceso a TIS TIS están listas',
     content,
-    showFooter: true,
   });
 };
