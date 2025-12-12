@@ -1,5 +1,5 @@
 // =====================================================
-// TIS TIS PLATFORM - Stat Card Component
+// TIS TIS PLATFORM - Stat Card Component (Premium Design)
 // =====================================================
 
 'use client';
@@ -40,38 +40,83 @@ export function StatCard({
   icon,
   trend = 'neutral',
   loading = false,
-}: StatCardProps) {
+  variant = 'default',
+}: StatCardProps & { variant?: 'default' | 'hero' }) {
   const trendColors = {
-    up: 'text-green-600 bg-green-50',
-    down: 'text-red-600 bg-red-50',
-    neutral: 'text-gray-600 bg-gray-50',
+    up: 'text-tis-green-600 bg-tis-green-100',
+    down: 'text-tis-coral bg-tis-coral-100',
+    neutral: 'text-slate-500 bg-slate-100',
   };
 
+  // Loading skeleton with premium animation
   if (loading) {
     return (
-      <Card variant="bordered" className="animate-pulse">
+      <Card variant="bordered" hover={false} className="overflow-hidden">
         <div className="flex items-start justify-between">
-          <div>
-            <div className="h-4 w-24 bg-gray-200 rounded mb-2" />
-            <div className="h-8 w-16 bg-gray-200 rounded" />
+          <div className="space-y-3">
+            <div className="h-3 w-24 skeleton rounded" />
+            <div className="h-8 w-16 skeleton rounded" />
           </div>
-          <div className="w-10 h-10 bg-gray-200 rounded-lg" />
+          <div className="w-11 h-11 skeleton rounded-xl" />
         </div>
       </Card>
     );
   }
 
+  // Hero variant (dark card)
+  if (variant === 'hero') {
+    return (
+      <Card variant="hero" padding="lg" hover={false}>
+        <div className="flex items-start justify-between relative z-10">
+          <div>
+            <p className="metric-label text-slate-400">{title}</p>
+            <p className="metric-value text-white mt-2">{value}</p>
+            {(change !== undefined || changeLabel) && (
+              <div className="flex items-center gap-2 mt-3">
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold',
+                    trend === 'up' ? 'bg-tis-green-200 text-tis-green-600' :
+                    trend === 'down' ? 'bg-tis-coral-200 text-tis-coral' :
+                    'bg-slate-700 text-slate-300'
+                  )}
+                >
+                  {trendIcons[trend]}
+                  {change !== undefined && (
+                    <span>
+                      {change > 0 ? '+' : ''}
+                      {change}%
+                    </span>
+                  )}
+                </span>
+                {changeLabel && (
+                  <span className="text-xs text-slate-400">{changeLabel}</span>
+                )}
+              </div>
+            )}
+          </div>
+          {icon && (
+            <div className="p-3 bg-white/10 backdrop-blur-sm rounded-xl text-white">
+              {icon}
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  // Default variant (light card)
   return (
-    <Card variant="bordered" className="hover:shadow-md transition-shadow">
+    <Card variant="bordered">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          <p className="metric-label">{title}</p>
+          <p className="metric-value text-slate-900 mt-2">{value}</p>
           {(change !== undefined || changeLabel) && (
-            <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-2 mt-3">
               <span
                 className={cn(
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold',
                   trendColors[trend]
                 )}
               >
@@ -84,13 +129,13 @@ export function StatCard({
                 )}
               </span>
               {changeLabel && (
-                <span className="text-xs text-gray-500">{changeLabel}</span>
+                <span className="text-xs text-slate-500">{changeLabel}</span>
               )}
             </div>
           )}
         </div>
         {icon && (
-          <div className="p-2.5 bg-blue-50 rounded-lg text-blue-600">
+          <div className="p-3 bg-tis-coral-100 rounded-xl text-tis-coral">
             {icon}
           </div>
         )}
@@ -145,7 +190,10 @@ export function HotLeadsStatCard({
       value={count}
       loading={loading}
       icon={
-        <span className="text-2xl">🔥</span>
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+        </svg>
       }
     />
   );

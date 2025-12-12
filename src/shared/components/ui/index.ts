@@ -4,7 +4,7 @@
 
 export { Button, type ButtonProps } from './Button';
 export { Card, CardHeader, CardContent, CardFooter, type CardProps, type CardHeaderProps } from './Card';
-export { Badge, StatusBadge, ClassificationBadge, type BadgeProps, type StatusBadgeProps, type ClassificationBadgeProps } from './Badge';
+export { Badge, StatusBadge, ClassificationBadge, LeadScoreBadge, type BadgeProps, type StatusBadgeProps, type ClassificationBadgeProps, type LeadScoreBadgeProps } from './Badge';
 export { Input, SearchInput, Textarea, type InputProps, type SearchInputProps, type TextareaProps } from './Input';
 export { Avatar, AvatarGroup, type AvatarProps, type AvatarGroupProps } from './Avatar';
 export {

@@ -1,5 +1,5 @@
 // =====================================================
-// TIS TIS PLATFORM - Card Component
+// TIS TIS PLATFORM - Card Component (Premium Design)
 // =====================================================
 
 import { forwardRef, type HTMLAttributes } from 'react';
@@ -9,32 +9,40 @@ import { cn } from '@/shared/utils';
 // CARD
 // ======================
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'bordered' | 'elevated';
+  variant?: 'default' | 'bordered' | 'elevated' | 'premium' | 'hero';
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  hover?: boolean;
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant = 'default', padding = 'md', children, ...props }, ref) => {
+  ({ className, variant = 'default', padding = 'md', hover = true, children, ...props }, ref) => {
     const variantStyles = {
-      default: 'bg-white',
-      bordered: 'bg-white border border-gray-200',
-      elevated: 'bg-white shadow-lg',
+      default: 'bg-white shadow-card border border-slate-200/50',
+      bordered: 'bg-white border border-slate-200 shadow-card',
+      elevated: 'bg-white shadow-card-elevated',
+      premium: 'card-premium',
+      hero: 'card-hero text-white',
     };
 
     const paddingStyles = {
       none: '',
       sm: 'p-3',
-      md: 'p-4',
+      md: 'p-5',
       lg: 'p-6',
     };
+
+    const hoverStyles = hover && variant !== 'hero'
+      ? 'transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5'
+      : '';
 
     return (
       <div
         ref={ref}
         className={cn(
-          'rounded-xl',
+          'rounded-2xl',
           variantStyles[variant],
           paddingStyles[padding],
+          hoverStyles,
           className
         )}
         {...props}
@@ -48,7 +56,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
 Card.displayName = 'Card';
 
 // ======================
-// CARD HEADER
+// CARD HEADER (Premium Typography)
 // ======================
 export interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
   title?: string;
@@ -66,14 +74,14 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
       >
         <div>
           {title && (
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <h3 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h3>
           )}
           {subtitle && (
-            <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
           )}
           {children}
         </div>
-        {action && <div className="ml-4">{action}</div>}
+        {action && <div className="ml-4 flex-shrink-0">{action}</div>}
       </div>
     );
   }
@@ -102,7 +110,7 @@ export const CardFooter = forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex items-center mt-4 pt-4 border-t border-gray-100', className)}
+    className={cn('flex items-center mt-4 pt-4 border-t border-slate-100', className)}
     {...props}
   />
 ));

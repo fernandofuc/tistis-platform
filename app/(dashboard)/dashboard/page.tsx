@@ -1,5 +1,5 @@
 // =====================================================
-// TIS TIS PLATFORM - Dashboard Overview Page
+// TIS TIS PLATFORM - Dashboard Overview Page (Premium)
 // =====================================================
 
 'use client';
@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardHeader, CardContent, Badge, Avatar, Button } from '@/src/shared/components/ui';
+import { Card, CardHeader, CardContent, Badge, Avatar, Button, LeadScoreBadge } from '@/src/shared/components/ui';
 import {
   PageWrapper,
   StatsGrid,
@@ -20,7 +20,7 @@ import { formatRelativeTime, formatTime } from '@/src/shared/utils';
 import type { Lead, Appointment } from '@/src/shared/types';
 
 // ======================
-// ICONS
+// ICONS (Premium SVG - sin emojis)
 // ======================
 const icons = {
   leads: (
@@ -38,7 +38,12 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
     </svg>
   ),
-  fire: <span className="text-lg">🔥</span>,
+  fire: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+    </svg>
+  ),
   plus: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -83,11 +88,8 @@ export default function DashboardPage() {
     async function fetchDashboardData() {
       // Wait for tenant to be loaded
       if (!tenant?.id) {
-        console.log('🟡 Dashboard: No tenant yet, waiting...');
         return;
       }
-
-      console.log('🟢 Dashboard: Fetching data for tenant:', tenant.id);
 
       try {
         // Fetch leads stats
@@ -180,7 +182,7 @@ export default function DashboardPage() {
         <Button
           leftIcon={icons.plus}
           onClick={() => router.push('/dashboard/calendario')}
-          className="bg-tis-coral hover:bg-tis-pink text-white"
+          className="bg-gradient-coral hover:opacity-90 text-white shadow-coral transition-all"
         >
           Nueva Cita
         </Button>
@@ -230,40 +232,40 @@ export default function DashboardPage() {
                 {loading ? (
                   <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="animate-pulse flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full" />
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-10 h-10 skeleton rounded-full" />
                         <div className="flex-1">
-                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-                          <div className="h-3 bg-gray-200 rounded w-1/2" />
+                          <div className="h-4 skeleton rounded w-3/4 mb-2" />
+                          <div className="h-3 skeleton rounded w-1/2" />
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : todayAppointments.length === 0 ? (
                   <div className="text-center py-8">
-                    <div className="w-12 h-12 mx-auto mb-3 bg-tis-green/20 rounded-full flex items-center justify-center text-tis-green">
+                    <div className="w-12 h-12 mx-auto mb-3 bg-tis-green-100 rounded-2xl flex items-center justify-center text-tis-green">
                       {icons.calendar}
                     </div>
-                    <p className="text-gray-900 font-medium text-sm mb-1">Sin citas para hoy</p>
-                    <p className="text-xs text-gray-500">Agenda tu primera cita</p>
+                    <p className="text-slate-900 font-medium text-sm mb-1">Sin citas para hoy</p>
+                    <p className="text-xs text-slate-500">Agenda tu primera cita</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {todayAppointments.slice(0, 5).map((apt) => (
                       <div
                         key={apt.id}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                        className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
                       >
                         <div className="flex-shrink-0">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium">
+                          <div className="w-10 h-10 bg-tis-coral-100 rounded-xl flex items-center justify-center text-tis-coral font-bold text-sm">
                             {formatTime(apt.scheduled_at).split(':')[0]}
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
+                          <p className="text-sm font-semibold text-slate-900 truncate">
                             {(apt as any).leads?.full_name || 'Sin nombre'}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-slate-500">
                             {formatTime(apt.scheduled_at)} - {apt.duration_minutes} min
                           </p>
                         </div>
@@ -296,53 +298,47 @@ export default function DashboardPage() {
               {loading ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="animate-pulse flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full" />
+                    <div key={i} className="flex items-center gap-4">
+                      <div className="w-10 h-10 skeleton rounded-full" />
                       <div className="flex-1">
-                        <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
-                        <div className="h-3 bg-gray-200 rounded w-1/4" />
+                        <div className="h-4 skeleton rounded w-1/3 mb-2" />
+                        <div className="h-3 skeleton rounded w-1/4" />
                       </div>
-                      <div className="h-6 w-16 bg-gray-200 rounded-full" />
+                      <div className="h-9 w-9 skeleton rounded-xl" />
                     </div>
                   ))}
                 </div>
               ) : recentLeads.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-tis-coral/10 rounded-full flex items-center justify-center text-tis-coral">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-tis-coral-100 rounded-2xl flex items-center justify-center text-tis-coral">
                     {icons.leads}
                   </div>
-                  <p className="text-gray-900 font-medium mb-1">No hay leads registrados</p>
-                  <p className="text-sm text-gray-500 mb-4">Los leads aparecerán aquí cuando lleguen mensajes por WhatsApp</p>
+                  <p className="text-slate-900 font-semibold mb-1">No hay leads registrados</p>
+                  <p className="text-sm text-slate-500 mb-4">Los leads aparecerán aquí cuando lleguen mensajes por WhatsApp</p>
                   <Link href="/dashboard/leads">
                     <Button variant="outline" size="sm">Crear lead manual</Button>
                   </Link>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-slate-100">
                   {recentLeads.map((lead) => (
                     <div
                       key={lead.id}
-                      className="flex items-center gap-4 py-3 hover:bg-gray-50 px-2 -mx-2 rounded-lg transition-colors cursor-pointer"
+                      className="flex items-center gap-4 py-3 hover:bg-slate-50 px-2 -mx-2 rounded-xl transition-colors cursor-pointer"
                     >
                       <Avatar name={(lead as any).full_name || lead.phone} size="md" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-semibold text-slate-900 truncate">
                           {(lead as any).full_name || 'Sin nombre'}
                         </p>
-                        <p className="text-xs text-gray-500">{lead.phone}</p>
+                        <p className="text-xs text-slate-500">{lead.phone}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={lead.classification as 'hot' | 'warm' | 'cold'}
-                          size="sm"
-                        >
-                          {lead.classification === 'hot' && '🔥'}
-                          {lead.classification === 'warm' && '🌡️'}
-                          {lead.classification === 'cold' && '❄️'}
-                          {' '}{lead.score}
-                        </Badge>
-                      </div>
-                      <span className="text-xs text-gray-400">
+                      <LeadScoreBadge
+                        score={lead.score || 0}
+                        classification={lead.classification as 'hot' | 'warm' | 'cold'}
+                        size="sm"
+                      />
+                      <span className="text-xs text-slate-400">
                         {formatRelativeTime(lead.created_at)}
                       </span>
                     </div>
@@ -355,18 +351,18 @@ export default function DashboardPage() {
           {/* Quick Actions */}
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Nuevo Lead', icon: icons.leads, color: 'bg-tis-coral/10 text-tis-coral hover:bg-tis-coral/20', href: '/dashboard/leads' },
-              { label: 'Agendar Cita', icon: icons.calendar, color: 'bg-tis-green/20 text-tis-green hover:bg-tis-green/30', href: '/dashboard/calendario' },
+              { label: 'Nuevo Lead', icon: icons.leads, color: 'bg-tis-coral-100 text-tis-coral hover:bg-tis-coral-200', href: '/dashboard/leads' },
+              { label: 'Agendar Cita', icon: icons.calendar, color: 'bg-tis-green-100 text-tis-green hover:bg-tis-green-200', href: '/dashboard/calendario' },
               { label: 'Ver Inbox', icon: icons.chat, color: 'bg-tis-purple/10 text-tis-purple hover:bg-tis-purple/20', href: '/dashboard/inbox' },
-              { label: 'Ver Hot Leads', icon: icons.fire, color: 'bg-tis-pink/10 text-tis-pink hover:bg-tis-pink/20', href: '/dashboard/leads?filter=hot' },
+              { label: 'Hot Leads', icon: icons.fire, color: 'bg-tis-pink-100 text-tis-pink hover:bg-tis-pink-200', href: '/dashboard/leads?filter=hot' },
             ].map((action) => (
               <Link
                 key={action.label}
                 href={action.href}
-                className={`${action.color} p-4 rounded-xl flex flex-col items-center gap-2 transition-colors`}
+                className={`${action.color} p-4 rounded-2xl flex flex-col items-center gap-2 transition-all duration-200 hover:-translate-y-0.5`}
               >
                 {action.icon}
-                <span className="text-sm font-medium">{action.label}</span>
+                <span className="text-sm font-semibold">{action.label}</span>
               </Link>
             ))}
           </div>
