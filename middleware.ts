@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Routes that require authentication
-const protectedRoutes = ['/dashboard'];
+// TEMPORARILY DISABLED - Let client-side ProtectedRoute handle auth
+// The middleware can't read the session properly when using localStorage
+// TODO: Implement proper @supabase/ssr cookie-based auth
+const protectedRoutes: string[] = []; // Was: ['/dashboard']
 
 // Routes that should redirect to dashboard if already logged in
 const authRoutes = ['/auth/login', '/auth/signup'];
