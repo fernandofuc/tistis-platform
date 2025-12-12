@@ -210,6 +210,7 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
     <aside
       className={cn(
         'fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300',
+        'hidden lg:block', // Only show on desktop
         collapsed ? 'w-20' : 'w-64'
       )}
     >
@@ -301,7 +302,7 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
           )}
         >
           {collapsed ? icons.expand : icons.collapse}
-          {!collapsed && <span className="font-medium">Colapsar</span>}
+          {!collapsed && <span className="font-medium">Minimizar</span>}
         </button>
       </div>
     </aside>
