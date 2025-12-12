@@ -1,8 +1,9 @@
 // =====================================================
 // TIS TIS PLATFORM - Auth Service
+// Multi-tenant aware - gets tenant_id from user metadata
 // =====================================================
 
-import { supabase, ESVA_TENANT_ID } from '@/shared/lib/supabase';
+import { supabase } from '@/shared/lib/supabase';
 import type { Staff, Branch, Tenant } from '@/shared/types';
 import type { SignUpData, AuthResult } from '../types';
 
@@ -95,18 +96,27 @@ export async function updatePassword(newPassword: string): Promise<{ error: stri
 
 // ======================
 // STAFF OPERATIONS
+// Now multi-tenant aware - uses user's tenant_id from metadata
 // ======================
 export async function fetchStaffByUserId(userId: string): Promise<Staff | null> {
   try {
+    // Get tenant_id from user metadata
+    const { data: { user } } = await supabase.auth.getUser();
+    const tenantId = user?.user_metadata?.tenant_id;
+
+    if (!tenantId) {
+      console.log('🟡 No tenant_id in user metadata');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('staff')
       .select('*')
       .eq('user_id', userId)
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (error) {
-      // Staff might not exist for this user
       if (error.code === 'PGRST116') {
         console.log('🟡 No staff record found for user:', userId);
         return null;
@@ -125,11 +135,20 @@ export async function fetchStaffByUserId(userId: string): Promise<Staff | null> 
 
 export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
   try {
+    // Get tenant_id from user metadata
+    const { data: { user } } = await supabase.auth.getUser();
+    const tenantId = user?.user_metadata?.tenant_id;
+
+    if (!tenantId) {
+      console.log('🟡 No tenant_id in user metadata for:', email);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('staff')
       .select('*')
       .eq('email', email)
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (error) {
@@ -151,13 +170,23 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
 
 // ======================
 // TENANT & BRANCHES
+// Now multi-tenant aware
 // ======================
 export async function fetchTenant(): Promise<Tenant | null> {
   try {
+    // Get tenant_id from user metadata
+    const { data: { user } } = await supabase.auth.getUser();
+    const tenantId = user?.user_metadata?.tenant_id;
+
+    if (!tenantId) {
+      console.log('🟡 No tenant_id in user metadata');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('tenants')
       .select('*')
-      .eq('id', ESVA_TENANT_ID)
+      .eq('id', tenantId)
       .single();
 
     if (error) {
@@ -175,10 +204,19 @@ export async function fetchTenant(): Promise<Tenant | null> {
 
 export async function fetchBranches(): Promise<Branch[]> {
   try {
+    // Get tenant_id from user metadata
+    const { data: { user } } = await supabase.auth.getUser();
+    const tenantId = user?.user_metadata?.tenant_id;
+
+    if (!tenantId) {
+      console.log('🟡 No tenant_id in user metadata');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('branches')
       .select('*')
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('is_active', true)
       .order('is_headquarters', { ascending: false })
       .order('name');
