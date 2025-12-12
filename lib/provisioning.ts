@@ -384,75 +384,62 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     console.log('✅ [Provisioning] Branch created:', branch.id);
 
     // ============================================
-    // STEP 5: Crear Usuario en auth.users
+    // STEP 5: Buscar o Crear Usuario en auth.users
+    // PRIORIDAD: Usar cuenta existente de TIS TIS (no crear contraseña temporal)
     // ============================================
-    const tempPassword = generateTempPassword();
 
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: params.customer_email,
-      password: tempPassword,
-      email_confirm: true, // Auto-confirmar email
-      user_metadata: {
-        name: params.customer_name,
-        tenant_id: tenant.id,
-        role: 'admin',
-        vertical: params.vertical,
-      },
-    });
+    // Primero buscar si el usuario ya existe
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    let authUser = existingUsers?.users?.find((u) => u.email === params.customer_email);
+    let tempPassword: string | undefined = undefined;
 
-    if (authError || !authData.user) {
-      console.error('❌ [Provisioning] Failed to create auth user:', authError);
+    if (authUser) {
+      // Usuario ya existe - usar su cuenta existente
+      console.log('✅ [Provisioning] Using existing user account:', authUser.id);
 
-      // Si el usuario ya existe, intentar obtenerlo
-      if (authError?.message?.includes('already been registered')) {
-        const { data: existingUsers } = await supabase.auth.admin.listUsers();
-        const existingUser = existingUsers?.users?.find((u) => u.email === params.customer_email);
+      // Actualizar metadata del usuario existente con info del tenant
+      await supabase.auth.admin.updateUserById(authUser.id, {
+        user_metadata: {
+          ...authUser.user_metadata,
+          tenant_id: tenant.id,
+          role: 'admin',
+          vertical: params.vertical,
+        },
+      });
+    } else {
+      // Usuario no existe - crear uno nuevo (caso raro, pero posible)
+      console.log('⚠️ [Provisioning] User not found, creating new account...');
+      tempPassword = generateTempPassword();
 
-        if (existingUser) {
-          console.log('⚠️ [Provisioning] User already exists, linking to tenant');
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: params.customer_email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: params.customer_name,
+          tenant_id: tenant.id,
+          role: 'admin',
+          vertical: params.vertical,
+        },
+      });
 
-          // Continuar con el usuario existente
-          await createStaffAndRole(supabase, {
-            tenant_id: tenant.id,
-            branch_id: branch.id,
-            user_id: existingUser.id,
-            email: params.customer_email,
-            name: params.customer_name,
-          });
+      if (authError || !authData.user) {
+        console.error('❌ [Provisioning] Failed to create auth user:', authError);
 
-          // Actualizar client
-          await supabase
-            .from('clients')
-            .update({
-              tenant_id: tenant.id,
-              user_id: existingUser.id,
-              status: 'active',
-            })
-            .eq('id', params.client_id);
+        // Rollback
+        await supabase.from('branches').delete().eq('id', branch.id);
+        await supabase.from('tenants').delete().eq('id', tenant.id);
 
-          return {
-            success: true,
-            tenant_id: tenant.id,
-            tenant_slug: slug,
-            branch_id: branch.id,
-            user_id: existingUser.id,
-            temp_password: undefined, // No tenemos la contraseña del usuario existente
-          };
-        }
+        return {
+          success: false,
+          error: 'Failed to create auth user',
+          details: { error: authError?.message },
+        };
       }
 
-      // Rollback
-      await supabase.from('branches').delete().eq('id', branch.id);
-      await supabase.from('tenants').delete().eq('id', tenant.id);
-
-      return {
-        success: false,
-        error: 'Failed to create auth user',
-        details: { error: authError?.message },
-      };
+      authUser = authData.user;
+      console.log('✅ [Provisioning] New auth user created:', authUser.id);
     }
-
-    console.log('✅ [Provisioning] Auth user created:', authData.user.id);
 
     // ============================================
     // STEP 6: Crear Staff y User Role
@@ -460,7 +447,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     const staffResult = await createStaffAndRole(supabase, {
       tenant_id: tenant.id,
       branch_id: branch.id,
-      user_id: authData.user.id,
+      user_id: authUser.id,
       email: params.customer_email,
       name: params.customer_name,
     });
@@ -479,7 +466,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       .from('clients')
       .update({
         tenant_id: tenant.id,
-        user_id: authData.user.id,
+        user_id: authUser.id,
         status: 'active',
         onboarding_completed: false,
         updated_at: new Date().toISOString(),
@@ -529,7 +516,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     await supabase.from('audit_logs').insert({
       client_id: params.client_id,
       tenant_id: tenant.id,
-      user_id: authData.user.id,
+      user_id: authUser.id,
       action: 'tenant_provisioned',
       entity_type: 'tenant',
       entity_id: tenant.id,
@@ -553,15 +540,16 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       tenant_id: tenant.id,
       tenant_slug: slug,
       branch_id: branch.id,
-      user_id: authData.user.id,
+      user_id: authUser.id,
       staff_id: staffResult.staff_id,
-      temp_password: tempPassword,
+      temp_password: tempPassword, // undefined si usamos cuenta existente
       details: {
         duration_ms: totalDuration,
         vertical: params.vertical,
         plan: params.plan,
         services_created: verticalConfig.default_services.length,
         faqs_created: verticalConfig.default_faqs.length,
+        used_existing_account: !tempPassword, // true si usamos cuenta existente
       },
     };
   } catch (error) {

@@ -44,6 +44,7 @@ const PLANS = {
   starter: {
     name: 'Starter',
     price: 3490,
+    branchExtra: 1500,
     features: [
       'Asistente IA 24/7 en WhatsApp',
       'Hasta 500 conversaciones/mes',
@@ -55,6 +56,7 @@ const PLANS = {
   essentials: {
     name: 'Essentials',
     price: 7490,
+    branchExtra: 1500,
     features: [
       'Todo lo de Starter',
       'Hasta 2,000 conversaciones/mes',
@@ -67,6 +69,7 @@ const PLANS = {
   growth: {
     name: 'Growth',
     price: 12490,
+    branchExtra: 1500,
     features: [
       'Todo lo de Essentials',
       'Conversaciones ilimitadas',
@@ -80,6 +83,7 @@ const PLANS = {
   scale: {
     name: 'Scale',
     price: 19990,
+    branchExtra: 1500,
     features: [
       'Todo lo de Growth',
       'Soporte multi-sucursal',
@@ -192,15 +196,22 @@ export default function ProposalPage() {
 
   const plan = PLANS[analysis.recommended_plan as keyof typeof PLANS] || PLANS.essentials;
 
+  // Calcular número de sucursales (ahora viene como número exacto)
+  const branches = parseInt(answers.locations || '1');
+  const extraBranches = Math.max(0, branches - 1);
+  const branchCost = extraBranches * plan.branchExtra;
+  const totalMonthly = plan.price + branchCost;
+
   // Calcular ROI (ejemplos basados en análisis)
   const monthlySavings = analysis.financial_impact || 15000;
   const hoursRecovered = analysis.time_impact || 20;
-  const paybackMonths = Math.ceil(plan.price / (monthlySavings * 0.3));
+  const paybackMonths = Math.ceil(totalMonthly / (monthlySavings * 0.3));
 
   const handleCheckout = async () => {
-    // Guardar plan seleccionado en sessionStorage
+    // Guardar plan y sucursales en sessionStorage para el checkout
     sessionStorage.setItem('selected_plan', analysis.recommended_plan);
-    sessionStorage.setItem('total_price', plan.price.toString());
+    sessionStorage.setItem('pricing_branches', branches.toString());
+    sessionStorage.setItem('total_price', totalMonthly.toString());
 
     // Save proposal to database
     const sessionToken = sessionStorage.getItem('discovery_session_token');
@@ -337,22 +348,29 @@ export default function ProposalPage() {
           />
         </section>
 
-        {/* Próximos Pasos */}
-        <section className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Próximos Pasos</h2>
-          <Timeline />
-        </section>
-
-        {/* CTA Principal */}
+        {/* CTA Principal - MOVIDO ARRIBA DEL TIMELINE */}
         <section className="mb-12">
           <Card className="p-8 bg-gradient-coral text-white text-center">
             <h3 className="text-3xl font-bold mb-4">
               Implementa tu Cerebro Digital Hoy
             </h3>
-            <div className="text-5xl font-extrabold mb-6">
-              ${plan.price.toLocaleString('es-MX')} MXN
-              <span className="text-lg font-normal opacity-90 ml-2">/mes</span>
+
+            {/* Desglose de precio con sucursales */}
+            <div className="mb-6">
+              <div className="text-lg opacity-90 mb-2">
+                Plan {plan.name}: ${plan.price.toLocaleString('es-MX')} MXN/mes
+              </div>
+              {extraBranches > 0 && (
+                <div className="text-lg opacity-90 mb-2">
+                  + {extraBranches} sucursal(es) extra: ${branchCost.toLocaleString('es-MX')} MXN/mes
+                </div>
+              )}
+              <div className="text-5xl font-extrabold mt-4">
+                ${totalMonthly.toLocaleString('es-MX')} MXN
+                <span className="text-lg font-normal opacity-90 ml-2">/mes</span>
+              </div>
             </div>
+
             <p className="text-lg opacity-90 mb-8">
               Sin costo de activación · Cancela cuando quieras
             </p>
@@ -371,29 +389,10 @@ export default function ProposalPage() {
           </Card>
         </section>
 
-        {/* FAQs */}
-        <section>
-          <h2 className="text-3xl font-bold mb-6">Preguntas Frecuentes</h2>
-          <div className="space-y-4">
-            <Card className="p-6">
-              <h4 className="font-semibold mb-2">¿Cuándo recibiré acceso?</h4>
-              <p className="text-tis-text-secondary">
-                Inmediatamente después del pago tendrás acceso a tu dashboard. El equipo te contactará en 30 minutos para la configuración personalizada.
-              </p>
-            </Card>
-            <Card className="p-6">
-              <h4 className="font-semibold mb-2">¿Puedo cambiar de plan después?</h4>
-              <p className="text-tis-text-secondary">
-                Sí, puedes cambiar de plan en cualquier momento desde tu dashboard. Los cambios se aplican en el siguiente ciclo de facturación.
-              </p>
-            </Card>
-            <Card className="p-6">
-              <h4 className="font-semibold mb-2">¿Hay contrato de permanencia?</h4>
-              <p className="text-tis-text-secondary">
-                No. Puedes cancelar cuando quieras. Solo te cobramos mes a mes.
-              </p>
-            </Card>
-          </div>
+        {/* Próximos Pasos - MOVIDO DESPUÉS DEL CTA */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold mb-6">Próximos Pasos</h2>
+          <Timeline />
         </section>
       </Container>
     </div>

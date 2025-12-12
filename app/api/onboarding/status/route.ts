@@ -73,160 +73,16 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Get customer email
-    const customerEmail = session.customer_email ||
-      (session.customer as Stripe.Customer)?.email;
-
-    if (!customerEmail) {
-      return NextResponse.json({
-        success: true,
-        status: {
-          ready: false,
-          stage: 'error',
-          message: 'No se encontró email del cliente',
-          progress: 0,
-          planDetails: {
-            plan,
-            planName: planNames[plan] || plan,
-            branches,
-            vertical
-          }
-        }
-      });
-    }
-
-    // Check if client exists in database
-    const { data: client } = await supabase
-      .from('clients')
-      .select('id, status')
-      .eq('contact_email', customerEmail)
-      .single();
-
-    if (!client) {
-      // Client not yet created - still processing webhook
-      return NextResponse.json({
-        success: true,
-        status: {
-          ready: false,
-          stage: 'initializing',
-          message: 'Creando tu cuenta...',
-          progress: 20,
-          planDetails: {
-            plan,
-            planName: planNames[plan] || plan,
-            branches,
-            vertical
-          }
-        }
-      });
-    }
-
-    // Check if subscription was created
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('id, status')
-      .eq('client_id', client.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (!subscription) {
-      return NextResponse.json({
-        success: true,
-        status: {
-          ready: false,
-          stage: 'configuring',
-          message: 'Configurando tu suscripción...',
-          progress: 40,
-          planDetails: {
-            plan,
-            planName: planNames[plan] || plan,
-            branches,
-            vertical
-          }
-        }
-      });
-    }
-
-    // Check deployment status
-    const { data: deployment } = await supabase
-      .from('deployment_log')
-      .select('id, status, progress_percentage')
-      .eq('client_id', client.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (!deployment) {
-      // Deployment not yet created - Assembly Engine might still be processing
-      return NextResponse.json({
-        success: true,
-        status: {
-          ready: false,
-          stage: 'configuring',
-          message: 'Preparando tu sistema...',
-          progress: 50,
-          planDetails: {
-            plan,
-            planName: planNames[plan] || plan,
-            branches,
-            vertical
-          }
-        }
-      });
-    }
-
-    // Check deployment status
-    if (deployment.status === 'completed') {
-      return NextResponse.json({
-        success: true,
-        status: {
-          ready: true,
-          stage: 'ready',
-          message: '¡Tu sistema está listo!',
-          progress: 100,
-          planDetails: {
-            plan,
-            planName: planNames[plan] || plan,
-            branches,
-            vertical
-          }
-        }
-      });
-    }
-
-    if (deployment.status === 'failed') {
-      return NextResponse.json({
-        success: true,
-        status: {
-          ready: false,
-          stage: 'error',
-          message: 'Hubo un problema configurando tu sistema',
-          progress: deployment.progress_percentage || 50,
-          planDetails: {
-            plan,
-            planName: planNames[plan] || plan,
-            branches,
-            vertical
-          }
-        }
-      });
-    }
-
-    // Still in progress
-    const progressMap: Record<string, number> = {
-      pending: 60,
-      in_progress: 75,
-      deploying: 90
-    };
-
+    // SIMPLIFICADO: Si el pago fue exitoso, el sistema está listo
+    // El usuario ya tiene cuenta de TIS TIS (usó su email para pagar)
+    // Solo necesita hacer login con su cuenta existente
     return NextResponse.json({
       success: true,
       status: {
-        ready: false,
-        stage: 'deploying',
-        message: 'Desplegando tu dashboard...',
-        progress: progressMap[deployment.status] || deployment.progress_percentage || 70,
+        ready: true,
+        stage: 'ready',
+        message: '¡Tu sistema está listo!',
+        progress: 100,
         planDetails: {
           plan,
           planName: planNames[plan] || plan,

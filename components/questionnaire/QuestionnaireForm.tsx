@@ -17,7 +17,9 @@ export default function QuestionnaireForm({
   onComplete,
   disabled = false
 }: QuestionnaireFormProps) {
-  const [answers, setAnswers] = useState<QuestionnaireAnswers>({});
+  const [answers, setAnswers] = useState<QuestionnaireAnswers>({
+    locations: '1', // Default a 1 sucursal
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,22 +66,50 @@ export default function QuestionnaireForm({
           />
         </Card>
 
-        {/* Pregunta 2: Ubicaciones */}
+        {/* Pregunta 2: Ubicaciones - NÚMERO EXACTO */}
         <Card className="p-6">
           <label className="block text-base font-semibold text-tis-text-primary mb-4">
             ¿Cuántas ubicaciones/sucursales tienes?
           </label>
-          <MultipleChoice
-            name="locations"
-            value={answers.locations}
-            onChange={(value) => setAnswers({ ...answers, locations: value })}
-            options={[
-              { value: '1', label: '1 ubicación' },
-              { value: '2-3', label: '2-3 ubicaciones' },
-              { value: '4-5', label: '4-5 ubicaciones' },
-              { value: '6+', label: '6 o más ubicaciones' }
-            ]}
-          />
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                const current = parseInt(answers.locations || '1');
+                if (current > 1) {
+                  setAnswers({ ...answers, locations: String(current - 1) });
+                }
+              }}
+              className="w-12 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center text-xl font-bold text-gray-600 hover:border-tis-coral hover:text-tis-coral transition-colors"
+            >
+              -
+            </button>
+            <div className="flex-1 text-center">
+              <span className="text-4xl font-bold text-tis-text-primary">
+                {answers.locations || '1'}
+              </span>
+              <p className="text-sm text-tis-text-secondary mt-1">
+                {parseInt(answers.locations || '1') === 1 ? 'sucursal' : 'sucursales'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const current = parseInt(answers.locations || '1');
+                if (current < 20) {
+                  setAnswers({ ...answers, locations: String(current + 1) });
+                }
+              }}
+              className="w-12 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center text-xl font-bold text-gray-600 hover:border-tis-coral hover:text-tis-coral transition-colors"
+            >
+              +
+            </button>
+          </div>
+          {parseInt(answers.locations || '1') > 1 && (
+            <p className="text-sm text-tis-coral mt-3 text-center">
+              +${(1500 * (parseInt(answers.locations || '1') - 1)).toLocaleString('es-MX')} MXN/mes por sucursales extra
+            </p>
+          )}
         </Card>
 
         {/* Pregunta 3: Empleados */}

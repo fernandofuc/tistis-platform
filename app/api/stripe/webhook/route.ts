@@ -326,6 +326,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     });
 
     // 📧 Enviar email con credenciales de acceso
+    // NOTA: Solo se envía si se creó un usuario nuevo (temp_password exists)
+    // Si el usuario ya tiene cuenta TIS TIS, no se envía email de credenciales
     if (provisionResult.temp_password) {
       try {
         const dashboardUrl = `${process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com'}/dashboard`;
@@ -342,6 +344,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       } catch (emailError) {
         console.error('📧 [Webhook] Error sending credentials email:', emailError);
       }
+    } else {
+      // Usuario existente - puede usar su misma cuenta de TIS TIS
+      console.log('✅ [Webhook] User already has TIS TIS account - no credentials email needed');
+      console.log('   User can login with their existing account:', customerEmail);
     }
   } else {
     console.error('❌ [Webhook] Tenant provisioning failed:', provisionResult.error);

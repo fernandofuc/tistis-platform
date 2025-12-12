@@ -318,7 +318,7 @@ function WelcomeContent() {
           <Button
             size="xl"
             variant="primary"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/auth/login?onboarding=complete')}
             disabled={!status.ready}
             className={`min-w-[280px] transition-all ${
               status.ready
@@ -328,7 +328,7 @@ function WelcomeContent() {
           >
             {status.ready ? (
               <>
-                Ir a mi Dashboard
+                Acceder a mi Dashboard
                 <ArrowRight className="ml-2 w-5 h-5" />
               </>
             ) : (
@@ -341,7 +341,7 @@ function WelcomeContent() {
 
           {status.ready && (
             <p className="mt-4 text-sm text-tis-text-muted">
-              También recibirás un email con instrucciones detalladas
+              Usa tu cuenta de TIS TIS para acceder a tu nuevo dashboard
             </p>
           )}
         </div>
