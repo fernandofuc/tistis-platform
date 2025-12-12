@@ -98,6 +98,14 @@ export interface PlanUpgradedEmailData {
   effectiveDate?: string;
 }
 
+export interface CredentialsEmailData {
+  customerName: string;
+  dashboardUrl: string;
+  email: string;
+  tempPassword: string;
+  tenantSlug: string;
+}
+
 export type EmailTemplateType =
   | 'welcome'
   | 'payment_confirmed'
@@ -105,4 +113,5 @@ export type EmailTemplateType =
   | 'setup_reminder'
   | 'payment_failed'
   | 'subscription_cancelled'
-  | 'plan_upgraded';
+  | 'plan_upgraded'
+  | 'credentials';

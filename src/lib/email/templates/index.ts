@@ -9,3 +9,4 @@ export { setupReminderEmailTemplate, setupReminderEmailSubject } from './setup-r
 export { paymentFailedEmailTemplate, paymentFailedEmailSubject } from './payment-failed';
 export { subscriptionCancelledEmailTemplate, subscriptionCancelledEmailSubject } from './subscription-cancelled';
 export { planUpgradedEmailTemplate, planUpgradedEmailSubject } from './plan-upgraded';
+export { credentialsEmailTemplate, credentialsEmailSubject } from './credentials';

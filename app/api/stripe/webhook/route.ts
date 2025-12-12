@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { emailService } from '@/src/lib/email';
+import { provisionTenant } from '@/lib/provisioning';
 
 // Create Stripe client lazily
 function getStripeClient() {
@@ -294,11 +295,81 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     .eq('stripe_subscription_id', subscription.id)
     .single();
 
+  // ============================================
+  // 🏗️ AUTO-PROVISION TENANT (NUEVO)
+  // Crea automáticamente:
+  // - Tenant para la micro-app
+  // - Branch principal
+  // - Usuario admin en auth.users
+  // - Staff record
+  // - User role para permisos
+  // - Servicios y FAQs por defecto según vertical
+  // ============================================
+  console.log('🏗️ [Webhook] Starting tenant provisioning...');
+
+  const provisionResult = await provisionTenant({
+    client_id: client.id,
+    customer_email: customerEmail,
+    customer_name: customerName || 'Nuevo Cliente',
+    vertical: (vertical as 'dental' | 'restaurant' | 'pharmacy' | 'retail' | 'medical' | 'services' | 'other') || 'services',
+    plan: (plan as 'starter' | 'essentials' | 'growth' | 'scale') || 'essentials',
+    branches_count: branches ? parseInt(branches) : 1,
+    subscription_id: newSubscription?.id,
+  });
+
+  if (provisionResult.success) {
+    console.log('✅ [Webhook] Tenant provisioned successfully:', {
+      tenant_id: provisionResult.tenant_id,
+      tenant_slug: provisionResult.tenant_slug,
+      branch_id: provisionResult.branch_id,
+      user_id: provisionResult.user_id,
+    });
+
+    // 📧 Enviar email con credenciales de acceso
+    if (provisionResult.temp_password) {
+      try {
+        const dashboardUrl = `${process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com'}/dashboard`;
+
+        await emailService.sendCredentials(customerEmail, {
+          customerName: customerName || 'Nuevo Cliente',
+          dashboardUrl: dashboardUrl,
+          email: customerEmail,
+          tempPassword: provisionResult.temp_password,
+          tenantSlug: provisionResult.tenant_slug || '',
+        });
+
+        console.log('📧 [Webhook] Credentials email sent to:', customerEmail);
+      } catch (emailError) {
+        console.error('📧 [Webhook] Error sending credentials email:', emailError);
+      }
+    }
+  } else {
+    console.error('❌ [Webhook] Tenant provisioning failed:', provisionResult.error);
+
+    // Notificar al equipo de TIS TIS sobre el fallo
+    await supabase.from('notification_queue').insert({
+      notification_type: 'system_alert',
+      priority: 'urgent',
+      recipient_type: 'internal_team',
+      recipient_emails: ['soporte@tistis.com'],
+      subject: `⚠️ Error en provisioning de tenant`,
+      body: `Error al provisionar tenant para cliente ${customerEmail}.\nError: ${provisionResult.error}`,
+      metadata: {
+        client_id: client.id,
+        error: provisionResult.error,
+        details: provisionResult.details,
+      },
+      client_id: client.id,
+    });
+  }
+
   // 🚀 TRIGGER ASSEMBLY ENGINE - Auto-provision micro-app
+  // El Assembly Engine configura los componentes y features según el plan
   await triggerAssemblyEngine({
     client_id: client.id,
     subscription_id: newSubscription?.id,
-    vertical: vertical || 'dental', // Use vertical from metadata, default to dental
+    tenant_id: provisionResult.tenant_id, // Ahora incluimos el tenant_id
+    vertical: vertical || 'services',
     plan: (plan as 'starter' | 'essentials' | 'growth' | 'scale') || 'essentials',
     addons: parsedAddons,
     branches: branches ? parseInt(branches) : 1,
@@ -393,6 +464,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 interface AssemblyTriggerParams {
   client_id: string;
   subscription_id?: string;
+  tenant_id?: string; // ID del tenant recién creado
   vertical: string;
   plan: 'starter' | 'essentials' | 'growth' | 'scale';
   addons: string[];
@@ -417,6 +489,7 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
       body: JSON.stringify({
         client_id: params.client_id,
         subscription_id: params.subscription_id,
+        tenant_id: params.tenant_id,
         vertical: params.vertical,
         plan: params.plan,
         addons: params.addons,

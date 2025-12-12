@@ -414,11 +414,7 @@ CREATE TABLE IF NOT EXISTS public.leads (
     phone_normalized VARCHAR(20),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
-    full_name VARCHAR(255) GENERATED ALWAYS AS (
-        COALESCE(first_name, '') ||
-        CASE WHEN first_name IS NOT NULL AND last_name IS NOT NULL THEN ' ' ELSE '' END ||
-        COALESCE(last_name, '')
-    ) STORED,
+    full_name VARCHAR(255),
     email VARCHAR(255),
 
     -- Origen
@@ -530,7 +526,7 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     -- Programación
     scheduled_at TIMESTAMPTZ NOT NULL,
     duration_minutes INTEGER DEFAULT 30,
-    end_time TIMESTAMPTZ GENERATED ALWAYS AS (scheduled_at + (duration_minutes || ' minutes')::INTERVAL) STORED,
+    end_time TIMESTAMPTZ,
 
     -- Estado
     status VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN (
@@ -569,8 +565,8 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON public.appointments(
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON public.appointments(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_appointments_lead_id ON public.appointments(lead_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_staff_id ON public.appointments(staff_id);
-CREATE INDEX IF NOT EXISTS idx_appointments_today ON public.appointments(tenant_id, scheduled_at)
-    WHERE scheduled_at >= CURRENT_DATE AND scheduled_at < CURRENT_DATE + INTERVAL '1 day';
+-- Nota: Índice para citas de hoy removido porque CURRENT_DATE no es inmutable
+-- Se usa índice general idx_appointments_scheduled_at en su lugar
 
 -- =====================================================
 -- PARTE E: PATIENTS Y CONVERSATIONS
@@ -586,7 +582,7 @@ CREATE TABLE IF NOT EXISTS public.patients (
     -- Información personal
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    full_name VARCHAR(255) GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED,
+    full_name VARCHAR(255),
     date_of_birth DATE,
     gender VARCHAR(20) CHECK (gender IN ('male', 'female', 'other', 'prefer_not_say')),
 
@@ -639,10 +635,19 @@ CREATE INDEX IF NOT EXISTS idx_patients_phone ON public.patients(tenant_id, phon
 CREATE INDEX IF NOT EXISTS idx_patients_email ON public.patients(tenant_id, email);
 CREATE INDEX IF NOT EXISTS idx_patients_name ON public.patients(tenant_id, last_name, first_name);
 
--- Agregar referencia de appointments a patients
-ALTER TABLE public.appointments
-ADD CONSTRAINT fk_appointments_patient
-FOREIGN KEY (patient_id) REFERENCES public.patients(id) ON DELETE SET NULL;
+-- Agregar referencia de appointments a patients (solo si no existe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'fk_appointments_patient'
+        AND table_name = 'appointments'
+    ) THEN
+        ALTER TABLE public.appointments
+        ADD CONSTRAINT fk_appointments_patient
+        FOREIGN KEY (patient_id) REFERENCES public.patients(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- E2: Clinical History (Historial Clínico)
 CREATE TABLE IF NOT EXISTS public.clinical_history (
@@ -1468,17 +1473,70 @@ BEGIN
 END $$;
 
 -- =====================================================
--- PARTE I: TRIGGERS DE UPDATED_AT
+-- PARTE I: TRIGGERS DE UPDATED_AT Y CAMPOS CALCULADOS
 -- =====================================================
 
--- Crear triggers para todas las tablas con updated_at
+-- Función para calcular full_name en leads
+CREATE OR REPLACE FUNCTION public.calculate_lead_full_name()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.full_name := COALESCE(NEW.first_name, '') ||
+        CASE WHEN NEW.first_name IS NOT NULL AND NEW.last_name IS NOT NULL THEN ' ' ELSE '' END ||
+        COALESCE(NEW.last_name, '');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Función para calcular full_name en patients
+CREATE OR REPLACE FUNCTION public.calculate_patient_full_name()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.full_name := NEW.first_name || ' ' || NEW.last_name;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Función para calcular end_time en appointments
+CREATE OR REPLACE FUNCTION public.calculate_appointment_end_time()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.end_time := NEW.scheduled_at + (NEW.duration_minutes || ' minutes')::INTERVAL;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger para leads full_name
+DROP TRIGGER IF EXISTS trigger_calculate_lead_full_name ON public.leads;
+CREATE TRIGGER trigger_calculate_lead_full_name
+    BEFORE INSERT OR UPDATE OF first_name, last_name ON public.leads
+    FOR EACH ROW EXECUTE FUNCTION public.calculate_lead_full_name();
+
+-- Trigger para patients full_name
+DROP TRIGGER IF EXISTS trigger_calculate_patient_full_name ON public.patients;
+CREATE TRIGGER trigger_calculate_patient_full_name
+    BEFORE INSERT OR UPDATE OF first_name, last_name ON public.patients
+    FOR EACH ROW EXECUTE FUNCTION public.calculate_patient_full_name();
+
+-- Trigger para appointments end_time
+DROP TRIGGER IF EXISTS trigger_calculate_appointment_end_time ON public.appointments;
+CREATE TRIGGER trigger_calculate_appointment_end_time
+    BEFORE INSERT OR UPDATE OF scheduled_at, duration_minutes ON public.appointments
+    FOR EACH ROW EXECUTE FUNCTION public.calculate_appointment_end_time();
+
+-- Crear triggers para todas las tablas con updated_at (excluyendo views)
 DO $$
 DECLARE
     t TEXT;
 BEGIN
     FOR t IN
-        SELECT table_name FROM information_schema.columns
-        WHERE table_schema = 'public' AND column_name = 'updated_at'
+        SELECT c.table_name
+        FROM information_schema.columns c
+        JOIN information_schema.tables tb
+            ON c.table_name = tb.table_name
+            AND c.table_schema = tb.table_schema
+        WHERE c.table_schema = 'public'
+        AND c.column_name = 'updated_at'
+        AND tb.table_type = 'BASE TABLE'  -- Solo tablas, no views
     LOOP
         EXECUTE format('
             DROP TRIGGER IF EXISTS update_%I_updated_at ON public.%I;

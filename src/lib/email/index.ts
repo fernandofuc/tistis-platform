@@ -19,6 +19,8 @@ import {
   subscriptionCancelledEmailSubject,
   planUpgradedEmailTemplate,
   planUpgradedEmailSubject,
+  credentialsEmailTemplate,
+  credentialsEmailSubject,
 } from './templates';
 import type {
   EmailResult,
@@ -29,6 +31,7 @@ import type {
   PaymentFailedEmailData,
   SubscriptionCancelledEmailData,
   PlanUpgradedEmailData,
+  CredentialsEmailData,
 } from './types';
 
 // Re-export types
@@ -169,6 +172,25 @@ export const emailService = {
       subject: planUpgradedEmailSubject(data.newPlan),
       html: planUpgradedEmailTemplate(data),
       tags: ['subscription', 'upgraded'],
+    });
+  },
+
+  /**
+   * Send access credentials after tenant provisioning
+   */
+  async sendCredentials(
+    to: string,
+    data: CredentialsEmailData
+  ): Promise<EmailResult> {
+    if (!isValidEmail(to)) {
+      return { success: false, error: 'Invalid email address' };
+    }
+
+    return sendEmail({
+      to: { email: to, name: data.customerName },
+      subject: credentialsEmailSubject(data.customerName),
+      html: credentialsEmailTemplate(data),
+      tags: ['credentials', 'onboarding'],
     });
   },
 
