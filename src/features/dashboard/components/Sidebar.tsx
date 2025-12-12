@@ -153,7 +153,7 @@ const navTerminology: Record<string, Record<string, string>> = {
 // ======================
 // COMPONENT
 // ======================
-export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
+export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   const pathname = usePathname();
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
@@ -162,7 +162,8 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
   const { tenant, isLoading: tenantLoading } = useTenant();
   const { flags, flagsLoading, isEnabled } = useFeatureFlags();
 
-  const collapsed = isCollapsed ?? sidebarCollapsed;
+  // Use props if explicitly provided, otherwise use store state
+  const collapsed = isCollapsed !== undefined ? isCollapsed : sidebarCollapsed;
   const handleCollapse = onCollapse ?? setSidebarCollapsed;
 
   // Filter nav items based on feature flags
@@ -210,7 +211,6 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
     <aside
       className={cn(
         'fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300',
-        'hidden lg:block', // Only show on desktop
         collapsed ? 'w-20' : 'w-64'
       )}
     >
