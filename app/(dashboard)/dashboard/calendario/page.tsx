@@ -7,7 +7,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardHeader, CardContent, Button, Badge, Avatar } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
-import { supabase, ESVA_TENANT_ID } from '@/src/shared/lib/supabase';
+import { useAuthContext } from '@/src/features/auth';
+import { supabase } from '@/src/shared/lib/supabase';
 import { formatDate, formatTime, cn } from '@/src/shared/utils';
 import { APPOINTMENT_STATUSES } from '@/src/shared/constants';
 import type { Appointment } from '@/src/shared/types';
@@ -73,10 +74,11 @@ function getMonthDays(year: number, month: number) {
 // COMPONENT
 // ======================
 export default function CalendarPage() {
+  const { tenant } = useAuthContext();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date()); // Select today by default
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
 
   const year = currentDate.getFullYear();
@@ -85,19 +87,28 @@ export default function CalendarPage() {
   // Fetch appointments for current month
   useEffect(() => {
     async function fetchAppointments() {
+      // Wait for tenant to be loaded
+      if (!tenant?.id) {
+        console.log('🟡 Calendar: No tenant yet, waiting...');
+        return;
+      }
+
+      console.log('🟢 Calendar: Fetching appointments for tenant:', tenant.id);
+
       try {
         const startOfMonth = new Date(year, month, 1);
         const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
 
         const { data, error } = await supabase
           .from('appointments')
-          .select('*, leads(name, phone)')
-          .eq('tenant_id', ESVA_TENANT_ID)
+          .select('*, leads(full_name, phone)')
+          .eq('tenant_id', tenant.id)
           .gte('scheduled_at', startOfMonth.toISOString())
           .lte('scheduled_at', endOfMonth.toISOString())
           .order('scheduled_at');
 
         if (error) throw error;
+        console.log('🟢 Calendar: Fetched', data?.length, 'appointments');
         setAppointments(data as Appointment[]);
       } catch (error) {
         console.error('Error fetching appointments:', error);
@@ -107,7 +118,7 @@ export default function CalendarPage() {
     }
 
     fetchAppointments();
-  }, [year, month]);
+  }, [year, month, tenant?.id]);
 
   // Get appointments by date
   const appointmentsByDate = useMemo(() => {
@@ -298,10 +309,10 @@ export default function CalendarPage() {
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Avatar name={(apt as any).leads?.name || 'Sin nombre'} size="sm" />
+                        <Avatar name={(apt as any).leads?.full_name || 'Sin nombre'} size="sm" />
                         <div>
                           <p className="text-sm font-medium text-gray-900">
-                            {(apt as any).leads?.name || 'Sin nombre'}
+                            {(apt as any).leads?.full_name || 'Sin nombre'}
                           </p>
                           <p className="text-xs text-gray-500">
                             {(apt as any).leads?.phone}

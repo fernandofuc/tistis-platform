@@ -7,7 +7,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardHeader, CardContent, Button, Badge, Avatar, SearchInput } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
-import { supabase, ESVA_TENANT_ID } from '@/src/shared/lib/supabase';
+import { useAuthContext } from '@/src/features/auth';
+import { supabase } from '@/src/shared/lib/supabase';
 import { formatRelativeTime, formatPhone, cn } from '@/src/shared/utils';
 import { LEAD_STATUSES, LEAD_CLASSIFICATIONS, LEAD_SOURCES } from '@/src/shared/constants';
 import type { Lead, LeadClassification, LeadStatus } from '@/src/shared/types';
@@ -52,6 +53,7 @@ type FilterTab = 'all' | LeadClassification;
 // COMPONENT
 // ======================
 export default function LeadsPage() {
+  const { tenant } = useAuthContext();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -61,15 +63,24 @@ export default function LeadsPage() {
   // Fetch leads
   useEffect(() => {
     async function fetchLeads() {
+      // Wait for tenant to be loaded
+      if (!tenant?.id) {
+        console.log('🟡 Leads: No tenant yet, waiting...');
+        return;
+      }
+
+      console.log('🟢 Leads: Fetching leads for tenant:', tenant.id);
+
       try {
         const { data, error } = await supabase
           .from('leads')
           .select('*')
-          .eq('tenant_id', ESVA_TENANT_ID)
+          .eq('tenant_id', tenant.id)
           .order('score', { ascending: false })
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+        console.log('🟢 Leads: Fetched', data?.length, 'leads');
         setLeads(data as Lead[]);
       } catch (error) {
         console.error('Error fetching leads:', error);
@@ -79,7 +90,7 @@ export default function LeadsPage() {
     }
 
     fetchLeads();
-  }, []);
+  }, [tenant?.id]);
 
   // Filter leads
   const filteredLeads = useMemo(() => {
@@ -92,8 +103,9 @@ export default function LeadsPage() {
       // Search filter
       if (search) {
         const searchLower = search.toLowerCase();
+        const fullName = (lead as any).full_name || '';
         return (
-          lead.name?.toLowerCase().includes(searchLower) ||
+          fullName.toLowerCase().includes(searchLower) ||
           lead.phone.includes(search) ||
           lead.email?.toLowerCase().includes(searchLower)
         );
@@ -196,13 +208,13 @@ export default function LeadsPage() {
                   className="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer transition-colors"
                 >
                   {/* Avatar */}
-                  <Avatar name={lead.name || lead.phone} size="lg" />
+                  <Avatar name={(lead as any).full_name || lead.phone} size="lg" />
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-medium text-gray-900 truncate">
-                        {lead.name || 'Sin nombre'}
+                        {(lead as any).full_name || 'Sin nombre'}
                       </h3>
                       <Badge variant={lead.classification as 'hot' | 'warm' | 'cold'} size="sm">
                         {lead.classification === 'hot' && '🔥'}
