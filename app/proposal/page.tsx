@@ -75,62 +75,106 @@ export default function ProposalPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      // First try to get from sessionStorage
-      const savedAnswers = sessionStorage.getItem('questionnaire_answers');
-      const sessionToken = sessionStorage.getItem('discovery_session_token');
+      try {
+        // First try to get from sessionStorage
+        const savedAnswers = sessionStorage.getItem('questionnaire_answers');
 
-      if (!savedAnswers) {
-        router.push('/discovery');
-        return;
-      }
-
-      setAnswers(JSON.parse(savedAnswers));
-
-      // Try to get analysis from database if we have a session token
-      if (sessionToken) {
-        try {
-          const { data: session, error } = await supabase
-            .from('discovery_sessions')
-            .select('ai_analysis')
-            .eq('session_token', sessionToken)
-            .single();
-
-          if (!error && session?.ai_analysis) {
-            setAnalysis(session.ai_analysis as AIAnalysis);
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.error('Error fetching session:', e);
+        if (!savedAnswers) {
+          router.push('/discovery');
+          return;
         }
-      }
 
-      // Fallback to sessionStorage
-      const savedAnalysis = sessionStorage.getItem('ai_analysis');
-      if (savedAnalysis) {
-        setAnalysis(JSON.parse(savedAnalysis));
-        setLoading(false);
-      } else {
-        // Generate default analysis based on answers
         const parsedAnswers = JSON.parse(savedAnswers);
+        setAnswers(parsedAnswers);
+
+        // Try to get analysis from sessionStorage first (fastest)
+        const savedAnalysis = sessionStorage.getItem('ai_analysis');
+        if (savedAnalysis) {
+          setAnalysis(JSON.parse(savedAnalysis));
+          setLoading(false);
+          return;
+        }
+
+        // Try database only if we have session token
+        const sessionToken = sessionStorage.getItem('discovery_session_token');
+        if (sessionToken) {
+          try {
+            const { data: session, error } = await supabase
+              .from('discovery_sessions')
+              .select('ai_analysis')
+              .eq('session_token', sessionToken)
+              .single();
+
+            if (!error && session?.ai_analysis) {
+              setAnalysis(session.ai_analysis as AIAnalysis);
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error('Error fetching session from DB:', e);
+            // Continue to fallback
+          }
+        }
+
+        // Fallback: Generate default analysis based on questionnaire answers
+        console.log('📊 Generating default analysis from questionnaire...');
         const defaultAnalysis: AIAnalysis = {
-          business_type: parsedAnswers.business_type || 'restaurante',
+          business_type: parsedAnswers.business_type || 'servicios',
           primary_pain: 'Ineficiencias operativas generales',
+          financial_impact: 15000,
+          time_impact: 20,
+          urgency_score: 7,
+          recommended_plan: getRecommendedPlan(parsedAnswers),
+          recommended_addons: [],
+          recommended_especialidad: parsedAnswers.business_type || null,
+          reasoning: generateReasoning(parsedAnswers)
+        };
+        setAnalysis(defaultAnalysis);
+        setLoading(false);
+
+      } catch (error) {
+        console.error('Error loading proposal data:', error);
+        // Even on error, set a default analysis so page doesn't hang
+        setAnalysis({
+          business_type: 'servicios',
+          primary_pain: 'Ineficiencias operativas',
           financial_impact: 15000,
           time_impact: 20,
           urgency_score: 7,
           recommended_plan: 'essentials',
           recommended_addons: [],
-          recommended_especialidad: parsedAnswers.business_type || null,
-          reasoning: 'Plan recomendado basado en el tamaño y necesidades de tu negocio.'
-        };
-        setAnalysis(defaultAnalysis);
+          recommended_especialidad: null,
+          reasoning: 'Plan recomendado basado en tus necesidades.'
+        });
         setLoading(false);
       }
     };
 
     loadData();
   }, [router]);
+
+  // Helper: Determine recommended plan based on answers
+  function getRecommendedPlan(answers: QuestionnaireAnswers): string {
+    const employees = parseInt(answers.employees_count || '1');
+    const locations = parseInt(answers.locations || '1');
+
+    if (locations > 3 || employees > 50) return 'scale';
+    if (locations > 1 || employees > 15) return 'growth';
+    if (employees > 5) return 'essentials';
+    return 'starter';
+  }
+
+  // Helper: Generate reasoning text
+  function generateReasoning(answers: QuestionnaireAnswers): string {
+    const plan = getRecommendedPlan(answers);
+    const planNames: Record<string, string> = {
+      starter: 'Starter',
+      essentials: 'Essentials',
+      growth: 'Growth',
+      scale: 'Scale'
+    };
+    return `El plan ${planNames[plan]} es ideal para tu negocio de ${answers.business_type || 'servicios'} con ${answers.employees_count || '1-5'} empleados. Te permitirá automatizar la atención al cliente y optimizar tus operaciones desde el primer día.`;
+  }
 
   if (loading || !analysis || !answers) {
     return (
