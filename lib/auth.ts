@@ -1,31 +1,11 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/src/shared/lib/supabase';
 
-// Browser client - direct initialization
-// Environment variables are inlined at build time by Next.js
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-// Log at module load for debugging
-if (typeof window !== 'undefined') {
-  console.log('🔧 Supabase config:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    urlPreview: supabaseUrl ? supabaseUrl.substring(0, 30) : 'NOT SET'
-  });
-}
-
-// Create client - will work without throwing if vars are empty (for static pages)
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
-);
-
-// Helper to check if Supabase is properly configured
-export function isSupabaseConfigured(): boolean {
-  return !!supabaseUrl && !!supabaseAnonKey;
-}
+// IMPORTANT: Re-export the supabase client from the shared lib
+// This ensures ALL parts of the app use the SAME supabase instance
+// and share the authentication session correctly
+export { supabase, isSupabaseConfigured } from '@/src/shared/lib/supabase';
 
 // Types
 export interface AuthState {
