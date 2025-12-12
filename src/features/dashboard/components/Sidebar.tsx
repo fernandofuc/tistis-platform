@@ -213,11 +213,11 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
         collapsed ? 'w-20' : 'w-64'
       )}
     >
-      {/* Logo - Shows tenant name */}
+      {/* Logo - Shows tenant name with TIS TIS branding */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-pink-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-coral rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
             </div>
             <span className="font-semibold text-gray-900 truncate max-w-[140px]">
@@ -226,7 +226,7 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
           </Link>
         )}
         {collapsed && (
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-pink-500 rounded-lg flex items-center justify-center mx-auto">
+          <div className="w-8 h-8 bg-gradient-coral rounded-lg flex items-center justify-center mx-auto">
             <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
           </div>
         )}
@@ -260,13 +260,13 @@ export function Sidebar({ isCollapsed = false, onCollapse }: SidebarProps) {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
                 isActive
-                  ? 'bg-purple-50 text-purple-700'
+                  ? 'bg-tis-coral/10 text-tis-coral'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
                 collapsed && 'justify-center'
               )}
               title={collapsed ? displayName : undefined}
             >
-              <span className={cn(isActive && 'text-purple-600')}>{item.icon}</span>
+              <span className={cn(isActive && 'text-tis-coral')}>{item.icon}</span>
               {!collapsed && (
                 <span className="font-medium">{displayName}</span>
               )}

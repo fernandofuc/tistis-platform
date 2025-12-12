@@ -5,6 +5,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardHeader, CardContent, Badge, Avatar, Button } from '@/src/shared/components/ui';
 import {
   PageWrapper,
@@ -61,6 +63,7 @@ interface DashboardStats {
 // COMPONENT
 // ======================
 export default function DashboardPage() {
+  const router = useRouter();
   const { staff, tenant } = useAuthContext();
   const [stats, setStats] = useState<DashboardStats>({
     totalLeads: 0,
@@ -174,7 +177,11 @@ export default function DashboardPage() {
       title={`${getGreeting()}, ${staff?.first_name || 'Usuario'}`}
       subtitle={`Aquí está el resumen de ${tenant?.name || 'tu negocio'}`}
       actions={
-        <Button leftIcon={icons.plus}>
+        <Button
+          leftIcon={icons.plus}
+          onClick={() => router.push('/dashboard/calendario')}
+          className="bg-tis-coral hover:bg-tis-pink text-white"
+        >
           Nueva Cita
         </Button>
       }
@@ -215,7 +222,9 @@ export default function DashboardPage() {
           sidebar={
             <Card variant="bordered">
               <CardHeader title="Citas de Hoy" action={
-                <Button variant="ghost" size="sm">Ver todas</Button>
+                <Link href="/dashboard/calendario">
+                  <Button variant="ghost" size="sm">Ver todas</Button>
+                </Link>
               } />
               <CardContent>
                 {loading ? (
@@ -231,8 +240,12 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : todayAppointments.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>No hay citas programadas para hoy</p>
+                  <div className="text-center py-8">
+                    <div className="w-12 h-12 mx-auto mb-3 bg-tis-green/20 rounded-full flex items-center justify-center text-tis-green">
+                      {icons.calendar}
+                    </div>
+                    <p className="text-gray-900 font-medium text-sm mb-1">Sin citas para hoy</p>
+                    <p className="text-xs text-gray-500">Agenda tu primera cita</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -274,7 +287,9 @@ export default function DashboardPage() {
               title="Leads Recientes"
               subtitle="Últimos leads registrados"
               action={
-                <Button variant="ghost" size="sm">Ver todos</Button>
+                <Link href="/dashboard/leads">
+                  <Button variant="ghost" size="sm">Ver todos</Button>
+                </Link>
               }
             />
             <CardContent>
@@ -292,9 +307,15 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : recentLeads.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <p className="mb-2">No hay leads registrados</p>
-                  <p className="text-sm">Los leads aparecerán aquí cuando lleguen mensajes</p>
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-tis-coral/10 rounded-full flex items-center justify-center text-tis-coral">
+                    {icons.leads}
+                  </div>
+                  <p className="text-gray-900 font-medium mb-1">No hay leads registrados</p>
+                  <p className="text-sm text-gray-500 mb-4">Los leads aparecerán aquí cuando lleguen mensajes por WhatsApp</p>
+                  <Link href="/dashboard/leads">
+                    <Button variant="outline" size="sm">Crear lead manual</Button>
+                  </Link>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
@@ -334,18 +355,19 @@ export default function DashboardPage() {
           {/* Quick Actions */}
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Nuevo Lead', icon: icons.leads, color: 'bg-blue-50 text-blue-600' },
-              { label: 'Agendar Cita', icon: icons.calendar, color: 'bg-green-50 text-green-600' },
-              { label: 'Ver Inbox', icon: icons.chat, color: 'bg-purple-50 text-purple-600' },
-              { label: 'Ver Hot Leads', icon: icons.fire, color: 'bg-red-50 text-red-600' },
+              { label: 'Nuevo Lead', icon: icons.leads, color: 'bg-tis-coral/10 text-tis-coral hover:bg-tis-coral/20', href: '/dashboard/leads' },
+              { label: 'Agendar Cita', icon: icons.calendar, color: 'bg-tis-green/20 text-tis-green hover:bg-tis-green/30', href: '/dashboard/calendario' },
+              { label: 'Ver Inbox', icon: icons.chat, color: 'bg-tis-purple/10 text-tis-purple hover:bg-tis-purple/20', href: '/dashboard/inbox' },
+              { label: 'Ver Hot Leads', icon: icons.fire, color: 'bg-tis-pink/10 text-tis-pink hover:bg-tis-pink/20', href: '/dashboard/leads?filter=hot' },
             ].map((action) => (
-              <button
+              <Link
                 key={action.label}
-                className={`${action.color} p-4 rounded-xl flex flex-col items-center gap-2 hover:opacity-80 transition-opacity`}
+                href={action.href}
+                className={`${action.color} p-4 rounded-xl flex flex-col items-center gap-2 transition-colors`}
               >
                 {action.icon}
                 <span className="text-sm font-medium">{action.label}</span>
-              </button>
+              </Link>
             ))}
           </div>
         </ContentGrid>
