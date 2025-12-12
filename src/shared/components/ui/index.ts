@@ -14,3 +14,4 @@ export {
   type StorageBucket,
   type FileCategory,
 } from './FileUpload';
+export { Modal, type ModalProps } from './Modal';

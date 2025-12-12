@@ -4,10 +4,11 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardHeader, CardContent, Button, Badge, Avatar } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
+import { NewAppointmentModal } from '@/src/features/appointments';
 import { supabase } from '@/src/shared/lib/supabase';
 import { formatDate, formatTime, cn } from '@/src/shared/utils';
 import { APPOINTMENT_STATUSES } from '@/src/shared/constants';
@@ -80,45 +81,46 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date()); // Select today by default
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
+  const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
   // Fetch appointments for current month
-  useEffect(() => {
-    async function fetchAppointments() {
-      // Wait for tenant to be loaded
-      if (!tenant?.id) {
-        console.log('🟡 Calendar: No tenant yet, waiting...');
-        return;
-      }
-
-      console.log('🟢 Calendar: Fetching appointments for tenant:', tenant.id);
-
-      try {
-        const startOfMonth = new Date(year, month, 1);
-        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
-
-        const { data, error } = await supabase
-          .from('appointments')
-          .select('*, leads(full_name, phone)')
-          .eq('tenant_id', tenant.id)
-          .gte('scheduled_at', startOfMonth.toISOString())
-          .lte('scheduled_at', endOfMonth.toISOString())
-          .order('scheduled_at');
-
-        if (error) throw error;
-        console.log('🟢 Calendar: Fetched', data?.length, 'appointments');
-        setAppointments(data as Appointment[]);
-      } catch (error) {
-        console.error('Error fetching appointments:', error);
-      } finally {
-        setLoading(false);
-      }
+  const fetchAppointments = useCallback(async () => {
+    // Wait for tenant to be loaded
+    if (!tenant?.id) {
+      console.log('🟡 Calendar: No tenant yet, waiting...');
+      return;
     }
 
-    fetchAppointments();
+    console.log('🟢 Calendar: Fetching appointments for tenant:', tenant.id);
+
+    try {
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*, leads(full_name, phone)')
+        .eq('tenant_id', tenant.id)
+        .gte('scheduled_at', startOfMonth.toISOString())
+        .lte('scheduled_at', endOfMonth.toISOString())
+        .order('scheduled_at');
+
+      if (error) throw error;
+      console.log('🟢 Calendar: Fetched', data?.length, 'appointments');
+      setAppointments(data as Appointment[]);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [year, month, tenant?.id]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
 
   // Get appointments by date
   const appointmentsByDate = useMemo(() => {
@@ -170,7 +172,7 @@ export default function CalendarPage() {
       title="Calendario"
       subtitle={`${MONTHS[month]} ${year}`}
       actions={
-        <Button leftIcon={icons.plus}>
+        <Button leftIcon={icons.plus} onClick={() => setShowNewAppointmentModal(true)}>
           Nueva Cita
         </Button>
       }
@@ -280,7 +282,7 @@ export default function CalendarPage() {
               ) : selectedDateAppointments.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <p className="mb-4">No hay citas para este día</p>
-                  <Button variant="outline" size="sm" leftIcon={icons.plus}>
+                  <Button variant="outline" size="sm" leftIcon={icons.plus} onClick={() => setShowNewAppointmentModal(true)}>
                     Agendar Cita
                   </Button>
                 </div>
@@ -332,6 +334,14 @@ export default function CalendarPage() {
           </Card>
         </div>
       </div>
+
+      {/* New Appointment Modal */}
+      <NewAppointmentModal
+        isOpen={showNewAppointmentModal}
+        onClose={() => setShowNewAppointmentModal(false)}
+        onSuccess={fetchAppointments}
+        preselectedDate={selectedDate || undefined}
+      />
     </PageWrapper>
   );
 }
