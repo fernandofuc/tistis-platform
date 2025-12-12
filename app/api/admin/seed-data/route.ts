@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Verify tenant exists
+    // Verify tenant exists and get a branch
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .select('id, name')
@@ -51,76 +51,92 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    // Delete existing sample data first
+    // Get a branch for this tenant (required for appointments)
+    const { data: branches } = await supabase
+      .from('branches')
+      .select('id')
+      .eq('tenant_id', tenant_id)
+      .limit(1);
+
+    const branchId = branches?.[0]?.id;
+
+    if (!branchId) {
+      return NextResponse.json({
+        error: 'No branch found for tenant. Please create a branch first.',
+        hint: 'Run the setup-user endpoint first to ensure branches are created.'
+      }, { status: 400 });
+    }
+
+    // Delete existing sample data first (order matters due to FK constraints)
+    await supabase.from('conversations').delete().eq('tenant_id', tenant_id);
     await supabase.from('appointments').delete().eq('tenant_id', tenant_id);
     await supabase.from('leads').delete().eq('tenant_id', tenant_id);
-    await supabase.from('conversations').delete().eq('tenant_id', tenant_id);
 
     console.log('🗑️ [SeedData] Cleared existing data');
 
-    // Create leads
+    // Create leads (usando columnas correctas según schema 003_esva_schema_v2.sql)
     const leadsData = [
       {
         tenant_id,
-        name: 'María García López',
+        first_name: 'María',
+        last_name: 'García López',
         phone: '+52 55 1234 5678',
         email: 'maria.garcia@email.com',
-        classification: 'hot',
-        status: 'qualified',
+        classification: 'HOT',
+        status: 'QUALIFIED',
         score: 92,
         source: 'whatsapp',
-        notes: 'Interesada en tratamiento completo. Ya agendó valoración.',
       },
       {
         tenant_id,
-        name: 'Juan Carlos Pérez',
+        first_name: 'Juan Carlos',
+        last_name: 'Pérez',
         phone: '+52 55 2345 6789',
         email: 'juancarlos@email.com',
-        classification: 'hot',
-        status: 'appointment_scheduled',
+        classification: 'HOT',
+        status: 'APPOINTMENT_BOOKED',
         score: 88,
         source: 'whatsapp',
-        notes: 'Referido por María. Viene mañana.',
       },
       {
         tenant_id,
-        name: 'Ana Sofía Rodríguez',
+        first_name: 'Ana Sofía',
+        last_name: 'Rodríguez',
         phone: '+52 55 3456 7890',
-        classification: 'warm',
-        status: 'contacted',
+        classification: 'WARM',
+        status: 'CONTACTED',
         score: 65,
         source: 'instagram',
-        notes: 'Preguntó por precios de limpieza.',
       },
       {
         tenant_id,
-        name: 'Roberto Hernández',
+        first_name: 'Roberto',
+        last_name: 'Hernández',
         phone: '+52 55 4567 8901',
-        classification: 'warm',
-        status: 'new',
+        classification: 'WARM',
+        status: 'NEW',
         score: 55,
         source: 'whatsapp',
-        notes: 'Primer mensaje hace 2 horas.',
       },
       {
         tenant_id,
-        name: 'Laura Martínez',
+        first_name: 'Laura',
+        last_name: 'Martínez',
         phone: '+52 55 5678 9012',
-        classification: 'cold',
-        status: 'contacted',
+        classification: 'COLD',
+        status: 'CONTACTED',
         score: 30,
         source: 'website',
-        notes: 'Solo pidió información general.',
       },
       {
         tenant_id,
-        name: 'Carlos Sánchez',
+        first_name: 'Carlos',
+        last_name: 'Sánchez',
         phone: '+52 55 6789 0123',
-        classification: 'hot',
-        status: 'qualified',
+        classification: 'HOT',
+        status: 'QUALIFIED',
         score: 85,
         source: 'referral',
-        notes: 'Quiere presupuesto urgente para implantes.',
       },
     ];
 
@@ -136,83 +152,91 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ [SeedData] Created', leads?.length, 'leads');
 
-    // Create appointments for today
+    // Create appointments for today (usando schema 012_CONSOLIDATED_SCHEMA.sql)
     const today = new Date();
-    const appointmentsData = leads?.slice(0, 4).map((lead, index) => {
-      const scheduledAt = new Date(today);
-      scheduledAt.setHours(9 + index * 2, 0, 0, 0);
+    let appointmentsCreated = 0;
 
-      return {
-        tenant_id,
-        lead_id: lead.id,
-        scheduled_at: scheduledAt.toISOString(),
-        duration_minutes: index === 0 ? 60 : 30,
-        service_name: ['Valoración Inicial', 'Limpieza Dental', 'Consulta General', 'Revisión'][index],
-        status: index < 2 ? 'confirmed' : 'scheduled',
-        notes: index === 0 ? 'Primera cita - evaluar tratamiento' : undefined,
-      };
-    }) || [];
+    if (leads && leads.length > 0) {
+      const appointmentsData = leads.slice(0, 4).map((lead, index) => {
+        const scheduledAt = new Date(today);
+        scheduledAt.setHours(9 + index * 2, 0, 0, 0);
 
-    const { data: appointments, error: appointmentsError } = await supabase
-      .from('appointments')
-      .insert(appointmentsData)
-      .select();
+        return {
+          tenant_id,
+          branch_id: branchId,
+          lead_id: lead.id,
+          scheduled_at: scheduledAt.toISOString(),
+          duration_minutes: index === 0 ? 60 : 30,
+          status: index < 2 ? 'confirmed' : 'scheduled',
+          notes: index === 0 ? 'Primera cita - evaluar tratamiento' : null,
+        };
+      });
 
-    if (appointmentsError) {
-      console.error('❌ [SeedData] Error creating appointments:', appointmentsError);
-    } else {
-      console.log('✅ [SeedData] Created', appointments?.length, 'appointments');
+      const { data: appointments, error: appointmentsError } = await supabase
+        .from('appointments')
+        .insert(appointmentsData)
+        .select();
+
+      if (appointmentsError) {
+        console.error('❌ [SeedData] Error creating appointments:', appointmentsError);
+        // Continue with conversations even if appointments fail
+      } else {
+        appointmentsCreated = appointments?.length || 0;
+        console.log('✅ [SeedData] Created', appointmentsCreated, 'appointments');
+      }
     }
 
-    // Create conversations
-    const conversationsData = [
-      {
-        tenant_id,
-        lead_id: leads?.[0]?.id,
-        status: 'active',
-        channel: 'whatsapp',
-        last_message_at: new Date().toISOString(),
-        last_message_preview: 'Perfecto, nos vemos mañana entonces',
-        unread_count: 0,
-      },
-      {
-        tenant_id,
-        lead_id: leads?.[1]?.id,
-        status: 'waiting_response',
-        channel: 'whatsapp',
-        last_message_at: new Date(Date.now() - 30 * 60000).toISOString(),
-        last_message_preview: '¿Cuánto cuesta una limpieza?',
-        unread_count: 1,
-      },
-      {
-        tenant_id,
-        lead_id: leads?.[3]?.id,
-        status: 'escalated',
-        channel: 'whatsapp',
-        last_message_at: new Date(Date.now() - 2 * 3600000).toISOString(),
-        last_message_preview: 'Necesito hablar con alguien urgente',
-        unread_count: 3,
-      },
-      {
-        tenant_id,
-        lead_id: leads?.[2]?.id,
-        status: 'active',
-        channel: 'instagram',
-        last_message_at: new Date(Date.now() - 15 * 60000).toISOString(),
-        last_message_preview: 'Gracias por la información',
-        unread_count: 0,
-      },
-    ];
+    // Create conversations (usando schema 012_CONSOLIDATED_SCHEMA.sql)
+    let conversationsCreated = 0;
 
-    const { data: conversations, error: conversationsError } = await supabase
-      .from('conversations')
-      .insert(conversationsData)
-      .select();
+    if (leads && leads.length > 0) {
+      const conversationsData = [
+        {
+          tenant_id,
+          branch_id: branchId,
+          lead_id: leads[0]?.id,
+          status: 'active',
+          channel: 'whatsapp',
+          ai_handling: true,
+        },
+        {
+          tenant_id,
+          branch_id: branchId,
+          lead_id: leads[1]?.id,
+          status: 'waiting_response',
+          channel: 'whatsapp',
+          ai_handling: true,
+        },
+        {
+          tenant_id,
+          branch_id: branchId,
+          lead_id: leads[3]?.id,
+          status: 'escalated',
+          channel: 'whatsapp',
+          ai_handling: false,
+          escalation_reason: 'Cliente solicita hablar con humano',
+        },
+        {
+          tenant_id,
+          branch_id: branchId,
+          lead_id: leads[2]?.id,
+          status: 'active',
+          channel: 'instagram',
+          ai_handling: true,
+        },
+      ].filter(c => c.lead_id); // Only include if lead exists
 
-    if (conversationsError) {
-      console.error('❌ [SeedData] Error creating conversations:', conversationsError);
-    } else {
-      console.log('✅ [SeedData] Created', conversations?.length, 'conversations');
+      const { data: conversations, error: conversationsError } = await supabase
+        .from('conversations')
+        .insert(conversationsData)
+        .select();
+
+      if (conversationsError) {
+        console.error('❌ [SeedData] Error creating conversations:', conversationsError);
+      } else {
+        conversationsCreated = conversations?.length || 0;
+        console.log('✅ [SeedData] Created', conversationsCreated, 'conversations');
+      }
     }
 
     return NextResponse.json({
@@ -220,8 +244,8 @@ export async function POST(req: NextRequest) {
       message: 'Sample data created successfully',
       data: {
         leads: leads?.length || 0,
-        appointments: appointments?.length || 0,
-        conversations: conversations?.length || 0,
+        appointments: appointmentsCreated,
+        conversations: conversationsCreated,
       },
       next_steps: [
         '1. Refresca el dashboard',

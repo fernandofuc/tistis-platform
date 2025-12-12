@@ -126,7 +126,7 @@ export default function DashboardPage() {
 
         const { data: appointmentsData } = await supabase
           .from('appointments')
-          .select('*, leads(name, phone)')
+          .select('*, leads(full_name, phone)')
           .eq('tenant_id', tenant.id)
           .gte('scheduled_at', startOfDay)
           .lte('scheduled_at', endOfDay)
@@ -261,7 +261,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">
-                            {(apt as any).leads?.name || 'Sin nombre'}
+                            {(apt as any).leads?.full_name || 'Sin nombre'}
                           </p>
                           <p className="text-xs text-gray-500">
                             {formatTime(apt.scheduled_at)} - {apt.duration_minutes} min
@@ -324,10 +324,10 @@ export default function DashboardPage() {
                       key={lead.id}
                       className="flex items-center gap-4 py-3 hover:bg-gray-50 px-2 -mx-2 rounded-lg transition-colors cursor-pointer"
                     >
-                      <Avatar name={lead.name || lead.phone} size="md" />
+                      <Avatar name={(lead as any).full_name || lead.phone} size="md" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {lead.name || 'Sin nombre'}
+                          {(lead as any).full_name || 'Sin nombre'}
                         </p>
                         <p className="text-xs text-gray-500">{lead.phone}</p>
                       </div>
