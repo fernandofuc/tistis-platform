@@ -40,13 +40,20 @@ function LoginContent() {
   // Check if already logged in
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        router.push('/dashboard');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('🔍 Login page - session check:', !!session);
+        if (session) {
+          console.log('✅ Already logged in, redirecting to dashboard...');
+          // Use window.location for hard redirect to avoid Next.js caching
+          window.location.href = '/dashboard';
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
       }
     };
     checkSession();
-  }, [router]);
+  }, []);
 
   const onSubmit = async (data: LoginFormData) => {
     setError(null);
@@ -69,7 +76,9 @@ function LoginContent() {
       }
 
       if (authData.session) {
-        router.push('/dashboard');
+        console.log('✅ Login successful, redirecting to dashboard...');
+        // Use window.location for hard redirect
+        window.location.href = '/dashboard';
       }
     } catch (err) {
       setError('Error al iniciar sesión. Intenta de nuevo.');

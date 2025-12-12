@@ -318,7 +318,7 @@ function WelcomeContent() {
           <Button
             size="xl"
             variant="primary"
-            onClick={() => router.push('/auth/login?onboarding=complete')}
+            onClick={() => window.location.href = '/auth/login?onboarding=complete'}
             disabled={!status.ready}
             className={`min-w-[280px] transition-all ${
               status.ready
