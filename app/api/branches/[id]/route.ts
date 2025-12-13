@@ -258,26 +258,39 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (migrateData && hqBranch.id !== branchId) {
       console.log(`📦 Migrating data from branch ${branchId} to HQ ${hqBranch.id}...`);
 
-      // Migrate leads
+      // Count items before migration
       const { count: leadsCount } = await supabaseAdmin
         .from('leads')
-        .update({ branch_id: hqBranch.id, updated_at: new Date().toISOString() })
-        .eq('branch_id', branchId)
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
 
-      // Migrate appointments
       const { count: appointmentsCount } = await supabaseAdmin
         .from('appointments')
-        .update({ branch_id: hqBranch.id, updated_at: new Date().toISOString() })
-        .eq('branch_id', branchId)
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
 
-      // Migrate conversations
       const { count: conversationsCount } = await supabaseAdmin
         .from('conversations')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
+
+      // Migrate leads
+      await supabaseAdmin
+        .from('leads')
         .update({ branch_id: hqBranch.id, updated_at: new Date().toISOString() })
-        .eq('branch_id', branchId)
-        .select('*', { count: 'exact', head: true });
+        .eq('branch_id', branchId);
+
+      // Migrate appointments
+      await supabaseAdmin
+        .from('appointments')
+        .update({ branch_id: hqBranch.id, updated_at: new Date().toISOString() })
+        .eq('branch_id', branchId);
+
+      // Migrate conversations
+      await supabaseAdmin
+        .from('conversations')
+        .update({ branch_id: hqBranch.id, updated_at: new Date().toISOString() })
+        .eq('branch_id', branchId);
 
       console.log(`✅ Migrated: ${leadsCount || 0} leads, ${appointmentsCount || 0} appointments, ${conversationsCount || 0} conversations`);
     }
