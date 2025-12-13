@@ -15,3 +15,4 @@ export {
   type FileCategory,
 } from './FileUpload';
 export { Modal, type ModalProps } from './Modal';
+export { BranchSelector } from './BranchSelector';

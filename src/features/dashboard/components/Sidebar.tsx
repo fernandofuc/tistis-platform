@@ -12,6 +12,7 @@ import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
 import { useFeatureFlags, MODULE_FLAGS } from '@/src/hooks/useFeatureFlags';
 import { useTenant } from '@/src/hooks/useTenant';
+import { BranchSelector } from '@/shared/components/ui';
 import type { SidebarProps, NavItem } from '../types';
 
 // ======================
@@ -247,6 +248,11 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
           </span>
         </div>
       )}
+
+      {/* Branch Selector - For multi-branch tenants */}
+      <div className="px-4 py-3 border-b border-gray-100">
+        <BranchSelector collapsed={collapsed} />
+      </div>
 
       {/* Navigation */}
       <nav className="p-4 space-y-1">
