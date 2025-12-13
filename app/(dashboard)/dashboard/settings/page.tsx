@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardContent, Button, Input, Badge, Avatar } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
+import { ChannelConnections, AIConfiguration } from '@/src/features/settings';
 import { cn } from '@/src/shared/utils';
 
 // ======================
@@ -34,14 +35,9 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   ),
-  whatsapp: (
+  channels: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-    </svg>
-  ),
-  calendar: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
     </svg>
   ),
   lock: (
@@ -54,14 +50,14 @@ const icons = {
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'clinic' | 'notifications' | 'ai' | 'integrations' | 'security';
+type SettingsTab = 'profile' | 'clinic' | 'notifications' | 'channels' | 'ai' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
   { key: 'clinic', label: 'Clínica', icon: icons.building },
-  { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
+  { key: 'channels', label: 'Canales', icon: icons.channels },
   { key: 'ai', label: 'AI Agent', icon: icons.ai },
-  { key: 'integrations', label: 'Integraciones', icon: icons.whatsapp },
+  { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
   { key: 'security', label: 'Seguridad', icon: icons.lock },
 ];
 
@@ -212,6 +208,12 @@ export default function SettingsPage() {
             </Card>
           )}
 
+          {/* Channels Tab - NEW */}
+          {activeTab === 'channels' && <ChannelConnections />}
+
+          {/* AI Agent Tab - NEW */}
+          {activeTab === 'ai' && <AIConfiguration />}
+
           {/* Notifications Tab */}
           {activeTab === 'notifications' && (
             <Card variant="bordered">
@@ -248,140 +250,6 @@ export default function SettingsPage() {
             </Card>
           )}
 
-          {/* AI Agent Tab */}
-          {activeTab === 'ai' && (
-            <Card variant="bordered">
-              <CardHeader title="AI Agent" subtitle="Configuración del asistente virtual" />
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="p-4 bg-purple-50 rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
-                        {icons.ai}
-                      </div>
-                      <div>
-                        <p className="font-medium text-purple-900">AI Agent Activo</p>
-                        <p className="text-sm text-purple-700">Respondiendo automáticamente en WhatsApp</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Personalidad
-                      </label>
-                      <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="professional_warm">Profesional y Cálido</option>
-                        <option value="professional">Profesional</option>
-                        <option value="friendly">Amigable</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Longitud Máxima de Mensajes
-                      </label>
-                      <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="300">Corto (300 caracteres)</option>
-                        <option value="500">Medio (500 caracteres)</option>
-                        <option value="800">Largo (800 caracteres)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-gray-100">
-                    <h4 className="font-medium text-gray-900 mb-3">Reglas de Escalamiento</h4>
-                    <div className="space-y-3">
-                      {[
-                        'Cuando el paciente mencione dolor o emergencia',
-                        'Cuando el paciente solicite hablar con un humano',
-                        'Después de 10 mensajes sin agendar cita',
-                        'Lead caliente listo para agendar',
-                      ].map((rule, i) => (
-                        <label key={i} className="flex items-center gap-3">
-                          <input type="checkbox" defaultChecked className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                          <span className="text-sm text-gray-700">{rule}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 flex justify-end">
-                    <Button onClick={handleSave} isLoading={saving}>
-                      Guardar Cambios
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Integrations Tab */}
-          {activeTab === 'integrations' && (
-            <Card variant="bordered">
-              <CardHeader title="Integraciones" subtitle="Conecta tus herramientas" />
-              <CardContent>
-                <div className="space-y-4">
-                  {/* WhatsApp */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
-                          {icons.whatsapp}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">WhatsApp Business API</p>
-                          <p className="text-sm text-gray-500">Conecta tu número de WhatsApp Business</p>
-                        </div>
-                      </div>
-                      <Badge variant="warning">Pendiente</Badge>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-3">
-                      Se configurará al final del setup
-                    </p>
-                  </div>
-
-                  {/* n8n */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600">
-                          <span className="text-lg font-bold">n8n</span>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">n8n Workflows</p>
-                          <p className="text-sm text-gray-500">Automatización de procesos</p>
-                        </div>
-                      </div>
-                      <Badge variant="warning">Pendiente</Badge>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-3">
-                      Se configurará al final del setup
-                    </p>
-                  </div>
-
-                  {/* Google Calendar */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
-                          {icons.calendar}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">Google Calendar</p>
-                          <p className="text-sm text-gray-500">Sincroniza citas con tu calendario</p>
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Conectar
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Security Tab */}
           {activeTab === 'security' && (
             <Card variant="bordered">
@@ -394,17 +262,17 @@ export default function SettingsPage() {
                       <Input
                         label="Contraseña Actual"
                         type="password"
-                        placeholder="••••••••"
+                        placeholder="********"
                       />
                       <Input
                         label="Nueva Contraseña"
                         type="password"
-                        placeholder="••••••••"
+                        placeholder="********"
                       />
                       <Input
                         label="Confirmar Nueva Contraseña"
                         type="password"
-                        placeholder="••••••••"
+                        placeholder="********"
                       />
                       <Button onClick={handleSave} isLoading={saving}>
                         Actualizar Contraseña
@@ -418,7 +286,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium text-gray-900">Esta sesión</p>
-                          <p className="text-sm text-gray-500">Navegador web • Activa ahora</p>
+                          <p className="text-sm text-gray-500">Navegador web - Activa ahora</p>
                         </div>
                         <Badge variant="success">Actual</Badge>
                       </div>

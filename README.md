@@ -12,13 +12,14 @@ Sistema completo de gestión dental con IA, WhatsApp Business API y automatizaci
 
 TIS TIS Platform es una solución SaaS multi-tenant para gestión de clínicas dentales que integra:
 
-- Gestión de leads con scoring automático
-- WhatsApp Business API para comunicación
+- Gestión de leads con scoring automático basado en IA
+- Sistema de mensajería multi-canal (WhatsApp, Instagram, Facebook, TikTok)
+- IA conversacional con Claude 3.5 Sonnet para respuestas automáticas
 - Sistema de citas y calendario
 - Historiales clínicos con odontograma
 - Cotizaciones y planes de pago
 - Notificaciones en tiempo real
-- Integración con IA (Claude, n8n workflows)
+- Cola de trabajos asíncronos para procesamiento de mensajes
 
 ## 🚀 Quick Start
 
@@ -141,14 +142,28 @@ Ver detalles completos en `/supabase/migrations/MIGRATION_NOTES.md`
 | GET/POST | `/api/appointments` | Gestión de citas | ✅ |
 | GET/POST | `/api/patients` | Gestión de pacientes | ✅ |
 | GET/PATCH/DELETE | `/api/patients/[id]` | CRUD de paciente | ✅ |
-| GET/POST | `/api/conversations` | Conversaciones WhatsApp | ✅ |
-| POST | `/api/webhook` | Webhook WhatsApp + n8n | ⚠️ |
+| GET/POST | `/api/conversations` | Conversaciones multi-canal | ✅ |
+| POST | `/api/webhook/whatsapp/[tenantSlug]` | Webhook WhatsApp | ⚠️ |
+| POST | `/api/webhook/instagram/[tenantSlug]` | Webhook Instagram | ⚠️ |
+| POST | `/api/webhook/facebook/[tenantSlug]` | Webhook Facebook | ⚠️ |
+| POST | `/api/webhook/tiktok/[tenantSlug]` | Webhook TikTok | ⚠️ |
+| POST | `/api/jobs/process` | Procesador de cola de trabajos | ⚠️ |
 
 Todas las rutas validan:
 - Autenticación vía header `Authorization`
 - Pertenencia al tenant correcto
 - Formato de UUID
 - Validaciones de datos específicas
+
+### Sistema de Webhooks Multi-Canal
+
+Los webhooks multi-tenant soportan:
+- **WhatsApp Business Cloud API** - Mensajes y estados
+- **Instagram Direct Messages** - Mensajes vía Meta Graph API
+- **Facebook Messenger** - Mensajes vía Meta Graph API
+- **TikTok Direct Messages** - Mensajes vía TikTok Business API
+
+Cada webhook verifica firmas criptográficas y procesa mensajes de forma asíncrona mediante cola de trabajos.
 
 ## 🔐 Seguridad
 
@@ -201,9 +216,22 @@ Todas las rutas validan:
 ## 📚 Documentación
 
 - `STATUS_PROYECTO.md` - Estado completo del proyecto
-- `INTEGRATION_GUIDE.md` - Guía de integraciones (WhatsApp, n8n)
-- `supabase/migrations/MIGRATION_NOTES.md` - **NUEVO** - Guía completa de migración 011
+- `docs/INTEGRATION_GUIDE.md` - Guía de integraciones (WhatsApp, n8n)
+- `docs/MULTI_CHANNEL_AI_SYSTEM.md` - **NUEVO** - Sistema de AI multi-canal completo
+- `supabase/migrations/MIGRATION_NOTES.md` - Guía completa de migración 011
 - `.claude/docs/` - Documentación técnica adicional
+
+### Documentación Técnica AI Multi-Canal
+
+El archivo `docs/MULTI_CHANNEL_AI_SYSTEM.md` contiene:
+- Arquitectura completa del sistema de mensajería
+- Especificación de webhooks para cada plataforma
+- Sistema de cola de trabajos (jobs queue)
+- Integración con Claude AI para respuestas automáticas
+- Lead scoring automático basado en señales del AI
+- Configuración de AI por tenant
+- Variables de entorno requeridas
+- Flujo completo de procesamiento de mensajes
 
 ## 🧪 Testing
 
