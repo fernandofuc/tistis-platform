@@ -20,6 +20,17 @@ export interface AuthState {
 }
 
 // ======================
+// UPDATE STAFF DATA
+// ======================
+export interface UpdateStaffData {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  whatsapp_number?: string;
+  avatar_url?: string;
+}
+
+// ======================
 // AUTH CONTEXT
 // ======================
 export interface AuthContextValue extends AuthState {
@@ -32,6 +43,7 @@ export interface AuthContextValue extends AuthState {
 
   // Staff methods
   refetchStaff: () => Promise<void>;
+  updateStaff: (data: UpdateStaffData) => Promise<{ success: boolean; error?: string }>;
 
   // Computed
   isAuthenticated: boolean;

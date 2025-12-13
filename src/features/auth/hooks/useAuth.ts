@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import type { Staff, Branch, Tenant } from '@/shared/types';
-import type { AuthState, SignUpData, AuthResult } from '../types';
+import type { AuthState, SignUpData, AuthResult, UpdateStaffData } from '../types';
 import * as authService from '../services/authService';
 
 // ======================
@@ -220,6 +220,27 @@ export function useAuth() {
   }, [state.user?.email]);
 
   // ======================
+  // UPDATE STAFF PROFILE
+  // ======================
+  const updateStaff = useCallback(
+    async (data: UpdateStaffData): Promise<{ success: boolean; error?: string }> => {
+      if (!state.staff?.id) {
+        return { success: false, error: 'No hay perfil de staff' };
+      }
+
+      const result = await authService.updateStaff(state.staff.id, data);
+
+      if (result.success && result.staff) {
+        // Update local state with new staff data
+        setState((prev) => ({ ...prev, staff: result.staff! }));
+      }
+
+      return { success: result.success, error: result.error };
+    },
+    [state.staff?.id]
+  );
+
+  // ======================
   // COMPUTED VALUES
   // ======================
   const isAuthenticated = useMemo(() => !!state.session, [state.session]);
@@ -255,6 +276,7 @@ export function useAuth() {
     resetPassword,
     updatePassword,
     refetchStaff,
+    updateStaff,
 
     // Computed
     isAuthenticated,

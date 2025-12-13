@@ -4,12 +4,22 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent, Button, Input, Badge, Avatar } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { ChannelConnections, AIConfiguration } from '@/src/features/settings';
 import { cn } from '@/src/shared/utils';
+
+// ======================
+// PROFILE FORM STATE
+// ======================
+interface ProfileFormData {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  whatsapp_number: string;
+}
 
 // ======================
 // ICONS
@@ -61,16 +71,90 @@ const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 // ======================
+// ROLE LABELS
+// ======================
+const roleLabels: Record<string, string> = {
+  owner: 'Propietario',
+  admin: 'Administrador',
+  manager: 'Gerente',
+  specialist: 'Especialista',
+  dentist: 'Dentista',
+  receptionist: 'Recepcionista',
+  assistant: 'Asistente',
+  staff: 'Staff',
+};
+
+// ======================
 // COMPONENT
 // ======================
 export default function SettingsPage() {
-  const { staff } = useAuthContext();
+  const { staff, updateStaff } = useAuthContext();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Profile form state - controlled inputs
+  const [profileForm, setProfileForm] = useState<ProfileFormData>({
+    first_name: '',
+    last_name: '',
+    phone: '',
+    whatsapp_number: '',
+  });
+
+  // Initialize form when staff data loads
+  useEffect(() => {
+    if (staff) {
+      setProfileForm({
+        first_name: staff.first_name || '',
+        last_name: staff.last_name || '',
+        phone: staff.phone || '',
+        whatsapp_number: staff.whatsapp_number || '',
+      });
+    }
+  }, [staff]);
+
+  // Handle profile form changes
+  const handleProfileChange = (field: keyof ProfileFormData, value: string) => {
+    setProfileForm(prev => ({ ...prev, [field]: value }));
+    setSaveSuccess(false);
+    setSaveError(null);
+  };
+
+  // Check if form has changes
+  const hasChanges = staff && (
+    profileForm.first_name !== (staff.first_name || '') ||
+    profileForm.last_name !== (staff.last_name || '') ||
+    profileForm.phone !== (staff.phone || '') ||
+    profileForm.whatsapp_number !== (staff.whatsapp_number || '')
+  );
+
+  // Save profile changes
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    const result = await updateStaff({
+      first_name: profileForm.first_name || undefined,
+      last_name: profileForm.last_name || undefined,
+      phone: profileForm.phone || undefined,
+      whatsapp_number: profileForm.whatsapp_number || undefined,
+    });
+
+    setSaving(false);
+
+    if (result.success) {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } else {
+      setSaveError(result.error || 'Error al guardar');
+    }
+  };
+
+  // Generic save for other tabs (placeholder)
   const handleSave = async () => {
     setSaving(true);
-    // Simulate save
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setSaving(false);
   };
@@ -112,49 +196,94 @@ export default function SettingsPage() {
             <Card variant="bordered">
               <CardHeader title="Mi Perfil" subtitle="Actualiza tu información personal" />
               <CardContent>
+                {/* Profile Header */}
                 <div className="flex items-center gap-6 mb-6 pb-6 border-b border-gray-100">
-                  <Avatar name={staff?.display_name || 'Usuario'} size="xl" />
+                  <Avatar
+                    name={staff?.display_name || 'Usuario'}
+                    src={staff?.avatar_url || undefined}
+                    size="xl"
+                  />
                   <div>
-                    <h3 className="font-medium text-gray-900">{staff?.display_name}</h3>
+                    <h3 className="font-semibold text-gray-900 text-lg">
+                      {staff?.display_name || 'Sin nombre'}
+                    </h3>
                     <p className="text-sm text-gray-500">{staff?.email}</p>
-                    <Badge variant="info" size="sm" className="mt-2">
-                      {staff?.role_title || staff?.role}
-                    </Badge>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="info" size="sm">
+                        {staff?.role_title || roleLabels[staff?.role || ''] || staff?.role}
+                      </Badge>
+                      {staff?.is_active !== false && (
+                        <Badge variant="success" size="sm">Activo</Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
 
+                {/* Success/Error Messages */}
+                {saveSuccess && (
+                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium">Perfil actualizado correctamente</span>
+                  </div>
+                )}
+                {saveError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium">{saveError}</span>
+                  </div>
+                )}
+
+                {/* Form Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Nombre"
-                    defaultValue={staff?.first_name}
+                    value={profileForm.first_name}
+                    onChange={(e) => handleProfileChange('first_name', e.target.value)}
                     placeholder="Tu nombre"
                   />
                   <Input
                     label="Apellido"
-                    defaultValue={staff?.last_name}
+                    value={profileForm.last_name}
+                    onChange={(e) => handleProfileChange('last_name', e.target.value)}
                     placeholder="Tu apellido"
                   />
                   <Input
                     label="Email"
                     type="email"
-                    defaultValue={staff?.email}
+                    value={staff?.email || ''}
                     placeholder="tu@email.com"
                     disabled
+                    helperText="El email no se puede cambiar"
                   />
                   <Input
                     label="Teléfono"
-                    defaultValue={staff?.phone || ''}
+                    value={profileForm.phone}
+                    onChange={(e) => handleProfileChange('phone', e.target.value)}
                     placeholder="+52 (XXX) XXX-XXXX"
                   />
                   <Input
                     label="WhatsApp"
-                    defaultValue={staff?.whatsapp_number || ''}
+                    value={profileForm.whatsapp_number}
+                    onChange={(e) => handleProfileChange('whatsapp_number', e.target.value)}
                     placeholder="+52 (XXX) XXX-XXXX"
+                    helperText="Número para recibir notificaciones"
                   />
                 </div>
 
-                <div className="mt-6 flex justify-end">
-                  <Button onClick={handleSave} isLoading={saving}>
+                {/* Actions */}
+                <div className="mt-6 flex items-center justify-between">
+                  <p className="text-sm text-gray-500">
+                    {hasChanges ? 'Tienes cambios sin guardar' : 'Todos los cambios guardados'}
+                  </p>
+                  <Button
+                    onClick={handleSaveProfile}
+                    isLoading={saving}
+                    disabled={!hasChanges}
+                  >
                     Guardar Cambios
                   </Button>
                 </div>

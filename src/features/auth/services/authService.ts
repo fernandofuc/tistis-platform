@@ -257,3 +257,55 @@ export function onAuthStateChange(callback: (session: unknown) => void) {
 
   return subscription;
 }
+
+// ======================
+// UPDATE STAFF PROFILE
+// ======================
+export interface UpdateStaffData {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  whatsapp_number?: string;
+  avatar_url?: string;
+}
+
+export async function updateStaff(staffId: string, data: UpdateStaffData): Promise<{ success: boolean; error?: string; staff?: Staff }> {
+  try {
+    // Get tenant_id from user metadata for security
+    const { data: { user } } = await supabase.auth.getUser();
+    const tenantId = user?.user_metadata?.tenant_id;
+
+    if (!tenantId) {
+      console.log('🟡 No tenant_id in user metadata');
+      return { success: false, error: 'No se encontró el tenant' };
+    }
+
+    // Build display_name from first_name and last_name
+    const updateData: Record<string, unknown> = { ...data };
+    if (data.first_name || data.last_name) {
+      const firstName = data.first_name || '';
+      const lastName = data.last_name || '';
+      updateData.display_name = `${firstName} ${lastName}`.trim();
+    }
+    updateData.updated_at = new Date().toISOString();
+
+    const { data: updatedStaff, error } = await supabase
+      .from('staff')
+      .update(updateData)
+      .eq('id', staffId)
+      .eq('tenant_id', tenantId) // Security: ensure same tenant
+      .select()
+      .single();
+
+    if (error) {
+      console.error('🔴 Update staff error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    console.log('🟢 Staff updated:', updatedStaff.display_name);
+    return { success: true, staff: updatedStaff as Staff };
+  } catch (err) {
+    console.error('🔴 Update staff exception:', err);
+    return { success: false, error: 'Error inesperado al actualizar perfil' };
+  }
+}
