@@ -1,5 +1,5 @@
 // =====================================================
-// TIS TIS PLATFORM - Webhook API Route
+// TIS TIS PLATFORM - Webhook API Route (Multi-Tenant)
 // Prepared for WhatsApp Business API & n8n Integration
 // =====================================================
 
@@ -8,8 +8,16 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
 
-const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'tistis_verify_token';
+
+// ======================
+// TYPES
+// ======================
+interface TenantContext {
+  tenant_id: string;
+  branch_id: string | null;
+  ai_enabled: boolean;
+}
 
 // ======================
 // GET - WhatsApp Webhook Verification
@@ -89,7 +97,35 @@ function identifyWebhookSource(body: Record<string, unknown>, headers: Headers):
 }
 
 // ======================
-// HANDLER: WhatsApp Webhook
+// HELPER: Get Tenant Context from phone_number_id (Multi-tenant)
+// ======================
+async function getTenantContext(
+  supabase: ReturnType<typeof createServerClient>,
+  phoneNumberId: string
+): Promise<TenantContext | null> {
+  // Find channel_connection by phone_number_id
+  const { data: connection } = await supabase
+    .from('channel_connections')
+    .select('tenant_id, branch_id, ai_enabled')
+    .eq('whatsapp_phone_number_id', phoneNumberId)
+    .eq('channel', 'whatsapp')
+    .eq('status', 'connected')
+    .single();
+
+  if (!connection) {
+    console.error(`[WhatsApp] No connection found for phone_number_id: ${phoneNumberId}`);
+    return null;
+  }
+
+  return {
+    tenant_id: connection.tenant_id,
+    branch_id: connection.branch_id,
+    ai_enabled: connection.ai_enabled ?? true,
+  };
+}
+
+// ======================
+// HANDLER: WhatsApp Webhook (Multi-tenant)
 // Ready for WhatsApp Business API integration
 // ======================
 async function handleWhatsAppWebhook(
@@ -106,11 +142,23 @@ async function handleWhatsAppWebhook(
       for (const change of changes) {
         if (change.field === 'messages') {
           const value = change.value as Record<string, unknown>;
+          const metadata = value.metadata as Record<string, unknown>;
+          const phoneNumberId = metadata?.phone_number_id as string;
           const messages = (value.messages as Record<string, unknown>[]) || [];
           const contacts = (value.contacts as Record<string, unknown>[]) || [];
 
+          // Get tenant context from phone_number_id
+          const context = phoneNumberId
+            ? await getTenantContext(supabase, phoneNumberId)
+            : null;
+
+          if (!context) {
+            console.error('[WhatsApp Webhook] Could not determine tenant context');
+            continue;
+          }
+
           for (const message of messages) {
-            await processIncomingWhatsAppMessage(supabase, message, contacts);
+            await processIncomingWhatsAppMessage(supabase, context, message, contacts);
           }
         }
       }
@@ -127,10 +175,11 @@ async function handleWhatsAppWebhook(
 }
 
 // ======================
-// PROCESS: Incoming WhatsApp Message
+// PROCESS: Incoming WhatsApp Message (Multi-tenant)
 // ======================
 async function processIncomingWhatsAppMessage(
   supabase: ReturnType<typeof createServerClient>,
+  context: TenantContext,
   message: Record<string, unknown>,
   contacts: Record<string, unknown>[]
 ): Promise<void> {
@@ -144,11 +193,11 @@ async function processIncomingWhatsAppMessage(
     normalizedPhone = `+${normalizedPhone}`;
   }
 
-  // Find or create lead
-  let lead = await findOrCreateLead(supabase, normalizedPhone, contacts);
+  // Find or create lead with tenant and branch context
+  const lead = await findOrCreateLead(supabase, context.tenant_id, context.branch_id, normalizedPhone, contacts);
 
-  // Find or create conversation
-  const conversation = await findOrCreateConversation(supabase, lead.id);
+  // Find or create conversation with tenant and branch context
+  const conversation = await findOrCreateConversation(supabase, context.tenant_id, context.branch_id, lead.id);
 
   // Extract message content
   let content = '';
@@ -206,10 +255,12 @@ async function processIncomingWhatsAppMessage(
 }
 
 // ======================
-// HELPER: Find or Create Lead
+// HELPER: Find or Create Lead (Multi-tenant)
 // ======================
 async function findOrCreateLead(
   supabase: ReturnType<typeof createServerClient>,
+  tenantId: string,
+  branchId: string | null,
   phone: string,
   contacts: Record<string, unknown>[]
 ): Promise<{ id: string; name: string }> {
@@ -217,7 +268,7 @@ async function findOrCreateLead(
   const { data: existingLead } = await supabase
     .from('leads')
     .select('id, name')
-    .eq('tenant_id', ESVA_TENANT_ID)
+    .eq('tenant_id', tenantId)
     .eq('phone_normalized', phone)
     .single();
 
@@ -230,11 +281,12 @@ async function findOrCreateLead(
   const profile = contact?.profile as Record<string, unknown> | undefined;
   const name = (profile?.name as string) || 'Unknown';
 
-  // Create new lead
+  // Create new lead with branch_id
   const { data: newLead, error } = await supabase
     .from('leads')
     .insert({
-      tenant_id: ESVA_TENANT_ID,
+      tenant_id: tenantId,
+      branch_id: branchId,
       phone,
       phone_normalized: phone,
       name,
@@ -254,17 +306,19 @@ async function findOrCreateLead(
 }
 
 // ======================
-// HELPER: Find or Create Conversation
+// HELPER: Find or Create Conversation (Multi-tenant)
 // ======================
 async function findOrCreateConversation(
   supabase: ReturnType<typeof createServerClient>,
+  tenantId: string,
+  branchId: string | null,
   leadId: string
 ): Promise<{ id: string }> {
   // Check existing active conversation
   const { data: existingConv } = await supabase
     .from('conversations')
     .select('id')
-    .eq('tenant_id', ESVA_TENANT_ID)
+    .eq('tenant_id', tenantId)
     .eq('lead_id', leadId)
     .in('status', ['active', 'pending'])
     .single();
@@ -273,11 +327,12 @@ async function findOrCreateConversation(
     return existingConv;
   }
 
-  // Create new conversation
+  // Create new conversation with branch_id
   const { data: newConv, error } = await supabase
     .from('conversations')
     .insert({
-      tenant_id: ESVA_TENANT_ID,
+      tenant_id: tenantId,
+      branch_id: branchId,
       lead_id: leadId,
       channel: 'whatsapp',
       status: 'active',
@@ -379,19 +434,20 @@ async function handleAIResponse(
 }
 
 // ======================
-// n8n ACTION: Lead Score Update
+// n8n ACTION: Lead Score Update (Multi-tenant)
 // ======================
 async function handleLeadScoreUpdate(
   supabase: ReturnType<typeof createServerClient>,
   body: Record<string, unknown>
 ): Promise<NextResponse> {
+  const tenantId = body.tenant_id as string;
   const leadId = body.lead_id as string;
   const score = body.score as number;
   const reason = body.reason as string;
 
-  if (!leadId || score === undefined) {
+  if (!tenantId || !leadId || score === undefined) {
     return NextResponse.json(
-      { error: 'lead_id and score required' },
+      { error: 'tenant_id, lead_id and score required' },
       { status: 400 }
     );
   }
@@ -409,7 +465,7 @@ async function handleLeadScoreUpdate(
       notes: reason ? `Score updated: ${reason}` : undefined,
     })
     .eq('id', leadId)
-    .eq('tenant_id', ESVA_TENANT_ID);
+    .eq('tenant_id', tenantId);
 
   console.log(`[n8n] Lead ${leadId} score updated to ${score}`);
 
@@ -417,20 +473,21 @@ async function handleLeadScoreUpdate(
 }
 
 // ======================
-// n8n ACTION: Appointment Scheduling
+// n8n ACTION: Appointment Scheduling (Multi-tenant)
 // ======================
 async function handleAppointmentScheduling(
   supabase: ReturnType<typeof createServerClient>,
   body: Record<string, unknown>
 ): Promise<NextResponse> {
+  const tenantId = body.tenant_id as string;
   const leadId = body.lead_id as string;
   const branchId = body.branch_id as string;
   const scheduledAt = body.scheduled_at as string;
   const serviceId = body.service_id as string;
 
-  if (!leadId || !branchId || !scheduledAt) {
+  if (!tenantId || !leadId || !branchId || !scheduledAt) {
     return NextResponse.json(
-      { error: 'lead_id, branch_id, and scheduled_at required' },
+      { error: 'tenant_id, lead_id, branch_id, and scheduled_at required' },
       { status: 400 }
     );
   }
@@ -438,7 +495,7 @@ async function handleAppointmentScheduling(
   const { data: appointment, error } = await supabase
     .from('appointments')
     .insert({
-      tenant_id: ESVA_TENANT_ID,
+      tenant_id: tenantId,
       lead_id: leadId,
       branch_id: branchId,
       service_id: serviceId || null,
@@ -466,19 +523,20 @@ async function handleAppointmentScheduling(
 }
 
 // ======================
-// n8n ACTION: Escalation
+// n8n ACTION: Escalation (Multi-tenant)
 // ======================
 async function handleEscalation(
   supabase: ReturnType<typeof createServerClient>,
   body: Record<string, unknown>
 ): Promise<NextResponse> {
+  const tenantId = body.tenant_id as string;
   const conversationId = body.conversation_id as string;
   const reason = body.reason as string;
   const staffId = body.staff_id as string;
 
-  if (!conversationId) {
+  if (!tenantId || !conversationId) {
     return NextResponse.json(
-      { error: 'conversation_id required' },
+      { error: 'tenant_id and conversation_id required' },
       { status: 400 }
     );
   }
@@ -493,7 +551,7 @@ async function handleEscalation(
       assigned_staff_id: staffId || null,
     })
     .eq('id', conversationId)
-    .eq('tenant_id', ESVA_TENANT_ID);
+    .eq('tenant_id', tenantId);
 
   console.log(`[n8n] Conversation ${conversationId} escalated`);
 
@@ -504,14 +562,14 @@ async function handleEscalation(
 // HANDLER: Generic Webhook
 // ======================
 async function handleGenericWebhook(
-  supabase: ReturnType<typeof createServerClient>,
-  body: Record<string, unknown>
+  _supabase: ReturnType<typeof createServerClient>,
+  _body: Record<string, unknown>
 ): Promise<NextResponse> {
   // Log unknown webhooks for debugging
   console.log('[Webhook] Unknown source, logging payload');
 
   // Could save to a webhooks_log table for debugging
-  // await supabase.from('webhook_logs').insert({ payload: body });
+  // await _supabase.from('webhook_logs').insert({ payload: _body });
 
   return NextResponse.json({
     success: true,
