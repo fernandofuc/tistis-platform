@@ -50,11 +50,10 @@ const icons = {
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'clinic' | 'branches' | 'notifications' | 'channels' | 'ai' | 'security';
+type SettingsTab = 'profile' | 'branches' | 'notifications' | 'channels' | 'ai' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
-  { key: 'clinic', label: 'Clínica', icon: icons.building },
   { key: 'branches', label: 'Sucursales', icon: icons.building },
   { key: 'channels', label: 'Canales', icon: icons.channels },
   { key: 'ai', label: 'AI Agent', icon: icons.ai },
@@ -164,58 +163,13 @@ export default function SettingsPage() {
             </Card>
           )}
 
-          {/* Clinic Tab */}
-          {activeTab === 'clinic' && (
-            <Card variant="bordered">
-              <CardHeader title="Clínica" subtitle="Información de la clínica" />
-              <CardContent>
-                {!isAdmin ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>No tienes permisos para editar esta sección</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input
-                        label="Nombre de la Clínica"
-                        defaultValue={tenant?.name}
-                        placeholder="Nombre"
-                      />
-                      <Input
-                        label="Razón Social"
-                        defaultValue={tenant?.legal_name || ''}
-                        placeholder="Razón social"
-                      />
-                      <Input
-                        label="Email de Contacto"
-                        defaultValue={tenant?.primary_contact_email || ''}
-                        placeholder="contacto@clinica.com"
-                      />
-                      <Input
-                        label="Teléfono"
-                        defaultValue={tenant?.primary_contact_phone || ''}
-                        placeholder="+52 (XXX) XXX-XXXX"
-                      />
-                    </div>
-
-                    <div className="mt-6 flex justify-end">
-                      <Button onClick={handleSave} isLoading={saving}>
-                        Guardar Cambios
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Branches Tab - NEW */}
+          {/* Branches Tab */}
           {activeTab === 'branches' && <BranchManagement />}
 
-          {/* Channels Tab - NEW */}
+          {/* Channels Tab */}
           {activeTab === 'channels' && <ChannelConnections />}
 
-          {/* AI Agent Tab - NEW */}
+          {/* AI Agent Tab */}
           {activeTab === 'ai' && <AIConfiguration />}
 
           {/* Notifications Tab */}
