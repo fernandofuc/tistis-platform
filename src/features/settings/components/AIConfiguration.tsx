@@ -394,17 +394,15 @@ export function AIConfiguration() {
                 </div>
               </div>
 
-              {isAdmin && (
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={config.ai_enabled}
-                    onChange={toggleAI}
-                  />
-                  <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
-                </label>
-              )}
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={config.ai_enabled}
+                  onChange={toggleAI}
+                />
+                <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+              </label>
             </div>
           </div>
         </CardContent>
@@ -556,19 +554,17 @@ export function AIConfiguration() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-medium text-gray-900">Sucursales ({branches.length})</h4>
-                  {isAdmin && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditingBranch(null);
-                        setShowBranchModal(true);
-                      }}
-                    >
-                      {icons.plus}
-                      <span className="ml-2">Agregar Sucursal</span>
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingBranch(null);
+                      setShowBranchModal(true);
+                    }}
+                  >
+                    {icons.plus}
+                    <span className="ml-2">Agregar Sucursal</span>
+                  </Button>
                 </div>
 
                 {branches.length === 0 ? (
@@ -590,7 +586,6 @@ export function AIConfiguration() {
                           setEditingBranch(branch);
                           setShowBranchModal(true);
                         }}
-                        isAdmin={isAdmin}
                       />
                     ))}
                   </div>
@@ -808,10 +803,9 @@ interface BranchCardProps {
   branch: Branch;
   staff: Staff[];
   onEdit: () => void;
-  isAdmin: boolean;
 }
 
-function BranchCard({ branch, staff, onEdit, isAdmin }: BranchCardProps) {
+function BranchCard({ branch, staff, onEdit }: BranchCardProps) {
   const hasCoordinates = branch.latitude && branch.longitude;
 
   return (
@@ -840,14 +834,14 @@ function BranchCard({ branch, staff, onEdit, isAdmin }: BranchCardProps) {
           </div>
         </div>
 
-        {isAdmin && (
-          <button
-            onClick={onEdit}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-          >
-            {icons.edit}
-          </button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onEdit}
+        >
+          {icons.edit}
+          <span className="ml-2">Editar</span>
+        </Button>
       </div>
 
       {/* Info Grid */}
