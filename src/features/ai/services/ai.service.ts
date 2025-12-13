@@ -53,6 +53,7 @@ export interface TenantAIContext {
     price_min: number;
     price_max: number;
     duration_minutes: number;
+    category: string;
   }>;
   faqs: Array<{
     question: string;
@@ -63,7 +64,27 @@ export interface TenantAIContext {
     id: string;
     name: string;
     address: string;
+    city: string;
     phone: string;
+    whatsapp_number: string;
+    email: string;
+    operating_hours: Record<string, { open: string; close: string }>;
+    google_maps_url: string;
+    is_headquarters: boolean;
+    staff_ids: string[];
+  }>;
+  doctors: Array<{
+    id: string;
+    name: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+    role_title: string;
+    email: string;
+    phone: string;
+    branch_ids: string[];
+    specialty: string;
+    bio: string;
   }>;
   scoring_rules: Array<{
     signal_name: string;
@@ -190,7 +211,7 @@ export async function getConversationContext(
  * Construye el system prompt completo para GPT-5 Mini
  */
 function buildSystemPrompt(tenant: TenantAIContext): string {
-  const { ai_config, services, faqs, branches } = tenant;
+  const { ai_config, services, faqs, branches, doctors } = tenant;
 
   // Base prompt from tenant config
   let systemPrompt = ai_config.system_prompt;
@@ -218,25 +239,106 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
     }
   }
 
-  // Agregar información de sucursales
+  // Agregar información de sucursales con horarios y WhatsApp
   if (branches.length > 0) {
-    systemPrompt += `\n\n## UBICACIONES\n`;
+    systemPrompt += `\n\n## SUCURSALES Y UBICACIONES\n`;
     for (const branch of branches) {
-      systemPrompt += `- ${branch.name}: ${branch.address}`;
-      if (branch.phone) {
-        systemPrompt += ` | Tel: ${branch.phone}`;
+      const isHQ = branch.is_headquarters ? ' (Principal)' : '';
+      systemPrompt += `### ${branch.name}${isHQ}\n`;
+
+      // Dirección
+      if (branch.address) {
+        const fullAddress = branch.city ? `${branch.address}, ${branch.city}` : branch.address;
+        systemPrompt += `- Dirección: ${fullAddress}\n`;
       }
+
+      // Teléfonos
+      if (branch.phone) {
+        systemPrompt += `- Teléfono: ${branch.phone}\n`;
+      }
+      if (branch.whatsapp_number && branch.whatsapp_number !== branch.phone) {
+        systemPrompt += `- WhatsApp: ${branch.whatsapp_number}\n`;
+      }
+
+      // Google Maps
+      if (branch.google_maps_url) {
+        systemPrompt += `- Ubicación en mapa: ${branch.google_maps_url}\n`;
+      }
+
+      // Horarios de operación
+      if (branch.operating_hours && Object.keys(branch.operating_hours).length > 0) {
+        systemPrompt += `- Horarios:\n`;
+        const dayNames: Record<string, string> = {
+          monday: 'Lunes',
+          tuesday: 'Martes',
+          wednesday: 'Miércoles',
+          thursday: 'Jueves',
+          friday: 'Viernes',
+          saturday: 'Sábado',
+          sunday: 'Domingo',
+        };
+        for (const [day, hours] of Object.entries(branch.operating_hours)) {
+          if (hours && typeof hours === 'object' && 'open' in hours) {
+            const dayName = dayNames[day.toLowerCase()] || day;
+            systemPrompt += `  * ${dayName}: ${hours.open} - ${hours.close}\n`;
+          }
+        }
+      }
+
+      // Doctores en esta sucursal
+      const branchDoctors = doctors.filter(doc =>
+        doc.branch_ids && doc.branch_ids.includes(branch.id)
+      );
+      if (branchDoctors.length > 0) {
+        systemPrompt += `- Especialistas disponibles:\n`;
+        for (const doc of branchDoctors) {
+          const specialty = doc.specialty ? ` - ${doc.specialty}` : '';
+          systemPrompt += `  * ${doc.role_title} ${doc.name}${specialty}\n`;
+        }
+      }
+
+      systemPrompt += '\n';
+    }
+  }
+
+  // Agregar información de doctores/especialistas (resumen general)
+  if (doctors.length > 0) {
+    systemPrompt += `\n## EQUIPO MÉDICO\n`;
+    for (const doc of doctors) {
+      systemPrompt += `### ${doc.role_title} ${doc.name}\n`;
+
+      if (doc.specialty) {
+        systemPrompt += `- Especialidad: ${doc.specialty}\n`;
+      }
+
+      if (doc.bio) {
+        systemPrompt += `- ${doc.bio}\n`;
+      }
+
+      // En qué sucursales atiende
+      if (doc.branch_ids && doc.branch_ids.length > 0) {
+        const docBranches = branches
+          .filter(b => doc.branch_ids.includes(b.id))
+          .map(b => b.name);
+        if (docBranches.length > 0) {
+          systemPrompt += `- Atiende en: ${docBranches.join(', ')}\n`;
+        }
+      }
+
       systemPrompt += '\n';
     }
   }
 
   // Agregar instrucciones de formato
-  systemPrompt += `\n\n## INSTRUCCIONES DE RESPUESTA
+  systemPrompt += `\n## INSTRUCCIONES DE RESPUESTA
 - Responde de manera ${ai_config.response_style || 'profesional y amable'}
 - Maximo ${ai_config.max_response_length || 300} caracteres por respuesta
 - NO uses emojis
 - Si no sabes algo, ofrece conectar con un asesor humano
-- Siempre busca agendar una cita o dar informacion util`;
+- Siempre busca agendar una cita o dar informacion util
+- Cuando el cliente pregunte por ubicación, da la dirección completa y el link de Google Maps si está disponible
+- Cuando el cliente pregunte por un doctor o especialista específico, indica en qué sucursal(es) atiende
+- Cuando el cliente pregunte por horarios, da los horarios específicos de la sucursal más cercana o relevante`;
 
   return systemPrompt;
 }
