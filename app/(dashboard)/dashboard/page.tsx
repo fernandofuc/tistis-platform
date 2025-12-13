@@ -313,10 +313,17 @@ export default function DashboardPage() {
                   <div className="w-16 h-16 mx-auto mb-4 bg-tis-coral-100 rounded-2xl flex items-center justify-center text-tis-coral">
                     {icons.leads}
                   </div>
-                  <p className="text-slate-900 font-semibold mb-1">No hay leads registrados</p>
-                  <p className="text-sm text-slate-500 mb-4">Los leads aparecerán aquí cuando lleguen mensajes por WhatsApp</p>
+                  <p className="text-slate-900 font-semibold mb-1">
+                    {selectedBranch ? `No hay leads en ${selectedBranch.name}` : 'No hay leads registrados'}
+                  </p>
+                  <p className="text-sm text-slate-500 mb-4">
+                    {selectedBranch
+                      ? 'Prueba seleccionando "Todas las sucursales" o los leads de esta sucursal aparecerán cuando lleguen mensajes.'
+                      : 'Los leads aparecerán aquí cuando lleguen mensajes por WhatsApp'
+                    }
+                  </p>
                   <Link href="/dashboard/leads">
-                    <Button variant="outline" size="sm">Crear lead manual</Button>
+                    <Button variant="outline" size="sm">Ver todos los leads</Button>
                   </Link>
                 </div>
               ) : (

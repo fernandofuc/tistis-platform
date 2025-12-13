@@ -205,7 +205,12 @@ export default function LeadsPage() {
             <div className="p-12 text-center text-gray-500">
               <p className="text-lg font-medium mb-2">No hay leads</p>
               <p className="text-sm">
-                {search ? 'No se encontraron resultados para tu búsqueda' : 'Los leads aparecerán aquí'}
+                {search
+                  ? 'No se encontraron resultados para tu búsqueda'
+                  : selectedBranch
+                    ? `No hay leads asignados a ${selectedBranch.name}. Prueba seleccionando "Todas las sucursales".`
+                    : 'Los leads aparecerán aquí cuando lleguen mensajes por WhatsApp'
+                }
               </p>
             </div>
           ) : (
