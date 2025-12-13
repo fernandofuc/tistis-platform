@@ -16,6 +16,7 @@ import {
 } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
+import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, formatTime } from '@/src/shared/utils';
 import type { Lead, Appointment } from '@/src/shared/types';
 
@@ -70,6 +71,7 @@ interface DashboardStats {
 export default function DashboardPage() {
   const router = useRouter();
   const { staff, tenant } = useAuthContext();
+  const { selectedBranchId, selectedBranch } = useBranch();
   const [stats, setStats] = useState<DashboardStats>({
     totalLeads: 0,
     hotLeads: 0,
@@ -92,28 +94,32 @@ export default function DashboardPage() {
       }
 
       try {
+        // Build base query with optional branch filter
+        const buildQuery = (table: string, selectFields: string) => {
+          let query = supabase.from(table).select(selectFields).eq('tenant_id', tenant.id);
+          // Apply branch filter if a specific branch is selected
+          if (selectedBranchId) {
+            query = query.eq('branch_id', selectedBranchId);
+          }
+          return query;
+        };
+
         // Fetch leads stats
-        const { data: leads, error: leadsError } = await supabase
-          .from('leads')
-          .select('id, classification, status')
-          .eq('tenant_id', tenant.id)
+        const { data: leads, error: leadsError } = await buildQuery('leads', 'id, classification, status')
           .in('status', ['new', 'contacted', 'qualified', 'appointment_scheduled']);
 
         if (!leadsError && leads) {
           setStats((prev) => ({
             ...prev,
             totalLeads: leads.length,
-            hotLeads: leads.filter((l) => l.classification === 'hot').length,
-            warmLeads: leads.filter((l) => l.classification === 'warm').length,
-            coldLeads: leads.filter((l) => l.classification === 'cold').length,
+            hotLeads: leads.filter((l: any) => l.classification === 'hot').length,
+            warmLeads: leads.filter((l: any) => l.classification === 'warm').length,
+            coldLeads: leads.filter((l: any) => l.classification === 'cold').length,
           }));
         }
 
         // Fetch recent leads
-        const { data: recentLeadsData } = await supabase
-          .from('leads')
-          .select('*')
-          .eq('tenant_id', tenant.id)
+        const { data: recentLeadsData } = await buildQuery('leads', '*')
           .order('created_at', { ascending: false })
           .limit(5);
 
@@ -126,10 +132,7 @@ export default function DashboardPage() {
         const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
         const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
-        const { data: appointmentsData } = await supabase
-          .from('appointments')
-          .select('*, leads(full_name, phone)')
-          .eq('tenant_id', tenant.id)
+        const { data: appointmentsData } = await buildQuery('appointments', '*, leads(full_name, phone)')
           .gte('scheduled_at', startOfDay)
           .lte('scheduled_at', endOfDay)
           .order('scheduled_at');
@@ -143,17 +146,14 @@ export default function DashboardPage() {
         }
 
         // Fetch conversations stats
-        const { data: conversations } = await supabase
-          .from('conversations')
-          .select('id, status')
-          .eq('tenant_id', tenant.id)
+        const { data: conversations } = await buildQuery('conversations', 'id, status')
           .in('status', ['active', 'waiting_response', 'escalated']);
 
         if (conversations) {
           setStats((prev) => ({
             ...prev,
-            activeConversations: conversations.filter((c) => c.status !== 'escalated').length,
-            escalatedConversations: conversations.filter((c) => c.status === 'escalated').length,
+            activeConversations: conversations.filter((c: any) => c.status !== 'escalated').length,
+            escalatedConversations: conversations.filter((c: any) => c.status === 'escalated').length,
           }));
         }
       } catch (error) {
@@ -164,7 +164,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboardData();
-  }, [tenant?.id]);
+  }, [tenant?.id, selectedBranchId]);
 
   // Greeting based on time of day
   const getGreeting = () => {
@@ -177,7 +177,7 @@ export default function DashboardPage() {
   return (
     <PageWrapper
       title={`${getGreeting()}, ${staff?.first_name || 'Usuario'}`}
-      subtitle={`Aquí está el resumen de ${tenant?.name || 'tu negocio'}`}
+      subtitle={selectedBranch ? `Sucursal: ${selectedBranch.name}` : `Aquí está el resumen de ${tenant?.name || 'tu negocio'}`}
       actions={
         <Button
           leftIcon={icons.plus}

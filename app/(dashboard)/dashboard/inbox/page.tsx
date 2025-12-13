@@ -7,7 +7,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardHeader, CardContent, Button, Badge, Avatar, SearchInput } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
-import { supabase, ESVA_TENANT_ID } from '@/src/shared/lib/supabase';
+import { useAuthContext } from '@/src/features/auth';
+import { supabase } from '@/src/shared/lib/supabase';
+import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, cn, truncate } from '@/src/shared/utils';
 import { CONVERSATION_STATUSES } from '@/src/shared/constants';
 import type { Conversation, Message, Lead } from '@/src/shared/types';
@@ -50,6 +52,8 @@ interface ConversationWithLead extends Conversation {
 // COMPONENT
 // ======================
 export default function InboxPage() {
+  const { tenant } = useAuthContext();
+  const { selectedBranchId, selectedBranch } = useBranch();
   const [conversations, setConversations] = useState<ConversationWithLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -61,15 +65,30 @@ export default function InboxPage() {
   // Fetch conversations
   useEffect(() => {
     async function fetchConversations() {
+      // Wait for tenant to be loaded
+      if (!tenant?.id) {
+        console.log('🟡 Inbox: No tenant yet, waiting...');
+        return;
+      }
+
+      console.log('🟢 Inbox: Fetching conversations for tenant:', tenant.id, 'branch:', selectedBranchId || 'all');
+
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('conversations')
           .select('*, leads(id, name, phone, classification, score)')
-          .eq('tenant_id', ESVA_TENANT_ID)
-          .in('status', ['active', 'waiting_response', 'escalated'])
-          .order('last_message_at', { ascending: false });
+          .eq('tenant_id', tenant.id)
+          .in('status', ['active', 'waiting_response', 'escalated']);
+
+        // Apply branch filter if selected
+        if (selectedBranchId) {
+          query = query.eq('branch_id', selectedBranchId);
+        }
+
+        const { data, error } = await query.order('last_message_at', { ascending: false });
 
         if (error) throw error;
+        console.log('🟢 Inbox: Fetched', data?.length, 'conversations');
         setConversations(data as ConversationWithLead[]);
 
         // Auto-select first conversation if none selected
@@ -84,7 +103,7 @@ export default function InboxPage() {
     }
 
     fetchConversations();
-  }, []);
+  }, [tenant?.id, selectedBranchId]);
 
   // Get conversation ID for dependency
   const selectedConversationId = selectedConversation?.id;
@@ -138,7 +157,7 @@ export default function InboxPage() {
   }), [conversations]);
 
   return (
-    <PageWrapper title="Inbox" subtitle={`${conversations.length} conversaciones activas`}>
+    <PageWrapper title="Inbox" subtitle={selectedBranch ? `${conversations.length} conversaciones en ${selectedBranch.name}` : `${conversations.length} conversaciones activas`}>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
         {/* Conversations List */}
         <div className="lg:col-span-1">

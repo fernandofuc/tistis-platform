@@ -10,6 +10,7 @@ import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { NewAppointmentModal } from '@/src/features/appointments';
 import { supabase } from '@/src/shared/lib/supabase';
+import { useBranch } from '@/src/shared/stores';
 import { formatDate, formatTime, cn } from '@/src/shared/utils';
 import { APPOINTMENT_STATUSES } from '@/src/shared/constants';
 import type { Appointment } from '@/src/shared/types';
@@ -76,6 +77,7 @@ function getMonthDays(year: number, month: number) {
 // ======================
 export default function CalendarPage() {
   const { tenant } = useAuthContext();
+  const { selectedBranchId, selectedBranch } = useBranch();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -94,19 +96,25 @@ export default function CalendarPage() {
       return;
     }
 
-    console.log('🟢 Calendar: Fetching appointments for tenant:', tenant.id);
+    console.log('🟢 Calendar: Fetching appointments for tenant:', tenant.id, 'branch:', selectedBranchId || 'all');
 
     try {
       const startOfMonth = new Date(year, month, 1);
       const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('appointments')
         .select('*, leads(full_name, phone)')
         .eq('tenant_id', tenant.id)
         .gte('scheduled_at', startOfMonth.toISOString())
-        .lte('scheduled_at', endOfMonth.toISOString())
-        .order('scheduled_at');
+        .lte('scheduled_at', endOfMonth.toISOString());
+
+      // Apply branch filter if selected
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query.order('scheduled_at');
 
       if (error) throw error;
       console.log('🟢 Calendar: Fetched', data?.length, 'appointments');
@@ -116,7 +124,7 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [year, month, tenant?.id]);
+  }, [year, month, tenant?.id, selectedBranchId]);
 
   useEffect(() => {
     fetchAppointments();
@@ -170,7 +178,7 @@ export default function CalendarPage() {
   return (
     <PageWrapper
       title="Calendario"
-      subtitle={`${MONTHS[month]} ${year}`}
+      subtitle={selectedBranch ? `${MONTHS[month]} ${year} - ${selectedBranch.name}` : `${MONTHS[month]} ${year}`}
       actions={
         <Button leftIcon={icons.plus} onClick={() => setShowNewAppointmentModal(true)}>
           Nueva Cita

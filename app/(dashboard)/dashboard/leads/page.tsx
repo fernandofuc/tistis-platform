@@ -9,6 +9,7 @@ import { Card, CardHeader, CardContent, Button, Badge, Avatar, SearchInput } fro
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
+import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, formatPhone, cn } from '@/src/shared/utils';
 import { LEAD_STATUSES, LEAD_CLASSIFICATIONS, LEAD_SOURCES } from '@/src/shared/constants';
 import type { Lead, LeadClassification, LeadStatus } from '@/src/shared/types';
@@ -54,6 +55,7 @@ type FilterTab = 'all' | LeadClassification;
 // ======================
 export default function LeadsPage() {
   const { tenant } = useAuthContext();
+  const { selectedBranchId, selectedBranch } = useBranch();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -69,13 +71,20 @@ export default function LeadsPage() {
         return;
       }
 
-      console.log('🟢 Leads: Fetching leads for tenant:', tenant.id);
+      console.log('🟢 Leads: Fetching leads for tenant:', tenant.id, 'branch:', selectedBranchId || 'all');
 
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('leads')
           .select('*')
-          .eq('tenant_id', tenant.id)
+          .eq('tenant_id', tenant.id);
+
+        // Apply branch filter if selected
+        if (selectedBranchId) {
+          query = query.eq('branch_id', selectedBranchId);
+        }
+
+        const { data, error } = await query
           .order('score', { ascending: false })
           .order('created_at', { ascending: false });
 
@@ -90,7 +99,7 @@ export default function LeadsPage() {
     }
 
     fetchLeads();
-  }, [tenant?.id]);
+  }, [tenant?.id, selectedBranchId]);
 
   // Filter leads
   const filteredLeads = useMemo(() => {
@@ -133,7 +142,7 @@ export default function LeadsPage() {
   return (
     <PageWrapper
       title="Leads"
-      subtitle={`${leads.length} leads en total`}
+      subtitle={selectedBranch ? `${leads.length} leads en ${selectedBranch.name}` : `${leads.length} leads en total`}
       actions={
         <div className="flex items-center gap-3">
           <Button variant="outline" leftIcon={icons.filter}>
