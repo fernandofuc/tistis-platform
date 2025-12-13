@@ -281,16 +281,20 @@ WITH CHECK (true);
 -- ============================================
 
 -- Actualizar subscriptions existentes con max_branches desde branches count
+-- La relación es: subscriptions -> client_id -> clients -> tenant_id -> branches
 UPDATE public.subscriptions s
 SET
     max_branches = GREATEST(COALESCE(s.branches, 1), 1),
-    current_branches = (
+    current_branches = COALESCE((
         SELECT COUNT(*)
         FROM public.branches b
-        JOIN public.clients c ON c.tenant_id = b.tenant_id
-        WHERE c.id = s.client_id
+        WHERE b.tenant_id = (
+            SELECT c.tenant_id
+            FROM public.clients c
+            WHERE c.id = s.client_id
+        )
         AND b.is_active = true
-    ),
+    ), 1),
     can_modify_branches = (s.plan != 'starter')
 WHERE s.status IN ('active', 'past_due');
 
