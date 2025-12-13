@@ -596,12 +596,23 @@ export function AIConfiguration() {
               <div className="pt-6 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-medium text-gray-900">Doctores / Especialistas ({staff.length})</h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingStaff(null);
+                      setShowStaffModal(true);
+                    }}
+                  >
+                    {icons.plus}
+                    <span className="ml-2">Agregar Doctor</span>
+                  </Button>
                 </div>
 
                 {staff.length === 0 ? (
                   <div className="text-center py-6 bg-gray-50 rounded-xl">
                     <p className="text-gray-500">No hay doctores registrados</p>
-                    <p className="text-sm text-gray-400">Los doctores se gestionan desde la sección de Personal</p>
+                    <p className="text-sm text-gray-400">Agrega doctores para asignarlos a sucursales</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -612,26 +623,41 @@ export function AIConfiguration() {
                         .filter(Boolean);
 
                       return (
-                        <div key={member.id} className="p-4 bg-gray-50 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                              <span className="text-purple-600 font-medium">
-                                {member.first_name[0]}{member.last_name[0]}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                Dr. {member.first_name} {member.last_name}
-                              </p>
-                              {member.specialty && (
-                                <p className="text-sm text-gray-500">{member.specialty}</p>
-                              )}
-                              {memberBranches.length > 0 && (
-                                <p className="text-xs text-purple-600 mt-1">
-                                  {memberBranches.join(', ')}
+                        <div key={member.id} className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                <span className="text-purple-600 font-medium">
+                                  {member.first_name[0]}{member.last_name[0]}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  Dr. {member.first_name} {member.last_name}
                                 </p>
-                              )}
+                                {member.specialty && (
+                                  <p className="text-sm text-gray-500">{member.specialty}</p>
+                                )}
+                                {memberBranches.length > 0 ? (
+                                  <p className="text-xs text-purple-600 mt-1">
+                                    {memberBranches.join(', ')}
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    Sin sucursal asignada
+                                  </p>
+                                )}
+                              </div>
                             </div>
+                            <button
+                              onClick={() => {
+                                setEditingStaff(member);
+                                setShowStaffModal(true);
+                              }}
+                              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-lg"
+                            >
+                              {icons.edit}
+                            </button>
                           </div>
                         </div>
                       );
@@ -789,6 +815,35 @@ export function AIConfiguration() {
           }}
           onSave={saveBranch}
           saving={saving}
+        />
+      )}
+
+      {/* Staff Modal */}
+      {showStaffModal && tenant && (
+        <StaffModal
+          staff={editingStaff}
+          branches={branches}
+          staffBranches={staffBranches}
+          tenantId={tenant.id}
+          onClose={() => {
+            setShowStaffModal(false);
+            setEditingStaff(null);
+          }}
+          onSave={async () => {
+            // Reload staff and staff_branches data
+            const { data: staffData } = await supabase
+              .from('staff')
+              .select('*')
+              .eq('tenant_id', tenant.id)
+              .order('first_name');
+
+            const { data: staffBranchesData } = await supabase
+              .from('staff_branches')
+              .select('*');
+
+            if (staffData) setStaff(staffData);
+            if (staffBranchesData) setStaffBranches(staffBranchesData);
+          }}
         />
       )}
     </div>
@@ -1249,6 +1304,323 @@ function BranchModal({ branch, onClose, onSave, saving }: BranchModalProps) {
           >
             {branch ? 'Guardar Cambios' : 'Crear Sucursal'}
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ======================
+// STAFF MODAL COMPONENT
+// ======================
+
+interface StaffModalProps {
+  staff: Staff | null;
+  branches: Branch[];
+  staffBranches: StaffBranch[];
+  tenantId: string;
+  onClose: () => void;
+  onSave: () => void;
+}
+
+function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave }: StaffModalProps) {
+  const isEditing = !!staff;
+
+  const [formData, setFormData] = useState({
+    first_name: staff?.first_name || '',
+    last_name: staff?.last_name || '',
+    specialty: staff?.specialty || '',
+    license_number: staff?.license_number || '',
+    role: staff?.role || 'doctor',
+    is_active: staff?.is_active ?? true,
+  });
+
+  // Get currently assigned branches for this staff member
+  const currentBranchIds = staffBranches
+    .filter(sb => sb.staff_id === staff?.id)
+    .map(sb => sb.branch_id);
+
+  const [selectedBranches, setSelectedBranches] = useState<string[]>(currentBranchIds);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!formData.first_name || !formData.last_name) {
+      alert('Nombre y apellido son requeridos');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      let staffId = staff?.id;
+
+      if (isEditing && staffId) {
+        // Update existing staff
+        const { error } = await supabase
+          .from('staff')
+          .update({
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            specialty: formData.specialty || null,
+            license_number: formData.license_number || null,
+            role: formData.role,
+            is_active: formData.is_active,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', staffId);
+
+        if (error) throw error;
+      } else {
+        // Create new staff
+        const { data, error } = await supabase
+          .from('staff')
+          .insert({
+            tenant_id: tenantId,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            specialty: formData.specialty || null,
+            license_number: formData.license_number || null,
+            role: formData.role,
+            is_active: formData.is_active,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        staffId = data.id;
+      }
+
+      // Update branch assignments
+      if (staffId) {
+        // Remove all existing assignments
+        await supabase
+          .from('staff_branches')
+          .delete()
+          .eq('staff_id', staffId);
+
+        // Add new assignments
+        if (selectedBranches.length > 0) {
+          const assignments = selectedBranches.map((branchId, index) => ({
+            staff_id: staffId,
+            branch_id: branchId,
+            is_primary: index === 0, // First selected is primary
+          }));
+
+          const { error: assignError } = await supabase
+            .from('staff_branches')
+            .insert(assignments);
+
+          if (assignError) throw assignError;
+        }
+      }
+
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error('Error saving staff:', error);
+      alert('Error al guardar. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!staff?.id) return;
+
+    if (!confirm('¿Estás seguro de eliminar este doctor? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Delete branch assignments first
+      await supabase
+        .from('staff_branches')
+        .delete()
+        .eq('staff_id', staff.id);
+
+      // Delete staff
+      const { error } = await supabase
+        .from('staff')
+        .delete()
+        .eq('id', staff.id);
+
+      if (error) throw error;
+
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+      alert('Error al eliminar. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleBranch = (branchId: string) => {
+    setSelectedBranches(prev =>
+      prev.includes(branchId)
+        ? prev.filter(id => id !== branchId)
+        : [...prev, branchId]
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">
+                {isEditing ? 'Editar Doctor' : 'Agregar Doctor'}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {isEditing ? 'Modifica los datos del doctor' : 'Registra un nuevo doctor o especialista'}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+          {/* Name Fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nombre *"
+              placeholder="Ej: Juan"
+              value={formData.first_name}
+              onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+            />
+            <Input
+              label="Apellido *"
+              placeholder="Ej: Pérez"
+              value={formData.last_name}
+              onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+            />
+          </div>
+
+          {/* Specialty & License */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Especialidad"
+              placeholder="Ej: Ortodoncia"
+              value={formData.specialty}
+              onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
+            />
+            <Input
+              label="Cédula Profesional"
+              placeholder="Ej: 12345678"
+              value={formData.license_number}
+              onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
+            />
+          </div>
+
+          {/* Role Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Rol</label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            >
+              <option value="doctor">Doctor</option>
+              <option value="specialist">Especialista</option>
+              <option value="assistant">Asistente</option>
+              <option value="receptionist">Recepcionista</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+
+          {/* Branch Assignment */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Sucursales Asignadas
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Selecciona las sucursales donde trabaja este doctor
+            </p>
+
+            {branches.length === 0 ? (
+              <div className="p-4 bg-amber-50 rounded-xl text-center">
+                <p className="text-amber-700 text-sm">
+                  No hay sucursales configuradas. Agrega sucursales primero.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {branches.map((branch) => (
+                  <label
+                    key={branch.id}
+                    className={cn(
+                      'flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors border',
+                      selectedBranches.includes(branch.id)
+                        ? 'bg-purple-50 border-purple-300'
+                        : 'bg-gray-50 border-transparent hover:bg-gray-100'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedBranches.includes(branch.id)}
+                      onChange={() => toggleBranch(branch.id)}
+                      className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{branch.name}</p>
+                      <p className="text-sm text-gray-500">{branch.city}, {branch.state}</p>
+                    </div>
+                    {branch.is_headquarters && (
+                      <Badge variant="info" size="sm">Principal</Badge>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Active Status */}
+          <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.is_active}
+              onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+              className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+            />
+            <div>
+              <p className="font-medium text-gray-900">Doctor Activo</p>
+              <p className="text-sm text-gray-500">Aparecerá en las opciones de asignación</p>
+            </div>
+          </label>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-gray-100 flex items-center justify-between">
+          {isEditing ? (
+            <Button
+              variant="outline"
+              onClick={handleDelete}
+              disabled={saving}
+              className="text-red-600 border-red-200 hover:bg-red-50"
+            >
+              Eliminar
+            </Button>
+          ) : (
+            <div />
+          )}
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Agregar Doctor')}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
