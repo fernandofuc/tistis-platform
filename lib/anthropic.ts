@@ -1,7 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
+// OpenAI client para Discovery Chat (GPT-5 Nano)
+export const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 // System prompt para discovery conversacional
@@ -53,16 +55,19 @@ ANALYSIS_COMPLETE::{
 
 Envía este JSON cuando detectes que tienes suficiente información para hacer una recomendación sólida.`;
 
-// Helper para chat de discovery
+// Helper para chat de discovery usando GPT-5 Nano
 export async function sendDiscoveryMessage(
   messages: Array<{ role: string; content: string }>
 ) {
-  const response = await anthropic.messages.create({
-    model: 'claude-3-5-haiku-20241022',
-    max_tokens: 300,
-    system: DISCOVERY_SYSTEM_PROMPT,
-    messages: messages as any,
+  const response = await openai.chat.completions.create({
+    model: DEFAULT_MODELS.CHAT_DISCOVERY, // gpt-5-nano
+    max_tokens: OPENAI_CONFIG.defaultMaxTokens,
+    temperature: OPENAI_CONFIG.defaultTemperature,
+    messages: [
+      { role: 'system', content: DISCOVERY_SYSTEM_PROMPT },
+      ...messages as any,
+    ],
   });
 
-  return response.content[0].type === 'text' ? response.content[0].text : '';
+  return response.choices[0]?.message?.content || '';
 }

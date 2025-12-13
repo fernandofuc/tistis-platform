@@ -1,22 +1,27 @@
 // =====================================================
 // TIS TIS PLATFORM - AI Service
-// Claude-powered AI responses for customer service
+// GPT-5 Mini powered AI responses for customer messaging
 // =====================================================
 
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import type { AIResponseFormat, AIIntent, AISignal } from '@/src/shared/types/whatsapp';
+import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
 
 // ======================
 // CONFIGURATION
 // ======================
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || '',
 });
 
-const DEFAULT_MODEL = 'claude-3-haiku-20240307'; // Rápido y económico para chat
-const MAX_TOKENS = 500; // Respuestas concisas
+// GPT-5 Mini: Optimizado para mensajeria automatizada (WhatsApp, Instagram, etc.)
+// - Costo: $0.25/$2.00 per 1M tokens
+// - Latencia: ~800ms (excelente para chat)
+// - Calidad: Superior a GPT-4o-mini, ideal para respuestas naturales
+const DEFAULT_MODEL = DEFAULT_MODELS.MESSAGING; // gpt-5-mini
+const MAX_TOKENS = OPENAI_CONFIG.defaultMaxTokens;
 
 // ======================
 // TYPES
@@ -182,7 +187,7 @@ export async function getConversationContext(
 // ======================
 
 /**
- * Construye el system prompt completo para Claude
+ * Construye el system prompt completo para GPT-5 Mini
  */
 function buildSystemPrompt(tenant: TenantAIContext): string {
   const { ai_config, services, faqs, branches } = tenant;
@@ -237,10 +242,10 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
 }
 
 /**
- * Construye el historial de mensajes para Claude
+ * Construye el historial de mensajes para OpenAI
  */
-function buildMessageHistory(context: ConversationContext): Anthropic.MessageParam[] {
-  const messages: Anthropic.MessageParam[] = [];
+function buildMessageHistory(context: ConversationContext): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
 
   for (const msg of context.last_messages) {
     const role = msg.role === 'lead' ? 'user' : 'assistant';
@@ -416,30 +421,31 @@ export async function generateAIResponse(
 
   // 4. Construir prompts
   const systemPrompt = buildSystemPrompt(tenantContext);
-  const messages = buildMessageHistory(conversationContext);
+  const messageHistory = buildMessageHistory(conversationContext);
 
-  // 5. Llamar a Claude
-  const model = tenantContext.ai_config.model || DEFAULT_MODEL;
-  const temperature = tenantContext.ai_config.temperature || 0.7;
+  // 5. Llamar a GPT-5 Mini (OpenAI)
+  const model = DEFAULT_MODEL; // Siempre usar gpt-5-mini para mensajeria
+  const temperature = tenantContext.ai_config.temperature || OPENAI_CONFIG.defaultTemperature;
 
   let response: string;
   let tokensUsed = 0;
 
   try {
-    const completion = await anthropic.messages.create({
+    const completion = await openai.chat.completions.create({
       model,
       max_tokens: MAX_TOKENS,
       temperature,
-      system: systemPrompt,
-      messages,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messageHistory,
+      ],
     });
 
     // Extraer respuesta
-    const textBlock = completion.content.find((block) => block.type === 'text');
-    response = textBlock?.text || 'Lo siento, no pude procesar tu mensaje. Un asesor te contactará pronto.';
-    tokensUsed = completion.usage.input_tokens + completion.usage.output_tokens;
+    response = completion.choices[0]?.message?.content || 'Lo siento, no pude procesar tu mensaje. Un asesor te contactará pronto.';
+    tokensUsed = (completion.usage?.prompt_tokens || 0) + (completion.usage?.completion_tokens || 0);
   } catch (error) {
-    console.error('[AI Service] Claude API error:', error);
+    console.error('[AI Service] OpenAI API error:', error);
     response = 'Disculpa, estoy experimentando dificultades técnicas. Un asesor humano te atenderá en breve.';
     tokensUsed = 0;
   }

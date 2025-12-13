@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
 
 export const runtime = 'edge';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
+// OpenAI client para GPT-5 Nano (Chat Discovery)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 // Create Supabase client lazily to avoid build-time errors
@@ -91,41 +93,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('❌ ANTHROPIC_API_KEY no está configurada');
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ OPENAI_API_KEY no está configurada');
       return new Response(
-        JSON.stringify({ error: 'ANTHROPIC_API_KEY no está configurada' }),
+        JSON.stringify({ error: 'OPENAI_API_KEY no está configurada' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('🚀 Iniciando llamada a Claude...');
+    console.log('🚀 Iniciando llamada a GPT-5 Nano (Discovery)...');
     console.log('📝 Messages enviados:', JSON.stringify(messages, null, 2));
 
-    // Usar create() en lugar de stream() para Edge Runtime (más estable)
-    const response_ai = await anthropic.messages.create({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 500,
-      system: DISCOVERY_SYSTEM_PROMPT,
-      messages: messages as any,
+    // Usar GPT-5 Nano para chat discovery (ultra rapido y economico)
+    const response_ai = await openai.chat.completions.create({
+      model: DEFAULT_MODELS.CHAT_DISCOVERY, // gpt-5-nano
+      max_tokens: OPENAI_CONFIG.defaultMaxTokens,
+      temperature: OPENAI_CONFIG.defaultTemperature,
+      messages: [
+        { role: 'system', content: DISCOVERY_SYSTEM_PROMPT },
+        ...messages,
+      ],
     });
 
-    console.log('✅ Respuesta de Claude recibida');
-    console.log('📦 Response:', JSON.stringify(response_ai, null, 2));
+    console.log('✅ Respuesta de GPT-5 Nano recibida');
 
     // Extraer texto de la respuesta
-    let accumulatedText = '';
-
-    if (response_ai.content && response_ai.content.length > 0) {
-      for (const block of response_ai.content) {
-        if (block.type === 'text') {
-          accumulatedText += block.text;
-        }
-      }
-    }
+    const accumulatedText = response_ai.choices[0]?.message?.content || '';
 
     console.log(`✅ Texto extraído: ${accumulatedText.length} chars`);
     console.log('📄 Contenido:', accumulatedText.substring(0, 200));
+    console.log('💰 Tokens usados:', response_ai.usage);
 
     // Save to database if sessionToken provided
     if (sessionToken && accumulatedText) {
@@ -182,7 +179,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Retornar el texto acumulado como stream simple
+    // Retornar el texto
     const encoder = new TextEncoder();
     const textBuffer = encoder.encode(accumulatedText);
 
