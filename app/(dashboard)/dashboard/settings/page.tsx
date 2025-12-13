@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardContent, Button, Input, Badge, Avatar } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
-import { ChannelConnections, AIConfiguration, BranchManagement } from '@/src/features/settings';
+import { ChannelConnections, AIConfiguration } from '@/src/features/settings';
 import { cn } from '@/src/shared/utils';
 
 // ======================
@@ -50,11 +50,10 @@ const icons = {
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'branches' | 'notifications' | 'channels' | 'ai' | 'security';
+type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
-  { key: 'branches', label: 'Sucursales', icon: icons.building },
   { key: 'channels', label: 'Canales', icon: icons.channels },
   { key: 'ai', label: 'AI Agent', icon: icons.ai },
   { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
@@ -65,7 +64,7 @@ const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
 // COMPONENT
 // ======================
 export default function SettingsPage() {
-  const { staff, tenant, isAdmin } = useAuthContext();
+  const { staff } = useAuthContext();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [saving, setSaving] = useState(false);
 
@@ -162,9 +161,6 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           )}
-
-          {/* Branches Tab */}
-          {activeTab === 'branches' && <BranchManagement />}
 
           {/* Channels Tab */}
           {activeTab === 'channels' && <ChannelConnections />}
