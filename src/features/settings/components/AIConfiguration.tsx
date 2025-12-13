@@ -1416,9 +1416,17 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
 
       onSave();
       onClose();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error saving staff:', error);
-      alert('Error al guardar. Intenta de nuevo.');
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      // Check for common RLS errors
+      if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
+        alert('Error de permisos: No tienes autorización para realizar esta acción. Contacta al administrador.');
+      } else if (errorMessage.includes('unique constraint') || errorMessage.includes('duplicate')) {
+        alert('Este doctor ya está asignado a esa sucursal.');
+      } else {
+        alert(`Error al guardar: ${errorMessage}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -1449,9 +1457,14 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
 
       onSave();
       onClose();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error deleting staff:', error);
-      alert('Error al eliminar. Intenta de nuevo.');
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
+        alert('Error de permisos: No tienes autorización para eliminar este doctor.');
+      } else {
+        alert(`Error al eliminar: ${errorMessage}`);
+      }
     } finally {
       setSaving(false);
     }
