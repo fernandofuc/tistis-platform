@@ -119,12 +119,12 @@ export default function DashboardPage() {
         }
 
         // Fetch recent leads
-        const { data: recentLeadsData } = await buildQuery('leads', '*')
+        const { data: recentLeadsData, error: recentLeadsError } = await buildQuery('leads', '*')
           .order('created_at', { ascending: false })
           .limit(5);
 
-        if (recentLeadsData) {
-          setRecentLeads(recentLeadsData as Lead[]);
+        if (!recentLeadsError && recentLeadsData) {
+          setRecentLeads(recentLeadsData as unknown as Lead[]);
         }
 
         // Fetch today's appointments
@@ -132,13 +132,13 @@ export default function DashboardPage() {
         const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
         const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
-        const { data: appointmentsData } = await buildQuery('appointments', '*, leads(full_name, phone)')
+        const { data: appointmentsData, error: appointmentsError } = await buildQuery('appointments', '*, leads(full_name, phone)')
           .gte('scheduled_at', startOfDay)
           .lte('scheduled_at', endOfDay)
           .order('scheduled_at');
 
-        if (appointmentsData) {
-          setTodayAppointments(appointmentsData as Appointment[]);
+        if (!appointmentsError && appointmentsData) {
+          setTodayAppointments(appointmentsData as unknown as Appointment[]);
           setStats((prev) => ({
             ...prev,
             todayAppointments: appointmentsData.length,

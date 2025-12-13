@@ -161,7 +161,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
 
   // Multi-tenant hooks
   const { tenant, isLoading: tenantLoading } = useTenant();
-  const { flags, flagsLoading, isEnabled } = useFeatureFlags();
+  const { flagsLoading, isEnabled } = useFeatureFlags();
 
   // Use props if explicitly provided, otherwise use store state
   const collapsed = isCollapsed !== undefined ? isCollapsed : sidebarCollapsed;
@@ -186,7 +186,8 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       // Show by default if no flag specified
       return true;
     });
-  }, [flags, flagsLoading, isEnabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flagsLoading, isEnabled]);
 
   // Get display name with vertical-specific terminology
   const getDisplayName = (item: NavItemWithFlag): string => {
