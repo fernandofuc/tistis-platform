@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardContent, Button, Input, Badge, Avatar } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
-import { ChannelConnections, AIConfiguration } from '@/src/features/settings';
+import { ChannelConnections, AIConfiguration, BranchManagement } from '@/src/features/settings';
 import { cn } from '@/src/shared/utils';
 
 // ======================
@@ -50,11 +50,12 @@ const icons = {
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'clinic' | 'notifications' | 'channels' | 'ai' | 'security';
+type SettingsTab = 'profile' | 'clinic' | 'branches' | 'notifications' | 'channels' | 'ai' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
   { key: 'clinic', label: 'Clínica', icon: icons.building },
+  { key: 'branches', label: 'Sucursales', icon: icons.building },
   { key: 'channels', label: 'Canales', icon: icons.channels },
   { key: 'ai', label: 'AI Agent', icon: icons.ai },
   { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
@@ -207,6 +208,9 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Branches Tab - NEW */}
+          {activeTab === 'branches' && <BranchManagement />}
 
           {/* Channels Tab - NEW */}
           {activeTab === 'channels' && <ChannelConnections />}

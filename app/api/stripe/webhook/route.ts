@@ -395,15 +395,45 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const periodStart = (subscription as any).current_period_start;
   const periodEnd = (subscription as any).current_period_end;
 
+  // Get branches count from metadata (set by update-subscription endpoint)
+  const metadataBranches = subscription.metadata?.branches;
+  const branchesCount = metadataBranches ? parseInt(metadataBranches) : undefined;
+
+  // Calculate total monthly amount from all line items
+  let totalMonthlyAmount = 0;
+  for (const item of subscription.items.data) {
+    const unitAmount = item.price?.unit_amount || 0;
+    const quantity = item.quantity || 1;
+    totalMonthlyAmount += unitAmount * quantity;
+  }
+
+  // Build update object
+  const updateData: Record<string, unknown> = {
+    status,
+    current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+    current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Update branches count if changed
+  if (branchesCount !== undefined) {
+    updateData.max_branches = branchesCount;
+    updateData.branches = branchesCount;
+    console.log(`📊 Branches count updated to: ${branchesCount}`);
+  }
+
+  // Update monthly amount if changed
+  if (totalMonthlyAmount > 0) {
+    updateData.monthly_amount = totalMonthlyAmount / 100;
+    console.log(`💰 Monthly amount updated to: ${totalMonthlyAmount / 100} MXN`);
+  }
+
   await supabase
     .from('subscriptions')
-    .update({
-      status,
-      current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
-      current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('stripe_subscription_id', subscription.id);
+
+  console.log('✅ Subscription record updated');
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {

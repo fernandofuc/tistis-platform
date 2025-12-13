@@ -340,9 +340,23 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     console.log('✅ [Provisioning] Tenant created:', tenant.id);
 
     // ============================================
-    // STEP 4: Crear Branch Principal
+    // STEP 4: Crear Sucursales (todas las contratadas)
     // ============================================
-    const { data: branch, error: branchError } = await supabase
+    const branchesCount = params.branches_count || 1;
+    const createdBranches: { id: string; name: string; is_headquarters: boolean }[] = [];
+
+    const defaultOperatingHours = {
+      monday: { open: '09:00', close: '18:00', enabled: true },
+      tuesday: { open: '09:00', close: '18:00', enabled: true },
+      wednesday: { open: '09:00', close: '18:00', enabled: true },
+      thursday: { open: '09:00', close: '18:00', enabled: true },
+      friday: { open: '09:00', close: '18:00', enabled: true },
+      saturday: { open: '09:00', close: '14:00', enabled: true },
+      sunday: { enabled: false },
+    };
+
+    // Crear sucursal principal (HQ)
+    const { data: hqBranch, error: hqError } = await supabase
       .from('branches')
       .insert({
         tenant_id: tenant.id,
@@ -357,31 +371,71 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         is_headquarters: true,
         is_active: true,
         timezone: 'America/Mexico_City',
-        operating_hours: {
-          monday: { open: '09:00', close: '18:00', enabled: true },
-          tuesday: { open: '09:00', close: '18:00', enabled: true },
-          wednesday: { open: '09:00', close: '18:00', enabled: true },
-          thursday: { open: '09:00', close: '18:00', enabled: true },
-          friday: { open: '09:00', close: '18:00', enabled: true },
-          saturday: { open: '09:00', close: '14:00', enabled: true },
-          sunday: { enabled: false },
-        },
+        operating_hours: defaultOperatingHours,
       })
       .select()
       .single();
 
-    if (branchError || !branch) {
-      console.error('❌ [Provisioning] Failed to create branch:', branchError);
-      // Intentar rollback del tenant
+    if (hqError || !hqBranch) {
+      console.error('❌ [Provisioning] Failed to create HQ branch:', hqError);
       await supabase.from('tenants').delete().eq('id', tenant.id);
       return {
         success: false,
-        error: 'Failed to create branch',
-        details: { error: branchError?.message },
+        error: 'Failed to create headquarters branch',
+        details: { error: hqError?.message },
       };
     }
 
-    console.log('✅ [Provisioning] Branch created:', branch.id);
+    createdBranches.push({
+      id: hqBranch.id,
+      name: hqBranch.name,
+      is_headquarters: true,
+    });
+    console.log('✅ [Provisioning] HQ Branch created:', hqBranch.id);
+
+    // Crear sucursales adicionales si se contrataron más de 1
+    if (branchesCount > 1) {
+      console.log(`📍 [Provisioning] Creating ${branchesCount - 1} additional branches...`);
+
+      for (let i = 2; i <= branchesCount; i++) {
+        const branchName = `Sucursal ${i}`;
+        const branchSlug = `sucursal-${i}`;
+
+        const { data: additionalBranch, error: additionalError } = await supabase
+          .from('branches')
+          .insert({
+            tenant_id: tenant.id,
+            name: branchName,
+            slug: branchSlug,
+            city: 'Por configurar',
+            state: 'Por configurar',
+            country: client.address_country || 'Mexico',
+            is_headquarters: false,
+            is_active: true,
+            timezone: 'America/Mexico_City',
+            operating_hours: defaultOperatingHours,
+          })
+          .select()
+          .single();
+
+        if (additionalError) {
+          console.warn(`⚠️ [Provisioning] Failed to create branch ${i}:`, additionalError);
+          // Continuamos con las demás, no hacemos rollback completo
+        } else if (additionalBranch) {
+          createdBranches.push({
+            id: additionalBranch.id,
+            name: additionalBranch.name,
+            is_headquarters: false,
+          });
+          console.log(`✅ [Provisioning] Branch ${i} created:`, additionalBranch.id);
+        }
+      }
+    }
+
+    console.log(`✅ [Provisioning] Total branches created: ${createdBranches.length}/${branchesCount}`);
+
+    // Usar la sucursal HQ como referencia para los siguientes pasos
+    const branch = hqBranch;
 
     // ============================================
     // STEP 5: Buscar o Crear Usuario en auth.users
@@ -523,6 +577,8 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       new_data: {
         tenant_id: tenant.id,
         branch_id: branch.id,
+        branches_created: createdBranches.length,
+        branches_requested: branchesCount,
         vertical: params.vertical,
         plan: params.plan,
         duration_ms: Date.now() - startTime,
@@ -549,6 +605,9 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         plan: params.plan,
         services_created: verticalConfig.default_services.length,
         faqs_created: verticalConfig.default_faqs.length,
+        branches_created: createdBranches.length,
+        branches_requested: branchesCount,
+        branches: createdBranches, // Lista de sucursales creadas
         used_existing_account: !tempPassword, // true si usamos cuenta existente
       },
     };
