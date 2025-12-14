@@ -688,11 +688,6 @@
                 <span class="summary-value" id="summaryAddonsCost">$0</span>
             </div>
 
-            <div class="total-section">
-                <div class="total-label">Inversión Mensual Total</div>
-                <div class="total-price" id="totalMonthly">$0</div>
-            </div>
-
             <!-- Activation fee removed from pricing page - shown in checkout -->
 
             <div style="background: linear-gradient(135deg, #7C5CFC15 0%, #C2335015 100%); padding: 1.5rem; border-radius: 12px; margin: 1rem 0; border: 2px solid var(--accent-coral);">
@@ -703,21 +698,6 @@
                 </div>
             </div>
 
-            <div style="background: var(--bg-light); padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 0.85rem;">
-                <div style="font-weight: 700; margin-bottom: 0.5rem;">💰 Desglose de Primeros Meses</div>
-                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
-                    <span>Mes 1:</span>
-                    <span style="font-weight: 700;" id="month1Cost">$0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
-                    <span>Mes 2:</span>
-                    <span style="font-weight: 700;" id="month2Cost">$0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
-                    <span>Mes 3+:</span>
-                    <span style="font-weight: 700;" id="month3Cost">$0</span>
-                </div>
-            </div>
 
             <div style="font-size: 0.85rem; color: var(--text-secondary); margin: 1rem 0;">
                 <strong>📦 Tu plan incluye:</strong><br>
@@ -729,7 +709,6 @@
             </button>
 
             <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
-                ⏰ Core Live en 21 días o menos<br>
                 🎯 IVA incluido
             </div>
         </div>
@@ -1331,11 +1310,7 @@
         function updateSummary() {
             if (!selectedPlan) {
                 document.getElementById('summaryPlan').textContent = 'Ninguno';
-                document.getElementById('totalMonthly').textContent = '$0';
                 document.getElementById('includedCredits').textContent = '0';
-                document.getElementById('month1Cost').textContent = '$0';
-                document.getElementById('month2Cost').textContent = '$0';
-                document.getElementById('month3Cost').textContent = '$0';
                 document.getElementById('initialPayment').textContent = '$0';
                 return;
             }
@@ -1395,23 +1370,13 @@
 
             const monthlyTotal = baseCost + branchCost + addonsCost;
 
-            // No activation fee - just show monthly total
-            const month1 = monthlyTotal;
-            const month2 = monthlyTotal;
-            const month3Plus = monthlyTotal;
-
             // Update UI
             document.getElementById('summaryPlan').textContent = `${selectedPlan.name} - ${selectedPlan.subtitle}`;
             document.getElementById('summaryBranches').textContent = branches;
             document.getElementById('summaryBranchCost').textContent = formatCurrency(branchCost);
             document.getElementById('summaryAddonsCount').textContent = selectedAddons.size;
             document.getElementById('summaryAddonsCost').textContent = formatCurrency(addonsCost);
-            document.getElementById('totalMonthly').textContent = formatCurrency(monthlyTotal);
             document.getElementById('includedCredits').textContent = selectedPlan.credits;
-            document.getElementById('month1Cost').textContent = formatCurrency(month1);
-            document.getElementById('month2Cost').textContent = formatCurrency(month2);
-            document.getElementById('month3Cost').textContent = formatCurrency(month3Plus);
-            // Show monthly total instead of initial payment (activation shown in checkout)
             document.getElementById('initialPayment').textContent = formatCurrency(monthlyTotal);
         }
 

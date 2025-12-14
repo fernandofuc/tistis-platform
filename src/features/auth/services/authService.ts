@@ -135,7 +135,7 @@ export async function fetchStaffByUserId(userId: string): Promise<Staff | null> 
 
 export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
   try {
-    // Get tenant_id from user metadata
+    // Get user data including metadata
     const { data: { user } } = await supabase.auth.getUser();
     const tenantId = user?.user_metadata?.tenant_id;
 
@@ -160,8 +160,37 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
       return null;
     }
 
-    console.log('🟢 Staff fetched by email:', data.display_name);
-    return data as Staff;
+    // Enrich staff data with user metadata if staff fields are empty
+    // This ensures profile shows data from checkout/discovery
+    const enrichedStaff = { ...data } as Staff;
+
+    if (user?.user_metadata) {
+      const meta = user.user_metadata;
+
+      // If staff first_name is empty, use from user_metadata
+      if (!enrichedStaff.first_name && meta.first_name) {
+        enrichedStaff.first_name = meta.first_name;
+      }
+      if (!enrichedStaff.last_name && meta.last_name) {
+        enrichedStaff.last_name = meta.last_name;
+      }
+      if (!enrichedStaff.phone && meta.phone) {
+        enrichedStaff.phone = meta.phone;
+      }
+
+      // Update display_name if it's missing or just "Admin"
+      if ((!enrichedStaff.display_name || enrichedStaff.display_name === 'Admin') && meta.name) {
+        enrichedStaff.display_name = meta.name;
+      }
+
+      // Ensure email is always from the authenticated user
+      if (user.email) {
+        enrichedStaff.email = user.email;
+      }
+    }
+
+    console.log('🟢 Staff fetched by email:', enrichedStaff.display_name);
+    return enrichedStaff;
   } catch (err) {
     console.error('🔴 Fetch staff by email exception:', err);
     return null;
