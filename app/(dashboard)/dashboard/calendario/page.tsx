@@ -8,7 +8,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardHeader, CardContent, Button, Badge, Avatar } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
-import { NewAppointmentModal } from '@/src/features/appointments';
+import { NewAppointmentModal, AppointmentDetailPanel } from '@/src/features/appointments';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
 import { formatDate, formatTime, cn } from '@/src/shared/utils';
@@ -39,6 +40,49 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  arrowRight: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  ),
+};
+
+// ======================
+// ANIMATION VARIANTS (Apple-style)
+// ======================
+const listItemVariants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: i * 0.05,
+      duration: 0.2,
+      ease: [0.32, 0.72, 0, 1],
+    },
+  }),
+};
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+// Status colors for badges
+const statusColors: Record<string, { bg: string; border: string; dot: string }> = {
+  scheduled: { bg: 'bg-blue-50', border: 'border-blue-100', dot: 'bg-blue-500' },
+  confirmed: { bg: 'bg-green-50', border: 'border-green-100', dot: 'bg-green-500' },
+  in_progress: { bg: 'bg-yellow-50', border: 'border-yellow-100', dot: 'bg-yellow-500' },
+  completed: { bg: 'bg-emerald-50', border: 'border-emerald-100', dot: 'bg-emerald-500' },
+  cancelled: { bg: 'bg-red-50', border: 'border-red-100', dot: 'bg-red-500' },
+  no_show: { bg: 'bg-gray-50', border: 'border-gray-200', dot: 'bg-gray-400' },
+  rescheduled: { bg: 'bg-purple-50', border: 'border-purple-100', dot: 'bg-purple-500' },
 };
 
 // ======================
@@ -82,8 +126,11 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date()); // Select today by default
-  const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
+
+  // Detail panel state
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -173,6 +220,21 @@ export default function CalendarPage() {
 
   const isSelected = (date: Date) => {
     return selectedDate?.toDateString() === date.toDateString();
+  };
+
+  // Handle appointment click
+  const handleAppointmentClick = (apt: Appointment) => {
+    setSelectedAppointment(apt);
+    setShowDetailPanel(true);
+  };
+
+  // Handle status change from detail panel
+  const handleStatusChange = (appointmentId: string, newStatus: string) => {
+    setAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === appointmentId ? { ...apt, status: newStatus as Appointment['status'] } : apt
+      )
+    );
   };
 
   return (
@@ -295,48 +357,89 @@ export default function CalendarPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {selectedDateAppointments.map((apt) => (
-                    <div
-                      key={apt.id}
-                      className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                          <span className="text-gray-400">{icons.clock}</span>
-                          {formatTime(apt.scheduled_at)}
-                          <span className="text-gray-400">({apt.duration_minutes} min)</span>
-                        </div>
-                        <Badge
-                          variant={
-                            apt.status === 'confirmed' ? 'success' :
-                            apt.status === 'cancelled' ? 'danger' :
-                            'info'
-                          }
-                          size="sm"
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={selectedDate.toDateString()}
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="space-y-3"
+                  >
+                    {selectedDateAppointments.map((apt, index) => {
+                      const statusStyle = statusColors[apt.status] || statusColors.scheduled;
+                      const lead = (apt as any).leads;
+
+                      return (
+                        <motion.button
+                          key={apt.id}
+                          custom={index}
+                          variants={listItemVariants}
+                          onClick={() => handleAppointmentClick(apt)}
+                          className={cn(
+                            'w-full p-4 rounded-xl text-left',
+                            'border transition-all duration-200',
+                            'hover:shadow-md hover:scale-[1.02] active:scale-[0.98]',
+                            'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                            statusStyle.bg,
+                            statusStyle.border
+                          )}
+                          whileHover={{ y: -2 }}
+                          whileTap={{ scale: 0.98 }}
                         >
-                          {APPOINTMENT_STATUSES.find((s) => s.value === apt.status)?.label || apt.status}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Avatar name={(apt as any).leads?.full_name || 'Sin nombre'} size="sm" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {(apt as any).leads?.full_name || 'Sin nombre'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(apt as any).leads?.phone}
-                          </p>
-                        </div>
-                      </div>
-                      {apt.notes && (
-                        <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                          {apt.notes}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                          {/* Time & Status Row */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className={cn('w-2 h-2 rounded-full', statusStyle.dot)} />
+                              <span className="text-sm font-semibold text-gray-900">
+                                {formatTime(apt.scheduled_at)}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                ({apt.duration_minutes} min)
+                              </span>
+                            </div>
+                            <Badge
+                              variant={
+                                apt.status === 'confirmed' ? 'success' :
+                                apt.status === 'cancelled' ? 'danger' :
+                                apt.status === 'completed' ? 'success' :
+                                'info'
+                              }
+                              size="sm"
+                            >
+                              {APPOINTMENT_STATUSES.find((s) => s.value === apt.status)?.label || apt.status}
+                            </Badge>
+                          </div>
+
+                          {/* Patient Info */}
+                          <div className="flex items-center gap-3">
+                            <Avatar
+                              name={lead?.full_name || lead?.phone || 'Sin nombre'}
+                              size="md"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 truncate">
+                                {lead?.full_name || 'Sin nombre'}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {lead?.phone || 'Sin teléfono'}
+                              </p>
+                            </div>
+                            <span className="text-gray-400 flex-shrink-0">
+                              {icons.arrowRight}
+                            </span>
+                          </div>
+
+                          {/* Notes Preview */}
+                          {apt.notes && (
+                            <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200/50 line-clamp-1">
+                              {apt.notes}
+                            </p>
+                          )}
+                        </motion.button>
+                      );
+                    })}
+                  </motion.div>
+                </AnimatePresence>
               )}
             </CardContent>
           </Card>
@@ -349,6 +452,17 @@ export default function CalendarPage() {
         onClose={() => setShowNewAppointmentModal(false)}
         onSuccess={fetchAppointments}
         preselectedDate={selectedDate || undefined}
+      />
+
+      {/* Appointment Detail Panel (Apple-style slide-over) */}
+      <AppointmentDetailPanel
+        appointment={selectedAppointment}
+        isOpen={showDetailPanel}
+        onClose={() => {
+          setShowDetailPanel(false);
+          setSelectedAppointment(null);
+        }}
+        onStatusChange={handleStatusChange}
       />
     </PageWrapper>
   );

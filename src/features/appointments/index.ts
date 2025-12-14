@@ -3,3 +3,4 @@
 // =====================================================
 
 export { NewAppointmentModal } from './components/NewAppointmentModal';
+export { AppointmentDetailPanel } from './components/AppointmentDetailPanel';
