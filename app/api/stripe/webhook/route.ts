@@ -217,10 +217,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
-  const { plan, customerName, branches, addons, vertical, proposalId } = subscription.metadata || {};
+  const { plan, customerName, customerPhone, branches, addons, vertical, proposalId } = subscription.metadata || {};
   const customerId = subscription.customer as string;
 
-  console.log('📋 Subscription metadata:', { plan, customerName, branches, addons });
+  console.log('📋 Subscription metadata:', { plan, customerName, customerPhone, branches, addons });
 
   // Get customer email from Stripe
   const customer = await stripe.customers.retrieve(customerId);
@@ -311,6 +311,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     client_id: client.id,
     customer_email: customerEmail,
     customer_name: customerName || 'Nuevo Cliente',
+    customer_phone: customerPhone || undefined,
     vertical: (vertical as 'dental' | 'restaurant' | 'pharmacy' | 'retail' | 'medical' | 'services' | 'other') || 'services',
     plan: (plan as 'starter' | 'essentials' | 'growth' | 'scale') || 'essentials',
     branches_count: branches ? parseInt(branches) : 1,

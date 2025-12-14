@@ -113,6 +113,7 @@ function CheckoutContent() {
   const [addons, setAddons] = useState<string[]>([]);
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
 
   const cancelled = searchParams.get('cancelled');
 
@@ -146,6 +147,7 @@ function CheckoutContent() {
         if (answers.contact_info) {
           setCustomerEmail(answers.contact_info.email || '');
           setCustomerName(answers.contact_info.name || '');
+          setCustomerPhone(answers.contact_info.phone || '');
         }
       } catch (e) {
         console.error('Error parsing questionnaire answers:', e);
@@ -177,6 +179,7 @@ function CheckoutContent() {
           plan: planId,
           customerEmail,
           customerName,
+          customerPhone,
           branches,
           addons,
           metadata: {

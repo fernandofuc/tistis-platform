@@ -23,6 +23,7 @@ export interface ProvisionTenantParams {
   client_id: string;
   customer_email: string;
   customer_name: string;
+  customer_phone?: string;
   vertical: 'dental' | 'restaurant' | 'pharmacy' | 'retail' | 'medical' | 'services' | 'other';
   plan: 'starter' | 'essentials' | 'growth' | 'scale';
   branches_count?: number;
@@ -458,6 +459,8 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
           tenant_id: tenant.id,
           role: 'admin',
           vertical: params.vertical,
+          name: params.customer_name,
+          phone: params.customer_phone || authUser.user_metadata?.phone,
         },
       });
     } else {
@@ -471,6 +474,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         email_confirm: true,
         user_metadata: {
           name: params.customer_name,
+          phone: params.customer_phone,
           tenant_id: tenant.id,
           role: 'admin',
           vertical: params.vertical,
@@ -504,6 +508,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       user_id: authUser.id,
       email: params.customer_email,
       name: params.customer_name,
+      phone: params.customer_phone,
     });
 
     if (!staffResult.success) {
@@ -630,6 +635,7 @@ interface CreateStaffParams {
   user_id: string;
   email: string;
   name: string;
+  phone?: string;
 }
 
 async function createStaffAndRole(
@@ -652,6 +658,7 @@ async function createStaffAndRole(
         last_name: lastName,
         display_name: params.name,
         email: params.email,
+        phone: params.phone || null,
         role: 'admin',
         role_title: 'Administrador',
         is_active: true,

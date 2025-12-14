@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
       plan,
       customerEmail,
       customerName,
+      customerPhone,
       branches = 1,
       addons = [],
       vertical = 'dental', // Default vertical
@@ -159,6 +160,7 @@ export async function POST(req: NextRequest) {
           branches: branches.toString(),
           addons: JSON.stringify(addons),
           customerName: customerName || '',
+          customerPhone: customerPhone || '',
           vertical, // Include vertical for Assembly Engine
           proposalId: proposalId || '',
           ...metadata,
@@ -171,6 +173,7 @@ export async function POST(req: NextRequest) {
         branches: branches.toString(),
         addons: JSON.stringify(addons),
         customerName: customerName || '',
+        customerPhone: customerPhone || '',
         vertical,
         proposalId: proposalId || '',
         ...metadata,
