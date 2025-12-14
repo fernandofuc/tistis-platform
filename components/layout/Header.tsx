@@ -70,7 +70,7 @@ export default function Header() {
               Planes
             </Link>
             <Link
-              href="/#como-funciona"
+              href="/como-funciona"
               className="text-tis-text-primary hover:text-tis-coral transition-colors font-medium"
             >
               Cómo funciona

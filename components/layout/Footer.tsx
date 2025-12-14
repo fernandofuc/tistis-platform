@@ -41,7 +41,7 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/#como-funciona" className="text-gray-400 hover:text-white transition-colors">
+                <Link href="/como-funciona" className="text-gray-400 hover:text-white transition-colors">
                   Cómo Funciona
                 </Link>
               </li>
