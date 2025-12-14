@@ -222,6 +222,12 @@ export default function CalendarPage() {
     return selectedDate?.toDateString() === date.toDateString();
   };
 
+  // Check if currently viewing today
+  const isViewingToday = useMemo(() => {
+    const today = new Date();
+    return selectedDate?.toDateString() === today.toDateString();
+  }, [selectedDate]);
+
   // Handle appointment click
   const handleAppointmentClick = (apt: Appointment) => {
     setSelectedAppointment(apt);
@@ -272,9 +278,11 @@ export default function CalendarPage() {
                     {MONTHS[month]} {year}
                   </h2>
                 </div>
-                <Button variant="outline" size="sm" onClick={goToToday}>
-                  Hoy
-                </Button>
+                {!isViewingToday && (
+                  <Button variant="outline" size="sm" onClick={goToToday}>
+                    Hoy
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
