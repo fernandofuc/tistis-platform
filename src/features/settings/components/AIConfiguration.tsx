@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent, Button, Badge, Input } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
+import { updateTenant, type UpdateTenantData } from '@/src/features/auth/services/authService';
 import { cn } from '@/src/shared/utils';
 
 // ======================
@@ -211,6 +212,16 @@ export function AIConfiguration() {
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
+
+  // Business Identity Edit State
+  const [isEditingIdentity, setIsEditingIdentity] = useState(false);
+  const [savingIdentity, setSavingIdentity] = useState(false);
+  const [identityForm, setIdentityForm] = useState({
+    name: '',
+    legal_name: '',
+    primary_contact_phone: '',
+  });
+  const [identityError, setIdentityError] = useState<string | null>(null);
 
   // Load configuration
   useEffect(() => {
@@ -535,55 +546,172 @@ export function AIConfiguration() {
               </div>
 
               {/* Business Identity - Datos del Tenant */}
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <h4 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                  Identidad del Negocio
-                </h4>
+              <div className="p-4 bg-white rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    Identidad del Negocio
+                  </h4>
+                  {!isEditingIdentity && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setIdentityForm({
+                          name: tenant?.name || '',
+                          legal_name: tenant?.legal_name || '',
+                          primary_contact_phone: tenant?.primary_contact_phone || '',
+                        });
+                        setIdentityError(null);
+                        setIsEditingIdentity(true);
+                      }}
+                    >
+                      {icons.edit}
+                      <span className="ml-1">Editar</span>
+                    </Button>
+                  )}
+                </div>
+
+                {/* Error Message */}
+                {identityError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-700">{identityError}</p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Nombre Comercial - EDITABLE */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Nombre Comercial
                     </label>
-                    <p className="text-gray-900 bg-white px-3 py-2 rounded-lg border border-gray-200">
-                      {tenant?.name || 'No configurado'}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">El AI usa este nombre para identificar tu clínica</p>
+                    {isEditingIdentity ? (
+                      <input
+                        type="text"
+                        value={identityForm.name}
+                        onChange={(e) => setIdentityForm({ ...identityForm, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Nombre de tu negocio"
+                      />
+                    ) : (
+                      <p className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                        {tenant?.name || 'No configurado'}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">El AI usa este nombre para identificar tu negocio</p>
                   </div>
+
+                  {/* Razón Social - EDITABLE */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Razón Social
+                      <span className="text-gray-400 font-normal ml-1">(opcional)</span>
                     </label>
-                    <p className="text-gray-900 bg-white px-3 py-2 rounded-lg border border-gray-200">
-                      {tenant?.legal_name || 'No configurado'}
-                    </p>
+                    {isEditingIdentity ? (
+                      <input
+                        type="text"
+                        value={identityForm.legal_name}
+                        onChange={(e) => setIdentityForm({ ...identityForm, legal_name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Razón social para facturas"
+                      />
+                    ) : (
+                      <p className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                        {tenant?.legal_name || 'No configurado'}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500 mt-1">Nombre legal para facturas y documentos</p>
                   </div>
+
+                  {/* Email de Contacto - READONLY (crítico) */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                       Email de Contacto
+                      <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
                     </label>
-                    <p className="text-gray-900 bg-white px-3 py-2 rounded-lg border border-gray-200">
+                    <p className="text-gray-900 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200">
                       {tenant?.primary_contact_email || 'No configurado'}
                     </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Vinculado a tu cuenta y facturación. Contacta soporte para cambiarlo.
+                    </p>
                   </div>
+
+                  {/* Teléfono Principal - EDITABLE */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Teléfono Principal
+                      <span className="text-gray-400 font-normal ml-1">(opcional)</span>
                     </label>
-                    <p className="text-gray-900 bg-white px-3 py-2 rounded-lg border border-gray-200">
-                      {tenant?.primary_contact_phone || 'No configurado'}
-                    </p>
+                    {isEditingIdentity ? (
+                      <input
+                        type="tel"
+                        value={identityForm.primary_contact_phone}
+                        onChange={(e) => setIdentityForm({ ...identityForm, primary_contact_phone: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="+52 55 1234 5678"
+                      />
+                    ) : (
+                      <p className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                        {tenant?.primary_contact_phone || 'No configurado'}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">Teléfono de contacto principal del negocio</p>
                   </div>
                 </div>
-                <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Estos datos se configuraron durante el onboarding. Contacta a soporte para modificarlos.
-                </p>
+
+                {/* Action Buttons when Editing */}
+                {isEditingIdentity && (
+                  <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditingIdentity(false);
+                        setIdentityError(null);
+                      }}
+                      disabled={savingIdentity}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        setSavingIdentity(true);
+                        setIdentityError(null);
+
+                        const result = await updateTenant({
+                          name: identityForm.name,
+                          legal_name: identityForm.legal_name,
+                          primary_contact_phone: identityForm.primary_contact_phone,
+                        });
+
+                        if (result.success) {
+                          // Refresh the page to get updated tenant data
+                          window.location.reload();
+                        } else {
+                          setIdentityError(result.error || 'Error al guardar');
+                          setSavingIdentity(false);
+                        }
+                      }}
+                      isLoading={savingIdentity}
+                    >
+                      Guardar Cambios
+                    </Button>
+                  </div>
+                )}
+
+                {/* Info note - only when NOT editing */}
+                {!isEditingIdentity && (
+                  <p className="text-xs text-gray-500 mt-4 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Puedes editar el nombre, razón social y teléfono. El email está protegido por seguridad.
+                  </p>
+                )}
               </div>
 
               {/* Branches List */}

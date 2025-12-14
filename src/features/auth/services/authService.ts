@@ -264,6 +264,74 @@ export async function fetchBranches(): Promise<Branch[]> {
 }
 
 // ======================
+// UPDATE TENANT (Identidad del Negocio)
+// Solo campos editables: name, legal_name, primary_contact_phone
+// Email es readonly por seguridad (afecta facturación/auth)
+// ======================
+export interface UpdateTenantData {
+  name?: string;
+  legal_name?: string;
+  primary_contact_phone?: string;
+}
+
+export async function updateTenant(data: UpdateTenantData): Promise<{ success: boolean; error?: string; tenant?: Tenant }> {
+  try {
+    // Get tenant_id from user metadata
+    const { data: { user } } = await supabase.auth.getUser();
+    const tenantId = user?.user_metadata?.tenant_id;
+
+    if (!tenantId) {
+      console.log('🟡 No tenant_id in user metadata');
+      return { success: false, error: 'No se encontró el tenant' };
+    }
+
+    // Validate: at least one field must be provided
+    if (!data.name && !data.legal_name && !data.primary_contact_phone) {
+      return { success: false, error: 'No hay datos para actualizar' };
+    }
+
+    // Build update object with only provided fields
+    const updateData: Record<string, unknown> = {};
+
+    if (data.name !== undefined) {
+      // Validate name is not empty
+      if (!data.name.trim()) {
+        return { success: false, error: 'El nombre comercial no puede estar vacío' };
+      }
+      updateData.name = data.name.trim();
+    }
+
+    if (data.legal_name !== undefined) {
+      updateData.legal_name = data.legal_name.trim() || null;
+    }
+
+    if (data.primary_contact_phone !== undefined) {
+      updateData.primary_contact_phone = data.primary_contact_phone.trim() || null;
+    }
+
+    updateData.updated_at = new Date().toISOString();
+
+    const { data: updatedTenant, error } = await supabase
+      .from('tenants')
+      .update(updateData)
+      .eq('id', tenantId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('🔴 Update tenant error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    console.log('🟢 Tenant updated:', updatedTenant.name);
+    return { success: true, tenant: updatedTenant as Tenant };
+  } catch (err) {
+    console.error('🔴 Update tenant exception:', err);
+    return { success: false, error: 'Error inesperado al actualizar datos del negocio' };
+  }
+}
+
+// ======================
 // SESSION
 // ======================
 export async function getSession() {
