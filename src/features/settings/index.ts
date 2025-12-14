@@ -7,3 +7,11 @@
 export { ChannelConnections } from './components/ChannelConnections';
 export { AIConfiguration } from './components/AIConfiguration';
 export { BranchManagement } from './components/BranchManagement';
+
+// Services
+export {
+  fetchNotificationPreferences,
+  updateNotificationPreferences,
+  toggleNotificationPreference,
+  type NotificationPreferences,
+} from './services/notificationService';
