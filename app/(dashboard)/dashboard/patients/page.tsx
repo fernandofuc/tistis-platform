@@ -85,8 +85,8 @@ type StatusFilter = 'all' | 'active' | 'inactive' | 'archived';
 // ======================
 const backdropVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] } },
-  exit: { opacity: 0, transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] } },
+  visible: { opacity: 1, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] as const } },
+  exit: { opacity: 0, transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] as const } },
 };
 
 const modalVariants = {
@@ -95,7 +95,7 @@ const modalVariants = {
     opacity: 1,
     scale: 1,
     y: 0,
-    transition: { type: 'spring', damping: 25, stiffness: 300 },
+    transition: { type: 'spring' as const, damping: 25, stiffness: 300 },
   },
   exit: {
     opacity: 0,

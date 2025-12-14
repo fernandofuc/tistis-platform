@@ -117,11 +117,11 @@ const backdropVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] },
+    transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] as const },
   },
   exit: {
     opacity: 0,
-    transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] },
+    transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] as const },
   },
 };
 
@@ -134,7 +134,7 @@ const panelVariants = {
     x: 0,
     opacity: 1,
     transition: {
-      type: 'spring',
+      type: 'spring' as const,
       damping: 30,
       stiffness: 300,
       mass: 0.8,
@@ -144,7 +144,7 @@ const panelVariants = {
     x: '100%',
     opacity: 0.8,
     transition: {
-      type: 'spring',
+      type: 'spring' as const,
       damping: 30,
       stiffness: 300,
       mass: 0.8,
@@ -160,7 +160,7 @@ const contentVariants = {
     transition: {
       delay: 0.1,
       duration: 0.25,
-      ease: [0.32, 0.72, 0, 1],
+      ease: [0.32, 0.72, 0, 1] as const,
     },
   },
   exit: {
@@ -177,7 +177,7 @@ const itemVariants = {
     transition: {
       delay: 0.15 + i * 0.05,
       duration: 0.25,
-      ease: [0.32, 0.72, 0, 1],
+      ease: [0.32, 0.72, 0, 1] as const,
     },
   }),
 };
@@ -388,12 +388,12 @@ export function AppointmentDetailPanel({
                     </div>
                     <div className="flex items-center gap-4">
                       <Avatar
-                        name={lead.full_name || lead.phone}
+                        name={lead.name || lead.phone}
                         size="lg"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 truncate">
-                          {lead.full_name || 'Sin nombre'}
+                          {lead.name || 'Sin nombre'}
                         </p>
                         <p className="text-sm text-gray-500 truncate">{lead.email || 'Sin email'}</p>
                         {lead.classification && (

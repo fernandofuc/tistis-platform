@@ -87,8 +87,8 @@ const icons = {
 // ======================
 const backdropVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] } },
-  exit: { opacity: 0, transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] } },
+  visible: { opacity: 1, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] as const } },
+  exit: { opacity: 0, transition: { duration: 0.15, ease: [0.32, 0.72, 0, 1] as const } },
 };
 
 const panelVariants = {
@@ -96,12 +96,12 @@ const panelVariants = {
   visible: {
     x: 0,
     opacity: 1,
-    transition: { type: 'spring', damping: 30, stiffness: 300, mass: 0.8 },
+    transition: { type: 'spring' as const, damping: 30, stiffness: 300, mass: 0.8 },
   },
   exit: {
     x: '100%',
     opacity: 0.8,
-    transition: { type: 'spring', damping: 30, stiffness: 300, mass: 0.8 },
+    transition: { type: 'spring' as const, damping: 30, stiffness: 300, mass: 0.8 },
   },
 };
 
@@ -110,7 +110,7 @@ const itemVariants = {
   visible: (i: number) => ({
     opacity: 1,
     x: 0,
-    transition: { delay: 0.15 + i * 0.05, duration: 0.25, ease: [0.32, 0.72, 0, 1] },
+    transition: { delay: 0.15 + i * 0.05, duration: 0.25, ease: [0.32, 0.72, 0, 1] as const },
   }),
 };
 
