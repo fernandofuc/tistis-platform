@@ -22,23 +22,27 @@ import { KnowledgeBase } from './KnowledgeBase';
 // - Mensajería Auto: gpt-5-mini (balance calidad/costo)
 // - Voz VAPI: gpt-4o (optimizado para audio)
 
+// AIConfig type must match database schema exactly (ai_tenant_config table)
 interface AIConfig {
   id?: string;
   tenant_id: string;
   ai_enabled: boolean;
+  ai_model?: string;
   ai_personality: 'professional' | 'professional_friendly' | 'casual' | 'formal';
-  max_tokens: number;
   ai_temperature: number;
-  enable_scoring: boolean;
-  auto_escalate_after_messages: number;
+  max_tokens: number;
+  custom_instructions?: string;
   escalation_keywords: string[];
-  business_hours: {
-    enabled: boolean;
-    start: string;
-    end: string;
-    days: number[];
-    timezone: string;
-  };
+  out_of_hours_enabled?: boolean;
+  out_of_hours_message?: string;
+  auto_greeting_enabled?: boolean;
+  auto_greeting_message?: string;
+  max_turns_before_escalation: number;
+  escalate_on_hot_lead?: boolean;
+  supported_languages?: string[];
+  default_language?: string;
+  currency?: string;
+  currency_format?: string;
 }
 
 interface Branch {
@@ -187,23 +191,20 @@ export function AIConfiguration() {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring' | 'escalation'>('general');
 
-  // AI Config State
+  // AI Config State - must match database schema exactly
   const [config, setConfig] = useState<AIConfig>({
     tenant_id: tenant?.id || '',
     ai_enabled: true,
     ai_personality: 'professional_friendly',
-    max_tokens: 500,
     ai_temperature: 0.7,
-    enable_scoring: true,
-    auto_escalate_after_messages: 10,
+    max_tokens: 500,
     escalation_keywords: ['queja', 'molesto', 'enojado', 'gerente', 'supervisor'],
-    business_hours: {
-      enabled: false,
-      start: '09:00',
-      end: '18:00',
-      days: [1, 2, 3, 4, 5],
-      timezone: 'America/Mexico_City',
-    },
+    max_turns_before_escalation: 10,
+    escalate_on_hot_lead: true,
+    out_of_hours_enabled: true,
+    auto_greeting_enabled: true,
+    supported_languages: ['es', 'en'],
+    default_language: 'es',
   });
 
   // Clinic Data State
@@ -212,6 +213,9 @@ export function AIConfiguration() {
   const [staffBranches, setStaffBranches] = useState<StaffBranch[]>([]);
   const [scoringRules, setScoringRules] = useState<ScoringRule[]>([]);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
+
+  // UI-only state (not saved to database)
+  const [enableScoring, setEnableScoring] = useState(true);
 
   // Modal States
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
@@ -956,8 +960,8 @@ export function AIConfiguration() {
                   <input
                     type="checkbox"
                     className="sr-only peer"
-                    checked={config.enable_scoring}
-                    onChange={(e) => setConfig({ ...config, enable_scoring: e.target.checked })}
+                    checked={enableScoring}
+                    onChange={(e) => setEnableScoring(e.target.checked)}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                 </label>
@@ -982,7 +986,7 @@ export function AIConfiguration() {
                 </div>
               </div>
 
-              {config.enable_scoring && (
+              {enableScoring && (
                 <div className="space-y-4">
                   {/* Sistema de Clasificación */}
                   <div>
@@ -1075,7 +1079,7 @@ export function AIConfiguration() {
                 </div>
               )}
 
-              {!config.enable_scoring && (
+              {!enableScoring && (
                 <div className="p-6 bg-gray-50 rounded-xl text-center">
                   <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1354,7 +1358,7 @@ export function AIConfiguration() {
               </div>
 
               {/* Integración con Puntuación */}
-              {config.enable_scoring && (
+              {enableScoring && (
                 <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1373,7 +1377,7 @@ export function AIConfiguration() {
                 </div>
               )}
 
-              {!config.enable_scoring && (
+              {!enableScoring && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">

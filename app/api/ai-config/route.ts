@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       .eq('tenant_id', tenantId)
       .single();
 
-    // If no config exists, return default config
+    // If no config exists, return default config matching database schema
     if (configError && configError.code === 'PGRST116') {
       return NextResponse.json({
         success: true,
@@ -85,18 +85,15 @@ export async function GET(request: NextRequest) {
           tenant_id: tenantId,
           ai_enabled: true,
           ai_personality: 'professional_friendly',
-          max_tokens: 500,
           ai_temperature: 0.7,
-          enable_scoring: true,
-          auto_escalate_after_messages: 10,
+          max_tokens: 500,
           escalation_keywords: ['queja', 'molesto', 'enojado', 'gerente', 'supervisor'],
-          business_hours: {
-            enabled: false,
-            start: '09:00',
-            end: '18:00',
-            days: [1, 2, 3, 4, 5],
-            timezone: 'America/Mexico_City',
-          },
+          max_turns_before_escalation: 10,
+          escalate_on_hot_lead: true,
+          out_of_hours_enabled: true,
+          auto_greeting_enabled: true,
+          supported_languages: ['es', 'en'],
+          default_language: 'es',
         },
       });
     }
