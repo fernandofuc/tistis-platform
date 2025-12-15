@@ -680,16 +680,22 @@ export function KnowledgeBase() {
               onClick={() => setShowModal(false)}
             />
 
-            {/* Slide-over Panel - Using inset-y-0 for guaranteed full height */}
+            {/* Slide-over Panel - Using 100dvh for mobile-safe explicit height */}
             <motion.div
               initial={{ opacity: 0, x: '100%' }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-50 flex flex-col overflow-hidden"
+              className="fixed top-0 right-0 w-full max-w-md bg-white shadow-2xl z-50"
+              style={{
+                height: '100dvh',
+                maxHeight: '100dvh',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
             >
               {/* Modal Header - Premium Design */}
-              <div className="relative overflow-hidden flex-shrink-0">
+              <div className="relative overflow-hidden" style={{ flexShrink: 0 }}>
                 {/* Gradient Background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-700" />
 
@@ -739,10 +745,15 @@ export function KnowledgeBase() {
                 </div>
               </div>
 
-              {/* Modal Content - Scrollable Area with proper height calculation */}
+              {/* Modal Content - Scrollable Area */}
               <div
-                className="flex-1 overflow-y-auto overscroll-contain"
-                style={{ minHeight: 0 }}
+                className="overflow-y-auto overscroll-contain"
+                style={{
+                  flex: '1 1 0%',
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  WebkitOverflowScrolling: 'touch'
+                }}
               >
                 <div className="p-6 space-y-5">
                 {/* Instructions Form - Premium Design */}
@@ -1166,7 +1177,7 @@ export function KnowledgeBase() {
               </div>
 
               {/* Modal Footer - Premium Design */}
-              <div className="flex-shrink-0 bg-white border-t border-gray-100 px-6 py-4">
+              <div className="bg-white border-t border-gray-100 px-6 py-4" style={{ flexShrink: 0 }}>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowModal(false)}
