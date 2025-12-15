@@ -139,13 +139,11 @@ export default function PatientsPage() {
     console.log('🟢 Patients: Fetching for tenant:', tenant.id);
 
     try {
+      // Query simple sin foreign key hints para evitar errores de schema cache
+      // Las relaciones se manejan en el frontend si son necesarias
       let query = supabase
         .from('patients')
-        .select(`
-          *,
-          preferred_branch:branches!preferred_branch_id(id, name),
-          assigned_dentist:staff_members!assigned_dentist_id(id, first_name, last_name)
-        `)
+        .select('*')
         .eq('tenant_id', tenant.id);
 
       // Apply branch filter if selected
@@ -358,9 +356,9 @@ export default function PatientsPage() {
                     </div>
                   </div>
 
-                  {/* Branch */}
+                  {/* Branch - mostramos si tiene preferred_branch_id */}
                   <div className="hidden md:block text-sm text-gray-500">
-                    {patient.preferred_branch?.name || 'Sin sucursal'}
+                    {patient.preferred_branch_id ? (selectedBranch?.name || 'Sucursal asignada') : 'Sin sucursal'}
                   </div>
 
                   {/* Status */}

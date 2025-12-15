@@ -138,7 +138,7 @@ const initialNewLeadForm: NewLeadForm = {
   full_name: '',
   phone: '',
   email: '',
-  source: 'manual',
+  source: 'other', // 'manual' is not a valid source in DB constraint
   status: 'new',
   notes: '',
 };

@@ -180,15 +180,20 @@ export function useTenant(): TenantContextValue {
           }
         }
 
-        // Load vertical config
-        const { data: verticalData } = await supabase
-          .from('vertical_configs')
-          .select('*')
-          .eq('vertical_key', tenantData.vertical)
-          .single();
+        // Load vertical config (optional - table may not exist)
+        try {
+          const { data: verticalData, error: verticalError } = await supabase
+            .from('vertical_configs')
+            .select('*')
+            .eq('vertical_key', tenantData.vertical)
+            .single();
 
-        if (verticalData) {
-          setVerticalConfig(verticalData);
+          if (verticalData && !verticalError) {
+            setVerticalConfig(verticalData);
+          }
+        } catch {
+          // vertical_configs table may not exist - use defaults
+          console.log('🟡 vertical_configs not available, using defaults');
         }
       }
 
