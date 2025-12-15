@@ -151,42 +151,49 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
       .eq('tenant_id', tenantId)
       .single();
 
-    // If no staff record exists, create one automatically
+    // If no staff record exists, create one via API (bypasses RLS)
     if (error && error.code === 'PGRST116') {
-      console.log('🟡 No staff record found for email, creating one:', email);
+      console.log('🟡 No staff record found for email, creating via API:', email);
 
-      // Get data from user_metadata to populate the new staff record
-      const meta = user?.user_metadata || {};
-      const firstName = meta.first_name || '';
-      const lastName = meta.last_name || '';
-      const displayName = meta.name || `${firstName} ${lastName}`.trim() || 'Usuario';
+      try {
+        // Get current session token
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          console.error('🔴 No session token available');
+          return null;
+        }
 
-      const newStaffData = {
-        tenant_id: tenantId,
-        user_id: user?.id,
-        email: email,
-        first_name: firstName,
-        last_name: lastName,
-        display_name: displayName,
-        phone: meta.phone || null,
-        role: 'owner', // First user is owner
-        role_title: 'Propietario',
-        is_active: true,
-      };
+        // Call API endpoint that uses service role
+        const response = await fetch('/api/auth/ensure-staff', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
 
-      const { data: newStaff, error: createError } = await supabase
-        .from('staff')
-        .insert(newStaffData)
-        .select()
-        .single();
+        const result = await response.json();
 
-      if (createError) {
-        console.error('🔴 Error creating staff record:', createError.message);
+        if (!response.ok) {
+          console.error('🔴 API error creating staff:', result.error, result.details);
+          return null;
+        }
+
+        console.log('🟢 Staff record created via API:', result.staff?.display_name);
+
+        // Fetch the complete staff record
+        const { data: newStaff } = await supabase
+          .from('staff')
+          .select('*')
+          .eq('email', email)
+          .eq('tenant_id', tenantId)
+          .single();
+
+        return newStaff as Staff;
+      } catch (apiError) {
+        console.error('🔴 Exception creating staff via API:', apiError);
         return null;
       }
-
-      console.log('🟢 Staff record created:', newStaff.display_name);
-      return newStaff as Staff;
     }
 
     if (error) {
