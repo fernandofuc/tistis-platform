@@ -207,14 +207,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert with tenant_id
+    // Build insert data - only ai_custom_instructions has created_by column
+    // DB Schema per table:
+    // - ai_custom_instructions: has created_by
+    // - ai_business_policies: NO created_by
+    // - ai_knowledge_articles: NO created_by
+    // - ai_response_templates: NO created_by
+    const insertData: Record<string, unknown> = {
+      ...data,
+      tenant_id: userRole.tenant_id,
+    };
+
+    // Only add created_by for instructions table (the only one that has this column)
+    if (type === 'instructions') {
+      insertData.created_by = user.id;
+    }
+
     const { data: inserted, error: insertError } = await supabase
       .from(tableName)
-      .insert({
-        ...data,
-        tenant_id: userRole.tenant_id,
-        created_by: user.id,
-      })
+      .insert(insertData)
       .select()
       .single();
 
