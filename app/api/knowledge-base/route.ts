@@ -4,7 +4,31 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
+
+// Create Supabase client with user's access token
+function createAuthenticatedClient(accessToken: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    }
+  );
+}
+
+// Extract Bearer token from Authorization header
+function getAccessToken(request: NextRequest): string | null {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  return null;
+}
 
 // ======================
 // TYPES
@@ -18,15 +42,23 @@ interface KnowledgeBasePayload {
 // ======================
 // GET - Retrieve all Knowledge Base data for tenant
 // ======================
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const accessToken = getAccessToken(request);
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'No autenticado - Token no proporcionado' },
+        { status: 401 }
+      );
+    }
+
+    const supabase = createAuthenticatedClient(accessToken);
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'No autenticado' },
+        { error: 'No autenticado - Token inválido' },
         { status: 401 }
       );
     }
@@ -107,13 +139,21 @@ export async function GET(_request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const accessToken = getAccessToken(request);
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'No autenticado - Token no proporcionado' },
+        { status: 401 }
+      );
+    }
+
+    const supabase = createAuthenticatedClient(accessToken);
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'No autenticado' },
+        { error: 'No autenticado - Token inválido' },
         { status: 401 }
       );
     }
@@ -204,13 +244,21 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const accessToken = getAccessToken(request);
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'No autenticado - Token no proporcionado' },
+        { status: 401 }
+      );
+    }
+
+    const supabase = createAuthenticatedClient(accessToken);
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'No autenticado' },
+        { error: 'No autenticado - Token inválido' },
         { status: 401 }
       );
     }
@@ -299,13 +347,21 @@ export async function PATCH(request: NextRequest) {
 // ======================
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const accessToken = getAccessToken(request);
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'No autenticado - Token no proporcionado' },
+        { status: 401 }
+      );
+    }
+
+    const supabase = createAuthenticatedClient(accessToken);
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'No autenticado' },
+        { error: 'No autenticado - Token inválido' },
         { status: 401 }
       );
     }

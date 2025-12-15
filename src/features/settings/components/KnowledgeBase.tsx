@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, Button, Input } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { cn } from '@/src/shared/utils';
+import { supabase } from '@/src/shared/lib/supabase';
 
 // ======================
 // TYPES
@@ -247,12 +248,27 @@ export function KnowledgeBase() {
   }, [showModal]);
 
   // ======================
+  // AUTH HEADERS HELPER
+  // ======================
+  const getAuthHeaders = async (): Promise<HeadersInit> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    return headers;
+  };
+
+  // ======================
   // DATA FETCHING
   // ======================
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/knowledge-base');
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/knowledge-base', { headers });
       if (response.ok) {
         const result = await response.json();
         setData(result.data);
@@ -305,9 +321,10 @@ export function KnowledgeBase() {
 
       console.log('[KnowledgeBase] Saving:', { method, body });
 
+      const headers = await getAuthHeaders();
       const response = await fetch(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
       });
 
@@ -335,8 +352,10 @@ export function KnowledgeBase() {
     if (!confirm('¿Estás seguro de eliminar este elemento?')) return;
 
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch(`/api/knowledge-base?type=${type}&id=${id}`, {
         method: 'DELETE',
+        headers,
       });
 
       if (response.ok) {
