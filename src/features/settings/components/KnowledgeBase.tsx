@@ -680,18 +680,19 @@ export function KnowledgeBase() {
               onClick={() => setShowModal(false)}
             />
 
-            {/* Slide-over Panel - Using 100dvh for mobile-safe explicit height */}
+            {/* Slide-over Panel - Fixed width, explicit height */}
             <motion.div
-              initial={{ opacity: 0, x: '100%' }}
+              initial={{ opacity: 0, x: 400 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed top-0 right-0 w-full max-w-md bg-white shadow-2xl z-50"
+              exit={{ opacity: 0, x: 400 }}
+              transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
+              className="fixed top-0 right-0 bottom-0 bg-white shadow-2xl z-50 overflow-hidden"
               style={{
-                height: '100dvh',
-                maxHeight: '100dvh',
+                width: '400px',
+                maxWidth: '100vw',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                height: '100%'
               }}
             >
               {/* Modal Header - Premium Design */}
@@ -747,11 +748,11 @@ export function KnowledgeBase() {
 
               {/* Modal Content - Scrollable Area */}
               <div
-                className="overflow-y-auto overscroll-contain"
+                className="overscroll-contain"
                 style={{
-                  flex: '1 1 0%',
+                  flex: '1 1 auto',
                   minHeight: 0,
-                  overflowY: 'auto',
+                  overflowY: 'scroll',
                   WebkitOverflowScrolling: 'touch'
                 }}
               >
