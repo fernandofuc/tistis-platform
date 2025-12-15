@@ -4,7 +4,7 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/src/shared/lib/supabase';
+import { createServerClientWithCookies } from '@/src/shared/lib/supabase';
 
 // ======================
 // TYPES
@@ -20,7 +20,7 @@ interface KnowledgeBasePayload {
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -299,7 +299,7 @@ export async function PATCH(request: NextRequest) {
 // ======================
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();

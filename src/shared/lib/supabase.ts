@@ -38,6 +38,7 @@ export const supabase = createClient(
 // ======================
 // SERVER CLIENT (API Routes)
 // ======================
+// For service-level operations (bypasses RLS)
 export function createServerClient(): SupabaseClient {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -50,6 +51,24 @@ export function createServerClient(): SupabaseClient {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+  });
+}
+
+// ======================
+// SERVER CLIENT WITH COOKIES (API Routes with auth)
+// ======================
+// For user-authenticated operations in API routes
+export function createServerClientWithCookies(cookieHeader: string | null): SupabaseClient {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        cookie: cookieHeader || '',
+      },
     },
   });
 }
