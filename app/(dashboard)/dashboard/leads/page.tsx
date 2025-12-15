@@ -748,7 +748,7 @@ export default function LeadsPage() {
         )}
       </AnimatePresence>
 
-      {/* Create Lead Panel (Apple-style slide-over) */}
+      {/* Create Lead Panel (Premium Design - Slide-over) */}
       <AnimatePresence>
         {showCreatePanel && (
           <>
@@ -759,7 +759,7 @@ export default function LeadsPage() {
               animate="visible"
               exit="exit"
               onClick={() => setShowCreatePanel(false)}
-              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
             />
 
             {/* Panel */}
@@ -768,199 +768,292 @@ export default function LeadsPage() {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto"
+              className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
             >
-              {/* Header */}
-              <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 z-10">
+              {/* Header with Gradient */}
+              <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100 px-6 py-4 z-10">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Nuevo Lead</h2>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Nuevo Lead</h2>
+                    <p className="text-sm text-gray-500">Registra un nuevo prospecto</p>
+                  </div>
                   <button
                     onClick={() => setShowCreatePanel(false)}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-xl transition-colors"
                   >
                     {icons.close}
                   </button>
                 </div>
               </div>
 
-              {/* Form Content */}
-              <div className="px-6 py-6 space-y-6">
+              {/* Form Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
                 {/* Error Message */}
                 {createError && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600"
+                    className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3"
                   >
-                    {createError}
+                    <div className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5">
+                      <svg fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-red-800">Error al crear el lead</p>
+                      <p className="text-sm text-red-600 mt-0.5">{createError}</p>
+                    </div>
                   </motion.div>
                 )}
 
-                {/* Name */}
+                {/* Section: Información del Contacto */}
                 <motion.div
                   custom={0}
                   variants={itemVariants}
                   initial="hidden"
                   animate="visible"
-                  className="space-y-2"
+                  className="space-y-4"
                 >
-                  <label className="block text-sm font-medium text-gray-700">
-                    Nombre completo
-                  </label>
-                  <input
-                    type="text"
-                    value={newLeadForm.full_name}
-                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, full_name: e.target.value }))}
-                    placeholder="Juan Pérez"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  />
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <span className="text-blue-500">{icons.user}</span>
+                    <span>Información del Contacto</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Nombre completo</label>
+                    <input
+                      type="text"
+                      value={newLeadForm.full_name}
+                      onChange={(e) => setNewLeadForm(prev => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="Juan Pérez"
+                      className={cn(
+                        'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                        'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                        'transition-all duration-200 placeholder:text-gray-400'
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Teléfono <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        {icons.phone}
+                      </span>
+                      <input
+                        type="tel"
+                        value={newLeadForm.phone}
+                        onChange={(e) => setNewLeadForm(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder="+52 55 1234 5678"
+                        className={cn(
+                          'w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                          'transition-all duration-200 placeholder:text-gray-400'
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Email <span className="text-gray-400 font-normal">(opcional)</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        {icons.mail}
+                      </span>
+                      <input
+                        type="email"
+                        value={newLeadForm.email}
+                        onChange={(e) => setNewLeadForm(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="juan@ejemplo.com"
+                        className={cn(
+                          'w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                          'transition-all duration-200 placeholder:text-gray-400'
+                        )}
+                      />
+                    </div>
+                  </div>
                 </motion.div>
 
-                {/* Phone */}
+                {/* Section: Clasificación */}
                 <motion.div
                   custom={1}
                   variants={itemVariants}
                   initial="hidden"
                   animate="visible"
-                  className="space-y-2"
+                  className="space-y-4"
                 >
-                  <label className="block text-sm font-medium text-gray-700">
-                    Teléfono <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={newLeadForm.phone}
-                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, phone: e.target.value }))}
-                    placeholder="+52 55 1234 5678"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  />
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <span className="text-purple-500">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                    </span>
+                    <span>Clasificación</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Fuente</label>
+                      <select
+                        value={newLeadForm.source}
+                        onChange={(e) => setNewLeadForm(prev => ({ ...prev, source: e.target.value }))}
+                        className={cn(
+                          'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'focus:ring-2 focus:ring-purple-500 focus:border-transparent',
+                          'transition-all duration-200 appearance-none bg-white',
+                          'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
+                        )}
+                      >
+                        {LEAD_SOURCES.map((source) => (
+                          <option key={source.value} value={source.value}>
+                            {source.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Estado</label>
+                      <select
+                        value={newLeadForm.status}
+                        onChange={(e) => setNewLeadForm(prev => ({ ...prev, status: e.target.value }))}
+                        className={cn(
+                          'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'focus:ring-2 focus:ring-purple-500 focus:border-transparent',
+                          'transition-all duration-200 appearance-none bg-white',
+                          'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
+                        )}
+                      >
+                        {LEAD_STATUSES.map((status) => (
+                          <option key={status.value} value={status.value}>
+                            {status.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </motion.div>
 
-                {/* Email */}
+                {/* Section: Notas */}
                 <motion.div
                   custom={2}
                   variants={itemVariants}
                   initial="hidden"
                   animate="visible"
-                  className="space-y-2"
+                  className="space-y-4"
                 >
-                  <label className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={newLeadForm.email}
-                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="juan@ejemplo.com"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  />
-                </motion.div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <span className="text-gray-400">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </span>
+                    <span>Notas Adicionales</span>
+                    <span className="text-gray-400 font-normal">(opcional)</span>
+                  </div>
 
-                {/* Source */}
-                <motion.div
-                  custom={3}
-                  variants={itemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-2"
-                >
-                  <label className="block text-sm font-medium text-gray-700">
-                    Fuente
-                  </label>
-                  <select
-                    value={newLeadForm.source}
-                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, source: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
-                  >
-                    {LEAD_SOURCES.map((source) => (
-                      <option key={source.value} value={source.value}>
-                        {source.label}
-                      </option>
-                    ))}
-                  </select>
-                </motion.div>
-
-                {/* Status */}
-                <motion.div
-                  custom={4}
-                  variants={itemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-2"
-                >
-                  <label className="block text-sm font-medium text-gray-700">
-                    Estado
-                  </label>
-                  <select
-                    value={newLeadForm.status}
-                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
-                  >
-                    {LEAD_STATUSES.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
-                </motion.div>
-
-                {/* Notes */}
-                <motion.div
-                  custom={5}
-                  variants={itemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-2"
-                >
-                  <label className="block text-sm font-medium text-gray-700">
-                    Notas
-                  </label>
                   <textarea
                     value={newLeadForm.notes}
                     onChange={(e) => setNewLeadForm(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Notas adicionales sobre el lead..."
+                    placeholder="Información adicional sobre el lead, intereses, necesidades..."
                     rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                    className={cn(
+                      'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                      'focus:ring-2 focus:ring-gray-400 focus:border-transparent',
+                      'transition-all duration-200 resize-none placeholder:text-gray-400'
+                    )}
                   />
                 </motion.div>
 
-                {/* Branch Info */}
-                {selectedBranch && (
+                {/* Preview Card */}
+                {(newLeadForm.full_name || newLeadForm.phone) && (
                   <motion.div
-                    custom={6}
+                    custom={3}
                     variants={itemVariants}
                     initial="hidden"
                     animate="visible"
-                    className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600"
+                    className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-xl space-y-3"
                   >
-                    Este lead se asignará a: <span className="font-medium">{selectedBranch.name}</span>
+                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Vista previa del lead
+                    </h4>
+                    <div className="flex items-center gap-4">
+                      <Avatar
+                        name={newLeadForm.full_name || newLeadForm.phone || 'Nuevo'}
+                        size="lg"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">
+                          {newLeadForm.full_name || 'Sin nombre'}
+                        </p>
+                        <div className="flex items-center gap-3 text-sm text-gray-500">
+                          {newLeadForm.phone && <span>{newLeadForm.phone}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge size="sm" variant="info">
+                            {LEAD_SOURCES.find(s => s.value === newLeadForm.source)?.label || 'Manual'}
+                          </Badge>
+                          <Badge size="sm" variant="default">
+                            {LEAD_STATUSES.find(s => s.value === newLeadForm.status)?.label || 'Nuevo'}
+                          </Badge>
+                          {selectedBranch && (
+                            <Badge size="sm" variant="warning">
+                              {selectedBranch.name}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </motion.div>
                 )}
+              </div>
 
-                {/* Action Buttons */}
-                <motion.div
-                  custom={7}
-                  variants={itemVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="flex gap-3 pt-4"
-                >
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setShowCreatePanel(false)}
-                    disabled={creating}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={handleCreateLead}
-                    disabled={creating}
-                  >
-                    {creating ? 'Creando...' : 'Crear Lead'}
-                  </Button>
-                </motion.div>
+              {/* Footer with Actions */}
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-100 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">
+                    <span className="text-red-500">*</span> Campo requerido
+                  </p>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowCreatePanel(false)}
+                      disabled={creating}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleCreateLead}
+                      disabled={creating || !newLeadForm.phone.trim()}
+                    >
+                      {creating ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Creando...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Crear Lead
+                        </span>
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </>
