@@ -115,17 +115,21 @@ export default function SettingsPage() {
   const [notificationSuccess, setNotificationSuccess] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
 
-  // Initialize form when staff data loads
+  // Track if form has been initialized
+  const [formInitialized, setFormInitialized] = useState(false);
+
+  // Initialize form when staff data loads (only once)
   useEffect(() => {
-    if (staff) {
+    if (staff && !formInitialized) {
       setProfileForm({
         first_name: staff.first_name || '',
         last_name: staff.last_name || '',
         phone: staff.phone || '',
         whatsapp_number: staff.whatsapp_number || '',
       });
+      setFormInitialized(true);
     }
-  }, [staff]);
+  }, [staff, formInitialized]);
 
   // Load notification preferences when tab becomes active
   const loadNotificationPreferences = useCallback(async () => {
@@ -209,6 +213,7 @@ export default function SettingsPage() {
 
     if (result.success) {
       setSaveSuccess(true);
+      setFormInitialized(false); // Reset to allow re-sync with updated staff data
       setTimeout(() => setSaveSuccess(false), 3000);
     } else {
       setSaveError(result.error || 'Error al guardar');
