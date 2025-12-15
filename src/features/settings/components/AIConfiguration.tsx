@@ -322,71 +322,114 @@ export function AIConfiguration() {
     loadConfig();
   }, [tenant?.id]);
 
-  // Save AI configuration
+  // Helper to get auth headers
+  const getAuthHeaders = async (): Promise<HeadersInit> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    return headers;
+  };
+
+  // Save AI configuration via API
   const saveConfig = async () => {
     if (!tenant?.id) return;
 
     setSaving(true);
 
-    const { tenant_id: _, ...configWithoutTenantId } = config;
-
-    const { error } = await supabase
-      .from('ai_tenant_config')
-      .upsert({
-        tenant_id: tenant.id,
-        ...configWithoutTenantId,
-        updated_at: new Date().toISOString(),
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/ai-config', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(config),
       });
 
-    setSaving(false);
+      const result = await response.json();
 
-    if (error) {
+      if (!response.ok) {
+        console.error('Error saving config:', result.error);
+        alert(`Error al guardar: ${result.error}`);
+      } else {
+        // Update local state with saved data
+        if (result.data) {
+          setConfig(prev => ({ ...prev, ...result.data }));
+        }
+        console.log('✅ Configuración guardada correctamente');
+      }
+    } catch (error) {
       console.error('Error saving config:', error);
+      alert('Error al guardar la configuración');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Save branch
+  // Save branch via API
   const saveBranch = async (branchData: Partial<Branch>) => {
     if (!tenant?.id) return;
 
     setSaving(true);
 
-    const { error } = await supabase
-      .from('branches')
-      .upsert({
-        ...branchData,
-        tenant_id: tenant.id,
-        updated_at: new Date().toISOString(),
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/settings/branches', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(branchData),
       });
 
-    if (!error) {
-      // Reload branches
-      const { data } = await supabase
-        .from('branches')
-        .select('*')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .order('is_headquarters', { ascending: false });
+      const result = await response.json();
 
-      if (data) setBranches(data);
-      setShowBranchModal(false);
-      setEditingBranch(null);
+      if (!response.ok) {
+        console.error('Error saving branch:', result.error);
+        alert(`Error al guardar: ${result.error}`);
+      } else {
+        // Reload branches from API
+        const reloadResponse = await fetch('/api/settings/branches', { headers });
+        const reloadResult = await reloadResponse.json();
+        if (reloadResult.data) {
+          setBranches(reloadResult.data.filter((b: Branch) => b.is_active));
+        }
+        setShowBranchModal(false);
+        setEditingBranch(null);
+        console.log('✅ Sucursal guardada correctamente');
+      }
+    } catch (error) {
+      console.error('Error saving branch:', error);
+      alert('Error al guardar la sucursal');
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
   };
 
-  // Toggle AI enabled
+  // Toggle AI enabled via API
   const toggleAI = async () => {
     const newState = !config.ai_enabled;
     setConfig({ ...config, ai_enabled: newState });
 
-    await supabase
-      .from('ai_tenant_config')
-      .upsert({
-        tenant_id: tenant?.id,
-        ai_enabled: newState,
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/ai-config', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...config, ai_enabled: newState }),
       });
+
+      if (!response.ok) {
+        // Revert on error
+        setConfig({ ...config, ai_enabled: !newState });
+        const result = await response.json();
+        console.error('Error toggling AI:', result.error);
+      }
+    } catch (error) {
+      // Revert on error
+      setConfig({ ...config, ai_enabled: !newState });
+      console.error('Error toggling AI:', error);
+    }
   };
 
   // Get staff for a branch
@@ -1905,6 +1948,18 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
   const [selectedBranches, setSelectedBranches] = useState<string[]>(currentBranchIds);
   const [saving, setSaving] = useState(false);
 
+  // Helper to get auth headers for API calls
+  const getAuthHeaders = async (): Promise<HeadersInit> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    return headers;
+  };
+
   const handleSave = async () => {
     if (!formData.first_name || !formData.last_name) {
       alert('Nombre y apellido son requeridos');
@@ -1914,81 +1969,40 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
     setSaving(true);
 
     try {
-      let staffId = staff?.id;
+      const headers = await getAuthHeaders();
 
-      if (isEditing && staffId) {
-        // Update existing staff
-        const { error } = await supabase
-          .from('staff')
-          .update({
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            specialty: formData.specialty || null,
-            license_number: formData.license_number || null,
-            role: formData.role,
-            is_active: formData.is_active,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', staffId);
+      const payload = {
+        id: staff?.id,
+        ...formData,
+        branchAssignments: selectedBranches,
+      };
 
-        if (error) throw error;
-      } else {
-        // Create new staff
-        const { data, error } = await supabase
-          .from('staff')
-          .insert({
-            tenant_id: tenantId,
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            specialty: formData.specialty || null,
-            license_number: formData.license_number || null,
-            role: formData.role,
-            is_active: formData.is_active,
-          })
-          .select()
-          .single();
+      const response = await fetch('/api/settings/staff', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
 
-        if (error) throw error;
-        staffId = data.id;
-      }
+      const result = await response.json();
 
-      // Update branch assignments
-      if (staffId) {
-        // Remove all existing assignments
-        await supabase
-          .from('staff_branches')
-          .delete()
-          .eq('staff_id', staffId);
-
-        // Add new assignments
-        if (selectedBranches.length > 0) {
-          const assignments = selectedBranches.map((branchId, index) => ({
-            staff_id: staffId,
-            branch_id: branchId,
-            is_primary: index === 0, // First selected is primary
-          }));
-
-          const { error: assignError } = await supabase
-            .from('staff_branches')
-            .insert(assignments);
-
-          if (assignError) throw assignError;
+      if (!response.ok) {
+        const errorMessage = result.error || 'Error desconocido';
+        if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
+          alert('Error de permisos: No tienes autorización para realizar esta acción. Contacta al administrador.');
+        } else if (errorMessage.includes('unique constraint') || errorMessage.includes('duplicate')) {
+          alert('Este doctor ya está asignado a esa sucursal.');
+        } else {
+          alert(`Error al guardar: ${errorMessage}`);
         }
+        return;
       }
 
+      console.log('✅ Doctor guardado correctamente');
       onSave();
       onClose();
     } catch (error: unknown) {
       console.error('Error saving staff:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      // Check for common RLS errors
-      if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
-        alert('Error de permisos: No tienes autorización para realizar esta acción. Contacta al administrador.');
-      } else if (errorMessage.includes('unique constraint') || errorMessage.includes('duplicate')) {
-        alert('Este doctor ya está asignado a esa sucursal.');
-      } else {
-        alert(`Error al guardar: ${errorMessage}`);
-      }
+      alert('Error al guardar el doctor');
     } finally {
       setSaving(false);
     }
@@ -2003,30 +2017,31 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
 
     setSaving(true);
     try {
-      // Delete branch assignments first
-      await supabase
-        .from('staff_branches')
-        .delete()
-        .eq('staff_id', staff.id);
+      const headers = await getAuthHeaders();
 
-      // Delete staff
-      const { error } = await supabase
-        .from('staff')
-        .delete()
-        .eq('id', staff.id);
+      const response = await fetch(`/api/settings/staff?id=${staff.id}`, {
+        method: 'DELETE',
+        headers,
+      });
 
-      if (error) throw error;
+      const result = await response.json();
 
+      if (!response.ok) {
+        const errorMessage = result.error || 'Error desconocido';
+        if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
+          alert('Error de permisos: No tienes autorización para eliminar este doctor.');
+        } else {
+          alert(`Error al eliminar: ${errorMessage}`);
+        }
+        return;
+      }
+
+      console.log('✅ Doctor eliminado correctamente');
       onSave();
       onClose();
     } catch (error: unknown) {
       console.error('Error deleting staff:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
-        alert('Error de permisos: No tienes autorización para eliminar este doctor.');
-      } else {
-        alert(`Error al eliminar: ${errorMessage}`);
-      }
+      alert('Error al eliminar el doctor');
     } finally {
       setSaving(false);
     }
