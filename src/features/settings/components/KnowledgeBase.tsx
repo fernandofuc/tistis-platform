@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, Button, Input } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
@@ -686,28 +687,29 @@ export function KnowledgeBase() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Premium Modal Slide-over */}
-      <AnimatePresence>
-        {showModal && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="fixed inset-0 bg-gray-900/30 z-40"
-              onClick={() => setShowModal(false)}
-            />
+      {/* Premium Modal - Rendered via Portal to be above everything */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showModal && (
+            <div className="fixed inset-0" style={{ zIndex: 9999 }}>
+              {/* Backdrop - Cubre TODA la pantalla */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setShowModal(false)}
+              />
 
-            {/* Slide-over Panel - Ancho fijo para evitar resize */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="fixed inset-y-0 right-0 w-[420px] max-w-[100vw] bg-white shadow-2xl z-50 flex flex-col overflow-hidden"
-            >
+              {/* Slide-over Panel */}
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="absolute inset-y-0 right-0 w-[420px] max-w-full bg-white shadow-2xl flex flex-col overflow-hidden"
+              >
               {/* Modal Header - Premium Design */}
               <div className="relative overflow-hidden flex-shrink-0">
                 {/* Gradient Background */}
@@ -1227,9 +1229,11 @@ export function KnowledgeBase() {
                 </div>
               </div>
             </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }
