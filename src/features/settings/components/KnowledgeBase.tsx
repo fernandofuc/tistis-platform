@@ -680,13 +680,13 @@ export function KnowledgeBase() {
               onClick={() => setShowModal(false)}
             />
 
-            {/* Slide-over Panel */}
+            {/* Slide-over Panel - Using inset-y-0 for guaranteed full height */}
             <motion.div
               initial={{ opacity: 0, x: '100%' }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
+              className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-50 flex flex-col overflow-hidden"
             >
               {/* Modal Header - Premium Design */}
               <div className="relative overflow-hidden flex-shrink-0">
@@ -739,9 +739,12 @@ export function KnowledgeBase() {
                 </div>
               </div>
 
-              {/* Modal Content - Scrollable Area */}
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="p-6 pb-24 space-y-5">
+              {/* Modal Content - Scrollable Area with proper height calculation */}
+              <div
+                className="flex-1 overflow-y-auto overscroll-contain"
+                style={{ minHeight: 0 }}
+              >
+                <div className="p-6 space-y-5">
                 {/* Instructions Form - Premium Design */}
                 {modalType === 'instructions' && (
                   <>
@@ -1156,6 +1159,9 @@ export function KnowledgeBase() {
                     <div className="w-12 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:shadow-sm after:border-gray-200 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-indigo-600" />
                   </label>
                 </div>
+
+                {/* Spacer para asegurar scroll completo */}
+                <div className="h-4" aria-hidden="true" />
                 </div>
               </div>
 
