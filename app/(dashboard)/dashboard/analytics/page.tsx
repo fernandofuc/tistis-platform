@@ -8,7 +8,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card, CardHeader, CardContent, Button } from '@/src/shared/components/ui';
 import { PageWrapper, StatsGrid, StatCard } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
-import { useBranch } from '@/src/features/dashboard/hooks/useBranch';
+import { useBranch } from '@/src/shared/stores';
 import { supabase } from '@/src/shared/lib/supabase';
 import { formatNumber, cn } from '@/src/shared/utils';
 import {
