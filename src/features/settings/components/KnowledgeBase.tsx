@@ -272,6 +272,22 @@ export function KnowledgeBase() {
   // CRUD OPERATIONS
   // ======================
   const handleSave = async () => {
+    // Validación del formulario según el tipo
+    const requiredFields: Record<ActiveTab, string[]> = {
+      instructions: ['instruction_type', 'title', 'instruction'],
+      policies: ['policy_type', 'title', 'policy_text'],
+      articles: ['category', 'title', 'content'],
+      templates: ['trigger_type', 'name', 'template_text'],
+    };
+
+    const required = requiredFields[modalType];
+    const missing = required.filter(field => !formData[field]);
+
+    if (missing.length > 0) {
+      alert(`Por favor completa los campos requeridos: ${missing.join(', ')}`);
+      return;
+    }
+
     setSaving(true);
     try {
       const endpoint = '/api/knowledge-base';
@@ -287,23 +303,29 @@ export function KnowledgeBase() {
         ? { type: typeMap[modalType], id: editingItem.id, data: formData }
         : { type: typeMap[modalType], data: formData };
 
+      console.log('[KnowledgeBase] Saving:', { method, body });
+
       const response = await fetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
-      if (response.ok) {
+      const result = await response.json();
+      console.log('[KnowledgeBase] Response:', result);
+
+      if (response.ok && result.success) {
         await fetchData();
         setShowModal(false);
         setEditingItem(null);
         setFormData({});
       } else {
-        const error = await response.json();
-        console.error('Save error:', error);
+        alert(`Error al guardar: ${result.error || 'Error desconocido'}`);
+        console.error('Save error:', result);
       }
     } catch (error) {
       console.error('Error saving:', error);
+      alert('Error de conexión al guardar');
     } finally {
       setSaving(false);
     }
