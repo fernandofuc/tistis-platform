@@ -369,11 +369,17 @@ export function KnowledgeBase() {
   const openAddModal = (type: ActiveTab) => {
     setModalType(type);
     setEditingItem(null);
-    setFormData({
+    // Set initial form data based on type - each table has different columns
+    const initialData: Record<string, unknown> = {
       is_active: true,
-      priority: 0,
-      display_order: 0,
-    });
+    };
+    // Only add type-specific fields
+    if (type === 'instructions') {
+      initialData.priority = 0;
+    } else if (type === 'articles') {
+      initialData.display_order = 0;
+    }
+    setFormData(initialData);
     setShowModal(true);
   };
 
