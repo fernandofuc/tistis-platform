@@ -278,15 +278,21 @@ export function AIConfiguration() {
       }
 
       // Load scoring rules
-      const { data: rules } = await supabase
+      const { data: rules, error: rulesError } = await supabase
         .from('ai_scoring_rules')
         .select('*')
-        .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
         .eq('is_active', true)
         .order('points', { ascending: false });
 
-      if (rules) {
-        setScoringRules(rules);
+      if (rulesError) {
+        console.log('🟡 AI scoring rules table may not exist:', rulesError.message);
+        // Table might not exist yet - this is OK
+      } else if (rules) {
+        // Filter to show only tenant-specific or global rules
+        const filteredRules = rules.filter(
+          (rule: ScoringRule) => rule.tenant_id === tenant.id || rule.tenant_id === null
+        );
+        setScoringRules(filteredRules);
       }
 
       // Load subscription info for branch limits

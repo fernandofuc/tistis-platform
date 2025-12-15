@@ -140,7 +140,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
 
   const allNavItems = [
     ...navItems,
-    { name: 'Analytics', href: '/dashboard/analytics', icon: icons.analytics },
+    { name: 'Analítica', href: '/dashboard/analytics', icon: icons.analytics },
     { name: 'Configuración', href: '/dashboard/settings', icon: icons.settings },
   ];
 

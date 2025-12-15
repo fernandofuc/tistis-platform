@@ -122,6 +122,27 @@ type FilterTab = 'all' | LeadClassification;
 // ======================
 // COMPONENT
 // ======================
+// ======================
+// NEW LEAD FORM TYPE
+// ======================
+interface NewLeadForm {
+  full_name: string;
+  phone: string;
+  email: string;
+  source: string;
+  status: string;
+  notes: string;
+}
+
+const initialNewLeadForm: NewLeadForm = {
+  full_name: '',
+  phone: '',
+  email: '',
+  source: 'manual',
+  status: 'new',
+  notes: '',
+};
+
 export default function LeadsPage() {
   const { tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
@@ -132,6 +153,12 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const router = useRouter();
+
+  // Create lead state
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [newLeadForm, setNewLeadForm] = useState<NewLeadForm>(initialNewLeadForm);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // ======================
   // ACTION HANDLERS
@@ -168,6 +195,67 @@ export default function LeadsPage() {
   const handleLeadClick = useCallback((lead: Lead) => {
     setSelectedLead(lead);
     setShowDetailPanel(true);
+  }, []);
+
+  // Handle create new lead
+  const handleCreateLead = useCallback(async () => {
+    if (!tenant?.id) {
+      setCreateError('No se encontró el tenant');
+      return;
+    }
+
+    // Validate required fields
+    if (!newLeadForm.phone.trim()) {
+      setCreateError('El teléfono es obligatorio');
+      return;
+    }
+
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      const leadData = {
+        tenant_id: tenant.id,
+        branch_id: selectedBranchId || null,
+        phone: newLeadForm.phone.trim(),
+        full_name: newLeadForm.full_name.trim() || null,
+        email: newLeadForm.email.trim() || null,
+        source: newLeadForm.source,
+        status: newLeadForm.status,
+        notes: newLeadForm.notes.trim() || null,
+        classification: 'cold' as LeadClassification,
+        score: 0,
+      };
+
+      const { data, error } = await supabase
+        .from('leads')
+        .insert(leadData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log('🟢 Lead created:', data);
+
+      // Add to list
+      setLeads((prev) => [data as Lead, ...prev]);
+
+      // Reset form and close panel
+      setNewLeadForm(initialNewLeadForm);
+      setShowCreatePanel(false);
+    } catch (error: any) {
+      console.error('🔴 Error creating lead:', error);
+      setCreateError(error.message || 'Error al crear el lead');
+    } finally {
+      setCreating(false);
+    }
+  }, [tenant?.id, selectedBranchId, newLeadForm]);
+
+  // Handle open create panel
+  const handleOpenCreatePanel = useCallback(() => {
+    setNewLeadForm(initialNewLeadForm);
+    setCreateError(null);
+    setShowCreatePanel(true);
   }, []);
 
   // Fetch leads
@@ -256,7 +344,7 @@ export default function LeadsPage() {
           <Button variant="outline" leftIcon={icons.filter}>
             Filtros
           </Button>
-          <Button leftIcon={icons.plus}>
+          <Button leftIcon={icons.plus} onClick={handleOpenCreatePanel}>
             Nuevo Lead
           </Button>
         </div>
@@ -653,6 +741,225 @@ export default function LeadsPage() {
                   {selectedLead.next_followup_at && (
                     <p>Próximo seguimiento: {formatRelativeTime(selectedLead.next_followup_at)}</p>
                   )}
+                </motion.div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Create Lead Panel (Apple-style slide-over) */}
+      <AnimatePresence>
+        {showCreatePanel && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setShowCreatePanel(false)}
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+            />
+
+            {/* Panel */}
+            <motion.div
+              variants={panelVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 z-10">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Nuevo Lead</h2>
+                  <button
+                    onClick={() => setShowCreatePanel(false)}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    {icons.close}
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="px-6 py-6 space-y-6">
+                {/* Error Message */}
+                {createError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600"
+                  >
+                    {createError}
+                  </motion.div>
+                )}
+
+                {/* Name */}
+                <motion.div
+                  custom={0}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Nombre completo
+                  </label>
+                  <input
+                    type="text"
+                    value={newLeadForm.full_name}
+                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, full_name: e.target.value }))}
+                    placeholder="Juan Pérez"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </motion.div>
+
+                {/* Phone */}
+                <motion.div
+                  custom={1}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Teléfono <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={newLeadForm.phone}
+                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+52 55 1234 5678"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </motion.div>
+
+                {/* Email */}
+                <motion.div
+                  custom={2}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={newLeadForm.email}
+                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="juan@ejemplo.com"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </motion.div>
+
+                {/* Source */}
+                <motion.div
+                  custom={3}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Fuente
+                  </label>
+                  <select
+                    value={newLeadForm.source}
+                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, source: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                  >
+                    {LEAD_SOURCES.map((source) => (
+                      <option key={source.value} value={source.value}>
+                        {source.label}
+                      </option>
+                    ))}
+                  </select>
+                </motion.div>
+
+                {/* Status */}
+                <motion.div
+                  custom={4}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Estado
+                  </label>
+                  <select
+                    value={newLeadForm.status}
+                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                  >
+                    {LEAD_STATUSES.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                </motion.div>
+
+                {/* Notes */}
+                <motion.div
+                  custom={5}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Notas
+                  </label>
+                  <textarea
+                    value={newLeadForm.notes}
+                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Notas adicionales sobre el lead..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                  />
+                </motion.div>
+
+                {/* Branch Info */}
+                {selectedBranch && (
+                  <motion.div
+                    custom={6}
+                    variants={itemVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600"
+                  >
+                    Este lead se asignará a: <span className="font-medium">{selectedBranch.name}</span>
+                  </motion.div>
+                )}
+
+                {/* Action Buttons */}
+                <motion.div
+                  custom={7}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="flex gap-3 pt-4"
+                >
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setShowCreatePanel(false)}
+                    disabled={creating}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleCreateLead}
+                    disabled={creating}
+                  >
+                    {creating ? 'Creando...' : 'Crear Lead'}
+                  </Button>
                 </motion.div>
               </div>
             </motion.div>

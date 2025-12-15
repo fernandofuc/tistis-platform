@@ -119,10 +119,10 @@ const navItemsConfig: NavItemWithFlag[] = [
     featureFlag: 'conversations_enabled',
   },
   {
-    name: 'Analytics',
+    name: 'Analítica',
     href: '/dashboard/analytics',
     icon: icons.analytics,
-    featureFlag: 'analytics_advanced_enabled',
+    alwaysShow: true, // Analytics always visible - basic feature
   },
   {
     name: 'Configuración',
