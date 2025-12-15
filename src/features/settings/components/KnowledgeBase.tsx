@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, Button, Input } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
@@ -210,41 +210,17 @@ export function KnowledgeBase() {
   // Form States
   const [formData, setFormData] = useState<Record<string, unknown>>({});
 
-  // Ref for scroll container
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
   // ======================
-  // BODY SCROLL LOCK
+  // BODY SCROLL LOCK - Simple approach
   // ======================
-  // Bloquear scroll del body cuando el modal está abierto
   useEffect(() => {
     if (showModal) {
-      // Guardar posición actual de scroll
-      const scrollY = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = '100%';
+      // Solo bloquear overflow, sin position fixed que rompe el layout
       document.body.style.overflow = 'hidden';
-
-      // Reset scroll position del contenedor del modal
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = 0;
-      }
     } else {
-      // Restaurar scroll del body
-      const scrollY = document.body.style.top;
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
       document.body.style.overflow = '';
-      window.scrollTo(0, parseInt(scrollY || '0') * -1);
     }
-
     return () => {
-      // Cleanup al desmontar
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
       document.body.style.overflow = '';
     };
   }, [showModal]);
@@ -713,7 +689,7 @@ export function KnowledgeBase() {
               className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
             >
               {/* Modal Header - Premium Design */}
-              <div className="relative overflow-hidden">
+              <div className="relative overflow-hidden flex-shrink-0">
                 {/* Gradient Background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-700" />
 
@@ -763,16 +739,9 @@ export function KnowledgeBase() {
                 </div>
               </div>
 
-              {/* Modal Content - Single Scroll Container */}
-              <div
-                ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto overscroll-contain scroll-smooth"
-                style={{
-                  WebkitOverflowScrolling: 'touch',
-                  scrollbarGutter: 'stable',
-                }}
-              >
-                <div className="p-6 pb-8 space-y-5">
+              {/* Modal Content - Scrollable Area */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="p-6 pb-24 space-y-5">
                 {/* Instructions Form - Premium Design */}
                 {modalType === 'instructions' && (
                   <>
@@ -1190,8 +1159,8 @@ export function KnowledgeBase() {
                 </div>
               </div>
 
-              {/* Modal Footer - Premium Design with shadow indicator */}
-              <div className="relative bg-white border-t border-gray-100 px-6 py-4 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)]">
+              {/* Modal Footer - Premium Design */}
+              <div className="flex-shrink-0 bg-white border-t border-gray-100 px-6 py-4">
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowModal(false)}
