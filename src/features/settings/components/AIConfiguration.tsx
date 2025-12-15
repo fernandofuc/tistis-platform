@@ -1226,10 +1226,10 @@ export function AIConfiguration() {
                   ].map((option) => (
                     <button
                       key={option.value}
-                      onClick={() => setConfig({ ...config, auto_escalate_after_messages: option.value })}
+                      onClick={() => setConfig({ ...config, max_turns_before_escalation: option.value })}
                       className={cn(
                         'p-3 rounded-xl border-2 text-center transition-all',
-                        config.auto_escalate_after_messages === option.value
+                        config.max_turns_before_escalation === option.value
                           ? 'border-purple-500 bg-purple-50'
                           : 'border-gray-200 hover:border-gray-300'
                       )}
@@ -1239,13 +1239,13 @@ export function AIConfiguration() {
                     </button>
                   ))}
                 </div>
-                {config.auto_escalate_after_messages > 0 && (
+                {config.max_turns_before_escalation > 0 && (
                   <p className="text-sm text-gray-500 mt-3">
-                    Después de <strong>{config.auto_escalate_after_messages} mensajes</strong> sin conversión,
+                    Después de <strong>{config.max_turns_before_escalation} mensajes</strong> sin conversión,
                     la conversación se transferirá a tu equipo.
                   </p>
                 )}
-                {config.auto_escalate_after_messages === 0 && (
+                {config.max_turns_before_escalation === 0 && (
                   <p className="text-sm text-amber-600 mt-3">
                     El escalamiento por límite de mensajes está desactivado. Los otros triggers siguen activos.
                   </p>
