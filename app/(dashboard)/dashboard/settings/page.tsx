@@ -115,21 +115,22 @@ export default function SettingsPage() {
   const [notificationSuccess, setNotificationSuccess] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
 
-  // Track if form has been initialized
-  const [formInitialized, setFormInitialized] = useState(false);
+  // Store initial values to compare against (snapshot of staff when form loaded)
+  const [initialValues, setInitialValues] = useState<ProfileFormData | null>(null);
 
-  // Initialize form when staff data loads (only once)
+  // Initialize form when staff data loads (only once per session)
   useEffect(() => {
-    if (staff && !formInitialized) {
-      setProfileForm({
+    if (staff && !initialValues) {
+      const values = {
         first_name: staff.first_name || '',
         last_name: staff.last_name || '',
         phone: staff.phone || '',
         whatsapp_number: staff.whatsapp_number || '',
-      });
-      setFormInitialized(true);
+      };
+      setProfileForm(values);
+      setInitialValues(values); // Store snapshot for comparison
     }
-  }, [staff, formInitialized]);
+  }, [staff, initialValues]);
 
   // Load notification preferences when tab becomes active
   const loadNotificationPreferences = useCallback(async () => {
@@ -188,12 +189,12 @@ export default function SettingsPage() {
     setSaveError(null);
   };
 
-  // Check if form has changes
-  const hasChanges = staff && (
-    profileForm.first_name !== (staff.first_name || '') ||
-    profileForm.last_name !== (staff.last_name || '') ||
-    profileForm.phone !== (staff.phone || '') ||
-    profileForm.whatsapp_number !== (staff.whatsapp_number || '')
+  // Check if form has changes (compare against initial snapshot, not current staff)
+  const hasChanges = initialValues && (
+    profileForm.first_name !== initialValues.first_name ||
+    profileForm.last_name !== initialValues.last_name ||
+    profileForm.phone !== initialValues.phone ||
+    profileForm.whatsapp_number !== initialValues.whatsapp_number
   );
 
   // Save profile changes
@@ -213,7 +214,8 @@ export default function SettingsPage() {
 
     if (result.success) {
       setSaveSuccess(true);
-      setFormInitialized(false); // Reset to allow re-sync with updated staff data
+      // Update initial values to current form values (so hasChanges becomes false)
+      setInitialValues({ ...profileForm });
       setTimeout(() => setSaveSuccess(false), 3000);
     } else {
       setSaveError(result.error || 'Error al guardar');
