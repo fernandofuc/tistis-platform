@@ -211,21 +211,6 @@ export function KnowledgeBase() {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
 
   // ======================
-  // BODY SCROLL LOCK - Simple approach
-  // ======================
-  useEffect(() => {
-    if (showModal) {
-      // Solo bloquear overflow, sin position fixed que rompe el layout
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showModal]);
-
-  // ======================
   // DATA FETCHING
   // ======================
   const fetchData = useCallback(async () => {
@@ -1156,7 +1141,6 @@ export function KnowledgeBase() {
                     <div className="w-12 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:shadow-sm after:border-gray-200 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-indigo-600" />
                   </label>
                 </div>
-
                 </div>
               </div>
 
