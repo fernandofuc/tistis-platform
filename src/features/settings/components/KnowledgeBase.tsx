@@ -16,50 +16,46 @@ import { cn } from '@/src/shared/utils';
 // TYPES
 // ======================
 
-interface CustomInstruction {
+// Base type for all Knowledge Base items
+interface KnowledgeBaseItem {
   id: string;
   tenant_id: string;
+  is_active: boolean;
+  [key: string]: unknown;
+}
+
+interface CustomInstruction extends KnowledgeBaseItem {
   branch_id?: string;
   instruction_type: string;
   title: string;
   instruction: string;
   examples?: string;
   priority: number;
-  is_active: boolean;
   created_at: string;
 }
 
-interface BusinessPolicy {
-  id: string;
-  tenant_id: string;
+interface BusinessPolicy extends KnowledgeBaseItem {
   policy_type: string;
   title: string;
   policy_text: string;
   short_version?: string;
-  is_active: boolean;
 }
 
-interface KnowledgeArticle {
-  id: string;
-  tenant_id: string;
+interface KnowledgeArticle extends KnowledgeBaseItem {
   branch_id?: string;
   category: string;
   title: string;
   content: string;
   summary?: string;
   display_order: number;
-  is_active: boolean;
 }
 
-interface ResponseTemplate {
-  id: string;
-  tenant_id: string;
+interface ResponseTemplate extends KnowledgeBaseItem {
   branch_id?: string;
   trigger_type: string;
   name: string;
   template_text: string;
   variables_available?: string[];
-  is_active: boolean;
 }
 
 interface KnowledgeBaseData {
@@ -209,7 +205,7 @@ export function KnowledgeBase() {
   // Modal States
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<ActiveTab>('instructions');
-  const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
+  const [editingItem, setEditingItem] = useState<KnowledgeBaseItem | null>(null);
 
   // Form States
   const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -304,7 +300,7 @@ export function KnowledgeBase() {
     setShowModal(true);
   };
 
-  const openEditModal = (type: ActiveTab, item: Record<string, unknown>) => {
+  const openEditModal = (type: ActiveTab, item: KnowledgeBaseItem) => {
     setModalType(type);
     setEditingItem(item);
     setFormData(item);
