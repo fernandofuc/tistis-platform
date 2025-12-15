@@ -690,24 +690,23 @@ export function KnowledgeBase() {
       <AnimatePresence>
         {showModal && (
           <>
-            {/* Backdrop - Oscurece toda la pantalla */}
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-gray-900/30 z-40"
               onClick={() => setShowModal(false)}
-              aria-hidden="true"
             />
 
-            {/* Slide-over Panel - Ocupa toda la altura */}
+            {/* Slide-over Panel - Ancho fijo para evitar resize */}
             <motion.div
-              initial={{ opacity: 0, x: '100%' }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-50 flex flex-col overflow-hidden"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="fixed inset-y-0 right-0 w-[420px] max-w-[100vw] bg-white shadow-2xl z-50 flex flex-col overflow-hidden"
             >
               {/* Modal Header - Premium Design */}
               <div className="relative overflow-hidden flex-shrink-0">
