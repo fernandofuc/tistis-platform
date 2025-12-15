@@ -289,9 +289,13 @@ export function AIConfiguration() {
         // Table might not exist yet - this is OK
       } else if (rules) {
         // Filter to show only tenant-specific or global rules
-        const filteredRules = rules.filter(
-          (rule: ScoringRule) => rule.tenant_id === tenant.id || rule.tenant_id === null
-        );
+        // Also normalize keywords to always be an array
+        const filteredRules = rules
+          .filter((rule: ScoringRule) => rule.tenant_id === tenant.id || rule.tenant_id === null)
+          .map((rule: ScoringRule) => ({
+            ...rule,
+            keywords: Array.isArray(rule.keywords) ? rule.keywords : []
+          }));
         setScoringRules(filteredRules);
       }
 
@@ -985,8 +989,8 @@ export function AIConfiguration() {
                             <div className="flex-1">
                               <p className="font-medium text-gray-900">{rule.signal_name}</p>
                               <p className="text-xs text-gray-500 mt-1">
-                                Detecta: {rule.keywords.slice(0, 4).join(', ')}
-                                {rule.keywords.length > 4 && ` (+${rule.keywords.length - 4} más)`}
+                                Detecta: {Array.isArray(rule.keywords) ? rule.keywords.slice(0, 4).join(', ') : 'Regla configurada'}
+                                {Array.isArray(rule.keywords) && rule.keywords.length > 4 && ` (+${rule.keywords.length - 4} más)`}
                               </p>
                             </div>
                             <div className={cn(
