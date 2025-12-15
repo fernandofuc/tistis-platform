@@ -388,7 +388,7 @@ export default function PatientsPage() {
         </CardContent>
       </Card>
 
-      {/* New Patient Modal */}
+      {/* New Patient Modal (Premium Design) */}
       <AnimatePresence>
         {showNewPatientModal && (
           <>
@@ -410,124 +410,246 @@ export default function PatientsPage() {
               exit="exit"
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                  <h2 className="text-lg font-semibold text-gray-900">Nuevo Paciente</h2>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Nuevo Paciente</h2>
+                    <p className="text-sm text-gray-500">Registra un nuevo paciente en el sistema</p>
+                  </div>
                   <button
                     onClick={() => setShowNewPatientModal(false)}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-xl transition-colors"
                   >
                     {icons.close}
                   </button>
                 </div>
 
-                {/* Form */}
-                <div className="px-6 py-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nombre *
-                      </label>
-                      <input
-                        type="text"
-                        value={newPatient.first_name}
-                        onChange={(e) => setNewPatient({ ...newPatient, first_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Nombre"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Apellido *
-                      </label>
-                      <input
-                        type="text"
-                        value={newPatient.last_name}
-                        onChange={(e) => setNewPatient({ ...newPatient, last_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Apellido"
-                      />
-                    </div>
-                  </div>
+                {/* Form - Scrollable */}
+                <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Teléfono *
-                    </label>
-                    <input
-                      type="tel"
-                      value={newPatient.phone}
-                      onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="+52 (000) 000-0000"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={newPatient.email}
-                      onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="email@ejemplo.com"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Fecha de Nacimiento
-                      </label>
-                      <input
-                        type="date"
-                        value={newPatient.date_of_birth}
-                        onChange={(e) => setNewPatient({ ...newPatient, date_of_birth: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
+                  {/* Section: Información Personal */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <span className="text-blue-500">{icons.user}</span>
+                      <span>Información Personal</span>
+                      <span className="text-red-500">*</span>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Género
-                      </label>
-                      <select
-                        value={newPatient.gender}
-                        onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">Seleccionar...</option>
-                        <option value="male">Masculino</option>
-                        <option value="female">Femenino</option>
-                        <option value="other">Otro</option>
-                      </select>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Nombre</label>
+                        <input
+                          type="text"
+                          value={newPatient.first_name}
+                          onChange={(e) => setNewPatient({ ...newPatient, first_name: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                            'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                            'transition-all duration-200 placeholder:text-gray-400'
+                          )}
+                          placeholder="Juan"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Apellido</label>
+                        <input
+                          type="text"
+                          value={newPatient.last_name}
+                          onChange={(e) => setNewPatient({ ...newPatient, last_name: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                            'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                            'transition-all duration-200 placeholder:text-gray-400'
+                          )}
+                          placeholder="Pérez"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Fecha de Nacimiento</label>
+                        <input
+                          type="date"
+                          value={newPatient.date_of_birth}
+                          onChange={(e) => setNewPatient({ ...newPatient, date_of_birth: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                            'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                            'transition-all duration-200'
+                          )}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Género</label>
+                        <select
+                          value={newPatient.gender}
+                          onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
+                          className={cn(
+                            'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                            'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                            'transition-all duration-200 appearance-none bg-white',
+                            'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
+                          )}
+                        >
+                          <option value="">Seleccionar...</option>
+                          <option value="male">Masculino</option>
+                          <option value="female">Femenino</option>
+                          <option value="other">Otro</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notas
-                    </label>
+                  {/* Section: Contacto */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <span className="text-green-500">{icons.phone}</span>
+                      <span>Información de Contacto</span>
+                      <span className="text-red-500">*</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Teléfono</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                          {icons.phone}
+                        </span>
+                        <input
+                          type="tel"
+                          value={newPatient.phone}
+                          onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+                          className={cn(
+                            'w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm',
+                            'focus:ring-2 focus:ring-green-500 focus:border-transparent',
+                            'transition-all duration-200 placeholder:text-gray-400'
+                          )}
+                          placeholder="+52 (000) 000-0000"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                        Email <span className="text-gray-400 font-normal">(opcional)</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                          {icons.mail}
+                        </span>
+                        <input
+                          type="email"
+                          value={newPatient.email}
+                          onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
+                          className={cn(
+                            'w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm',
+                            'focus:ring-2 focus:ring-green-500 focus:border-transparent',
+                            'transition-all duration-200 placeholder:text-gray-400'
+                          )}
+                          placeholder="paciente@ejemplo.com"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section: Notas */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <span className="text-gray-400">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </span>
+                      <span>Notas Adicionales</span>
+                      <span className="text-gray-400 font-normal">(opcional)</span>
+                    </div>
+
                     <textarea
                       value={newPatient.notes}
                       onChange={(e) => setNewPatient({ ...newPatient, notes: e.target.value })}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                      placeholder="Notas adicionales..."
+                      className={cn(
+                        'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                        'focus:ring-2 focus:ring-gray-400 focus:border-transparent',
+                        'transition-all duration-200 resize-none placeholder:text-gray-400'
+                      )}
+                      placeholder="Alergias, condiciones médicas, información relevante..."
                     />
                   </div>
+
+                  {/* Summary Card */}
+                  {(newPatient.first_name || newPatient.last_name || newPatient.phone) && (
+                    <div className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-xl space-y-3">
+                      <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Vista previa del paciente
+                      </h4>
+                      <div className="flex items-center gap-4">
+                        <Avatar
+                          name={`${newPatient.first_name} ${newPatient.last_name}`.trim() || 'Nuevo'}
+                          size="lg"
+                        />
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">
+                            {newPatient.first_name || newPatient.last_name
+                              ? `${newPatient.first_name} ${newPatient.last_name}`.trim()
+                              : 'Sin nombre'}
+                          </p>
+                          <div className="flex items-center gap-3 text-sm text-gray-500">
+                            {newPatient.phone && <span>{newPatient.phone}</span>}
+                            {newPatient.email && <span>{newPatient.email}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            {newPatient.gender && (
+                              <Badge size="sm" variant="info">
+                                {newPatient.gender === 'male' ? 'Masculino' :
+                                 newPatient.gender === 'female' ? 'Femenino' : 'Otro'}
+                              </Badge>
+                            )}
+                            {selectedBranch && (
+                              <Badge size="sm" variant="default">
+                                {selectedBranch.name}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
-                  <Button variant="outline" onClick={() => setShowNewPatientModal(false)}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleCreatePatient} disabled={saving}>
-                    {saving ? 'Guardando...' : 'Crear Paciente'}
-                  </Button>
+                <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+                  <p className="text-xs text-gray-500">
+                    <span className="text-red-500">*</span> Campos requeridos
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" onClick={() => setShowNewPatientModal(false)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleCreatePatient}
+                      disabled={saving || !newPatient.first_name || !newPatient.last_name || !newPatient.phone}
+                    >
+                      {saving ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Guardando...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          {icons.check}
+                          Crear Paciente
+                        </span>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>
