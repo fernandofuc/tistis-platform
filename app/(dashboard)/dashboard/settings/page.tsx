@@ -94,7 +94,7 @@ const roleLabels: Record<string, string> = {
 // COMPONENT
 // ======================
 export default function SettingsPage() {
-  const { staff, updateStaff } = useAuthContext();
+  const { staff, user, updateStaff } = useAuthContext();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -270,7 +270,7 @@ export default function SettingsPage() {
                     <h3 className="font-semibold text-gray-900 text-lg">
                       {staff?.display_name || 'Sin nombre'}
                     </h3>
-                    <p className="text-sm text-gray-500">{staff?.email}</p>
+                    <p className="text-sm text-gray-500">{staff?.email || user?.email}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <Badge variant="info" size="sm">
                         {staff?.role_title || roleLabels[staff?.role || ''] || staff?.role}
@@ -317,7 +317,7 @@ export default function SettingsPage() {
                   <Input
                     label="Email"
                     type="email"
-                    value={staff?.email || ''}
+                    value={staff?.email || user?.email || ''}
                     placeholder="tu@email.com"
                     disabled
                     helperText="El email no se puede cambiar"
