@@ -680,23 +680,16 @@ export function KnowledgeBase() {
               onClick={() => setShowModal(false)}
             />
 
-            {/* Slide-over Panel - Fixed width, explicit height */}
+            {/* Slide-over Panel */}
             <motion.div
-              initial={{ opacity: 0, x: 400 }}
+              initial={{ opacity: 0, x: '100%' }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 400 }}
-              transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
-              className="fixed top-0 right-0 bottom-0 bg-white shadow-2xl z-50 overflow-hidden"
-              style={{
-                width: '400px',
-                maxWidth: '100vw',
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%'
-              }}
+              exit={{ opacity: 0, x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
             >
               {/* Modal Header - Premium Design */}
-              <div className="relative overflow-hidden" style={{ flexShrink: 0 }}>
+              <div className="relative overflow-hidden">
                 {/* Gradient Background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-700" />
 
@@ -746,16 +739,8 @@ export function KnowledgeBase() {
                 </div>
               </div>
 
-              {/* Modal Content - Scrollable Area */}
-              <div
-                className="overscroll-contain"
-                style={{
-                  flex: '1 1 auto',
-                  minHeight: 0,
-                  overflowY: 'scroll',
-                  WebkitOverflowScrolling: 'touch'
-                }}
-              >
+              {/* Modal Content - Better Scroll */}
+              <div className="flex-1 overflow-y-auto overscroll-contain">
                 <div className="p-6 space-y-5">
                 {/* Instructions Form - Premium Design */}
                 {modalType === 'instructions' && (
@@ -1172,13 +1157,11 @@ export function KnowledgeBase() {
                   </label>
                 </div>
 
-                {/* Spacer para asegurar scroll completo */}
-                <div className="h-4" aria-hidden="true" />
                 </div>
               </div>
 
               {/* Modal Footer - Premium Design */}
-              <div className="bg-white border-t border-gray-100 px-6 py-4" style={{ flexShrink: 0 }}>
+              <div className="bg-white border-t border-gray-100 px-6 py-4">
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowModal(false)}
