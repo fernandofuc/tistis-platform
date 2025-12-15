@@ -297,6 +297,25 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
+                {/* No Staff Record Warning - with auto-retry */}
+                {!staff && user && (
+                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between text-amber-700">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span className="text-sm font-medium">Configurando tu perfil de staff...</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.reload()}
+                    >
+                      Reintentar
+                    </Button>
+                  </div>
+                )}
+
                 {/* Success/Error Messages */}
                 {saveSuccess && (
                   <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
