@@ -4,7 +4,7 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClientWithCookies } from '@/src/shared/lib/supabase';
+import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
 
 // ======================
 // TYPES

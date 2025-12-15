@@ -3,8 +3,6 @@
 // =====================================================
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { createServerClient as createSSRServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 
 // ======================
 // ENVIRONMENT VARIABLES
@@ -60,28 +58,9 @@ export function createServerClient(): SupabaseClient {
 // ======================
 // SERVER CLIENT WITH COOKIES (API Routes with auth)
 // ======================
-// For user-authenticated operations in API routes using @supabase/ssr
-export async function createServerClientWithCookies() {
-  const cookieStore = await cookies();
-
-  return createSSRServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        } catch {
-          // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing user sessions.
-        }
-      },
-    },
-  });
-}
+// IMPORTANT: For server-side cookie-based auth, import from:
+// '@/src/shared/lib/supabase-server' directly in API routes
+// Do NOT re-export here to avoid client-side import issues
 
 // ======================
 // HELPER FUNCTIONS
