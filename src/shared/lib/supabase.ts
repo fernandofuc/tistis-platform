@@ -3,6 +3,8 @@
 // =====================================================
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createServerClient as createSSRServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 // ======================
 // ENVIRONMENT VARIABLES
@@ -58,16 +60,24 @@ export function createServerClient(): SupabaseClient {
 // ======================
 // SERVER CLIENT WITH COOKIES (API Routes with auth)
 // ======================
-// For user-authenticated operations in API routes
-export function createServerClientWithCookies(cookieHeader: string | null): SupabaseClient {
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    global: {
-      headers: {
-        cookie: cookieHeader || '',
+// For user-authenticated operations in API routes using @supabase/ssr
+export async function createServerClientWithCookies() {
+  const cookieStore = await cookies();
+
+  return createSSRServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        } catch {
+          // The `setAll` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing user sessions.
+        }
       },
     },
   });

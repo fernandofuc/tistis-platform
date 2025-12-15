@@ -18,9 +18,9 @@ interface KnowledgeBasePayload {
 // ======================
 // GET - Retrieve all Knowledge Base data for tenant
 // ======================
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
+    const supabase = await createServerClientWithCookies();
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
+    const supabase = await createServerClientWithCookies();
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
+    const supabase = await createServerClientWithCookies();
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -299,7 +299,7 @@ export async function PATCH(request: NextRequest) {
 // ======================
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies(request.headers.get('cookie'));
+    const supabase = await createServerClientWithCookies();
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
