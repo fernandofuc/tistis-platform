@@ -190,12 +190,20 @@ export default function SettingsPage() {
   };
 
   // Check if form has changes (compare against initial snapshot, not current staff)
-  const hasChanges = initialValues && (
+  // Also enable save if display_name is out of sync with first_name/last_name
+  const formHasChanges = initialValues && (
     profileForm.first_name !== initialValues.first_name ||
     profileForm.last_name !== initialValues.last_name ||
     profileForm.phone !== initialValues.phone ||
     profileForm.whatsapp_number !== initialValues.whatsapp_number
   );
+
+  // Calculate what display_name SHOULD be based on current form values
+  const expectedDisplayName = `${profileForm.first_name} ${profileForm.last_name}`.trim();
+
+  // Enable save if: there are form changes OR display_name is outdated/missing
+  const displayNameNeedsUpdate = expectedDisplayName && staff?.display_name !== expectedDisplayName;
+  const hasChanges = formHasChanges || displayNameNeedsUpdate;
 
   // Save profile changes
   const handleSaveProfile = async () => {
@@ -269,13 +277,13 @@ export default function SettingsPage() {
                 {/* Profile Header */}
                 <div className="flex items-center gap-6 mb-6 pb-6 border-b border-gray-100">
                   <Avatar
-                    name={staff?.display_name || 'Usuario'}
+                    name={staff?.display_name || expectedDisplayName || 'Usuario'}
                     src={staff?.avatar_url || undefined}
                     size="xl"
                   />
                   <div>
                     <h3 className="font-semibold text-gray-900 text-lg">
-                      {staff?.display_name || 'Sin nombre'}
+                      {staff?.display_name || expectedDisplayName || 'Sin nombre'}
                     </h3>
                     <p className="text-sm text-gray-500">{staff?.email || user?.email}</p>
                     <div className="flex items-center gap-2 mt-2">
@@ -347,7 +355,12 @@ export default function SettingsPage() {
                 {/* Actions */}
                 <div className="mt-6 flex items-center justify-between">
                   <p className="text-sm text-gray-500">
-                    {hasChanges ? 'Tienes cambios sin guardar' : 'Todos los cambios guardados'}
+                    {displayNameNeedsUpdate && !formHasChanges
+                      ? 'Guarda para sincronizar tu nombre de perfil'
+                      : hasChanges
+                        ? 'Tienes cambios sin guardar'
+                        : 'Todos los cambios guardados'
+                    }
                   </p>
                   <Button
                     onClick={handleSaveProfile}
