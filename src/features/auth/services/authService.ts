@@ -151,11 +151,45 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
       .eq('tenant_id', tenantId)
       .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        console.log('🟡 No staff record found for email:', email);
+    // If no staff record exists, create one automatically
+    if (error && error.code === 'PGRST116') {
+      console.log('🟡 No staff record found for email, creating one:', email);
+
+      // Get data from user_metadata to populate the new staff record
+      const meta = user?.user_metadata || {};
+      const firstName = meta.first_name || '';
+      const lastName = meta.last_name || '';
+      const displayName = meta.name || `${firstName} ${lastName}`.trim() || 'Usuario';
+
+      const newStaffData = {
+        tenant_id: tenantId,
+        user_id: user?.id,
+        email: email,
+        first_name: firstName,
+        last_name: lastName,
+        display_name: displayName,
+        phone: meta.phone || null,
+        role: 'owner', // First user is owner
+        role_title: 'Propietario',
+        is_active: true,
+      };
+
+      const { data: newStaff, error: createError } = await supabase
+        .from('staff')
+        .insert(newStaffData)
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('🔴 Error creating staff record:', createError.message);
         return null;
       }
+
+      console.log('🟢 Staff record created:', newStaff.display_name);
+      return newStaff as Staff;
+    }
+
+    if (error) {
       console.error('🔴 Fetch staff by email error:', error.message);
       return null;
     }
