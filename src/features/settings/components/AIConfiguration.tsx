@@ -11,6 +11,7 @@ import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { updateTenant, type UpdateTenantData } from '@/src/features/auth/services/authService';
 import { cn } from '@/src/shared/utils';
+import { KnowledgeBase } from './KnowledgeBase';
 
 // ======================
 // TYPES
@@ -152,6 +153,11 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
     </svg>
   ),
+  brain: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    </svg>
+  ),
 };
 
 const responseStyles = [
@@ -179,7 +185,7 @@ export function AIConfiguration() {
   const { tenant, isAdmin } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'scoring' | 'escalation'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring' | 'escalation'>('general');
 
   // AI Config State
   const [config, setConfig] = useState<AIConfig>({
@@ -458,6 +464,7 @@ export function AIConfiguration() {
             {[
               { key: 'general', label: 'General', icon: icons.ai },
               { key: 'clinic', label: 'Clínica y Sucursales', icon: icons.clinic },
+              { key: 'knowledge', label: 'Base de Conocimiento', icon: icons.brain },
               { key: 'scoring', label: 'Puntuación', icon: icons.check },
               { key: 'escalation', label: 'Escalamiento', icon: icons.warning },
             ].map((tab) => (
@@ -881,6 +888,13 @@ export function AIConfiguration() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Knowledge Base */}
+          {activeSection === 'knowledge' && (
+            <div className="p-6">
+              <KnowledgeBase />
             </div>
           )}
 

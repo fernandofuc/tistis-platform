@@ -50,10 +50,16 @@ export interface TenantAIContext {
     id: string;
     name: string;
     description: string;
+    ai_description?: string;
     price_min: number;
     price_max: number;
+    price_note?: string;
     duration_minutes: number;
     category: string;
+    special_instructions?: string;
+    requires_consultation?: boolean;
+    promotion_active?: boolean;
+    promotion_text?: string;
   }>;
   faqs: Array<{
     question: string;
@@ -91,6 +97,43 @@ export interface TenantAIContext {
     points: number;
     keywords: string[];
     category: string;
+  }>;
+  // =====================================================
+  // KNOWLEDGE BASE - Información personalizada del cliente
+  // =====================================================
+  custom_instructions?: Array<{
+    type: string;
+    title: string;
+    instruction: string;
+    examples?: string;
+    branch_id?: string;
+  }>;
+  business_policies?: Array<{
+    type: string;
+    title: string;
+    policy: string;
+    short_version?: string;
+  }>;
+  knowledge_articles?: Array<{
+    category: string;
+    title: string;
+    content: string;
+    summary?: string;
+    branch_id?: string;
+  }>;
+  response_templates?: Array<{
+    trigger: string;
+    name: string;
+    template: string;
+    variables?: string[];
+    branch_id?: string;
+  }>;
+  competitor_handling?: Array<{
+    competitor: string;
+    aliases?: string[];
+    strategy: string;
+    talking_points?: string[];
+    avoid_saying?: string[];
   }>;
 }
 
@@ -209,50 +252,224 @@ export async function getConversationContext(
 
 /**
  * Construye el system prompt completo para GPT-5 Mini
+ * Incluye Knowledge Base personalizado del cliente
  */
 function buildSystemPrompt(tenant: TenantAIContext): string {
-  const { ai_config, services, faqs, branches, doctors } = tenant;
+  const {
+    ai_config,
+    services,
+    faqs,
+    branches,
+    doctors,
+    custom_instructions,
+    business_policies,
+    knowledge_articles,
+    response_templates,
+    competitor_handling,
+  } = tenant;
 
-  // Base prompt from tenant config
-  let systemPrompt = ai_config.system_prompt;
+  // =====================================================
+  // 1. BASE PROMPT + INSTRUCCIONES PERSONALIZADAS
+  // =====================================================
+  let systemPrompt = ai_config.system_prompt || '';
 
-  // Agregar información de servicios
-  if (services.length > 0) {
-    systemPrompt += `\n\n## SERVICIOS Y PRECIOS\n`;
-    for (const service of services) {
-      const priceRange =
-        service.price_min === service.price_max
-          ? `$${service.price_min}`
-          : `$${service.price_min} - $${service.price_max}`;
-      systemPrompt += `- ${service.name}: ${priceRange} (${service.duration_minutes} min)\n`;
-      if (service.description) {
-        systemPrompt += `  ${service.description}\n`;
+  // Agregar instrucciones personalizadas del cliente (Knowledge Base)
+  if (custom_instructions && custom_instructions.length > 0) {
+    // Agrupar por tipo para mejor organización
+    const instructionsByType = custom_instructions.reduce((acc, inst) => {
+      if (!acc[inst.type]) acc[inst.type] = [];
+      acc[inst.type].push(inst);
+      return acc;
+    }, {} as Record<string, typeof custom_instructions>);
+
+    // Mapeo de tipos a títulos legibles
+    const typeLabels: Record<string, string> = {
+      identity: 'IDENTIDAD DEL NEGOCIO',
+      greeting: 'CÓMO SALUDAR',
+      farewell: 'CÓMO DESPEDIRSE',
+      pricing_policy: 'POLÍTICA DE PRECIOS',
+      special_cases: 'CASOS ESPECIALES',
+      competitors: 'MANEJO DE COMPETENCIA',
+      objections: 'MANEJO DE OBJECIONES',
+      upsell: 'OPORTUNIDADES DE VENTA ADICIONAL',
+      tone_examples: 'EJEMPLOS DE TONO',
+      forbidden: 'LO QUE NUNCA DEBES DECIR',
+      always_mention: 'SIEMPRE MENCIONAR',
+      custom: 'INSTRUCCIONES ADICIONALES',
+    };
+
+    systemPrompt += `\n\n# INSTRUCCIONES PERSONALIZADAS DEL NEGOCIO\n`;
+
+    for (const [type, instructions] of Object.entries(instructionsByType)) {
+      const label = typeLabels[type] || type.toUpperCase();
+      systemPrompt += `\n## ${label}\n`;
+      for (const inst of instructions) {
+        systemPrompt += `### ${inst.title}\n`;
+        systemPrompt += `${inst.instruction}\n`;
+        if (inst.examples) {
+          systemPrompt += `Ejemplos: ${inst.examples}\n`;
+        }
+        systemPrompt += '\n';
       }
     }
   }
 
-  // Agregar FAQs
-  if (faqs.length > 0) {
-    systemPrompt += `\n\n## PREGUNTAS FRECUENTES\n`;
-    for (const faq of faqs) {
-      systemPrompt += `P: ${faq.question}\nR: ${faq.answer}\n\n`;
+  // =====================================================
+  // 2. POLÍTICAS DEL NEGOCIO
+  // =====================================================
+  if (business_policies && business_policies.length > 0) {
+    systemPrompt += `\n# POLÍTICAS DEL NEGOCIO\n`;
+    systemPrompt += `Conoce y comunica estas políticas cuando sea relevante:\n\n`;
+
+    const policyLabels: Record<string, string> = {
+      cancellation: 'Cancelación',
+      rescheduling: 'Reagendamiento',
+      payment: 'Métodos de Pago',
+      insurance: 'Seguros',
+      warranty: 'Garantías',
+      pricing: 'Precios',
+      late_arrival: 'Llegadas Tarde',
+      deposits: 'Anticipos',
+      refunds: 'Reembolsos',
+      emergency: 'Emergencias',
+      custom: 'Otras Políticas',
+    };
+
+    for (const policy of business_policies) {
+      const label = policyLabels[policy.type] || policy.title;
+      systemPrompt += `## ${label}\n`;
+      systemPrompt += `${policy.policy}\n\n`;
     }
   }
 
-  // Agregar información de sucursales con horarios y WhatsApp
+  // =====================================================
+  // 3. SERVICIOS Y PRECIOS (Mejorado)
+  // =====================================================
+  if (services.length > 0) {
+    systemPrompt += `\n# SERVICIOS Y PRECIOS\n`;
+
+    // Agrupar por categoría
+    const servicesByCategory = services.reduce((acc, svc) => {
+      const cat = svc.category || 'general';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(svc);
+      return acc;
+    }, {} as Record<string, typeof services>);
+
+    for (const [category, categoryServices] of Object.entries(servicesByCategory)) {
+      if (Object.keys(servicesByCategory).length > 1) {
+        systemPrompt += `\n## ${category.charAt(0).toUpperCase() + category.slice(1)}\n`;
+      }
+
+      for (const service of categoryServices) {
+        // Precio formateado
+        let priceStr = '';
+        if (service.price_note) {
+          priceStr = service.price_note;
+        } else if (service.price_min === service.price_max) {
+          priceStr = `$${service.price_min.toLocaleString()}`;
+        } else {
+          priceStr = `$${service.price_min.toLocaleString()} - $${service.price_max.toLocaleString()}`;
+        }
+
+        // Indicador de promoción
+        const promoTag = service.promotion_active ? ' [EN PROMOCIÓN]' : '';
+
+        systemPrompt += `### ${service.name}${promoTag}\n`;
+        systemPrompt += `- Precio: ${priceStr}\n`;
+        systemPrompt += `- Duración: ${service.duration_minutes} minutos\n`;
+
+        // Usar ai_description si existe, sino description
+        const desc = service.ai_description || service.description;
+        if (desc) {
+          systemPrompt += `- Descripción: ${desc}\n`;
+        }
+
+        if (service.requires_consultation) {
+          systemPrompt += `- Requiere consulta previa\n`;
+        }
+
+        if (service.promotion_active && service.promotion_text) {
+          systemPrompt += `- Promoción: ${service.promotion_text}\n`;
+        }
+
+        // Instrucciones especiales para este servicio
+        if (service.special_instructions) {
+          systemPrompt += `- IMPORTANTE: ${service.special_instructions}\n`;
+        }
+
+        systemPrompt += '\n';
+      }
+    }
+  }
+
+  // =====================================================
+  // 4. PREGUNTAS FRECUENTES
+  // =====================================================
+  if (faqs.length > 0) {
+    systemPrompt += `\n# PREGUNTAS FRECUENTES\n`;
+    systemPrompt += `Usa estas respuestas como referencia:\n\n`;
+    for (const faq of faqs) {
+      systemPrompt += `P: ${faq.question}\n`;
+      systemPrompt += `R: ${faq.answer}\n\n`;
+    }
+  }
+
+  // =====================================================
+  // 5. ARTÍCULOS DE CONOCIMIENTO
+  // =====================================================
+  if (knowledge_articles && knowledge_articles.length > 0) {
+    systemPrompt += `\n# INFORMACIÓN ADICIONAL DEL NEGOCIO\n`;
+
+    const categoryLabels: Record<string, string> = {
+      about_us: 'Sobre Nosotros',
+      differentiators: 'Lo Que Nos Diferencia',
+      certifications: 'Certificaciones',
+      technology: 'Tecnología',
+      materials: 'Materiales y Productos',
+      process: 'Procesos',
+      aftercare: 'Cuidados Post-Servicio',
+      preparation: 'Preparación Pre-Servicio',
+      promotions: 'Promociones Actuales',
+      events: 'Eventos',
+      testimonials: 'Testimonios',
+      awards: 'Premios',
+      partnerships: 'Alianzas',
+      custom: 'Información General',
+    };
+
+    // Agrupar por categoría
+    const articlesByCategory = knowledge_articles.reduce((acc, art) => {
+      const cat = art.category;
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(art);
+      return acc;
+    }, {} as Record<string, typeof knowledge_articles>);
+
+    for (const [category, articles] of Object.entries(articlesByCategory)) {
+      const label = categoryLabels[category] || category;
+      systemPrompt += `\n## ${label}\n`;
+      for (const article of articles) {
+        systemPrompt += `### ${article.title}\n`;
+        systemPrompt += `${article.content}\n\n`;
+      }
+    }
+  }
+
+  // =====================================================
+  // 6. SUCURSALES Y UBICACIONES
+  // =====================================================
   if (branches.length > 0) {
-    systemPrompt += `\n\n## SUCURSALES Y UBICACIONES\n`;
+    systemPrompt += `\n# SUCURSALES Y UBICACIONES\n`;
     for (const branch of branches) {
       const isHQ = branch.is_headquarters ? ' (Principal)' : '';
-      systemPrompt += `### ${branch.name}${isHQ}\n`;
+      systemPrompt += `## ${branch.name}${isHQ}\n`;
 
-      // Dirección
       if (branch.address) {
         const fullAddress = branch.city ? `${branch.address}, ${branch.city}` : branch.address;
         systemPrompt += `- Dirección: ${fullAddress}\n`;
       }
 
-      // Teléfonos
       if (branch.phone) {
         systemPrompt += `- Teléfono: ${branch.phone}\n`;
       }
@@ -260,12 +477,11 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
         systemPrompt += `- WhatsApp: ${branch.whatsapp_number}\n`;
       }
 
-      // Google Maps
       if (branch.google_maps_url) {
         systemPrompt += `- Ubicación en mapa: ${branch.google_maps_url}\n`;
       }
 
-      // Horarios de operación
+      // Horarios
       if (branch.operating_hours && Object.keys(branch.operating_hours).length > 0) {
         systemPrompt += `- Horarios:\n`;
         const dayNames: Record<string, string> = {
@@ -290,7 +506,7 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
         doc.branch_ids && doc.branch_ids.includes(branch.id)
       );
       if (branchDoctors.length > 0) {
-        systemPrompt += `- Especialistas disponibles:\n`;
+        systemPrompt += `- Especialistas:\n`;
         for (const doc of branchDoctors) {
           const specialty = doc.specialty ? ` - ${doc.specialty}` : '';
           systemPrompt += `  * ${doc.role_title} ${doc.name}${specialty}\n`;
@@ -301,11 +517,13 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
     }
   }
 
-  // Agregar información de doctores/especialistas (resumen general)
+  // =====================================================
+  // 7. EQUIPO MÉDICO
+  // =====================================================
   if (doctors.length > 0) {
-    systemPrompt += `\n## EQUIPO MÉDICO\n`;
+    systemPrompt += `\n# EQUIPO MÉDICO\n`;
     for (const doc of doctors) {
-      systemPrompt += `### ${doc.role_title} ${doc.name}\n`;
+      systemPrompt += `## ${doc.role_title} ${doc.name}\n`;
 
       if (doc.specialty) {
         systemPrompt += `- Especialidad: ${doc.specialty}\n`;
@@ -315,7 +533,6 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
         systemPrompt += `- ${doc.bio}\n`;
       }
 
-      // En qué sucursales atiende
       if (doc.branch_ids && doc.branch_ids.length > 0) {
         const docBranches = branches
           .filter(b => doc.branch_ids.includes(b.id))
@@ -329,16 +546,86 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
     }
   }
 
-  // Agregar instrucciones de formato
-  systemPrompt += `\n## INSTRUCCIONES DE RESPUESTA
-- Responde de manera ${ai_config.response_style || 'profesional y amable'}
-- Maximo ${ai_config.max_response_length || 300} caracteres por respuesta
-- NO uses emojis
-- Si no sabes algo, ofrece conectar con un asesor humano
-- Siempre busca agendar una cita o dar informacion util
-- Cuando el cliente pregunte por ubicación, da la dirección completa y el link de Google Maps si está disponible
-- Cuando el cliente pregunte por un doctor o especialista específico, indica en qué sucursal(es) atiende
-- Cuando el cliente pregunte por horarios, da los horarios específicos de la sucursal más cercana o relevante`;
+  // =====================================================
+  // 8. MANEJO DE COMPETENCIA
+  // =====================================================
+  if (competitor_handling && competitor_handling.length > 0) {
+    systemPrompt += `\n# MANEJO DE MENCIONES DE COMPETENCIA\n`;
+    systemPrompt += `Si el cliente menciona alguno de estos competidores, sigue la estrategia indicada:\n\n`;
+
+    for (const comp of competitor_handling) {
+      const aliases = comp.aliases && comp.aliases.length > 0
+        ? ` (también conocido como: ${comp.aliases.join(', ')})`
+        : '';
+      systemPrompt += `## ${comp.competitor}${aliases}\n`;
+      systemPrompt += `Estrategia: ${comp.strategy}\n`;
+
+      if (comp.talking_points && comp.talking_points.length > 0) {
+        systemPrompt += `Puntos a destacar:\n`;
+        for (const point of comp.talking_points) {
+          systemPrompt += `- ${point}\n`;
+        }
+      }
+
+      if (comp.avoid_saying && comp.avoid_saying.length > 0) {
+        systemPrompt += `EVITAR decir:\n`;
+        for (const avoid of comp.avoid_saying) {
+          systemPrompt += `- ${avoid}\n`;
+        }
+      }
+
+      systemPrompt += '\n';
+    }
+  }
+
+  // =====================================================
+  // 9. PLANTILLAS DE RESPUESTA (Como referencia)
+  // =====================================================
+  if (response_templates && response_templates.length > 0) {
+    systemPrompt += `\n# PLANTILLAS DE RESPUESTA SUGERIDAS\n`;
+    systemPrompt += `Usa estas plantillas como referencia para mantener consistencia:\n\n`;
+
+    const triggerLabels: Record<string, string> = {
+      greeting: 'Saludo inicial',
+      after_hours: 'Fuera de horario',
+      appointment_confirm: 'Confirmación de cita',
+      price_inquiry: 'Consulta de precios',
+      location_inquiry: 'Consulta de ubicación',
+      emergency: 'Emergencia',
+      farewell: 'Despedida',
+      thank_you: 'Agradecimiento',
+    };
+
+    for (const template of response_templates) {
+      const label = triggerLabels[template.trigger] || template.name;
+      systemPrompt += `## ${label}\n`;
+      systemPrompt += `${template.template}\n\n`;
+    }
+  }
+
+  // =====================================================
+  // 10. INSTRUCCIONES FINALES DE FORMATO
+  // =====================================================
+  const styleDescriptions: Record<string, string> = {
+    professional: 'profesional y directo',
+    professional_friendly: 'profesional pero cálido y amigable',
+    casual: 'informal y cercano',
+    formal: 'muy formal y respetuoso',
+  };
+
+  const styleDesc = styleDescriptions[ai_config.response_style] || 'profesional y amable';
+
+  systemPrompt += `\n# INSTRUCCIONES DE RESPUESTA\n`;
+  systemPrompt += `- Responde de manera ${styleDesc}\n`;
+  systemPrompt += `- Máximo ${ai_config.max_response_length || 300} caracteres por respuesta\n`;
+  systemPrompt += `- NO uses emojis a menos que el cliente los use primero\n`;
+  systemPrompt += `- Si no sabes algo con certeza, ofrece conectar con un asesor humano\n`;
+  systemPrompt += `- Siempre busca agendar una cita o proporcionar información útil\n`;
+  systemPrompt += `- Para ubicaciones, da la dirección completa y el link de Google Maps\n`;
+  systemPrompt += `- Para doctores, indica en qué sucursal(es) atienden\n`;
+  systemPrompt += `- Para horarios, da información específica de la sucursal relevante\n`;
+  systemPrompt += `- Usa la información de las políticas cuando sea relevante\n`;
+  systemPrompt += `- Sigue las instrucciones personalizadas del negocio de forma natural\n`;
 
   return systemPrompt;
 }
