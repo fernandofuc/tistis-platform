@@ -104,7 +104,7 @@ const navItemsConfig: NavItemWithFlag[] = [
     name: 'Pacientes',
     href: '/dashboard/patients',
     icon: icons.patients,
-    featureFlag: 'patients_enabled',
+    alwaysShow: true, // Always show for dental vertical
   },
   {
     name: 'Cotizaciones',
