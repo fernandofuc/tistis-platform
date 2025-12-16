@@ -1938,6 +1938,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
   const [formData, setFormData] = useState({
     first_name: staff?.first_name || '',
     last_name: staff?.last_name || '',
+    email: staff?.email || '',
     specialty: staff?.specialty || '',
     license_number: staff?.license_number || '',
     role: staff?.role || 'doctor',
@@ -1967,6 +1968,11 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
   const handleSave = async () => {
     if (!formData.first_name || !formData.last_name) {
       alert('Nombre y apellido son requeridos');
+      return;
+    }
+
+    if (!formData.email || !formData.email.includes('@')) {
+      alert('Email válido es requerido');
       return;
     }
 
@@ -2098,6 +2104,15 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
               onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
             />
           </div>
+
+          {/* Email Field */}
+          <Input
+            label="Email *"
+            type="email"
+            placeholder="Ej: doctor@clinica.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          />
 
           {/* Specialty & License */}
           <div className="grid grid-cols-2 gap-4">
