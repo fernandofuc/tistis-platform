@@ -159,6 +159,7 @@ export interface Lead {
   classification: LeadClassification;
   score: number;
   interested_services: string[];
+  primary_service_id: string | null; // Primary service the lead is interested in
   preferred_branch_id: string | null;
   preferred_contact_time: string | null;
   notes: string | null;
@@ -325,6 +326,8 @@ export interface AppointmentDentalDetails {
 // ======================
 // SERVICES
 // ======================
+export type ServiceLeadPriority = 'hot' | 'warm' | 'cold';
+
 export interface Service {
   id: string;
   tenant_id: string;
@@ -348,6 +351,7 @@ export interface Service {
   display_order: number;
   keywords: string[];
   ai_description: string | null;
+  lead_priority: ServiceLeadPriority; // HOT, WARM, COLD - determines lead classification
   created_at: string;
   updated_at: string;
 }

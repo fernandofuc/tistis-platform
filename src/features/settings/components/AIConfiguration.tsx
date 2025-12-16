@@ -12,6 +12,7 @@ import { supabase } from '@/src/shared/lib/supabase';
 import { updateTenant, type UpdateTenantData } from '@/src/features/auth/services/authService';
 import { cn } from '@/src/shared/utils';
 import { KnowledgeBase } from './KnowledgeBase';
+import { ServicePriorityConfig } from './ServicePriorityConfig';
 
 // ======================
 // TYPES
@@ -1087,6 +1088,15 @@ export function AIConfiguration() {
                       &quot;disponibilidad&quot; y ajusta el score del lead en tiempo real.
                     </p>
                   </div>
+
+                  {/* Separador */}
+                  <div className="border-t border-gray-200 pt-6 mt-6">
+                    <h4 className="font-medium text-gray-900 mb-2">Prioridad por Servicio</h4>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Clasifica tus servicios para determinar automáticamente la prioridad del lead cuando muestre interés
+                    </p>
+                    <ServicePriorityConfig />
+                  </div>
                 </div>
               )}
 
@@ -1151,13 +1161,13 @@ export function AIConfiguration() {
                         </svg>
                       </div>
                       <div>
-                        <p className="font-medium text-red-900">Lead HOT Detectado</p>
-                        <Badge variant="hot" size="sm">80+ puntos</Badge>
+                        <p className="font-medium text-red-900">Servicio HOT Detectado</p>
+                        <Badge variant="hot" size="sm">Alto Valor</Badge>
                       </div>
                     </div>
                     <p className="text-sm text-red-700">
-                      Cuando el sistema de puntuación clasifica al lead como HOT, se escala inmediatamente para que
-                      tu equipo cierre la venta.
+                      Cuando el lead muestra interés en un servicio de alta prioridad (implantes, ortodoncia, etc.),
+                      se escala para que tu equipo cierre la venta.
                     </p>
                   </div>
 
