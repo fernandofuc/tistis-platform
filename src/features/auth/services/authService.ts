@@ -165,8 +165,41 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
       }
     }
 
+    // If still no tenant_id, try to find staff record by email only as last resort
     if (!tenantId) {
-      console.log('🟡 No tenant_id found for:', email);
+      console.log('🟡 No tenant_id, searching staff by email only:', email);
+
+      // Try to find any staff with this email
+      const { data: staffByEmail } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('email', email)
+        .limit(1)
+        .single();
+
+      if (staffByEmail) {
+        console.log('🟢 Found staff by email, tenant_id:', staffByEmail.tenant_id);
+
+        // Try to sync this tenant_id to metadata in background (don't wait)
+        if (user && staffByEmail.tenant_id) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            // Fire and forget - sync metadata for future sessions
+            fetch('/api/admin/sync-tenant-metadata', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+            }).catch(() => {}); // Ignore errors, this is non-critical
+          }
+        }
+
+        // Return the staff even without tenant_id in metadata
+        return staffByEmail as Staff;
+      }
+
+      console.log('🟡 No tenant_id and no staff found for:', email);
       return null;
     }
 

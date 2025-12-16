@@ -268,16 +268,23 @@ export function AIConfiguration() {
         setBranches(branchesData);
       }
 
-      // Load staff
+      // Load staff - filter out empty records at DB level
       const { data: staffData } = await supabase
         .from('staff')
         .select('*')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
-        .in('role', ['dentist', 'specialist', 'owner', 'manager']);
+        .in('role', ['dentist', 'specialist', 'owner', 'manager'])
+        .or('first_name.neq.,last_name.neq.,display_name.neq.');
 
       if (staffData) {
-        setStaff(staffData);
+        // Additional client-side filter as safety net
+        const validStaff = staffData.filter(s =>
+          (s.first_name && s.first_name.trim() !== '') ||
+          (s.last_name && s.last_name.trim() !== '') ||
+          (s.display_name && s.display_name.trim() !== '')
+        );
+        setStaff(validStaff);
       }
 
       // Load staff-branch assignments
