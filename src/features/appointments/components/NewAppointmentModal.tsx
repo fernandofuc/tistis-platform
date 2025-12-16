@@ -354,6 +354,15 @@ export function NewAppointmentModal({
 
       if (insertError) throw insertError;
 
+      // Update lead's branch_id to match the appointment's branch
+      // This ensures the lead appears when filtering by branch
+      if (selectedLeadId && selectedBranchIdLocal) {
+        await supabase
+          .from('leads')
+          .update({ branch_id: selectedBranchIdLocal })
+          .eq('id', selectedLeadId);
+      }
+
       // Success
       onSuccess?.();
       onClose();
