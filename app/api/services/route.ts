@@ -78,8 +78,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('services')
       .select('*')
-      .eq('tenant_id', userRole.tenant_id)
-      .is('deleted_at', null);
+      .eq('tenant_id', userRole.tenant_id);
 
     if (category) {
       query = query.eq('category', category);
