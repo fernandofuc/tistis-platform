@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     const stripe = getStripeClient();
 
     // Cancel Stripe subscription at period end (gives them remaining time)
-    const cancelledSubscription = await stripe.subscriptions.update(
+    const cancelledSubscription: Stripe.Subscription = await stripe.subscriptions.update(
       subscription.stripe_subscription_id,
       {
         cancel_at_period_end: true,
