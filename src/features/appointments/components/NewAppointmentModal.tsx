@@ -213,7 +213,7 @@ export function NewAppointmentModal({
           .select('id, display_name, first_name, last_name, role, role_title, avatar_url')
           .eq('tenant_id', tenant.id)
           .eq('is_active', true)
-          .in('role', ['dentist', 'specialist', 'doctor', 'manager'])
+          .in('role', ['dentist', 'specialist', 'doctor', 'manager', 'owner'])
           .order('display_name'),
       ]);
 
@@ -643,9 +643,11 @@ export function NewAppointmentModal({
                 )}
               >
                 <option value="">Sin asignar</option>
-                {staff.map((member) => (
+                {staff
+                  .filter((member) => member.display_name?.trim() || member.first_name?.trim() || member.last_name?.trim())
+                  .map((member) => (
                   <option key={member.id} value={member.id}>
-                    {member.role_title || member.role} - {member.display_name || `${member.first_name} ${member.last_name}`}
+                    {member.role_title || member.role} - {member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim()}
                   </option>
                 ))}
               </select>

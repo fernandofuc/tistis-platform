@@ -76,6 +76,7 @@ interface Staff {
   tenant_id: string;
   first_name: string;
   last_name: string;
+  display_name: string | null;
   email: string;
   role: string;
   specialty: string | null;
@@ -887,7 +888,9 @@ export function AIConfiguration() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {staff.map((member) => {
+                    {staff
+                      .filter((member) => member.first_name?.trim() || member.last_name?.trim() || member.display_name?.trim())
+                      .map((member) => {
                       const memberBranches = staffBranches
                         .filter(sb => sb.staff_id === member.id)
                         .map(sb => branches.find(b => b.id === sb.branch_id)?.name)
@@ -899,12 +902,12 @@ export function AIConfiguration() {
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
                                 <span className="text-purple-600 font-medium">
-                                  {member.first_name[0]}{member.last_name[0]}
+                                  {(member.first_name?.[0] || '').toUpperCase()}{(member.last_name?.[0] || '').toUpperCase()}
                                 </span>
                               </div>
                               <div>
                                 <p className="font-medium text-gray-900">
-                                  Dr. {member.first_name} {member.last_name}
+                                  Dr. {member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre'}
                                 </p>
                                 {member.specialty && (
                                   <p className="text-sm text-gray-500">{member.specialty}</p>
