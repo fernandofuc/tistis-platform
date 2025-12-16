@@ -135,7 +135,35 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
   try {
     // Get user data including metadata
     const { data: { user } } = await supabase.auth.getUser();
-    const tenantId = await getTenantId();
+    let tenantId = await getTenantId();
+
+    // If no tenant_id, try to sync metadata from server
+    if (!tenantId && user) {
+      console.log('🟡 No tenant_id found, attempting to sync metadata...');
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const syncResponse = await fetch('/api/admin/sync-tenant-metadata', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          const syncResult = await syncResponse.json();
+          console.log('🔄 Sync metadata result:', syncResult);
+
+          if (syncResult.success && syncResult.tenant_id) {
+            tenantId = syncResult.tenant_id;
+            console.log('🟢 Got tenant_id from sync:', tenantId);
+          }
+        }
+      } catch (syncError) {
+        console.error('🔴 Error syncing metadata:', syncError);
+      }
+    }
 
     if (!tenantId) {
       console.log('🟡 No tenant_id found for:', email);

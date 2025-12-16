@@ -78,14 +78,37 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (roleError || !userRole) {
-      // Try to find tenant from staff
-      const { data: staffRecord, error: staffError } = await supabase
+      // Try to find tenant from staff by user_id
+      let staffRecord: { tenant_id: string; id?: string } | null = null;
+
+      const { data: staffByUserId } = await supabase
         .from('staff')
-        .select('tenant_id')
+        .select('id, tenant_id')
         .eq('user_id', user.id)
         .single();
 
-      if (staffError || !staffRecord) {
+      if (staffByUserId) {
+        staffRecord = staffByUserId;
+      } else if (user.email) {
+        // Try to find staff by email (staff may exist without user_id)
+        const { data: staffByEmail } = await supabase
+          .from('staff')
+          .select('id, tenant_id')
+          .eq('email', user.email)
+          .single();
+
+        if (staffByEmail) {
+          staffRecord = staffByEmail;
+          // Link the staff record to the user
+          await supabase
+            .from('staff')
+            .update({ user_id: user.id })
+            .eq('id', staffByEmail.id);
+          console.log('🔗 [SyncMetadata] Linked staff to user by email');
+        }
+      }
+
+      if (!staffRecord) {
         // Try to find tenant from client
         const { data: clientRecord, error: clientError } = await supabase
           .from('clients')
