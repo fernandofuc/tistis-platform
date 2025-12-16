@@ -6,13 +6,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/src/shared/lib/supabase';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,12 +36,12 @@ export default function ResetPasswordPage() {
 
         if (accessToken && type === 'recovery') {
           // Set the session from the recovery token
-          const { error } = await supabase.auth.setSession({
+          const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: hashParams.get('refresh_token') || '',
           });
 
-          if (!error) {
+          if (!sessionError) {
             setIsValidSession(true);
           } else {
             setIsValidSession(false);
@@ -56,7 +55,7 @@ export default function ResetPasswordPage() {
     };
 
     checkSession();
-  }, [supabase.auth]);
+  }, []);
 
   // Password validation
   const validatePassword = (password: string): string | null => {
@@ -94,12 +93,12 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
-      if (error) {
-        throw error;
+      if (updateError) {
+        throw updateError;
       }
 
       setSuccess(true);
@@ -109,8 +108,9 @@ export default function ResetPasswordPage() {
         router.push('/login');
       }, 3000);
 
-    } catch (error: any) {
-      setError(error.message || 'Error al actualizar la contraseña');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al actualizar la contraseña';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
