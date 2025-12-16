@@ -100,12 +100,10 @@ export async function updatePassword(newPassword: string): Promise<{ error: stri
 // ======================
 export async function fetchStaffByUserId(userId: string): Promise<Staff | null> {
   try {
-    // Get tenant_id from user metadata
-    const { data: { user } } = await supabase.auth.getUser();
-    const tenantId = user?.user_metadata?.tenant_id;
+    const tenantId = await getTenantId();
 
     if (!tenantId) {
-      console.log('🟡 No tenant_id in user metadata');
+      console.log('🟡 No tenant_id found');
       return null;
     }
 
@@ -137,10 +135,10 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
   try {
     // Get user data including metadata
     const { data: { user } } = await supabase.auth.getUser();
-    const tenantId = user?.user_metadata?.tenant_id;
+    const tenantId = await getTenantId();
 
     if (!tenantId) {
-      console.log('🟡 No tenant_id in user metadata for:', email);
+      console.log('🟡 No tenant_id found for:', email);
       return null;
     }
 
@@ -239,17 +237,45 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
 }
 
 // ======================
+// HELPER: Get tenant_id with fallback
+// ======================
+async function getTenantId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Method 1: Try user_metadata (fast)
+  const metaTenantId = user?.user_metadata?.tenant_id;
+  if (metaTenantId) {
+    return metaTenantId;
+  }
+
+  // Method 2: Fallback to user_roles table
+  if (user?.id) {
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (roleData?.tenant_id) {
+      console.log('🟡 Got tenant_id from user_roles (fallback)');
+      return roleData.tenant_id;
+    }
+  }
+
+  console.log('🟡 No tenant_id found in metadata or user_roles');
+  return null;
+}
+
+// ======================
 // TENANT & BRANCHES
-// Now multi-tenant aware
+// Now multi-tenant aware with fallback
 // ======================
 export async function fetchTenant(): Promise<Tenant | null> {
   try {
-    // Get tenant_id from user metadata
-    const { data: { user } } = await supabase.auth.getUser();
-    const tenantId = user?.user_metadata?.tenant_id;
+    const tenantId = await getTenantId();
 
     if (!tenantId) {
-      console.log('🟡 No tenant_id in user metadata');
       return null;
     }
 
@@ -274,12 +300,9 @@ export async function fetchTenant(): Promise<Tenant | null> {
 
 export async function fetchBranches(): Promise<Branch[]> {
   try {
-    // Get tenant_id from user metadata
-    const { data: { user } } = await supabase.auth.getUser();
-    const tenantId = user?.user_metadata?.tenant_id;
+    const tenantId = await getTenantId();
 
     if (!tenantId) {
-      console.log('🟡 No tenant_id in user metadata');
       return [];
     }
 

@@ -237,9 +237,10 @@ export default function PatientsPage() {
       setShowNewPatientModal(false);
       setNewPatient({ first_name: '', last_name: '', phone: '', email: '', date_of_birth: '', gender: '', notes: '' });
       fetchPatients();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating patient:', error);
-      alert('Error al crear el paciente. Intenta de nuevo.');
+      console.error('Error details:', error?.message, error?.details, error?.hint, error?.code);
+      alert(`Error al crear el paciente: ${error?.message || 'Intenta de nuevo.'}`);
     } finally {
       setSaving(false);
     }

@@ -25,6 +25,31 @@ const initialState: AuthState = {
 };
 
 // ======================
+// SYNC TENANT METADATA (runs in background)
+// ======================
+async function syncTenantMetadata(accessToken: string): Promise<void> {
+  try {
+    const response = await fetch('/api/admin/sync-tenant-metadata', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.needs_refresh) {
+        console.log('🔄 [Auth] Tenant metadata synced - refresh may be needed');
+      }
+    }
+  } catch (error) {
+    // Silent fail - this is a background optimization
+    console.debug('[Auth] Metadata sync failed (non-critical):', error);
+  }
+}
+
+// ======================
 // HOOK
 // ======================
 export function useAuth() {
@@ -44,6 +69,11 @@ export function useAuth() {
         if (!mounted) return;
 
         if (session?.user) {
+          // Sync tenant metadata in background (non-blocking)
+          if (session.access_token) {
+            syncTenantMetadata(session.access_token);
+          }
+
           // Fetch all data in parallel
           const [staff, tenant, branches] = await Promise.all([
             authService.fetchStaffByEmail(session.user.email || ''),

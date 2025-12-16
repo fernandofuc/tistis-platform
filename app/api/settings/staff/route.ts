@@ -153,6 +153,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { id, tenant_id: _, branchAssignments, ...staffData } = body;
 
+    // Auto-generate display_name if not provided
+    if (!staffData.display_name && (staffData.first_name || staffData.last_name)) {
+      staffData.display_name = `${staffData.first_name || ''} ${staffData.last_name || ''}`.trim();
+    }
+
     let staffId = id;
     let result;
 

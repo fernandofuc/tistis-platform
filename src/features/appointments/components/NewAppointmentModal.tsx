@@ -221,6 +221,12 @@ export function NewAppointmentModal({
       if (servicesRes.error) console.error('Error fetching services:', servicesRes.error);
       if (staffRes.error) console.error('Error fetching staff:', staffRes.error);
 
+      // Debug logging
+      console.log('[NewAppointmentModal] Staff loaded:', staffRes.data?.length || 0, 'members');
+      console.log('[NewAppointmentModal] Staff data:', staffRes.data);
+      console.log('[NewAppointmentModal] Services loaded:', servicesRes.data?.length || 0);
+      console.log('[NewAppointmentModal] Leads loaded:', leadsRes.data?.length || 0);
+
       setLeads(leadsRes.data || []);
       setServices(servicesRes.data || []);
       setStaff(staffRes.data || []);
