@@ -236,21 +236,38 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
     if (staffWithUserId) {
       data = staffWithUserId as Staff;
     } else {
-      // Fallback: find any staff with this email and tenant
-      const { data: anyStaff, error: err2 } = await supabase
+      // Fallback: find any staff with this email and tenant (use array, not single)
+      const { data: staffArray } = await supabase
         .from('staff')
         .select('*')
         .eq('email', email)
         .eq('tenant_id', tenantId)
-        .limit(1)
-        .single();
+        .limit(1);
 
-      data = anyStaff as Staff | null;
-      error = err2;
+      // If we found any staff, use the first one
+      if (staffArray && staffArray.length > 0) {
+        data = staffArray[0] as Staff;
+        error = null;
+      } else {
+        error = { code: 'PGRST116', message: 'No rows found' };
+      }
     }
 
-    // If no staff record exists, create one via API (bypasses RLS)
-    if (!data && error?.code === 'PGRST116') {
+    // IMPORTANT: Only create if we truly have NO staff records
+    // Check one more time to prevent duplicates
+    if (!data) {
+      const { data: doubleCheck } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('email', email)
+        .eq('tenant_id', tenantId)
+        .limit(1);
+
+      if (doubleCheck && doubleCheck.length > 0) {
+        console.log('🟢 Found staff on double-check, returning it');
+        return doubleCheck[0] as Staff;
+      }
+
       console.log('🟡 No staff record found for email, creating via API:', email);
 
       try {
@@ -279,15 +296,16 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
 
         console.log('🟢 Staff record created via API:', result.staff?.display_name);
 
-        // Fetch the complete staff record
-        const { data: newStaff } = await supabase
+        // Fetch the complete staff record (use array to handle duplicates)
+        const { data: newStaffArray } = await supabase
           .from('staff')
           .select('*')
           .eq('email', email)
           .eq('tenant_id', tenantId)
-          .single();
+          .order('created_at', { ascending: false })
+          .limit(1);
 
-        return newStaff as Staff;
+        return newStaffArray?.[0] as Staff || null;
       } catch (apiError) {
         console.error('🔴 Exception creating staff via API:', apiError);
         return null;
