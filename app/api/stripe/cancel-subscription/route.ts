@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     const stripe = getStripeClient();
 
     // Cancel Stripe subscription at period end (gives them remaining time)
-    const cancelledSubscription: Stripe.Subscription = await stripe.subscriptions.update(
+    const cancelledSubscription = await stripe.subscriptions.update(
       subscription.stripe_subscription_id,
       {
         cancel_at_period_end: true,
@@ -168,10 +168,13 @@ export async function POST(request: NextRequest) {
       metadata: {
         stripe_subscription_id: cancelledSubscription.id,
         cancel_at_period_end: true,
-        current_period_end: cancelledSubscription.current_period_end,
+        current_period_end: (cancelledSubscription as any).current_period_end,
         reason_details: reasonDetails,
       },
     });
+
+    // Get period end for response
+    const periodEnd = (cancelledSubscription as any).current_period_end;
 
     // Log cancellation reason for analytics
     await supabaseAdmin.from('cancellation_feedback').insert({
@@ -201,7 +204,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Suscripción cancelada exitosamente',
-      access_until: new Date(cancelledSubscription.current_period_end * 1000).toISOString(),
+      access_until: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       data_retention_until: dataRetentionDate.toISOString(),
     });
 
