@@ -107,9 +107,15 @@ export default function SubscriptionPage() {
     const fetchSubscription = async () => {
       try {
         const response = await fetch('/api/stripe/update-subscription');
-        if (response.ok) {
-          const data = await response.json();
+        const data = await response.json();
+
+        console.log('📊 Subscription API Response:', data);
+        console.log('📊 Plan from API:', data?.data?.plan);
+
+        if (response.ok && data.data) {
           setSubscription(data.data);
+        } else {
+          console.error('Subscription fetch failed:', data.error);
         }
       } catch (err) {
         console.error('Error fetching subscription:', err);
@@ -276,8 +282,22 @@ export default function SubscriptionPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Planes Disponibles</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {PLANS.map((plan) => {
-              const isCurrentPlan = subscription?.plan?.toLowerCase() === plan.id.toLowerCase();
+              // Normalize plan names with trim to handle any whitespace
+              const subscriptionPlan = subscription?.plan?.toLowerCase()?.trim() || '';
+              const planIdNormalized = plan.id.toLowerCase().trim();
+              const isCurrentPlan = subscriptionPlan === planIdNormalized;
               const isPlanUpgrade = isUpgrade(plan.id);
+
+              // Debug logging for ALL plans to find the issue
+              console.log(`🔍 Plan Check [${plan.id}]:`, {
+                subscriptionPlan: `"${subscriptionPlan}"`,
+                planIdNormalized: `"${planIdNormalized}"`,
+                isCurrentPlan,
+                rawSubscriptionPlan: subscription?.plan,
+                subscriptionExists: !!subscription,
+                charCodeComparison: subscriptionPlan === planIdNormalized ? 'MATCH' :
+                  `MISMATCH (lengths: ${subscriptionPlan.length} vs ${planIdNormalized.length})`,
+              });
 
               return (
                 <Card

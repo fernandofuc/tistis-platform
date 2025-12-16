@@ -106,6 +106,12 @@ export interface CredentialsEmailData {
   tenantSlug: string;
 }
 
+export interface PasswordResetEmailData {
+  customerName: string;
+  resetUrl: string;
+  expiresIn: string;
+}
+
 export type EmailTemplateType =
   | 'welcome'
   | 'payment_confirmed'
@@ -114,4 +120,5 @@ export type EmailTemplateType =
   | 'payment_failed'
   | 'subscription_cancelled'
   | 'plan_upgraded'
-  | 'credentials';
+  | 'credentials'
+  | 'password_reset';

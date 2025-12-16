@@ -21,6 +21,8 @@ import {
   planUpgradedEmailSubject,
   credentialsEmailTemplate,
   credentialsEmailSubject,
+  passwordResetEmailTemplate,
+  passwordResetEmailSubject,
 } from './templates';
 import type {
   EmailResult,
@@ -32,6 +34,7 @@ import type {
   SubscriptionCancelledEmailData,
   PlanUpgradedEmailData,
   CredentialsEmailData,
+  PasswordResetEmailData,
 } from './types';
 
 // Re-export types
@@ -191,6 +194,25 @@ export const emailService = {
       subject: credentialsEmailSubject(data.customerName),
       html: credentialsEmailTemplate(data),
       tags: ['credentials', 'onboarding'],
+    });
+  },
+
+  /**
+   * Send password reset email with magic link
+   */
+  async sendPasswordReset(
+    to: string,
+    data: PasswordResetEmailData
+  ): Promise<EmailResult> {
+    if (!isValidEmail(to)) {
+      return { success: false, error: 'Invalid email address' };
+    }
+
+    return sendEmail({
+      to: { email: to, name: data.customerName },
+      subject: passwordResetEmailSubject(),
+      html: passwordResetEmailTemplate(data),
+      tags: ['password', 'reset', 'security'],
     });
   },
 

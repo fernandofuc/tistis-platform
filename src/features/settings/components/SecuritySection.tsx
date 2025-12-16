@@ -111,20 +111,29 @@ export function SecuritySection() {
     setSendingReset(true);
     setResetError(null);
 
+    const redirectUrl = `${window.location.origin}/auth/reset-password`;
+    console.log('🔐 [Password Reset] Starting reset for:', user.email);
+    console.log('🔐 [Password Reset] Redirect URL:', redirectUrl);
+
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+      const { data, error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: redirectUrl,
       });
 
+      console.log('🔐 [Password Reset] Supabase response:', { data, error });
+
       if (error) {
+        console.error('🔐 [Password Reset] Error:', error);
         throw error;
       }
 
+      console.log('🔐 [Password Reset] Success! Email should be sent.');
       setResetSent(true);
       // Auto-hide after 10 seconds
       setTimeout(() => setResetSent(false), 10000);
 
     } catch (error: any) {
+      console.error('🔐 [Password Reset] Catch error:', error);
       setResetError(error.message || 'Error al enviar el email');
     } finally {
       setSendingReset(false);

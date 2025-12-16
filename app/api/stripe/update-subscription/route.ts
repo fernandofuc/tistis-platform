@@ -365,12 +365,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Get subscription
-    const { data: subscription } = await supabaseAdmin
+    const { data: subscription, error: subscriptionError } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
       .eq('client_id', client.id)
       .in('status', ['active', 'past_due'])
       .single();
+
+    console.log('📊 [GET Subscription] Query result:', {
+      client_id: client.id,
+      subscription_found: !!subscription,
+      subscription_plan: subscription?.plan,
+      subscription_status: subscription?.status,
+      error: subscriptionError?.message,
+    });
 
     if (!subscription) {
       return NextResponse.json({ error: 'No subscription found' }, { status: 404 });

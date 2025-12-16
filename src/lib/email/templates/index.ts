@@ -10,3 +10,4 @@ export { paymentFailedEmailTemplate, paymentFailedEmailSubject } from './payment
 export { subscriptionCancelledEmailTemplate, subscriptionCancelledEmailSubject } from './subscription-cancelled';
 export { planUpgradedEmailTemplate, planUpgradedEmailSubject } from './plan-upgraded';
 export { credentialsEmailTemplate, credentialsEmailSubject } from './credentials';
+export { passwordResetEmailTemplate, passwordResetEmailSubject } from './password-reset';
