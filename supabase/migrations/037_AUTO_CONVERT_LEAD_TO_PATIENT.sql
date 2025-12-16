@@ -109,7 +109,6 @@ WHERE NOT EXISTS (
   SELECT 1 FROM public.patients p
   WHERE p.lead_id = l.id AND p.tenant_id = l.tenant_id
 )
-AND a.deleted_at IS NULL
 ORDER BY l.id, a.created_at ASC;
 
 -- =====================================================
