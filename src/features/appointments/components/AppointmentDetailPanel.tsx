@@ -215,7 +215,7 @@ export function AppointmentDetailPanel({
         .select(`
           *,
           leads(*),
-          staff(*),
+          staff:staff!appointments_staff_id_fkey(*),
           services(*),
           branches(*)
         `)
