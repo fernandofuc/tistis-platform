@@ -176,26 +176,27 @@ export async function POST(request: NextRequest) {
     // Get period end for response
     const periodEnd = (cancelledSubscription as any).current_period_end;
 
-    // Log cancellation reason for analytics
-    await supabaseAdmin.from('cancellation_feedback').insert({
-      tenant_id: userRole.tenant_id,
-      client_id: client.id,
-      subscription_id: subscription.id,
-      plan_at_cancellation: subscription.plan,
-      reason: reason || 'not_specified',
-      reason_details: reasonDetails,
-      subscription_duration_days: Math.floor(
-        (new Date().getTime() - new Date(subscription.created_at).getTime()) / (1000 * 60 * 60 * 24)
-      ),
-      monthly_amount: subscription.monthly_amount,
-      branches_count: subscription.max_branches || 1,
-      created_by: user.id,
-    }).then(() => {
+    // Log cancellation reason for analytics (non-blocking)
+    try {
+      await supabaseAdmin.from('cancellation_feedback').insert({
+        tenant_id: userRole.tenant_id,
+        client_id: client.id,
+        subscription_id: subscription.id,
+        plan_at_cancellation: subscription.plan,
+        reason: reason || 'not_specified',
+        reason_details: reasonDetails,
+        subscription_duration_days: Math.floor(
+          (new Date().getTime() - new Date(subscription.created_at).getTime()) / (1000 * 60 * 60 * 24)
+        ),
+        monthly_amount: subscription.monthly_amount,
+        branches_count: subscription.max_branches || 1,
+        created_by: user.id,
+      });
       console.log('Cancellation feedback logged');
-    }).catch((err) => {
+    } catch (feedbackErr) {
       // Non-blocking - just log the error
-      console.error('Failed to log cancellation feedback:', err);
-    });
+      console.error('Failed to log cancellation feedback:', feedbackErr);
+    }
 
     console.log(`❌ Subscription cancelled: ${client.business_name} (${subscription.plan})`);
     console.log(`   Reason: ${reason || 'not_specified'}`);
