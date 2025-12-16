@@ -213,7 +213,7 @@ export function NewAppointmentModal({
           .select('id, display_name, first_name, last_name, role, role_title, avatar_url')
           .eq('tenant_id', tenant.id)
           .eq('is_active', true)
-          .in('role', ['owner', 'dentist', 'specialist', 'manager'])
+          .in('role', ['dentist', 'specialist', 'doctor', 'manager'])
           .order('display_name'),
       ]);
 
