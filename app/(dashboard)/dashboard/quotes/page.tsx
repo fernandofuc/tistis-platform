@@ -35,7 +35,7 @@ interface Quote {
   };
   lead?: {
     id: string;
-    name: string;
+    full_name: string | null;
     phone: string;
     classification: string;
   };

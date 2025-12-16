@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         patient:patients!patient_id(id, patient_number, first_name, last_name, phone, email),
-        lead:leads!lead_id(id, name, phone, email, classification),
+        lead:leads!lead_id(id, full_name, phone, email, classification),
         created_by_user:staff_members!created_by(id, first_name, last_name),
         quote_items(id, service_name, quantity, unit_price, discount_percentage, discount_amount, subtotal)
       `, { count: 'exact' })
