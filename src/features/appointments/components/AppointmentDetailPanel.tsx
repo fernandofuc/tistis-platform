@@ -275,6 +275,15 @@ export function AppointmentDetailPanel({
   const service = displayData?.services;
   const branch = displayData?.branches;
 
+  // Debug: log staff data
+  console.log('🔍 Appointment Detail:', {
+    staff_id: displayData?.staff_id,
+    staff: staff,
+    service_id: displayData?.service_id,
+    service: service,
+    fullData: fullData
+  });
+
   const statusInfo = displayData?.status ? statusColors[displayData.status] || statusColors.scheduled : statusColors.scheduled;
   const statusLabel = APPOINTMENT_STATUSES.find((s) => s.value === displayData?.status)?.label || displayData?.status;
 
@@ -490,8 +499,8 @@ export function AppointmentDetailPanel({
                   </motion.div>
                 )}
 
-                {/* Reason Card - Motivo de consulta */}
-                {(displayData.reason || displayData.notes) && (
+                {/* Reason Card - Motivo de consulta (from service or notes) */}
+                {(service || displayData.reason || displayData.notes) && (
                   <motion.div
                     custom={3}
                     variants={itemVariants}
@@ -503,9 +512,16 @@ export function AppointmentDetailPanel({
                       <span className="text-amber-600">{icons.reason}</span>
                       <span className="text-sm font-medium text-amber-800">Motivo de Consulta</span>
                     </div>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                      {displayData.reason || displayData.notes}
-                    </p>
+                    {/* Primary: Service name as consultation reason */}
+                    {service && (
+                      <p className="font-medium text-gray-900 mb-1">{service.name}</p>
+                    )}
+                    {/* Secondary: Additional notes or reason */}
+                    {(displayData.reason || displayData.notes) && (
+                      <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                        {displayData.reason || displayData.notes}
+                      </p>
+                    )}
                   </motion.div>
                 )}
 
