@@ -11,6 +11,7 @@ import { useAuthContext } from '@/src/features/auth';
 import {
   ChannelConnections,
   AIConfiguration,
+  SecuritySection,
   fetchNotificationPreferences,
   updateNotificationPreferences,
   type NotificationPreferences,
@@ -635,49 +636,7 @@ export default function SettingsPage() {
 
           {/* Security Tab */}
           {activeTab === 'security' && (
-            <Card variant="bordered">
-              <CardHeader title="Seguridad" subtitle="Protege tu cuenta" />
-              <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-4">Cambiar Contraseña</h4>
-                    <div className="space-y-4 max-w-md">
-                      <Input
-                        label="Contraseña Actual"
-                        type="password"
-                        placeholder="********"
-                      />
-                      <Input
-                        label="Nueva Contraseña"
-                        type="password"
-                        placeholder="********"
-                      />
-                      <Input
-                        label="Confirmar Nueva Contraseña"
-                        type="password"
-                        placeholder="********"
-                      />
-                      <Button onClick={handleSave} isLoading={saving}>
-                        Actualizar Contraseña
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="pt-6 border-t border-gray-100">
-                    <h4 className="font-medium text-gray-900 mb-4">Sesiones Activas</h4>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-900">Esta sesión</p>
-                          <p className="text-sm text-gray-500">Navegador web - Activa ahora</p>
-                        </div>
-                        <Badge variant="success">Actual</Badge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <SecuritySection />
           )}
         </div>
       </div>

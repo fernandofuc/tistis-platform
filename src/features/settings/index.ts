@@ -7,6 +7,7 @@
 export { ChannelConnections } from './components/ChannelConnections';
 export { AIConfiguration } from './components/AIConfiguration';
 export { BranchManagement } from './components/BranchManagement';
+export { SecuritySection } from './components/SecuritySection';
 
 // Services
 export {
