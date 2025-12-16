@@ -288,6 +288,7 @@ export interface Appointment {
   confirmation_sent: boolean;
   reminder_24h_sent: boolean;
   reminder_2h_sent: boolean;
+  reason: string | null;
   notes: string | null;
   cancellation_reason: string | null;
   rescheduled_from_id: string | null;

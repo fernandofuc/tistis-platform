@@ -80,6 +80,16 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
     </svg>
   ),
+  reason: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  doctor: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
   check: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -480,19 +490,38 @@ export function AppointmentDetailPanel({
                   </motion.div>
                 )}
 
-                {/* Staff Card */}
-                {staff && (
+                {/* Reason Card - Motivo de consulta */}
+                {(displayData.reason || displayData.notes) && (
                   <motion.div
                     custom={3}
                     variants={itemVariants}
                     initial="hidden"
                     animate="visible"
-                    className="p-4 bg-white rounded-2xl border border-gray-200"
+                    className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100"
                   >
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-orange-500">{icons.user}</span>
-                      <span className="text-sm font-medium text-gray-700">Especialista</span>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-amber-600">{icons.reason}</span>
+                      <span className="text-sm font-medium text-amber-800">Motivo de Consulta</span>
                     </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {displayData.reason || displayData.notes}
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* Staff Card - Always show, even if no doctor assigned */}
+                <motion.div
+                  custom={4}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="p-4 bg-white rounded-2xl border border-gray-200"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-orange-500">{icons.doctor}</span>
+                    <span className="text-sm font-medium text-gray-700">Especialista Asignado</span>
+                  </div>
+                  {staff ? (
                     <div className="flex items-center gap-3">
                       <Avatar
                         name={staff.display_name || `${staff.first_name} ${staff.last_name}`}
@@ -506,8 +535,18 @@ export function AppointmentDetailPanel({
                         <p className="text-sm text-gray-500">{staff.role_title || staff.role}</p>
                       </div>
                     </div>
-                  </motion.div>
-                )}
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                        <span className="text-gray-400">{icons.user}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-500">Sin asignar</p>
+                        <p className="text-sm text-gray-400">Pendiente de asignación</p>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
 
                 {/* Branch Card */}
                 {branch && (
@@ -534,10 +573,10 @@ export function AppointmentDetailPanel({
                   </motion.div>
                 )}
 
-                {/* Notes Card */}
-                {displayData.notes && (
+                {/* Notes Card - Only show if notes exist AND are different from reason */}
+                {displayData.notes && displayData.reason && displayData.notes !== displayData.reason && (
                   <motion.div
-                    custom={5}
+                    custom={6}
                     variants={itemVariants}
                     initial="hidden"
                     animate="visible"
@@ -545,7 +584,7 @@ export function AppointmentDetailPanel({
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-gray-400">{icons.notes}</span>
-                      <span className="text-sm font-medium text-gray-700">Notas</span>
+                      <span className="text-sm font-medium text-gray-700">Notas Internas</span>
                     </div>
                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{displayData.notes}</p>
                   </motion.div>
