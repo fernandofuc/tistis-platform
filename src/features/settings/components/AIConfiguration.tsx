@@ -91,16 +91,6 @@ interface StaffBranch {
   is_primary: boolean;
 }
 
-interface ScoringRule {
-  id: string;
-  tenant_id: string | null;
-  signal_name: string;
-  points: number;
-  keywords: string[];
-  category: string;
-  is_active: boolean;
-}
-
 interface SubscriptionInfo {
   plan: string;
   max_branches: number;
@@ -192,7 +182,7 @@ export function AIConfiguration() {
   const { tenant, isAdmin } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring' | 'escalation'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring'>('general');
 
   // AI Config State - must match database schema exactly
   const [config, setConfig] = useState<AIConfig>({
@@ -214,11 +204,7 @@ export function AIConfiguration() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffBranches, setStaffBranches] = useState<StaffBranch[]>([]);
-  const [scoringRules, setScoringRules] = useState<ScoringRule[]>([]);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
-
-  // UI-only state (not saved to database)
-  const [enableScoring, setEnableScoring] = useState(true);
 
   // Modal States
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
@@ -295,28 +281,6 @@ export function AIConfiguration() {
 
       if (sbData) {
         setStaffBranches(sbData);
-      }
-
-      // Load scoring rules
-      const { data: rules, error: rulesError } = await supabase
-        .from('ai_scoring_rules')
-        .select('*')
-        .eq('is_active', true)
-        .order('points', { ascending: false });
-
-      if (rulesError) {
-        console.log('🟡 AI scoring rules table may not exist:', rulesError.message);
-        // Table might not exist yet - this is OK
-      } else if (rules) {
-        // Filter to show only tenant-specific or global rules
-        // Also normalize keywords to always be an array
-        const filteredRules = rules
-          .filter((rule: ScoringRule) => rule.tenant_id === tenant.id || rule.tenant_id === null)
-          .map((rule: ScoringRule) => ({
-            ...rule,
-            keywords: Array.isArray(rule.keywords) ? rule.keywords : []
-          }));
-        setScoringRules(filteredRules);
       }
 
       // Load subscription info for branch limits
@@ -522,8 +486,7 @@ export function AIConfiguration() {
               { key: 'general', label: 'General', icon: icons.ai },
               { key: 'clinic', label: 'Clínica y Sucursales', icon: icons.clinic },
               { key: 'knowledge', label: 'Base de Conocimiento', icon: icons.brain },
-              { key: 'scoring', label: 'Puntuación', icon: icons.check },
-              { key: 'escalation', label: 'Escalamiento', icon: icons.warning },
+              { key: 'scoring', label: 'Clasificación', icon: icons.check },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -957,273 +920,156 @@ export function AIConfiguration() {
             </div>
           )}
 
-          {/* Scoring Configuration */}
+          {/* Clasificación y Escalamiento - Sistema basado en Servicios */}
           {activeSection === 'scoring' && (
             <div className="p-6 space-y-6">
-              {/* Header con Toggle */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium text-gray-900">Sistema de Puntuación de Leads</h4>
-                  <p className="text-sm text-gray-500">
-                    El AI detecta señales de intención de compra y clasifica automáticamente tus leads
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={enableScoring}
-                    onChange={(e) => setEnableScoring(e.target.checked)}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                </label>
+              {/* Header */}
+              <div>
+                <h4 className="font-medium text-gray-900">Clasificación de Leads por Servicio</h4>
+                <p className="text-sm text-gray-500">
+                  Los leads se clasifican automáticamente según el servicio que les interesa
+                </p>
               </div>
 
-              {/* Explicación del Sistema */}
+              {/* Explicación del Nuevo Sistema */}
               <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                   </div>
                   <div className="flex-1">
                     <h4 className="font-medium text-purple-900 mb-1">¿Cómo funciona?</h4>
                     <p className="text-sm text-purple-700">
-                      Cuando un cliente escribe por WhatsApp, el AI analiza sus mensajes y detecta señales de interés.
-                      Cada señal suma puntos que clasifican al lead como <strong>HOT</strong>, <strong>WARM</strong> o <strong>COLD</strong>,
-                      permitiéndote priorizar a quienes tienen mayor probabilidad de conversión.
+                      Cuando un lead muestra interés en un servicio específico, se clasifica automáticamente según
+                      la prioridad que hayas asignado a ese servicio. Los servicios de alto valor (implantes, ortodoncia)
+                      generan leads <strong>HOT</strong>, mientras que servicios básicos (limpieza) generan leads <strong>COLD</strong>.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {enableScoring && (
-                <div className="space-y-4">
-                  {/* Sistema de Clasificación */}
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-3">Sistema de Clasificación</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                          <Badge variant="hot" size="sm">HOT</Badge>
-                        </div>
-                        <p className="text-2xl font-bold text-red-700">80+</p>
-                        <p className="text-xs text-red-600">puntos</p>
-                        <p className="text-sm text-red-700 mt-2">Alta intención de compra. Prioridad máxima.</p>
-                      </div>
-                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                          <Badge variant="warning" size="sm">WARM</Badge>
-                        </div>
-                        <p className="text-2xl font-bold text-amber-700">40-79</p>
-                        <p className="text-xs text-amber-600">puntos</p>
-                        <p className="text-sm text-amber-700 mt-2">Interés moderado. Requiere seguimiento.</p>
-                      </div>
-                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                          <Badge variant="info" size="sm">COLD</Badge>
-                        </div>
-                        <p className="text-2xl font-bold text-blue-700">0-39</p>
-                        <p className="text-xs text-blue-600">puntos</p>
-                        <p className="text-sm text-blue-700 mt-2">Solo explorando. Nutrir con información.</p>
-                      </div>
+              {/* Sistema de Clasificación - Sin puntos */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">Niveles de Clasificación</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                      <Badge variant="hot" size="sm">HOT</Badge>
                     </div>
+                    <p className="text-sm font-medium text-red-900">Servicios de Alto Valor</p>
+                    <p className="text-xs text-red-700 mt-1">Implantes, Ortodoncia, Carillas, Rehabilitación</p>
+                    <p className="text-sm text-red-700 mt-2">→ Escalamiento automático para cierre de venta</p>
                   </div>
-
-                  {/* Reglas de Puntuación */}
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-3">
-                      Señales Detectadas ({scoringRules.length} reglas activas)
-                    </p>
-                    {scoringRules.length === 0 ? (
-                      <div className="text-center py-8 bg-gray-50 rounded-xl">
-                        <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center mx-auto mb-3">
-                          {icons.check}
-                        </div>
-                        <p className="text-gray-500">Sistema de puntuación con reglas por defecto</p>
-                        <p className="text-sm text-gray-400 mt-1">Las reglas globales de TIS TIS están activas automáticamente</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {scoringRules.map((rule) => (
-                          <div
-                            key={rule.id}
-                            className={cn(
-                              'flex items-center justify-between p-4 rounded-xl border transition-colors',
-                              rule.points > 0
-                                ? 'bg-green-50 border-green-200'
-                                : 'bg-red-50 border-red-200'
-                            )}
-                          >
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900">{rule.signal_name}</p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                Detecta: {Array.isArray(rule.keywords) ? rule.keywords.slice(0, 4).join(', ') : 'Regla configurada'}
-                                {Array.isArray(rule.keywords) && rule.keywords.length > 4 && ` (+${rule.keywords.length - 4} más)`}
-                              </p>
-                            </div>
-                            <div className={cn(
-                              'px-3 py-1.5 rounded-lg font-bold text-sm',
-                              rule.points > 0
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            )}>
-                              {rule.points > 0 ? '+' : ''}{rule.points} pts
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                      <Badge variant="warning" size="sm">WARM</Badge>
+                    </div>
+                    <p className="text-sm font-medium text-amber-900">Servicios Moderados</p>
+                    <p className="text-xs text-amber-700 mt-1">Endodoncia, Coronas, Blanqueamiento, Resinas</p>
+                    <p className="text-sm text-amber-700 mt-2">→ Seguimiento prioritario</p>
                   </div>
-
-                  {/* Nota informativa */}
-                  <div className="p-4 bg-gray-50 rounded-xl">
-                    <p className="text-sm text-gray-600">
-                      <strong>Nota:</strong> Las reglas de puntuación están optimizadas por TIS TIS para tu industria.
-                      El sistema detecta automáticamente palabras clave como &quot;urgente&quot;, &quot;precio&quot;, &quot;agendar cita&quot;,
-                      &quot;disponibilidad&quot; y ajusta el score del lead en tiempo real.
-                    </p>
-                  </div>
-
-                  {/* Separador */}
-                  <div className="border-t border-gray-200 pt-6 mt-6">
-                    <h4 className="font-medium text-gray-900 mb-2">Prioridad por Servicio</h4>
-                    <p className="text-sm text-gray-500 mb-4">
-                      Clasifica tus servicios para determinar automáticamente la prioridad del lead cuando muestre interés
-                    </p>
-                    <ServicePriorityConfig />
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                      <Badge variant="info" size="sm">COLD</Badge>
+                    </div>
+                    <p className="text-sm font-medium text-blue-900">Servicios Básicos</p>
+                    <p className="text-xs text-blue-700 mt-1">Limpieza, Consulta, Diagnóstico, Radiografías</p>
+                    <p className="text-sm text-blue-700 mt-2">→ Nutrir con información</p>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {!enableScoring && (
-                <div className="p-6 bg-gray-50 rounded-xl text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
+              {/* Configuración de Servicios */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">Configura la Prioridad de tus Servicios</p>
+                <ServicePriorityConfig />
+              </div>
+
+              {/* Separador visual */}
+              <div className="border-t border-gray-200 pt-6">
+                <h4 className="font-medium text-gray-900 mb-2">Escalamiento Automático</h4>
+                <p className="text-sm text-gray-500 mb-4">
+                  Configura cuándo el AI debe transferir la conversación a tu equipo
+                </p>
+              </div>
+
+              {/* Triggers de Escalamiento */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Lead HOT */}
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-medium text-red-900">Servicio HOT Detectado</p>
+                      <Badge variant="hot" size="sm">Auto</Badge>
+                    </div>
                   </div>
-                  <p className="text-gray-600 font-medium">Puntuación Desactivada</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Activa el sistema para clasificar automáticamente tus leads por nivel de interés
+                  <p className="text-sm text-red-700">
+                    Cuando el lead pregunta por implantes, ortodoncia u otro servicio HOT.
                   </p>
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* Escalation Settings */}
-          {activeSection === 'escalation' && (
-            <div className="p-6 space-y-6">
-              {/* Header Explicativo */}
-              <div>
-                <h4 className="font-medium text-gray-900">Sistema de Escalamiento Inteligente</h4>
-                <p className="text-sm text-gray-500">
-                  Configura cuándo el AI debe transferir la conversación a un humano
-                </p>
-              </div>
-
-              {/* Explicación del Sistema */}
-              <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                {/* Solicitud de Humano */}
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-medium text-blue-900">Solicitud de Humano</p>
+                      <Badge variant="info" size="sm">Auto</Badge>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-amber-900 mb-1">¿Qué es el Escalamiento?</h4>
-                    <p className="text-sm text-amber-700">
-                      El escalamiento transfiere automáticamente la conversación de WhatsApp del AI a tu equipo humano
-                      cuando detecta situaciones que requieren atención personal: clientes molestos, emergencias,
-                      oportunidades de venta calientes, o cuando el cliente solicita hablar con una persona.
-                    </p>
-                  </div>
+                  <p className="text-sm text-blue-700">
+                    Cuando el cliente pide hablar con una persona o asesor.
+                  </p>
                 </div>
-              </div>
 
-              {/* Triggers Automáticos - Siempre Activos */}
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-3">
-                  Triggers de Escalamiento Automático
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Lead HOT */}
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="font-medium text-red-900">Servicio HOT Detectado</p>
-                        <Badge variant="hot" size="sm">Alto Valor</Badge>
-                      </div>
+                {/* Emergencia */}
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
                     </div>
-                    <p className="text-sm text-red-700">
-                      Cuando el lead muestra interés en un servicio de alta prioridad (implantes, ortodoncia, etc.),
-                      se escala para que tu equipo cierre la venta.
-                    </p>
+                    <div>
+                      <p className="font-medium text-purple-900">Emergencia / Dolor</p>
+                      <Badge variant="default" size="sm">Prioridad</Badge>
+                    </div>
                   </div>
+                  <p className="text-sm text-purple-700">
+                    Detecta &quot;emergencia&quot;, &quot;dolor fuerte&quot;, &quot;urgente&quot;.
+                  </p>
+                </div>
 
-                  {/* Solicitud de Humano */}
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-900">Solicitud de Humano</p>
-                        <Badge variant="info" size="sm">Automático</Badge>
-                      </div>
+                {/* Límite de Mensajes */}
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
                     </div>
-                    <p className="text-sm text-blue-700">
-                      Cuando el cliente pide explícitamente hablar con una persona, asesor o gerente.
-                    </p>
-                  </div>
-
-                  {/* Emergencia Médica */}
-                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="font-medium text-purple-900">Emergencia / Dolor</p>
-                        <Badge variant="default" size="sm">Prioridad Alta</Badge>
-                      </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Límite de Mensajes</p>
+                      <Badge variant="default" size="sm">Configurable</Badge>
                     </div>
-                    <p className="text-sm text-purple-700">
-                      Detecta palabras como &quot;emergencia&quot;, &quot;dolor fuerte&quot;, &quot;urgente&quot; para atención inmediata.
-                    </p>
                   </div>
-
-                  {/* Límite de Mensajes */}
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center">
-                        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Límite de Mensajes</p>
-                        <Badge variant="default" size="sm">Configurable</Badge>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      Conversaciones largas sin conversión se escalan para evitar frustración del cliente.
-                    </p>
-                  </div>
+                  <p className="text-sm text-gray-600">
+                    Conversaciones largas sin conversión se escalan automáticamente.
+                  </p>
                 </div>
               </div>
 
@@ -1278,7 +1124,7 @@ export function AIConfiguration() {
                 <div className="mb-4">
                   <p className="font-medium text-gray-900">Palabras Clave de Escalamiento</p>
                   <p className="text-sm text-gray-500">
-                    El AI escalará inmediatamente si detecta estas palabras en los mensajes del cliente
+                    El AI escalará inmediatamente si detecta estas palabras
                   </p>
                 </div>
 
@@ -1376,52 +1222,6 @@ export function AIConfiguration() {
                     ))}
                   </div>
                 </div>
-              </div>
-
-              {/* Integración con Puntuación */}
-              {enableScoring && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-medium text-green-900">Integración con Lead Scoring</p>
-                      <p className="text-sm text-green-700">
-                        El sistema de puntuación está <strong>activo</strong>. Los leads que alcancen 80+ puntos (HOT)
-                        serán escalados automáticamente para maximizar las conversiones.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!enableScoring && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      {icons.warning}
-                    </div>
-                    <div>
-                      <p className="font-medium text-amber-900">Lead Scoring Desactivado</p>
-                      <p className="text-sm text-amber-700">
-                        El sistema de puntuación está desactivado. El escalamiento por lead HOT no funcionará.
-                        Actívalo en la pestaña &quot;Puntuación&quot; para maximizar conversiones.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Nota Final */}
-              <div className="p-4 bg-gray-50 rounded-xl">
-                <p className="text-sm text-gray-600">
-                  <strong>Nota:</strong> Cuando se escala una conversación, recibirás una notificación en el dashboard
-                  y la conversación aparecerá destacada en tu bandeja de entrada. El AI informará al cliente que
-                  un asesor humano tomará la conversación.
-                </p>
               </div>
             </div>
           )}
