@@ -213,7 +213,7 @@ export default function QuotesPage() {
       return `${quote.patient.first_name} ${quote.patient.last_name}`;
     }
     if (quote.lead) {
-      return quote.lead.name;
+      return quote.lead.full_name || 'Sin nombre';
     }
     return 'Sin asignar';
   };

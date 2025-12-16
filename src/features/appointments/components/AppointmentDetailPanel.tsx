@@ -388,12 +388,12 @@ export function AppointmentDetailPanel({
                     </div>
                     <div className="flex items-center gap-4">
                       <Avatar
-                        name={lead.name || lead.phone}
+                        name={lead.full_name || lead.phone}
                         size="lg"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 truncate">
-                          {lead.name || 'Sin nombre'}
+                          {lead.full_name || 'Sin nombre'}
                         </p>
                         <p className="text-sm text-gray-500 truncate">{lead.email || 'Sin email'}</p>
                         {lead.classification && (
