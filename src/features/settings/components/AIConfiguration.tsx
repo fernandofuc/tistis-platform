@@ -1942,7 +1942,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
     email: staff?.email || '',
     specialty: staff?.specialty || '',
     license_number: staff?.license_number || '',
-    role: staff?.role || 'doctor',
+    role: staff?.role || 'dentist',
     is_active: staff?.is_active ?? true,
   });
 
@@ -2139,11 +2139,12 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
-              <option value="doctor">Doctor</option>
+              <option value="dentist">Dentista / Doctor</option>
               <option value="specialist">Especialista</option>
               <option value="assistant">Asistente</option>
               <option value="receptionist">Recepcionista</option>
               <option value="admin">Administrador</option>
+              <option value="manager">Gerente</option>
             </select>
           </div>
 
