@@ -188,7 +188,7 @@ export default function SubscriptionPage() {
   // Check if plan is upgrade or downgrade
   const isUpgrade = (planId: string): boolean => {
     if (!subscription) return false;
-    return getPlanTier(planId) > getPlanTier(subscription.plan);
+    return getPlanTier(planId.toLowerCase()) > getPlanTier(subscription.plan?.toLowerCase() || '');
   };
 
   if (!isOwner) {
@@ -276,7 +276,7 @@ export default function SubscriptionPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Planes Disponibles</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {PLANS.map((plan) => {
-              const isCurrentPlan = subscription?.plan === plan.id;
+              const isCurrentPlan = subscription?.plan?.toLowerCase() === plan.id.toLowerCase();
               const isPlanUpgrade = isUpgrade(plan.id);
 
               return (
