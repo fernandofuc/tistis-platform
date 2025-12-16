@@ -14,7 +14,13 @@ import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, formatPhone, cn } from '@/src/shared/utils';
 import { LEAD_STATUSES, LEAD_CLASSIFICATIONS, LEAD_SOURCES } from '@/src/shared/constants';
-import type { Lead, LeadClassification, LeadStatus } from '@/src/shared/types';
+import type { Lead, LeadClassification, LeadStatus, Appointment, Staff, Service } from '@/src/shared/types';
+
+// Type for appointment with relations
+interface AppointmentWithRelations extends Appointment {
+  staff?: Staff | null;
+  services?: Service | null;
+}
 
 // ======================
 // ICONS
@@ -160,6 +166,10 @@ export default function LeadsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // Lead appointments state
+  const [leadAppointments, setLeadAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+
   // ======================
   // ACTION HANDLERS
   // ======================
@@ -191,11 +201,37 @@ export default function LeadsPage() {
     router.push(`/dashboard/calendario?lead_id=${lead.id}`);
   }, [router]);
 
+  // Fetch appointments for a lead
+  const fetchLeadAppointments = useCallback(async (leadId: string) => {
+    setLoadingAppointments(true);
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          staff:staff!appointments_staff_id_fkey(*),
+          services(*)
+        `)
+        .eq('lead_id', leadId)
+        .order('scheduled_at', { ascending: false });
+
+      if (error) throw error;
+      setLeadAppointments(data as AppointmentWithRelations[]);
+    } catch (err) {
+      console.error('Error fetching lead appointments:', err);
+      setLeadAppointments([]);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, []);
+
   // Handle lead row click - open detail panel
   const handleLeadClick = useCallback((lead: Lead) => {
     setSelectedLead(lead);
     setShowDetailPanel(true);
-  }, []);
+    setLeadAppointments([]); // Reset appointments
+    fetchLeadAppointments(lead.id); // Fetch appointments for this lead
+  }, [fetchLeadAppointments]);
 
   // Handle create new lead
   const handleCreateLead = useCallback(async () => {
@@ -707,10 +743,95 @@ export default function LeadsPage() {
                   </motion.div>
                 )}
 
+                {/* Citas Programadas */}
+                <motion.div
+                  custom={6}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 space-y-3 border border-blue-100"
+                >
+                  <h4 className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+                    {icons.calendar}
+                    Citas Programadas
+                  </h4>
+
+                  {loadingAppointments ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : leadAppointments.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic py-2">No hay citas programadas para este lead</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {leadAppointments.map((appointment) => (
+                        <div
+                          key={appointment.id}
+                          className="bg-white rounded-lg p-3 border border-blue-100 space-y-2"
+                        >
+                          {/* Motivo de consulta */}
+                          <div className="flex items-start gap-2">
+                            <span className="text-blue-600 text-xs font-medium">Motivo:</span>
+                            <span className="text-sm text-gray-800 font-medium">
+                              {appointment.services?.name || appointment.reason || 'No especificado'}
+                            </span>
+                          </div>
+
+                          {/* Doctor asignado */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-600 text-xs font-medium">Doctor:</span>
+                            <span className="text-sm text-gray-800">
+                              {appointment.staff
+                                ? `${appointment.staff.first_name || ''} ${appointment.staff.last_name || ''}`.trim() || 'Sin nombre'
+                                : <span className="text-gray-400 italic">Sin asignar</span>
+                              }
+                            </span>
+                          </div>
+
+                          {/* Fecha y hora */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-600 text-xs font-medium">Fecha:</span>
+                            <span className="text-sm text-gray-700">
+                              {appointment.scheduled_at
+                                ? new Date(appointment.scheduled_at).toLocaleDateString('es-MX', {
+                                    weekday: 'short',
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })
+                                : 'Sin fecha'
+                              }
+                            </span>
+                          </div>
+
+                          {/* Status */}
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-xs font-medium",
+                              appointment.status === 'scheduled' && "bg-blue-100 text-blue-700",
+                              appointment.status === 'confirmed' && "bg-green-100 text-green-700",
+                              appointment.status === 'completed' && "bg-gray-100 text-gray-700",
+                              appointment.status === 'cancelled' && "bg-red-100 text-red-700",
+                              appointment.status === 'no_show' && "bg-orange-100 text-orange-700"
+                            )}>
+                              {appointment.status === 'scheduled' && 'Programada'}
+                              {appointment.status === 'confirmed' && 'Confirmada'}
+                              {appointment.status === 'completed' && 'Completada'}
+                              {appointment.status === 'cancelled' && 'Cancelada'}
+                              {appointment.status === 'no_show' && 'No asistió'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+
                 {/* Tags */}
                 {selectedLead.tags && selectedLead.tags.length > 0 && (
                   <motion.div
-                    custom={6}
+                    custom={7}
                     variants={itemVariants}
                     initial="hidden"
                     animate="visible"
@@ -729,7 +850,7 @@ export default function LeadsPage() {
 
                 {/* Timestamps */}
                 <motion.div
-                  custom={7}
+                  custom={8}
                   variants={itemVariants}
                   initial="hidden"
                   animate="visible"
