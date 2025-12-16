@@ -9,12 +9,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardContent, Button, Input, Badge } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
-import { createBrowserSupabaseClient } from '@/src/shared/lib/supabase';
+import { supabase } from '@/src/shared/lib/supabase';
 
 export function SecuritySection() {
   const router = useRouter();
   const { user, staff } = useAuthContext();
-  const supabase = createBrowserSupabaseClient();
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
