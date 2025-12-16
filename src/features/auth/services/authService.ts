@@ -169,13 +169,30 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
     if (!tenantId) {
       console.log('🟡 No tenant_id, searching staff by email only:', email);
 
-      // Try to find any staff with this email
+      // First try to find staff linked to this user (has user_id)
+      // This prioritizes the actual profile over duplicate records
       const { data: staffByEmail } = await supabase
         .from('staff')
         .select('*')
         .eq('email', email)
+        .not('user_id', 'is', null)  // Prefer records with user_id set
         .limit(1)
         .single();
+
+      // If not found with user_id, try any record with this email
+      if (!staffByEmail) {
+        const { data: anyStaffByEmail } = await supabase
+          .from('staff')
+          .select('*')
+          .eq('email', email)
+          .limit(1)
+          .single();
+
+        if (anyStaffByEmail) {
+          console.log('🟢 Found staff by email (no user_id):', anyStaffByEmail.tenant_id);
+          return anyStaffByEmail as Staff;
+        }
+      }
 
       if (staffByEmail) {
         console.log('🟢 Found staff by email, tenant_id:', staffByEmail.tenant_id);
@@ -203,15 +220,37 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
       return null;
     }
 
-    const { data, error } = await supabase
+    // First try to find staff with user_id (the actual linked profile)
+    // This handles the case where same email is used for multiple records
+    let data: Staff | null = null;
+    let error: { code?: string; message?: string } | null = null;
+
+    const { data: staffWithUserId, error: err1 } = await supabase
       .from('staff')
       .select('*')
       .eq('email', email)
       .eq('tenant_id', tenantId)
+      .eq('user_id', user?.id || '')
       .single();
 
+    if (staffWithUserId) {
+      data = staffWithUserId as Staff;
+    } else {
+      // Fallback: find any staff with this email and tenant
+      const { data: anyStaff, error: err2 } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('email', email)
+        .eq('tenant_id', tenantId)
+        .limit(1)
+        .single();
+
+      data = anyStaff as Staff | null;
+      error = err2;
+    }
+
     // If no staff record exists, create one via API (bypasses RLS)
-    if (error && error.code === 'PGRST116') {
+    if (!data && error?.code === 'PGRST116') {
       console.log('🟡 No staff record found for email, creating via API:', email);
 
       try {
