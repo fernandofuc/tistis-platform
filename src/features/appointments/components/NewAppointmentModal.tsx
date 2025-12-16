@@ -42,6 +42,12 @@ interface StaffMember {
   avatar_url?: string;
 }
 
+interface StaffBranchAssignment {
+  staff_id: string;
+  branch_id: string;
+  is_primary: boolean;
+}
+
 interface Branch {
   id: string;
   name: string;
@@ -144,6 +150,7 @@ export function NewAppointmentModal({
   const [leads, setLeads] = useState<Lead[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staffBranches, setStaffBranches] = useState<StaffBranchAssignment[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Form states
@@ -196,7 +203,7 @@ export function NewAppointmentModal({
 
     setLoadingData(true);
     try {
-      const [leadsRes, servicesRes, staffRes] = await Promise.all([
+      const [leadsRes, servicesRes, staffRes, staffBranchesRes] = await Promise.all([
         supabase
           .from('leads')
           .select('id, full_name, phone, email, classification')
@@ -215,21 +222,26 @@ export function NewAppointmentModal({
           .eq('is_active', true)
           .in('role', ['dentist', 'specialist', 'doctor', 'manager', 'owner'])
           .order('display_name'),
+        supabase
+          .from('staff_branches')
+          .select('staff_id, branch_id, is_primary'),
       ]);
 
       if (leadsRes.error) console.error('Error fetching leads:', leadsRes.error);
       if (servicesRes.error) console.error('Error fetching services:', servicesRes.error);
       if (staffRes.error) console.error('Error fetching staff:', staffRes.error);
+      if (staffBranchesRes.error) console.error('Error fetching staff_branches:', staffBranchesRes.error);
 
       // Debug logging
       console.log('[NewAppointmentModal] Staff loaded:', staffRes.data?.length || 0, 'members');
-      console.log('[NewAppointmentModal] Staff data:', staffRes.data);
+      console.log('[NewAppointmentModal] Staff branches loaded:', staffBranchesRes.data?.length || 0);
       console.log('[NewAppointmentModal] Services loaded:', servicesRes.data?.length || 0);
       console.log('[NewAppointmentModal] Leads loaded:', leadsRes.data?.length || 0);
 
       setLeads(leadsRes.data || []);
       setServices(servicesRes.data || []);
       setStaff(staffRes.data || []);
+      setStaffBranches(staffBranchesRes.data || []);
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -264,12 +276,49 @@ export function NewAppointmentModal({
     return staff.find((s) => s.id === selectedStaffId);
   }, [staff, selectedStaffId]);
 
+  // Filter staff by selected branch
+  const filteredStaffByBranch = useMemo(() => {
+    // Filter out staff without valid names
+    const validStaff = staff.filter(
+      (member) => member.display_name?.trim() || member.first_name?.trim() || member.last_name?.trim()
+    );
+
+    // If no branch selected, show all valid staff
+    if (!selectedBranchIdLocal) {
+      return validStaff;
+    }
+
+    // Get staff IDs that are assigned to the selected branch
+    const staffIdsForBranch = staffBranches
+      .filter((sb) => sb.branch_id === selectedBranchIdLocal)
+      .map((sb) => sb.staff_id);
+
+    // Filter staff to only those assigned to the branch
+    const staffForBranch = validStaff.filter((member) => staffIdsForBranch.includes(member.id));
+
+    console.log('[NewAppointmentModal] Filtering staff for branch:', selectedBranchIdLocal);
+    console.log('[NewAppointmentModal] Staff assigned to branch:', staffForBranch.length, 'of', validStaff.length);
+
+    return staffForBranch;
+  }, [staff, staffBranches, selectedBranchIdLocal]);
+
   // Auto-set duration when service is selected
   useEffect(() => {
     if (selectedService?.duration_minutes) {
       setDuration(selectedService.duration_minutes);
     }
   }, [selectedService]);
+
+  // Clear staff selection when branch changes if staff is not available in new branch
+  useEffect(() => {
+    if (selectedStaffId && selectedBranchIdLocal) {
+      const staffInBranch = filteredStaffByBranch.some((s) => s.id === selectedStaffId);
+      if (!staffInBranch) {
+        console.log('[NewAppointmentModal] Clearing staff selection - not available in selected branch');
+        setSelectedStaffId('');
+      }
+    }
+  }, [selectedBranchIdLocal, filteredStaffByBranch, selectedStaffId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -627,33 +676,7 @@ export function NewAppointmentModal({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Staff Select */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                Especialista <span className="text-gray-400">(opcional)</span>
-              </label>
-              <select
-                value={selectedStaffId}
-                onChange={(e) => setSelectedStaffId(e.target.value)}
-                className={cn(
-                  'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
-                  'focus:ring-2 focus:ring-orange-500 focus:border-transparent',
-                  'transition-all duration-200 appearance-none bg-white',
-                  'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
-                )}
-              >
-                <option value="">Sin asignar</option>
-                {staff
-                  .filter((member) => member.display_name?.trim() || member.first_name?.trim() || member.last_name?.trim())
-                  .map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.role_title || member.role} - {member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim()}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Branch Select */}
+            {/* Branch Select - FIRST so staff filters by selected branch */}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">
                 Sucursal <span className="text-red-500">*</span>
@@ -675,6 +698,34 @@ export function NewAppointmentModal({
                     {branch.name}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            {/* Staff Select - filtered by selected branch */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                Especialista <span className="text-gray-400">(opcional)</span>
+              </label>
+              <select
+                value={selectedStaffId}
+                onChange={(e) => setSelectedStaffId(e.target.value)}
+                className={cn(
+                  'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                  'focus:ring-2 focus:ring-orange-500 focus:border-transparent',
+                  'transition-all duration-200 appearance-none bg-white',
+                  'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
+                )}
+              >
+                <option value="">Sin asignar</option>
+                {filteredStaffByBranch.length === 0 && selectedBranchIdLocal ? (
+                  <option value="" disabled>No hay especialistas en esta sucursal</option>
+                ) : (
+                  filteredStaffByBranch.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.role_title || member.role} - {member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim()}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>
