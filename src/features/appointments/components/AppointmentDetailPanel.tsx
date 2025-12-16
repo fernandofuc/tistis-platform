@@ -275,13 +275,14 @@ export function AppointmentDetailPanel({
   const service = displayData?.services;
   const branch = displayData?.branches;
 
-  // Debug: log staff data
-  console.log('🔍 Appointment Detail:', {
+  // Debug: log staff data (v2 - with FK fix)
+  console.log('🔍 Appointment Detail v2:', {
+    timestamp: new Date().toISOString(),
     staff_id: displayData?.staff_id,
     staff: staff,
     service_id: displayData?.service_id,
     service: service,
-    fullData: fullData
+    hasFullData: !!fullData
   });
 
   const statusInfo = displayData?.status ? statusColors[displayData.status] || statusColors.scheduled : statusColors.scheduled;
