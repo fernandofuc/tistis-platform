@@ -93,6 +93,13 @@ export default function DashboardPage() {
         return;
       }
 
+      // Debug logging
+      console.log('[Dashboard] Fetching data with:', {
+        tenantId: tenant.id,
+        selectedBranchId,
+        selectedBranchName: selectedBranch?.name,
+      });
+
       try {
         // Build base query with optional branch filter
         const buildQuery = (table: string, selectFields: string) => {
@@ -136,6 +143,20 @@ export default function DashboardPage() {
           .gte('scheduled_at', startOfDay)
           .lte('scheduled_at', endOfDay)
           .order('scheduled_at');
+
+        // Debug logging for appointments
+        console.log('[Dashboard] Appointments query:', {
+          startOfDay,
+          endOfDay,
+          selectedBranchId,
+          appointmentsCount: appointmentsData?.length || 0,
+          appointmentsError: appointmentsError?.message,
+          appointments: appointmentsData?.map((a: any) => ({
+            id: a.id,
+            branch_id: a.branch_id,
+            scheduled_at: a.scheduled_at,
+          })),
+        });
 
         if (!appointmentsError && appointmentsData) {
           setTodayAppointments(appointmentsData as unknown as Appointment[]);
