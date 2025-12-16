@@ -29,7 +29,7 @@ const CANCELLATION_REASONS = [
 
 export default function CancelSubscriptionPage() {
   const router = useRouter();
-  const { staff, logout } = useAuthContext();
+  const { staff, signOut } = useAuthContext();
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -89,9 +89,9 @@ export default function CancelSubscriptionPage() {
 
       setStep('done');
 
-      // Logout after 5 seconds
+      // Sign out after 5 seconds
       setTimeout(async () => {
-        await logout();
+        await signOut();
         router.push('/');
       }, 5000);
 
