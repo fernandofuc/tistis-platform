@@ -66,8 +66,17 @@ export async function POST(request: Request) {
 
     // Staff doesn't exist, create one
     const meta = user.user_metadata || {};
-    const firstName = meta.first_name || '';
-    const lastName = meta.last_name || '';
+
+    // Extract name from various sources with proper fallbacks
+    const nameFromEmail = email.split('@')[0].replace(/[._-]/g, ' ');
+    const nameParts = nameFromEmail.split(' ');
+
+    const firstName = meta.first_name ||
+                      (meta.name ? meta.name.split(' ')[0] : null) ||
+                      (nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'Usuario');
+    const lastName = meta.last_name ||
+                     (meta.name ? meta.name.split(' ').slice(1).join(' ') : null) ||
+                     (nameParts[1] ? nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1) : '');
     const displayName = meta.name || `${firstName} ${lastName}`.trim() || 'Usuario';
 
     const newStaffData = {
