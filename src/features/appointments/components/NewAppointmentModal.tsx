@@ -189,7 +189,12 @@ export function NewAppointmentModal({
         setSelectedLeadId(preselectedLeadId);
       }
 
-      // Set default branch
+      // Set default branch from global store
+      console.log('[NewAppointmentModal] Setting branch:', {
+        selectedBranchId,
+        authBranches: authBranches.map(b => ({ id: b.id, name: b.name })),
+      });
+
       if (selectedBranchId) {
         setSelectedBranchIdLocal(selectedBranchId);
       } else if (authBranches.length > 0) {
@@ -358,7 +363,10 @@ export function NewAppointmentModal({
         notes: notes || null,
       };
 
-      console.log('Creating appointment:', appointmentData);
+      console.log('[NewAppointmentModal] Creating appointment:', {
+        ...appointmentData,
+        branchName: authBranches.find(b => b.id === selectedBranchIdLocal)?.name,
+      });
 
       const { error: insertError } = await supabase
         .from('appointments')
