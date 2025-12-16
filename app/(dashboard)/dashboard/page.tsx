@@ -132,30 +132,10 @@ export default function DashboardPage() {
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
 
-        // DEBUG: Log date range and branch filter
-        console.log('[Dashboard] Appointments query params:', {
-          selectedBranchId,
-          startOfDay,
-          endOfDay,
-          branchFilter: selectedBranchId ? `branch_id = ${selectedBranchId}` : 'NO BRANCH FILTER',
-        });
-
         const { data: appointmentsData, error: appointmentsError } = await buildQuery('appointments', '*, leads(full_name, phone)')
           .gte('scheduled_at', startOfDay)
           .lte('scheduled_at', endOfDay)
           .order('scheduled_at');
-
-        // DEBUG: Log results
-        console.log('[Dashboard] Appointments result:', {
-          count: appointmentsData?.length || 0,
-          error: appointmentsError?.message,
-          appointments: appointmentsData?.map((a: any) => ({
-            id: a.id.slice(0, 8),
-            branch_id: a.branch_id?.slice(0, 8),
-            scheduled_at: a.scheduled_at,
-            lead: a.leads?.full_name,
-          })),
-        });
 
         if (!appointmentsError && appointmentsData) {
           setTodayAppointments(appointmentsData as unknown as Appointment[]);
