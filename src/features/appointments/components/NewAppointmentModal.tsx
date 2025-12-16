@@ -190,11 +190,6 @@ export function NewAppointmentModal({
       }
 
       // Set default branch from global store
-      console.log('[NewAppointmentModal] Setting branch:', {
-        selectedBranchId,
-        authBranches: authBranches.map(b => ({ id: b.id, name: b.name })),
-      });
-
       if (selectedBranchId) {
         setSelectedBranchIdLocal(selectedBranchId);
       } else if (authBranches.length > 0) {
@@ -236,12 +231,6 @@ export function NewAppointmentModal({
       if (servicesRes.error) console.error('Error fetching services:', servicesRes.error);
       if (staffRes.error) console.error('Error fetching staff:', staffRes.error);
       if (staffBranchesRes.error) console.error('Error fetching staff_branches:', staffBranchesRes.error);
-
-      // Debug logging
-      console.log('[NewAppointmentModal] Staff loaded:', staffRes.data?.length || 0, 'members');
-      console.log('[NewAppointmentModal] Staff branches loaded:', staffBranchesRes.data?.length || 0);
-      console.log('[NewAppointmentModal] Services loaded:', servicesRes.data?.length || 0);
-      console.log('[NewAppointmentModal] Leads loaded:', leadsRes.data?.length || 0);
 
       setLeads(leadsRes.data || []);
       setServices(servicesRes.data || []);
@@ -301,9 +290,6 @@ export function NewAppointmentModal({
     // Filter staff to only those assigned to the branch
     const staffForBranch = validStaff.filter((member) => staffIdsForBranch.includes(member.id));
 
-    console.log('[NewAppointmentModal] Filtering staff for branch:', selectedBranchIdLocal);
-    console.log('[NewAppointmentModal] Staff assigned to branch:', staffForBranch.length, 'of', validStaff.length);
-
     return staffForBranch;
   }, [staff, staffBranches, selectedBranchIdLocal]);
 
@@ -319,7 +305,6 @@ export function NewAppointmentModal({
     if (selectedStaffId && selectedBranchIdLocal) {
       const staffInBranch = filteredStaffByBranch.some((s) => s.id === selectedStaffId);
       if (!staffInBranch) {
-        console.log('[NewAppointmentModal] Clearing staff selection - not available in selected branch');
         setSelectedStaffId('');
       }
     }
@@ -362,11 +347,6 @@ export function NewAppointmentModal({
         status: 'scheduled',
         notes: notes || null,
       };
-
-      console.log('[NewAppointmentModal] Creating appointment:', {
-        ...appointmentData,
-        branchName: authBranches.find(b => b.id === selectedBranchIdLocal)?.name,
-      });
 
       const { error: insertError } = await supabase
         .from('appointments')

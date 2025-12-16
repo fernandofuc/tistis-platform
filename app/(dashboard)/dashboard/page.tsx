@@ -93,13 +93,6 @@ export default function DashboardPage() {
         return;
       }
 
-      // Debug logging
-      console.log('[Dashboard] Fetching data with:', {
-        tenantId: tenant.id,
-        selectedBranchId,
-        selectedBranchName: selectedBranch?.name,
-      });
-
       try {
         // Build base query with optional branch filter
         const buildQuery = (table: string, selectFields: string) => {
@@ -135,26 +128,32 @@ export default function DashboardPage() {
         }
 
         // Fetch today's appointments
-        const today = new Date();
-        const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-        const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+
+        // DEBUG: Log date range and branch filter
+        console.log('[Dashboard] Appointments query params:', {
+          selectedBranchId,
+          startOfDay,
+          endOfDay,
+          branchFilter: selectedBranchId ? `branch_id = ${selectedBranchId}` : 'NO BRANCH FILTER',
+        });
 
         const { data: appointmentsData, error: appointmentsError } = await buildQuery('appointments', '*, leads(full_name, phone)')
           .gte('scheduled_at', startOfDay)
           .lte('scheduled_at', endOfDay)
           .order('scheduled_at');
 
-        // Debug logging for appointments
-        console.log('[Dashboard] Appointments query:', {
-          startOfDay,
-          endOfDay,
-          selectedBranchId,
-          appointmentsCount: appointmentsData?.length || 0,
-          appointmentsError: appointmentsError?.message,
+        // DEBUG: Log results
+        console.log('[Dashboard] Appointments result:', {
+          count: appointmentsData?.length || 0,
+          error: appointmentsError?.message,
           appointments: appointmentsData?.map((a: any) => ({
-            id: a.id,
-            branch_id: a.branch_id,
+            id: a.id.slice(0, 8),
+            branch_id: a.branch_id?.slice(0, 8),
             scheduled_at: a.scheduled_at,
+            lead: a.leads?.full_name,
           })),
         });
 
