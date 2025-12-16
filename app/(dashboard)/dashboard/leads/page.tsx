@@ -167,7 +167,7 @@ export default function LeadsPage() {
   // Handle call button - show confirmation alert
   const handleCallClick = useCallback((e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation(); // Prevent row click
-    const leadName = (lead as any).full_name || lead.phone;
+    const leadName = lead.name || lead.phone;
     const confirmed = window.confirm(
       `¿Estás seguro de que quieres llamar a ${leadName}?\n\nTeléfono: ${formatPhone(lead.phone)}`
     );
@@ -218,7 +218,7 @@ export default function LeadsPage() {
         tenant_id: tenant.id,
         branch_id: selectedBranchId || null,
         phone: newLeadForm.phone.trim(),
-        full_name: newLeadForm.full_name.trim() || null,
+        name: newLeadForm.full_name.trim() || null,  // DB column is "name", not "full_name"
         email: newLeadForm.email.trim() || null,
         source: newLeadForm.source,
         status: newLeadForm.status,
@@ -308,9 +308,9 @@ export default function LeadsPage() {
       // Search filter
       if (search) {
         const searchLower = search.toLowerCase();
-        const fullName = (lead as any).full_name || '';
+        const leadName = lead.name || '';
         return (
-          fullName.toLowerCase().includes(searchLower) ||
+          leadName.toLowerCase().includes(searchLower) ||
           lead.phone.includes(search) ||
           lead.email?.toLowerCase().includes(searchLower)
         );
@@ -418,13 +418,13 @@ export default function LeadsPage() {
                   className="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer transition-colors"
                 >
                   {/* Avatar */}
-                  <Avatar name={(lead as any).full_name || lead.phone} size="lg" />
+                  <Avatar name={lead.name || lead.phone} size="lg" />
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-medium text-gray-900 truncate">
-                        {(lead as any).full_name || 'Sin nombre'}
+                        {lead.name || 'Sin nombre'}
                       </h3>
                       <Badge variant={lead.classification as 'hot' | 'warm' | 'cold'} size="sm">
                         {lead.classification === 'hot' && '🔥'}
@@ -549,10 +549,10 @@ export default function LeadsPage() {
                   animate="visible"
                   className="flex items-center gap-4"
                 >
-                  <Avatar name={(selectedLead as any).full_name || selectedLead.phone} size="xl" />
+                  <Avatar name={selectedLead.name || selectedLead.phone} size="xl" />
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold text-gray-900">
-                      {(selectedLead as any).full_name || 'Sin nombre'}
+                      {selectedLead.name || 'Sin nombre'}
                     </h3>
                     <p className="text-gray-500">{formatPhone(selectedLead.phone)}</p>
                     <div className="flex items-center gap-2 mt-2">

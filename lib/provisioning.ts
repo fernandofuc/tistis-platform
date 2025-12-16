@@ -545,6 +545,11 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         category: 'General',
         is_active: true,
         display_order: index,
+        duration_minutes: 30,  // Duración por defecto
+        price_min: 0,
+        price_max: 0,
+        price_unit: 'per_service',
+        currency: 'MXN',
       }));
 
       await supabase.from('services').insert(services);
