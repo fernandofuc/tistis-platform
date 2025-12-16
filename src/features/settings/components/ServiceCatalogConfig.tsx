@@ -136,7 +136,7 @@ export function ServiceCatalogConfig({ className }: ServiceCatalogConfigProps) {
       setServices(result.data || []);
 
       // Expand all categories by default
-      const categories = new Set(
+      const categories = new Set<string>(
         (result.data || []).map((s: Service) => s.category || 'Sin categoría')
       );
       setExpandedCategories(categories);
