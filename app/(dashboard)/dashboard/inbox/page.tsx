@@ -140,7 +140,7 @@ export default function InboxPage() {
       // Search filter
       if (search) {
         const searchLower = search.toLowerCase();
-        const leadName = conv.leads?.name?.toLowerCase() || '';
+        const leadName = conv.leads?.full_name?.toLowerCase() || '';
         const leadPhone = conv.leads?.phone || '';
         return leadName.includes(searchLower) || leadPhone.includes(search);
       }
@@ -223,7 +223,7 @@ export default function InboxPage() {
                     >
                       <div className="flex items-start gap-3">
                         <div className="relative">
-                          <Avatar name={conv.leads?.name || conv.leads?.phone || '?'} size="md" />
+                          <Avatar name={conv.leads?.full_name || conv.leads?.phone || '?'} size="md" />
                           {conv.ai_handling && (
                             <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
                               {icons.ai}
@@ -233,7 +233,7 @@ export default function InboxPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium text-gray-900 truncate">
-                              {conv.leads?.name || conv.leads?.phone || 'Sin nombre'}
+                              {conv.leads?.full_name || conv.leads?.phone || 'Sin nombre'}
                             </span>
                             <span className="text-xs text-gray-400">
                               {conv.last_message_at ? formatRelativeTime(conv.last_message_at) : ''}
@@ -270,10 +270,10 @@ export default function InboxPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3">
-                      <Avatar name={selectedConversation.leads?.name || '?'} size="md" />
+                      <Avatar name={selectedConversation.leads?.full_name || '?'} size="md" />
                       <div>
                         <h3 className="font-medium text-gray-900">
-                          {selectedConversation.leads?.name || 'Sin nombre'}
+                          {selectedConversation.leads?.full_name || 'Sin nombre'}
                         </h3>
                         <p className="text-sm text-gray-500">
                           {selectedConversation.leads?.phone}
