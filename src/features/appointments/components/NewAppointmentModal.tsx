@@ -17,7 +17,7 @@ import { cn } from '@/src/shared/utils';
 // ======================
 interface Lead {
   id: string;
-  name: string | null;  // DB column is "name", not "full_name"
+  full_name: string | null;
   phone: string;
   email?: string;
   classification?: string;
@@ -199,9 +199,9 @@ export function NewAppointmentModal({
       const [leadsRes, servicesRes, staffRes] = await Promise.all([
         supabase
           .from('leads')
-          .select('id, name, phone, email, classification')
+          .select('id, full_name, phone, email, classification')
           .eq('tenant_id', tenant.id)
-          .order('name'),
+          .order('full_name'),
         supabase
           .from('services')
           .select('id, name, duration_minutes, price_min, price_max, category')
@@ -237,7 +237,7 @@ export function NewAppointmentModal({
     const search = leadSearch.toLowerCase();
     return leads.filter(
       (lead) =>
-        lead.name?.toLowerCase().includes(search) ||
+        lead.full_name?.toLowerCase().includes(search) ||
         lead.phone?.includes(search) ||
         lead.email?.toLowerCase().includes(search)
     );
@@ -408,7 +408,7 @@ export function NewAppointmentModal({
               </span>
               <input
                 type="text"
-                value={selectedLead ? selectedLead.name || selectedLead.phone : leadSearch}
+                value={selectedLead ? selectedLead.full_name || selectedLead.phone : leadSearch}
                 onChange={(e) => {
                   setLeadSearch(e.target.value);
                   setSelectedLeadId('');
@@ -460,10 +460,10 @@ export function NewAppointmentModal({
                       }}
                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
                     >
-                      <Avatar name={lead.name || lead.phone} size="sm" />
+                      <Avatar name={lead.full_name || lead.phone} size="sm" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {lead.name || 'Sin nombre'}
+                          {lead.full_name || 'Sin nombre'}
                         </p>
                         <p className="text-xs text-gray-500 truncate">{lead.phone}</p>
                       </div>
@@ -489,9 +489,9 @@ export function NewAppointmentModal({
           {/* Selected Lead Card */}
           {selectedLead && (
             <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl flex items-center gap-3">
-              <Avatar name={selectedLead.name || selectedLead.phone} size="md" />
+              <Avatar name={selectedLead.full_name || selectedLead.phone} size="md" />
               <div className="flex-1">
-                <p className="font-medium text-gray-900">{selectedLead.name || 'Sin nombre'}</p>
+                <p className="font-medium text-gray-900">{selectedLead.full_name || 'Sin nombre'}</p>
                 <p className="text-sm text-gray-500">{selectedLead.phone}</p>
               </div>
               <div className="text-green-500">{icons.check}</div>
@@ -739,7 +739,7 @@ export function NewAppointmentModal({
               {selectedLead && (
                 <div className="col-span-2">
                   <span className="text-gray-500">Cliente:</span>
-                  <p className="font-medium text-gray-900">{selectedLead.name || selectedLead.phone}</p>
+                  <p className="font-medium text-gray-900">{selectedLead.full_name || selectedLead.phone}</p>
                 </div>
               )}
               {selectedService && (

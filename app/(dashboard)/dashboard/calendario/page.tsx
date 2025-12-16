@@ -151,7 +151,7 @@ export default function CalendarPage() {
 
       let query = supabase
         .from('appointments')
-        .select('*, leads(name, phone)')
+        .select('*, leads(full_name, phone)')
         .eq('tenant_id', tenant.id)
         .gte('scheduled_at', startOfMonth.toISOString())
         .lte('scheduled_at', endOfMonth.toISOString());
@@ -421,12 +421,12 @@ export default function CalendarPage() {
                           {/* Patient Info */}
                           <div className="flex items-center gap-3">
                             <Avatar
-                              name={lead?.name || lead?.phone || 'Sin nombre'}
+                              name={lead?.full_name || lead?.phone || 'Sin nombre'}
                               size="md"
                             />
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-gray-900 truncate">
-                                {lead?.name || 'Sin nombre'}
+                                {lead?.full_name || 'Sin nombre'}
                               </p>
                               <p className="text-xs text-gray-500 truncate">
                                 {lead?.phone || 'Sin teléfono'}

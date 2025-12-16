@@ -151,7 +151,7 @@ export interface Lead {
   branch_id: string | null;
   phone: string;
   phone_normalized: string | null;
-  name: string | null;
+  full_name: string | null;
   email: string | null;
   source: LeadSource;
   source_details: Record<string, unknown> | null;
