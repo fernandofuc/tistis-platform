@@ -54,17 +54,17 @@ export async function GET(request: NextRequest) {
       .eq('tenant_id', effectiveTenantId)
       .eq('is_active', true)
       .order('is_headquarters', { ascending: false })
-      .order('name');
+      .order('name') as { data: Array<{ id: string; [key: string]: unknown }> | null; error: unknown };
 
     if (error) {
       console.error('Error fetching branches:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: String(error) }, { status: 500 });
     }
 
     // If stats requested, fetch counts for each branch
     if (includeStats && branches) {
       const branchesWithStats = await Promise.all(
-        branches.map(async (branch) => {
+        branches.map(async (branch: { id: string; [key: string]: unknown }) => {
           const [leadsResult, appointmentsResult, conversationsResult] = await Promise.all([
             supabase
               .from('leads')
