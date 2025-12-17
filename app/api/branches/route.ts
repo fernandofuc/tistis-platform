@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@/src/shared/lib/supabase';
+import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -22,7 +22,7 @@ function getSupabaseAdmin() {
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
     const { searchParams } = new URL(request.url);
     const includeStats = searchParams.get('include_stats') === 'true';
     const tenantId = searchParams.get('tenant_id');
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
     const body = await request.json();
 
     // Authenticate user
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('id');
 

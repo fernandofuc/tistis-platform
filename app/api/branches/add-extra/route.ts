@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@/src/shared/lib/supabase';
+import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -30,7 +30,7 @@ const EXTRA_BRANCH_PRICING: Record<string, number> = {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
     const body = await request.json();
     const { name, city, state, address, phone, whatsapp_number, confirmBilling } = body;
 
@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function GET() {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
 
     // Authenticate user
     const { data: { user } } = await supabase.auth.getUser();
