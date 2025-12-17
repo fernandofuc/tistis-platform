@@ -298,13 +298,21 @@ export function AIConfiguration() {
 
       // Load subscription info for branch limits
       try {
-        const subRes = await fetch('/api/stripe/update-subscription');
+        const subRes = await fetch('/api/branches/add-extra');
         if (subRes.ok) {
           const subData = await subRes.json();
-          setSubscriptionInfo(subData.data || null);
+          // Map the response to SubscriptionInfo format
+          setSubscriptionInfo({
+            plan: subData.plan || 'starter',
+            max_branches: subData.max_branches || 1,
+            current_branches: subData.current_branches || 1,
+            can_add_branch: subData.can_add_extra || false,
+            next_branch_price: subData.extra_branch_price || 0,
+            currency: subData.currency || 'MXN',
+          });
         }
       } catch (err) {
-        console.log('Subscription info not available');
+        console.log('Subscription info not available:', err);
       }
 
       setLoading(false);
