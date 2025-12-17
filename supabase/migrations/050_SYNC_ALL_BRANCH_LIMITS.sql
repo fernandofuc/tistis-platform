@@ -45,7 +45,8 @@ BEGIN
             s.max_branches,
             s.current_branches,
             s.status,
-            c.email
+            c.contact_email,
+            c.business_name
         FROM public.subscriptions s
         JOIN public.clients c ON c.id = s.client_id
         ORDER BY s.created_at DESC
@@ -54,10 +55,10 @@ BEGIN
         IF v_sub.current_branches > v_sub.max_branches THEN
             v_issues := v_issues + 1;
             RAISE WARNING '⚠️ OVER LIMIT: % (%) - %/% branches on % plan',
-                v_sub.email, v_sub.status, v_sub.current_branches, v_sub.max_branches, v_sub.plan;
+                COALESCE(v_sub.contact_email, v_sub.business_name, 'Unknown'), v_sub.status, v_sub.current_branches, v_sub.max_branches, v_sub.plan;
         ELSE
             RAISE NOTICE '✅ OK: % - %/% branches on % plan',
-                v_sub.email, v_sub.current_branches, v_sub.max_branches, v_sub.plan;
+                COALESCE(v_sub.contact_email, v_sub.business_name, 'Unknown'), v_sub.current_branches, v_sub.max_branches, v_sub.plan;
         END IF;
     END LOOP;
 
