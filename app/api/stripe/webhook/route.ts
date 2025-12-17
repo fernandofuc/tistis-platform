@@ -385,14 +385,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const periodStart = (subscription as any).current_period_start;
   const periodEnd = (subscription as any).current_period_end;
 
-  // Determine max_branches based on plan
-  const planMaxBranches: Record<string, number> = {
-    starter: 1,
-    essentials: 5,  // Updated: 5 branches for Essentials
-    growth: 8,      // Updated: 8 branches for Growth
-    scale: 15,      // 15 branches for Scale
-  };
-  const maxBranchesForPlan = planMaxBranches[validatedPlan] || 5;
+  // max_branches = sucursales CONTRATADAS (lo que el cliente paga)
+  // current_branches = sucursales que se crearán (igual a branches inicialmente)
+  // El plan_limit (límite máximo del plan) se calcula en el frontend
+  const contractedBranches = branches ? parseInt(branches) : 1;
 
   const { error } = await supabase.from('subscriptions').insert({
     client_id: client.id,
@@ -401,9 +397,9 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     stripe_price_id: subscription.items.data[0]?.price?.id,
     plan: validatedPlan, // Use validated plan
     addons: parsedAddons,
-    branches: branches ? parseInt(branches) : 1,
-    max_branches: maxBranchesForPlan, // Set max branches based on plan
-    current_branches: 1, // Start with 1 branch
+    branches: contractedBranches,
+    max_branches: contractedBranches, // Sucursales contratadas (puede aumentar con extras)
+    current_branches: contractedBranches, // Sucursales que se crearán en provisioning
     monthly_amount: totalMonthlyAmount / 100,
     currency: 'MXN',
     status: subscription.status === 'active' ? 'active' : 'pending',
@@ -417,7 +413,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   }
 
   console.log('✅ Subscription record created for client:', client.id);
-  console.log('   Plan:', validatedPlan, '| Max Branches:', maxBranchesForPlan, '| Amount:', totalMonthlyAmount / 100, 'MXN');
+  console.log('   Plan:', validatedPlan, '| Contracted Branches:', contractedBranches, '| Amount:', totalMonthlyAmount / 100, 'MXN');
 
   // Get the newly created subscription ID
   const { data: newSubscription } = await supabase
