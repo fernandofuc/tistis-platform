@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@/src/shared/lib/supabase';
+import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -27,7 +27,7 @@ interface RouteContext {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id: branchId } = await context.params;
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
 
     // Authenticate user
     const { data: { user } } = await supabase.auth.getUser();
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id: branchId } = await context.params;
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
     const body = await request.json();
 
     // Authenticate user
@@ -188,7 +188,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id: branchId } = await context.params;
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
     const { searchParams } = new URL(request.url);
     const migrateData = searchParams.get('migrate') !== 'false'; // Default: migrate data
 
