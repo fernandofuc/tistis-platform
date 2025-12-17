@@ -171,10 +171,31 @@ const icons = {
 };
 
 const responseStyles = [
-  { value: 'professional', label: 'Profesional', desc: 'Formal y directo' },
-  { value: 'professional_friendly', label: 'Profesional Cálido', desc: 'Formal pero amigable (recomendado)' },
-  { value: 'casual', label: 'Casual', desc: 'Informal y cercano' },
-  { value: 'formal', label: 'Muy Formal', desc: 'Extremadamente profesional' },
+  {
+    value: 'professional',
+    label: 'Profesional',
+    desc: 'Formal y directo',
+    example: '"La limpieza dental tiene un costo de $800. El procedimiento dura 45 minutos. ¿Desea agendar una cita?"'
+  },
+  {
+    value: 'professional_friendly',
+    label: 'Profesional Cálido',
+    desc: 'Formal pero amigable',
+    example: '"Con gusto le informo que la limpieza dental tiene un costo de $800 MXN e incluye revisión completa. ¿Le gustaría agendar una cita?"',
+    recommended: true
+  },
+  {
+    value: 'casual',
+    label: 'Casual',
+    desc: 'Informal y cercano',
+    example: '"Claro que sí, la limpieza te sale en $800 y tardamos como 45 mins. ¿Quieres que te aparte un espacio?"'
+  },
+  {
+    value: 'formal',
+    label: 'Muy Formal',
+    desc: 'Extremadamente profesional',
+    example: '"Estimado/a paciente, le informo que el procedimiento de profilaxis dental tiene un costo de $800.00 MXN. Quedamos a sus órdenes."'
+  },
 ];
 
 // Modelos gestionados por TIS TIS (no seleccionables por cliente)
@@ -614,26 +635,92 @@ export function AIConfiguration() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Estilo de Respuesta del AI
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {responseStyles.map((style) => (
-                    <button
-                      key={style.value}
-                      onClick={() => setConfig({ ...config, ai_personality: style.value as typeof config.ai_personality })}
-                      className={cn(
-                        'p-4 rounded-xl border-2 text-left transition-all',
-                        config.ai_personality === style.value
-                          ? 'border-purple-500 bg-purple-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      )}
-                    >
-                      <p className="font-medium text-gray-900">{style.label}</p>
-                      <p className="text-sm text-gray-500">{style.desc}</p>
-                    </button>
-                  ))}
+              {/* Estilo de Respuesta del AI - Con Ejemplos */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Estilo de Respuesta del AI
+                  </label>
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    Sin emojis en respuestas
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {responseStyles.map((style) => {
+                    const isSelected = config.ai_personality === style.value;
+                    return (
+                      <button
+                        key={style.value}
+                        onClick={() => setConfig({ ...config, ai_personality: style.value as typeof config.ai_personality })}
+                        className={cn(
+                          'p-4 rounded-xl border-2 text-left transition-all relative',
+                          isSelected
+                            ? 'border-purple-500 bg-purple-50 shadow-sm'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        )}
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <p className={cn(
+                              'font-semibold',
+                              isSelected ? 'text-purple-900' : 'text-gray-900'
+                            )}>
+                              {style.label}
+                            </p>
+                            {'recommended' in style && style.recommended && (
+                              <span className="text-[10px] font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                Recomendado
+                              </span>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <div className="w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Description */}
+                        <p className={cn(
+                          'text-sm mb-3',
+                          isSelected ? 'text-purple-700' : 'text-gray-500'
+                        )}>
+                          {style.desc}
+                        </p>
+
+                        {/* Example */}
+                        <div className={cn(
+                          'p-3 rounded-lg text-xs leading-relaxed',
+                          isSelected
+                            ? 'bg-purple-100/50 text-purple-800 border border-purple-200'
+                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                        )}>
+                          <span className={cn(
+                            'font-medium block mb-1',
+                            isSelected ? 'text-purple-600' : 'text-gray-500'
+                          )}>
+                            Ejemplo de respuesta:
+                          </span>
+                          <span className="italic">{style.example}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Info Note */}
+                <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs text-gray-600">
+                    El AI mantiene un tono profesional y <strong>no utiliza emojis</strong> en sus respuestas para proyectar una imagen seria y confiable.
+                    Solo responderá con emojis si el cliente los utiliza primero en la conversación.
+                  </p>
                 </div>
               </div>
 
