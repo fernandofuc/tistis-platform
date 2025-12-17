@@ -124,12 +124,15 @@ export async function POST(request: NextRequest) {
       .eq('is_active', true)
       .single();
 
-    if (!userRole) {
+    if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
     }
 
+    const tenantId = userRole.tenant_id;
+    const userRoleType = userRole.role;
+
     // Only admins can create branches
-    if (!['admin', 'owner'].includes(userRole.role)) {
+    if (!['admin', 'owner'].includes(userRoleType)) {
       return NextResponse.json(
         { error: 'Solo administradores pueden crear sucursales' },
         { status: 403 }
@@ -139,7 +142,7 @@ export async function POST(request: NextRequest) {
     // Check branch limit using the database function
     const supabaseAdmin = getSupabaseAdmin();
     const { data: limitCheck, error: limitError } = await supabaseAdmin
-      .rpc('check_branch_limit', { p_tenant_id: userRole.tenant_id });
+      .rpc('check_branch_limit', { p_tenant_id: tenantId });
 
     if (limitError) {
       console.error('Error checking branch limit:', limitError);

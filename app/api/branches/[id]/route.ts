@@ -42,15 +42,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .eq('is_active', true)
       .single();
 
-    if (!userRole) {
+    if (!userRole?.tenant_id) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
     }
+
+    const tenantId = userRole.tenant_id;
 
     const { data: branch, error } = await supabase
       .from('branches')
       .select('*')
       .eq('id', branchId)
-      .eq('tenant_id', userRole.tenant_id)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (error || !branch) {
@@ -86,12 +88,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .eq('is_active', true)
       .single();
 
-    if (!userRole) {
+    if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
     }
 
+    const tenantId = userRole.tenant_id;
+    const userRoleType = userRole.role;
+
     // Only admins can update branches
-    if (!['admin', 'owner'].includes(userRole.role)) {
+    if (!['admin', 'owner'].includes(userRoleType)) {
       return NextResponse.json(
         { error: 'Solo administradores pueden editar sucursales' },
         { status: 403 }
@@ -105,7 +110,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .from('branches')
       .select('id, tenant_id, is_headquarters')
       .eq('id', branchId)
-      .eq('tenant_id', userRole.tenant_id)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (!existingBranch) {
@@ -158,7 +163,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     // Log the action
     await supabaseAdmin.from('audit_logs').insert({
-      tenant_id: userRole.tenant_id,
+      tenant_id: tenantId,
       user_id: user.id,
       action: 'branch_updated',
       entity_type: 'branch',
@@ -204,12 +209,15 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       .eq('is_active', true)
       .single();
 
-    if (!userRole) {
+    if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
     }
 
+    const tenantId = userRole.tenant_id;
+    const userRoleType = userRole.role;
+
     // Only admins can delete branches
-    if (!['admin', 'owner'].includes(userRole.role)) {
+    if (!['admin', 'owner'].includes(userRoleType)) {
       return NextResponse.json(
         { error: 'Solo administradores pueden eliminar sucursales' },
         { status: 403 }
@@ -223,7 +231,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       .from('branches')
       .select('id, tenant_id, name, is_headquarters')
       .eq('id', branchId)
-      .eq('tenant_id', userRole.tenant_id)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (!branchToDelete) {
@@ -242,7 +250,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { data: hqBranch } = await supabaseAdmin
       .from('branches')
       .select('id')
-      .eq('tenant_id', userRole.tenant_id)
+      .eq('tenant_id', tenantId)
       .eq('is_headquarters', true)
       .single();
 
@@ -317,7 +325,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     // Log the action
     await supabaseAdmin.from('audit_logs').insert({
-      tenant_id: userRole.tenant_id,
+      tenant_id: tenantId,
       user_id: user.id,
       action: 'branch_deleted',
       entity_type: 'branch',

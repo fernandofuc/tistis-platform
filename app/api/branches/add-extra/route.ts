@@ -47,12 +47,15 @@ export async function POST(request: NextRequest) {
       .eq('is_active', true)
       .single();
 
-    if (!userRole) {
+    if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
     }
 
+    const tenantId = userRole.tenant_id;
+    const userRoleType = userRole.role;
+
     // Only admins/owners can add branches
-    if (!['admin', 'owner'].includes(userRole.role)) {
+    if (!['admin', 'owner'].includes(userRoleType)) {
       return NextResponse.json(
         { error: 'Solo administradores pueden agregar sucursales' },
         { status: 403 }
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
     const { data: clientData, error: clientError } = await supabaseAdmin
       .from('clients')
       .select('id')
-      .eq('tenant_id', userRole.tenant_id)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (clientError || !clientData) {
@@ -149,7 +152,7 @@ export async function POST(request: NextRequest) {
     const { data: existingSlugs } = await supabaseAdmin
       .from('branches')
       .select('slug')
-      .eq('tenant_id', userRole.tenant_id)
+      .eq('tenant_id', tenantId)
       .like('slug', `${baseSlug}%`);
 
     let slug = baseSlug;
@@ -160,7 +163,7 @@ export async function POST(request: NextRequest) {
     const { data: newBranch, error: createError } = await supabaseAdmin
       .from('branches')
       .insert({
-        tenant_id: userRole.tenant_id,
+        tenant_id: tenantId,
         name: name || 'Nueva Sucursal',
         slug: slug,
         city: city || 'Por configurar',
@@ -212,7 +215,7 @@ export async function POST(request: NextRequest) {
     try {
       await supabaseAdmin.from('subscription_changes').insert({
         subscription_id: subscriptionData.id,
-        tenant_id: userRole.tenant_id,
+        tenant_id: tenantId,
         client_id: subscriptionData.client_id,
         change_type: 'branch_added',
         previous_value: { max_branches: maxBranches, current_branches: currentBranches },
@@ -233,7 +236,7 @@ export async function POST(request: NextRequest) {
     // 4. Log audit (ignore errors - non-critical)
     try {
       await supabaseAdmin.from('audit_logs').insert({
-        tenant_id: userRole.tenant_id,
+        tenant_id: tenantId,
         user_id: user.id,
         action: 'extra_branch_created',
         entity_type: 'branch',
@@ -289,17 +292,18 @@ export async function GET(request: NextRequest) {
       .eq('is_active', true)
       .single();
 
-    if (!userRole) {
+    if (!userRole?.tenant_id) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
     }
 
+    const tenantId = userRole.tenant_id;
     const supabaseAdmin = getSupabaseAdmin();
 
     // Step 1: Get client_id for this tenant
     const { data: clientData } = await supabaseAdmin
       .from('clients')
       .select('id')
-      .eq('tenant_id', userRole.tenant_id)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (!clientData) {
