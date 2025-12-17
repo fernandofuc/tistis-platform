@@ -94,9 +94,11 @@ interface StaffBranch {
 
 interface SubscriptionInfo {
   plan: string;
-  max_branches: number;
-  current_branches: number;
+  max_branches: number;        // Límite máximo del PLAN (ej: 5 para Essentials)
+  current_branches: number;    // Sucursales CONTRATADAS inicialmente
+  plan_limit: number;          // Límite absoluto del plan
   can_add_branch: boolean;
+  can_add_extra: boolean;      // Puede agregar extra con cargo
   next_branch_price: number;
   currency: string;
 }
@@ -310,12 +312,24 @@ export function AIConfiguration() {
         });
         if (subRes.ok) {
           const subData = await subRes.json();
+          // Límites por plan
+          const planLimits: Record<string, number> = {
+            starter: 1,
+            essentials: 5,
+            growth: 8,
+            scale: 15,
+          };
+          const plan = subData.plan || 'starter';
+          const planLimit = planLimits[plan] || 1;
+
           // Map the response to SubscriptionInfo format
           setSubscriptionInfo({
-            plan: subData.plan || 'starter',
-            max_branches: subData.max_branches || 1,
-            current_branches: subData.current_branches || 1,
-            can_add_branch: subData.can_add_extra || false,
+            plan: plan,
+            max_branches: subData.max_branches || 1,       // Lo que tiene contratado
+            current_branches: subData.current_branches || 1, // Sucursales contratadas
+            plan_limit: planLimit,                           // Límite máximo del plan
+            can_add_branch: subData.current_branches < subData.max_branches, // Dentro del contrato
+            can_add_extra: subData.can_add_extra && subData.max_branches < planLimit, // Puede comprar extra
             next_branch_price: subData.extra_branch_price || 0,
             currency: subData.currency || 'MXN',
           });
@@ -823,7 +837,7 @@ export function AIConfiguration() {
                     </h4>
                     {subscriptionInfo && (
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Plan {subscriptionInfo.plan?.toUpperCase()} • {subscriptionInfo.max_branches - branches.length} disponibles
+                        Plan {subscriptionInfo.plan?.toUpperCase()} • {Math.max(0, subscriptionInfo.max_branches - branches.length)} disponibles
                       </p>
                     )}
                   </div>
@@ -834,15 +848,15 @@ export function AIConfiguration() {
                       setEditingBranch(null);
                       setShowBranchModal(true);
                     }}
-                    disabled={subscriptionInfo ? branches.length >= subscriptionInfo.max_branches : false}
+                    disabled={subscriptionInfo ? branches.length >= subscriptionInfo.plan_limit : false}
                   >
                     {icons.plus}
                     <span className="ml-2">Agregar Sucursal</span>
                   </Button>
                 </div>
 
-                {/* Branch Limit Banner */}
-                {subscriptionInfo && branches.length >= subscriptionInfo.max_branches && (
+                {/* Branch Limit Banner - Alcanzó el límite contratado pero puede agregar extra */}
+                {subscriptionInfo && branches.length >= subscriptionInfo.max_branches && subscriptionInfo.max_branches < subscriptionInfo.plan_limit && (
                   <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
                     <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -852,7 +866,7 @@ export function AIConfiguration() {
                         Has alcanzado el límite de sucursales
                       </p>
                       <p className="text-sm text-amber-700 mt-1">
-                        Tu plan {subscriptionInfo.plan?.toUpperCase()} incluye hasta {subscriptionInfo.max_branches} sucursales.
+                        Tu plan {subscriptionInfo.plan?.toUpperCase()} incluye hasta {subscriptionInfo.plan_limit} sucursales.
                         {subscriptionInfo.next_branch_price > 0 && (
                           <> Para agregar una sucursal extra, el costo es de ${subscriptionInfo.next_branch_price.toLocaleString()} MXN/mes.</>
                         )}
@@ -869,6 +883,34 @@ export function AIConfiguration() {
                           Agregar Sucursal Extra (+${subscriptionInfo.next_branch_price.toLocaleString()}/mes)
                         </Button>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Branch Plan Limit Banner - Alcanzó el límite máximo del plan, debe subir de plan */}
+                {subscriptionInfo && branches.length >= subscriptionInfo.plan_limit && (
+                  <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                    <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="font-medium text-red-900">
+                        Has alcanzado el límite máximo de tu plan
+                      </p>
+                      <p className="text-sm text-red-700 mt-1">
+                        Tu plan {subscriptionInfo.plan?.toUpperCase()} permite máximo {subscriptionInfo.plan_limit} sucursales.
+                        Para agregar más sucursales, necesitas actualizar a un plan superior.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 border-red-300 text-red-800 hover:bg-red-100"
+                        onClick={() => {
+                          window.open('/dashboard/billing?action=upgrade', '_blank');
+                        }}
+                      >
+                        Subir de Plan
+                      </Button>
                     </div>
                   </div>
                 )}
