@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardContent, Button, Input, Badge, Avatar } from '@/src/shared/components/ui';
+import { Card, CardHeader, CardContent, Button, Input, Badge } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { cn } from '@/src/shared/utils';
 
@@ -60,6 +60,11 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   ),
+  money: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
 };
 
 // ======================
@@ -93,17 +98,29 @@ interface SubscriptionInfo {
   currency: string;
 }
 
+interface ExtraBranchPricing {
+  extra_branch_price: number;
+  currency: string;
+  billing_period: string;
+  current_branches: number;
+  max_branches: number;
+  new_total_branches: number;
+  plan: string;
+}
+
 // ======================
 // COMPONENT
 // ======================
 export function BranchManagement() {
-  const { isAdmin, tenant } = useAuthContext();
+  const { isAdmin } = useAuthContext();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<Branch | null>(null);
+  const [showExtraBranchModal, setShowExtraBranchModal] = useState(false);
+  const [extraBranchPricing, setExtraBranchPricing] = useState<ExtraBranchPricing | null>(null);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -129,14 +146,23 @@ export function BranchManagement() {
       const branchesData = await branchesRes.json();
       setBranches(branchesData.data || []);
 
-      // Fetch subscription info
-      const subRes = await fetch('/api/stripe/update-subscription');
-      if (subRes.ok) {
-        const subData = await subRes.json();
-        setSubscriptionInfo(subData.data || null);
+      // Fetch extra branch pricing info
+      const pricingRes = await fetch('/api/branches/add-extra');
+      if (pricingRes.ok) {
+        const pricingData = await pricingRes.json();
+        setSubscriptionInfo({
+          plan: pricingData.plan,
+          max_branches: pricingData.max_branches,
+          current_branches: pricingData.current_branches,
+          can_add_branch: pricingData.current_branches < pricingData.max_branches,
+          can_remove_branch: true,
+          next_branch_price: pricingData.extra_branch_price,
+          currency: pricingData.currency,
+        });
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -146,7 +172,7 @@ export function BranchManagement() {
     fetchData();
   }, [fetchData]);
 
-  // Handle add branch
+  // Handle add branch (normal - within limit)
   const handleAddBranch = async () => {
     if (!formData.name.trim()) {
       setError('El nombre de la sucursal es requerido');
@@ -167,7 +193,9 @@ export function BranchManagement() {
 
       if (!res.ok) {
         if (data.error === 'branch_limit_reached') {
-          setError(`${data.message} (${data.current}/${data.max} sucursales)`);
+          // At limit - show extra branch pricing
+          setShowAddModal(false);
+          await checkExtraBranchPricing();
         } else {
           setError(data.message || data.error || 'Error al crear sucursal');
         }
@@ -178,10 +206,87 @@ export function BranchManagement() {
       setShowAddModal(false);
       setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
       fetchData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Check extra branch pricing
+  const checkExtraBranchPricing = async () => {
+    try {
+      const res = await fetch('/api/branches/add-extra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, confirmBilling: false }),
+      });
+
+      const data = await res.json();
+
+      if (data.requires_confirmation) {
+        setExtraBranchPricing(data.pricing);
+        setShowExtraBranchModal(true);
+      } else if (data.error === 'plan_not_allowed') {
+        setError(data.message);
+      } else if (data.error) {
+        setError(data.message || 'Error al verificar precio');
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
+    }
+  };
+
+  // Handle add extra branch (with billing)
+  const handleAddExtraBranch = async () => {
+    setSaving(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/branches/add-extra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, confirmBilling: true }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || data.error || 'Error al crear sucursal');
+        return;
+      }
+
+      // Success
+      setShowExtraBranchModal(false);
+      setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
+      fetchData();
+
+      // Show success message with billing info
+      if (data.billing) {
+        alert(data.billing.message);
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle clicking "Agregar Sucursal" button
+  const handleAddBranchClick = () => {
+    setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
+    setError(null);
+
+    // Check if at limit
+    if (subscriptionInfo && subscriptionInfo.current_branches >= subscriptionInfo.max_branches) {
+      // At limit - show pricing confirmation first
+      checkExtraBranchPricing();
+    } else {
+      // Not at limit - show normal add modal
+      setShowAddModal(true);
     }
   };
 
@@ -208,8 +313,9 @@ export function BranchManagement() {
       setEditingBranch(null);
       setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
       fetchData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -240,8 +346,9 @@ export function BranchManagement() {
 
       setShowDeleteModal(null);
       fetchData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -264,6 +371,15 @@ export function BranchManagement() {
   const isAtLimit = subscriptionInfo &&
     subscriptionInfo.current_branches >= subscriptionInfo.max_branches;
 
+  // Format price
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      minimumFractionDigits: 0,
+    }).format(price);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Card with Subscription Info */}
@@ -271,18 +387,14 @@ export function BranchManagement() {
         <CardHeader
           title="Sucursales"
           subtitle={subscriptionInfo
-            ? `${subscriptionInfo.current_branches}/${subscriptionInfo.max_branches} sucursales activas`
+            ? `${subscriptionInfo.current_branches} de ${subscriptionInfo.max_branches} sucursales contratadas`
             : 'Gestiona las ubicaciones de tu negocio'
           }
           action={
             isAdmin && (
               <Button
                 leftIcon={icons.plus}
-                onClick={() => {
-                  setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
-                  setShowAddModal(true);
-                }}
-                disabled={isAtLimit || !subscriptionInfo?.can_add_branch}
+                onClick={handleAddBranchClick}
               >
                 Agregar Sucursal
               </Button>
@@ -290,30 +402,42 @@ export function BranchManagement() {
           }
         />
         <CardContent>
-          {/* Branch Limit Banner */}
-          {isAtLimit && (
+          {/* Branch Limit Info Banner */}
+          {isAtLimit && subscriptionInfo?.next_branch_price > 0 && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+              <span className="text-blue-600">{icons.money}</span>
+              <div className="flex-1">
+                <p className="font-medium text-blue-900">
+                  Has usado todas tus sucursales contratadas
+                </p>
+                <p className="text-sm text-blue-700 mt-1">
+                  Tu plan <span className="font-semibold uppercase">{subscriptionInfo?.plan}</span> incluye {subscriptionInfo?.max_branches} sucursal{subscriptionInfo?.max_branches !== 1 ? 'es' : ''}.
+                  Puedes agregar sucursales adicionales por {formatPrice(subscriptionInfo.next_branch_price)}/mes cada una.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Starter Plan Warning */}
+          {subscriptionInfo?.plan === 'starter' && (
             <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
               <span className="text-amber-600">{icons.alert}</span>
               <div className="flex-1">
                 <p className="font-medium text-amber-900">
-                  Has alcanzado el límite de sucursales
+                  Plan Starter: 1 sucursal incluida
                 </p>
                 <p className="text-sm text-amber-700 mt-1">
-                  Tu plan {subscriptionInfo?.plan?.toUpperCase()} incluye hasta {subscriptionInfo?.max_branches} sucursales.
-                  {subscriptionInfo?.next_branch_price && (
-                    <> Para agregar una sucursal extra, el costo es de ${subscriptionInfo.next_branch_price.toLocaleString()} MXN/mes.</>
-                  )}
+                  Para agregar más sucursales, necesitas mejorar tu plan a Essentials o superior.
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
                   className="mt-3"
                   onClick={() => {
-                    // TODO: Implement upgrade flow
-                    alert('Funcionalidad de upgrade próximamente');
+                    window.location.href = '/dashboard/settings/subscription';
                   }}
                 >
-                  Agregar Sucursal Extra (+${subscriptionInfo?.next_branch_price?.toLocaleString()}/mes)
+                  Ver Planes
                 </Button>
               </div>
             </div>
@@ -462,7 +586,7 @@ export function BranchManagement() {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal (Normal - within limit) */}
       {(showAddModal || editingBranch) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
@@ -547,6 +671,130 @@ export function BranchManagement() {
                 isLoading={saving}
               >
                 {editingBranch ? 'Guardar Cambios' : 'Crear Sucursal'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extra Branch Confirmation Modal (at limit - with billing) */}
+      {showExtraBranchModal && extraBranchPricing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <span className="text-blue-600">{icons.money}</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Agregar Sucursal Extra
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Se agregará un cobro mensual adicional
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Pricing Summary */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-gray-600">Sucursales actuales:</span>
+                  <span className="font-semibold">{extraBranchPricing.current_branches} de {extraBranchPricing.max_branches}</span>
+                </div>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-gray-600">Nueva sucursal:</span>
+                  <span className="font-semibold text-blue-600">+1</span>
+                </div>
+                <div className="border-t border-blue-200 pt-3 mt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-900 font-medium">Costo mensual adicional:</span>
+                    <span className="text-xl font-bold text-blue-600">
+                      {formatPrice(extraBranchPricing.extra_branch_price)}/mes
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Fields */}
+              <Input
+                label="Nombre de la Sucursal *"
+                placeholder="Ej: Sucursal Centro"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Ciudad"
+                  placeholder="Ej: Monterrey"
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                />
+                <Input
+                  label="Estado"
+                  placeholder="Ej: Nuevo León"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                />
+              </div>
+
+              <Input
+                label="Dirección"
+                placeholder="Calle, número, colonia"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Teléfono"
+                  placeholder="+52 81 1234 5678"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
+                <Input
+                  label="WhatsApp"
+                  placeholder="+52 81 1234 5678"
+                  value={formData.whatsapp_number}
+                  onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
+                />
+              </div>
+
+              {/* Notice */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800">
+                  <strong>Nota:</strong> El cobro de {formatPrice(extraBranchPricing.extra_branch_price)}/mes se agregará a tu próxima factura y se mantendrá mientras la sucursal esté activa.
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowExtraBranchModal(false);
+                  setExtraBranchPricing(null);
+                  setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
+                  setError(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleAddExtraBranch}
+                isLoading={saving}
+                disabled={!formData.name.trim()}
+              >
+                Confirmar y Agregar (+{formatPrice(extraBranchPricing.extra_branch_price)}/mes)
               </Button>
             </div>
           </div>
