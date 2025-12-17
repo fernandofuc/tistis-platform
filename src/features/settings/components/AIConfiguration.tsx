@@ -151,6 +151,11 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
     </svg>
   ),
+  trash: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  ),
   brain: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -217,6 +222,8 @@ export function AIConfiguration() {
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
+  const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
+  const [deletingBranchLoading, setDeletingBranchLoading] = useState(false);
 
   // Business Identity Edit State
   const [isEditingIdentity, setIsEditingIdentity] = useState(false);
@@ -422,6 +429,34 @@ export function AIConfiguration() {
       .filter(sb => sb.branch_id === branchId)
       .map(sb => sb.staff_id);
     return staff.filter(s => staffIds.includes(s.id));
+  };
+
+  // Handle delete branch
+  const handleDeleteBranch = async () => {
+    if (!deletingBranch) return;
+
+    setDeletingBranchLoading(true);
+    try {
+      const res = await fetch(`/api/branches?id=${deletingBranch.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || data.error || 'Error al eliminar sucursal');
+        return;
+      }
+
+      // Remove branch from local state
+      setBranches(prev => prev.filter(b => b.id !== deletingBranch.id));
+      setDeletingBranch(null);
+    } catch (error) {
+      console.error('Error deleting branch:', error);
+      alert('Error al eliminar sucursal');
+    } finally {
+      setDeletingBranchLoading(false);
+    }
   };
 
   if (loading) {
@@ -836,6 +871,7 @@ export function AIConfiguration() {
                           setEditingBranch(branch);
                           setShowBranchModal(true);
                         }}
+                        onDelete={() => setDeletingBranch(branch)}
                       />
                     ))}
                   </div>
@@ -1290,6 +1326,50 @@ export function AIConfiguration() {
           }}
         />
       )}
+
+      {/* Delete Branch Confirmation Modal */}
+      {deletingBranch && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-red-600">{icons.trash}</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 text-center">
+                ¿Eliminar sucursal?
+              </h2>
+              <p className="text-gray-500 text-center mt-2">
+                Esta acción eliminará <strong>{deletingBranch.name}</strong>.
+              </p>
+
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800">
+                  <strong>Nota:</strong> Los leads, citas y conversaciones de esta sucursal
+                  se moverán automáticamente a la Sucursal Principal.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setDeletingBranch(null)}
+                disabled={deletingBranchLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={handleDeleteBranch}
+                isLoading={deletingBranchLoading}
+              >
+                Sí, Eliminar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1302,9 +1382,10 @@ interface BranchCardProps {
   branch: Branch;
   staff: Staff[];
   onEdit: () => void;
+  onDelete?: () => void;
 }
 
-function BranchCard({ branch, staff, onEdit }: BranchCardProps) {
+function BranchCard({ branch, staff, onEdit, onDelete }: BranchCardProps) {
   const hasCoordinates = branch.latitude && branch.longitude;
 
   return (
@@ -1333,14 +1414,25 @@ function BranchCard({ branch, staff, onEdit }: BranchCardProps) {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onEdit}
-        >
-          {icons.edit}
-          <span className="ml-2">Editar</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onEdit}
+          >
+            {icons.edit}
+            <span className="ml-2">Editar</span>
+          </Button>
+          {!branch.is_headquarters && onDelete && (
+            <button
+              onClick={onDelete}
+              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Eliminar sucursal"
+            >
+              {icons.trash}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Info Grid */}
