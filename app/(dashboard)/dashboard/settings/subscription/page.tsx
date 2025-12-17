@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, Button, Badge } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
-import { useTenant } from '@/src/hooks/useTenant';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
 
@@ -84,10 +83,10 @@ const PLANS = [
 
 export default function SubscriptionPage() {
   const router = useRouter();
-  const { staff } = useAuthContext();
 
-  // Use useTenant hook - same source as Sidebar (works correctly)
-  const { tenant, branches, isLoading: loading } = useTenant();
+  // Use ONLY useAuthContext - it has everything we need (staff, tenant, branches)
+  // This avoids race conditions between two different hooks
+  const { staff, tenant, branches, loading, initialized } = useAuthContext();
 
   const [changingPlan, setChangingPlan] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -97,29 +96,19 @@ export default function SubscriptionPage() {
   // Check if user is owner
   const isOwner = staff?.role === 'owner';
 
-  // Create subscription-like object from tenant data
-  const subscription = tenant ? {
-    plan: tenant.plan,
-    status: tenant.status === 'active' ? 'active' : tenant.status,
-    max_branches: branches.length || 1,
-    current_branches: branches.filter(b => b.is_active).length || 1,
-    period_end: '', // Not available from tenant, but not critical for display
-  } : null;
+  // Get current plan directly from tenant (lowercase for comparison)
+  const currentPlan = tenant?.plan?.toLowerCase() || null;
 
-  // Debug: Log exactly what we're comparing
-  console.log('🔍 DEBUG subscription page:', {
-    tenant_exists: !!tenant,
-    tenant_plan: tenant?.plan,
-    tenant_plan_type: typeof tenant?.plan,
-    subscription_plan: subscription?.plan,
-    loading: loading,
-    PLANS_ids: PLANS.map(p => p.id),
-    comparison_essentials: tenant?.plan === 'essentials',
-  });
+  // Get tenant status
+  const tenantStatus = tenant?.status || 'inactive';
+
+  // Calculate branch counts
+  const activeBranches = branches?.filter((b: { is_active?: boolean }) => b.is_active).length || 0;
+  const totalBranches = branches?.length || 0;
 
   // Handle plan selection
   const handleSelectPlan = (planId: string) => {
-    if (planId === subscription?.plan) return; // Already on this plan
+    if (planId === currentPlan) return; // Already on this plan
     setSelectedPlan(planId);
     setShowConfirmModal(true);
   };
@@ -163,8 +152,9 @@ export default function SubscriptionPage() {
       // Otherwise, refresh and show success
       window.location.reload();
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
     } finally {
       setChangingPlan(false);
       setShowConfirmModal(false);
@@ -188,14 +178,25 @@ export default function SubscriptionPage() {
       growth: 3,
       scale: 4,
     };
-    return tiers[planId] || 0;
+    return tiers[planId.toLowerCase()] || 0;
   };
 
   // Check if plan is upgrade or downgrade
   const isUpgrade = (planId: string): boolean => {
-    if (!subscription) return false;
-    return getPlanTier(planId.toLowerCase()) > getPlanTier(subscription.plan?.toLowerCase() || '');
+    if (!currentPlan) return true; // If no current plan, any plan is an "upgrade"
+    return getPlanTier(planId) > getPlanTier(currentPlan);
   };
+
+  // Wait for auth to initialize before showing access denied
+  if (!initialized || loading) {
+    return (
+      <PageWrapper title="Gestión de Suscripción" subtitle="Cargando...">
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C5CFC]"></div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   if (!isOwner) {
     return (
@@ -218,21 +219,11 @@ export default function SubscriptionPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <PageWrapper title="Gestión de Suscripción" subtitle="Cargando...">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C5CFC]"></div>
-        </div>
-      </PageWrapper>
-    );
-  }
-
   return (
     <PageWrapper title="Gestión de Suscripción" subtitle="Cambia tu plan o gestiona tu facturación">
       <div className="space-y-8">
         {/* Current Plan Summary */}
-        {subscription && (
+        {currentPlan && (
           <Card variant="bordered" className="bg-gradient-to-r from-[#7C5CFC]/5 to-[#C23350]/5">
             <CardContent className="py-6">
               <div className="flex items-center justify-between">
@@ -240,26 +231,20 @@ export default function SubscriptionPage() {
                   <p className="text-sm text-gray-600 mb-1">Tu plan actual</p>
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-bold text-gray-900 capitalize">
-                      {subscription.plan}
+                      {currentPlan}
                     </h2>
-                    <Badge variant={subscription.status === 'active' ? 'success' : 'warning'}>
-                      {subscription.status === 'active' ? 'Activo' : subscription.status}
+                    <Badge variant={tenantStatus === 'active' ? 'success' : 'warning'}>
+                      {tenantStatus === 'active' ? 'Activo' : tenantStatus}
                     </Badge>
                   </div>
                   <p className="text-sm text-gray-500 mt-1">
-                    {subscription.current_branches} de {subscription.max_branches} sucursales en uso
+                    {activeBranches} de {totalBranches || 1} sucursales en uso
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600 mb-1">Próximo cobro</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {subscription.period_end
-                      ? new Date(subscription.period_end).toLocaleDateString('es-MX', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })
-                      : 'N/A'}
+                    N/A
                   </p>
                 </div>
               </div>
@@ -282,21 +267,9 @@ export default function SubscriptionPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Planes Disponibles</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {PLANS.map((plan) => {
-              // Simple comparison - tenant.plan is already lowercase from DB
-              const isCurrentPlan = subscription?.plan === plan.id;
+              // Direct comparison - both are lowercase
+              const isCurrentPlan = currentPlan === plan.id;
               const isPlanUpgrade = isUpgrade(plan.id);
-
-              // Debug each plan comparison
-              if (plan.id === 'essentials') {
-                console.log('🎯 ESSENTIALS CHECK:', {
-                  'subscription?.plan': subscription?.plan,
-                  'plan.id': plan.id,
-                  'isCurrentPlan': isCurrentPlan,
-                  'strict_equal': subscription?.plan === plan.id,
-                  'subscription_plan_charCodes': subscription?.plan?.split('').map(c => c.charCodeAt(0)),
-                  'plan_id_charCodes': plan.id.split('').map(c => c.charCodeAt(0)),
-                });
-              }
 
               return (
                 <Card
