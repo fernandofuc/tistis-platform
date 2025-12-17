@@ -331,11 +331,21 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function GET(request: NextRequest) {
   try {
+    console.log('📊 [GET Subscription] Starting...');
+
     const supabase = await createServerClientWithCookies();
+    console.log('📊 [GET Subscription] Supabase client created');
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('📊 [GET Subscription] Auth result:', {
+      hasUser: !!user,
+      userId: user?.id?.substring(0, 8),
+      authError: authError?.message
+    });
+
     if (!user) {
+      console.log('📊 [GET Subscription] No user found, returning 401');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
