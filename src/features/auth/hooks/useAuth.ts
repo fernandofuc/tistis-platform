@@ -250,6 +250,14 @@ export function useAuth() {
   }, [state.user?.email]);
 
   // ======================
+  // REFETCH BRANCHES
+  // ======================
+  const refetchBranches = useCallback(async (): Promise<void> => {
+    const branches = await authService.fetchBranches();
+    setState((prev) => ({ ...prev, branches }));
+  }, []);
+
+  // ======================
   // UPDATE STAFF PROFILE
   // ======================
   const updateStaff = useCallback(
@@ -306,6 +314,7 @@ export function useAuth() {
     resetPassword,
     updatePassword,
     refetchStaff,
+    refetchBranches,
     updateStaff,
 
     // Computed

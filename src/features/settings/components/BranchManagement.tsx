@@ -112,7 +112,7 @@ interface ExtraBranchPricing {
 // COMPONENT
 // ======================
 export function BranchManagement() {
-  const { isAdmin } = useAuthContext();
+  const { isAdmin, refetchBranches } = useAuthContext();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -206,6 +206,8 @@ export function BranchManagement() {
       setShowAddModal(false);
       setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
       fetchData();
+      // Also refresh auth context branches so they appear in other components
+      refetchBranches();
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
       setError(errorMessage);
@@ -262,6 +264,8 @@ export function BranchManagement() {
       setShowExtraBranchModal(false);
       setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
       fetchData();
+      // Also refresh auth context branches so they appear in other components
+      refetchBranches();
 
       // Show success message with billing info
       if (data.billing) {

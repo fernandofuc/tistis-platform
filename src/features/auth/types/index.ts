@@ -45,6 +45,9 @@ export interface AuthContextValue extends AuthState {
   refetchStaff: () => Promise<void>;
   updateStaff: (data: UpdateStaffData) => Promise<{ success: boolean; error?: string }>;
 
+  // Branch methods
+  refetchBranches: () => Promise<void>;
+
   // Computed
   isAuthenticated: boolean;
   isOwner: boolean;
