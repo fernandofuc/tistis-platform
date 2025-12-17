@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
+import { getUserFromRequest } from '@/src/shared/lib/supabase-server';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -27,10 +27,9 @@ interface RouteContext {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id: branchId } = await context.params;
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -71,11 +70,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id: branchId } = await context.params;
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
     const body = await request.json();
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -100,8 +98,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       );
     }
 
+    const supabaseAdmin = getSupabaseAdmin();
+
     // Verify branch belongs to tenant
-    const { data: existingBranch } = await supabase
+    const { data: existingBranch } = await supabaseAdmin
       .from('branches')
       .select('id, tenant_id, is_headquarters')
       .eq('id', branchId)
@@ -141,7 +141,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       updateData.slug = baseSlug;
     }
 
-    const { data: updatedBranch, error: updateError } = await supabase
+    const { data: updatedBranch, error: updateError } = await supabaseAdmin
       .from('branches')
       .update(updateData)
       .eq('id', branchId)
@@ -157,7 +157,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     // Log the action
-    const supabaseAdmin = getSupabaseAdmin();
     await supabaseAdmin.from('audit_logs').insert({
       tenant_id: userRole.tenant_id,
       user_id: user.id,
@@ -188,12 +187,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id: branchId } = await context.params;
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
     const { searchParams } = new URL(request.url);
     const migrateData = searchParams.get('migrate') !== 'false'; // Default: migrate data
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -218,8 +216,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       );
     }
 
+    const supabaseAdmin = getSupabaseAdmin();
+
     // Verify branch belongs to tenant
-    const { data: branchToDelete } = await supabase
+    const { data: branchToDelete } = await supabaseAdmin
       .from('branches')
       .select('id, tenant_id, name, is_headquarters')
       .eq('id', branchId)
@@ -239,7 +239,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     // Get HQ branch for data migration
-    const { data: hqBranch } = await supabase
+    const { data: hqBranch } = await supabaseAdmin
       .from('branches')
       .select('id')
       .eq('tenant_id', userRole.tenant_id)
@@ -251,8 +251,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         error: 'No headquarters branch found for data migration',
       }, { status: 500 });
     }
-
-    const supabaseAdmin = getSupabaseAdmin();
 
     // Migrate data to HQ if requested
     if (migrateData && hqBranch.id !== branchId) {
@@ -296,7 +294,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     // Soft delete: set is_active = false
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from('branches')
       .update({
         is_active: false,

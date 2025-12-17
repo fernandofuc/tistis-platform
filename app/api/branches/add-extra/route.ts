@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
+import { getUserFromRequest } from '@/src/shared/lib/supabase-server';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -30,12 +30,11 @@ const EXTRA_BRANCH_PRICING: Record<string, number> = {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
     const body = await request.json();
     const { name, city, state, address, phone, whatsapp_number, confirmBilling } = body;
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -147,7 +146,7 @@ export async function POST(request: NextRequest) {
       .replace(/^-+|-+$/g, '')
       .substring(0, 50);
 
-    const { data: existingSlugs } = await supabase
+    const { data: existingSlugs } = await supabaseAdmin
       .from('branches')
       .select('slug')
       .eq('tenant_id', userRole.tenant_id)
@@ -273,12 +272,11 @@ export async function POST(request: NextRequest) {
 // ======================
 // GET - Get extra branch pricing info
 // ======================
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
+import { getUserFromRequest } from '@/src/shared/lib/supabase-server';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -22,13 +22,12 @@ function getSupabaseAdmin() {
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
     const { searchParams } = new URL(request.url);
     const includeStats = searchParams.get('include_stats') === 'true';
     const tenantId = searchParams.get('tenant_id');
 
     // Get current user's tenant
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -109,11 +108,10 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
     const body = await request.json();
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -184,8 +182,8 @@ export async function POST(request: NextRequest) {
       slug = `${baseSlug}-${existingSlugs.length + 1}`;
     }
 
-    // Create the branch
-    const { data: newBranch, error: createError } = await supabase
+    // Create the branch using admin client (bypasses RLS)
+    const { data: newBranch, error: createError } = await supabaseAdmin
       .from('branches')
       .insert({
         tenant_id: userRole.tenant_id,
@@ -253,7 +251,7 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const { user, supabase } = await getUserFromRequest(request);
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('id');
 
@@ -262,7 +260,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

@@ -298,7 +298,16 @@ export function AIConfiguration() {
 
       // Load subscription info for branch limits
       try {
-        const subRes = await fetch('/api/branches/add-extra');
+        // Get auth token for API call
+        const { data: { session } } = await supabase.auth.getSession();
+        const authHeaders: HeadersInit = {};
+        if (session?.access_token) {
+          authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
+        const subRes = await fetch('/api/branches/add-extra', {
+          headers: authHeaders,
+        });
         if (subRes.ok) {
           const subData = await subRes.json();
           // Map the response to SubscriptionInfo format
@@ -310,6 +319,8 @@ export function AIConfiguration() {
             next_branch_price: subData.extra_branch_price || 0,
             currency: subData.currency || 'MXN',
           });
+        } else {
+          console.log('Subscription info response not ok:', subRes.status);
         }
       } catch (err) {
         console.log('Subscription info not available:', err);
@@ -445,8 +456,10 @@ export function AIConfiguration() {
 
     setDeletingBranchLoading(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`/api/branches?id=${deletingBranch.id}`, {
         method: 'DELETE',
+        headers,
       });
 
       const data = await res.json();

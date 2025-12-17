@@ -4,7 +4,9 @@
 // =====================================================
 
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { NextRequest } from 'next/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -33,4 +35,61 @@ export async function createServerClientWithCookies() {
       },
     },
   });
+}
+
+// ======================
+// GET USER FROM REQUEST (API Routes - supports both header and cookies)
+// ======================
+// This is the PREFERRED method for API routes
+// It tries Authorization header first (from client-side fetch), then falls back to cookies
+export async function getUserFromRequest(request: NextRequest): Promise<{
+  user: { id: string; email?: string } | null;
+  supabase: ReturnType<typeof createClient>;
+  error?: string;
+}> {
+  const authHeader = request.headers.get('authorization');
+
+  // Method 1: Try Authorization Bearer token (sent from client-side fetch)
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+
+    // Create a client and set the session from the token
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (user && !error) {
+      return { user, supabase };
+    }
+
+    // Token was invalid
+    console.log('🔴 Auth header token invalid:', error?.message);
+  }
+
+  // Method 2: Try cookies (for SSR or middleware-refreshed sessions)
+  try {
+    const supabase = await createServerClientWithCookies();
+    const { data: { user }, error } = await supabase.auth.getUser();
+
+    if (user && !error) {
+      return { user, supabase };
+    }
+
+    console.log('🔴 Cookie auth failed:', error?.message);
+  } catch (cookieError) {
+    console.log('🔴 Cookie read error:', cookieError);
+  }
+
+  // Neither method worked
+  return {
+    user: null,
+    supabase: createClient(supabaseUrl, supabaseAnonKey),
+    error: 'No valid authentication found',
+  };
 }
