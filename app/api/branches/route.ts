@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       .select('tenant_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string } | null };
 
     const effectiveTenantId = tenantId || userRole?.tenant_id;
     if (!effectiveTenantId) {
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       .select('tenant_id, role')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string; role: string } | null };
 
     if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
@@ -273,14 +273,17 @@ export async function DELETE(request: NextRequest) {
       .select('tenant_id, role')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string; role: string } | null };
 
-    if (!userRole) {
+    if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
     }
 
+    const tenantId = userRole.tenant_id;
+    const userRoleType = userRole.role;
+
     // Only admins can delete branches
-    if (!['admin', 'owner'].includes(userRole.role)) {
+    if (!['admin', 'owner'].includes(userRoleType)) {
       return NextResponse.json(
         { error: 'Solo administradores pueden eliminar sucursales' },
         { status: 403 }
@@ -301,7 +304,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify branch belongs to user's tenant
-    if (branch.tenant_id !== userRole.tenant_id) {
+    if (branch.tenant_id !== tenantId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 

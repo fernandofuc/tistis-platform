@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .select('tenant_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string } | null };
 
     if (!userRole?.tenant_id) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
@@ -86,7 +86,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .select('tenant_id, role')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string; role: string } | null };
 
     if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
@@ -207,7 +207,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       .select('tenant_id, role')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string; role: string } | null };
 
     if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });

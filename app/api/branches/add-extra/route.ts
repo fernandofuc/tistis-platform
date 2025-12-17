@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       .select('tenant_id, role')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string; role: string } | null };
 
     if (!userRole?.tenant_id || !userRole?.role) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
@@ -290,7 +290,7 @@ export async function GET(request: NextRequest) {
       .select('tenant_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .single() as { data: { tenant_id: string } | null };
 
     if (!userRole?.tenant_id) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
