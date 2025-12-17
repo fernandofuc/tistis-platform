@@ -877,7 +877,7 @@ export function AIConfiguration() {
                           size="sm"
                           className="mt-3 border-amber-300 text-amber-800 hover:bg-amber-100"
                           onClick={() => {
-                            window.open('/dashboard/billing?action=add-branch', '_blank');
+                            window.location.href = '/dashboard/settings/subscription';
                           }}
                         >
                           Agregar Sucursal Extra (+${subscriptionInfo.next_branch_price.toLocaleString()}/mes)
@@ -906,7 +906,7 @@ export function AIConfiguration() {
                         size="sm"
                         className="mt-3 border-red-300 text-red-800 hover:bg-red-100"
                         onClick={() => {
-                          window.open('/dashboard/billing?action=upgrade', '_blank');
+                          window.location.href = '/dashboard/settings/subscription';
                         }}
                       >
                         Subir de Plan
