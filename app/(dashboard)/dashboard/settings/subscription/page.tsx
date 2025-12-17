@@ -106,6 +106,17 @@ export default function SubscriptionPage() {
     period_end: '', // Not available from tenant, but not critical for display
   } : null;
 
+  // Debug: Log exactly what we're comparing
+  console.log('🔍 DEBUG subscription page:', {
+    tenant_exists: !!tenant,
+    tenant_plan: tenant?.plan,
+    tenant_plan_type: typeof tenant?.plan,
+    subscription_plan: subscription?.plan,
+    loading: loading,
+    PLANS_ids: PLANS.map(p => p.id),
+    comparison_essentials: tenant?.plan === 'essentials',
+  });
+
   // Handle plan selection
   const handleSelectPlan = (planId: string) => {
     if (planId === subscription?.plan) return; // Already on this plan
@@ -274,6 +285,18 @@ export default function SubscriptionPage() {
               // Simple comparison - tenant.plan is already lowercase from DB
               const isCurrentPlan = subscription?.plan === plan.id;
               const isPlanUpgrade = isUpgrade(plan.id);
+
+              // Debug each plan comparison
+              if (plan.id === 'essentials') {
+                console.log('🎯 ESSENTIALS CHECK:', {
+                  'subscription?.plan': subscription?.plan,
+                  'plan.id': plan.id,
+                  'isCurrentPlan': isCurrentPlan,
+                  'strict_equal': subscription?.plan === plan.id,
+                  'subscription_plan_charCodes': subscription?.plan?.split('').map(c => c.charCodeAt(0)),
+                  'plan_id_charCodes': plan.id.split('').map(c => c.charCodeAt(0)),
+                });
+              }
 
               return (
                 <Card
