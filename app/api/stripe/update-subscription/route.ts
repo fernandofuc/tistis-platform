@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@/src/shared/lib/supabase';
+import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -61,7 +61,7 @@ function getBranchPrice(plan: string, branchNumber: number): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
     const body = await request.json();
     const { action } = body; // 'add_branch' | 'remove_branch'
 
@@ -331,7 +331,7 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
 
     // Authenticate user
     const { data: { user } } = await supabase.auth.getUser();
