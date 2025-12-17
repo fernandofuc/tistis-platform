@@ -6,6 +6,16 @@ import { createClient } from '@supabase/supabase-js';
 import { emailService } from '@/src/lib/email';
 import { provisionTenant } from '@/lib/provisioning';
 
+// ============================================
+// VALID PLANS - Source of truth
+// ============================================
+const VALID_PLANS = ['starter', 'essentials', 'growth', 'scale'] as const;
+type ValidPlan = typeof VALID_PLANS[number];
+
+function isValidPlan(plan: string | undefined): plan is ValidPlan {
+  return VALID_PLANS.includes(plan as ValidPlan);
+}
+
 // Create Stripe client lazily
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -19,6 +29,30 @@ function getSupabaseClient() {
   );
 }
 
+// ============================================
+// IDEMPOTENCY: Check if event was already processed
+// ============================================
+async function isEventProcessed(eventId: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  const { data } = await supabase
+    .from('webhook_events')
+    .select('id')
+    .eq('event_id', eventId)
+    .single();
+  return !!data;
+}
+
+async function markEventProcessed(eventId: string, eventType: string, status: 'success' | 'failed', errorMessage?: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  await supabase.from('webhook_events').upsert({
+    event_id: eventId,
+    event_type: eventType,
+    status,
+    error_message: errorMessage,
+    processed_at: new Date().toISOString(),
+  }, { onConflict: 'event_id' });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const signature = req.headers.get('stripe-signature');
@@ -30,6 +64,16 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
 
+  // ============================================
+  // FIX 3: STRIPE_WEBHOOK_SECRET obligatorio en producción
+  // ============================================
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+
+  if (isProduction && !process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('🚨 CRITICAL: STRIPE_WEBHOOK_SECRET is required in production!');
+    return NextResponse.json({ error: 'Webhook configuration error' }, { status: 500 });
+  }
+
   try {
     // Verify webhook signature if secret is configured
     if (process.env.STRIPE_WEBHOOK_SECRET) {
@@ -39,12 +83,21 @@ export async function POST(req: NextRequest) {
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } else {
-      // For testing without webhook secret
+      // For LOCAL testing only - NOT production
+      console.warn('⚠️ [Webhook] Running without signature verification (development only)');
       event = JSON.parse(body) as Stripe.Event;
     }
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+  }
+
+  // ============================================
+  // FIX 6: Idempotency check - Skip already processed events
+  // ============================================
+  if (await isEventProcessed(event.id)) {
+    console.log(`⏭️ [Webhook] Event already processed, skipping: ${event.id}`);
+    return NextResponse.json({ received: true, skipped: true });
   }
 
   console.log('📨 Stripe webhook received:', event.type);
@@ -91,9 +144,16 @@ export async function POST(req: NextRequest) {
         console.log(`Unhandled event type: ${event.type}`);
     }
 
+    // ✅ Mark event as processed successfully
+    await markEventProcessed(event.id, event.type, 'success');
     return NextResponse.json({ received: true });
   } catch (error: any) {
     console.error('Webhook handler error:', error);
+
+    // ❌ Mark event as failed (will be retried by Stripe)
+    await markEventProcessed(event.id, event.type, 'failed', error.message);
+
+    // Return 500 so Stripe retries the webhook
     return NextResponse.json(
       { error: error.message || 'Webhook handler failed' },
       { status: 500 }
@@ -108,12 +168,27 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const { plan, customerName, proposalId, branches, addons } = session.metadata || {};
   const customerEmail = session.customer_email || session.customer_details?.email;
 
+  // ============================================
+  // FIX 1: Email obligatorio - BLOQUEAR si falta (Stripe reintentará)
+  // ============================================
   if (!customerEmail) {
-    console.error('No customer email found in session');
-    return;
+    console.error('🚨 [Checkout] CRITICAL: No customer email found in session:', session.id);
+    throw new Error('Customer email is required for checkout completion');
   }
 
-  console.log('📋 Checkout metadata:', { plan, customerName, branches, addons, proposalId });
+  // ============================================
+  // FIX 4: Validar plan obligatorio y válido
+  // ============================================
+  if (!plan) {
+    console.error('🚨 [Checkout] WARNING: No plan in metadata, defaulting to essentials');
+  }
+
+  const validatedPlan = isValidPlan(plan) ? plan : 'essentials';
+  if (plan && !isValidPlan(plan)) {
+    console.warn(`⚠️ [Checkout] Invalid plan "${plan}", using "essentials"`);
+  }
+
+  console.log('📋 Checkout metadata:', { plan: validatedPlan, customerName, branches, addons, proposalId });
 
   // Find or create client
   let { data: existingClient } = await supabase
@@ -134,13 +209,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         business_name: customerName,
         status: 'active',
         locations_count: branches ? parseInt(branches) : 1,
+        // Store metadata for subscription handler (race condition prevention)
+        metadata: {
+          plan: validatedPlan,
+          customerName,
+          branches: branches ? parseInt(branches) : 1,
+        },
       })
       .select('id')
       .single();
 
     if (error) {
-      console.error('Error creating client:', error);
-      return;
+      console.error('🚨 [Checkout] Error creating client:', error);
+      throw new Error(`Failed to create client: ${error.message}`);
     }
     clientId = newClient?.id || null;
     console.log('✅ New client created:', clientId);
@@ -226,21 +307,60 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const customer = await stripe.customers.retrieve(customerId);
   const customerEmail = (customer as Stripe.Customer).email;
 
+  // ============================================
+  // FIX 1: Email obligatorio - BLOQUEAR si falta
+  // ============================================
   if (!customerEmail) {
-    console.error('No customer email found');
-    return;
+    console.error('🚨 [Subscription] CRITICAL: No customer email found for subscription:', subscription.id);
+    throw new Error('Customer email is required for subscription creation');
   }
 
-  // Find client by email
-  const { data: client } = await supabase
+  // ============================================
+  // FIX 4: Validar plan obligatorio y válido
+  // ============================================
+  const validatedPlan = isValidPlan(plan) ? plan : 'essentials';
+  if (!plan) {
+    console.warn('⚠️ [Subscription] No plan in metadata, defaulting to essentials');
+  } else if (!isValidPlan(plan)) {
+    console.warn(`⚠️ [Subscription] Invalid plan "${plan}", using "essentials"`);
+  }
+
+  // ============================================
+  // FIX 2: Crear cliente si no existe (race condition prevention)
+  // ============================================
+  let { data: client } = await supabase
     .from('clients')
-    .select('id')
+    .select('id, metadata')
     .eq('contact_email', customerEmail)
     .single();
 
   if (!client) {
-    console.error('Client not found for email:', customerEmail);
-    return;
+    console.warn('⚠️ [Subscription] Client not found, creating now (race condition fallback)');
+
+    // Create client if checkout.session.completed hasn't created it yet
+    const { data: newClient, error: createClientError } = await supabase
+      .from('clients')
+      .insert({
+        contact_email: customerEmail,
+        contact_name: customerName || (customer as Stripe.Customer).name || 'Cliente',
+        business_name: customerName || (customer as Stripe.Customer).name || 'Negocio',
+        status: 'active',
+        locations_count: branches ? parseInt(branches) : 1,
+        metadata: {
+          plan: validatedPlan,
+          created_by: 'subscription_webhook_fallback',
+        },
+      })
+      .select('id, metadata')
+      .single();
+
+    if (createClientError || !newClient) {
+      console.error('🚨 [Subscription] Failed to create client:', createClientError);
+      throw new Error(`Failed to create client: ${createClientError?.message || 'Unknown error'}`);
+    }
+
+    client = newClient;
+    console.log('✅ [Subscription] Client created via fallback:', client.id);
   }
 
   // Calculate total monthly amount from all line items
@@ -265,14 +385,25 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const periodStart = (subscription as any).current_period_start;
   const periodEnd = (subscription as any).current_period_end;
 
+  // Determine max_branches based on plan
+  const planMaxBranches: Record<string, number> = {
+    starter: 1,
+    essentials: 5,  // Updated: 5 branches for Essentials
+    growth: 8,      // Updated: 8 branches for Growth
+    scale: 15,      // 15 branches for Scale
+  };
+  const maxBranchesForPlan = planMaxBranches[validatedPlan] || 5;
+
   const { error } = await supabase.from('subscriptions').insert({
     client_id: client.id,
     stripe_customer_id: customerId,
     stripe_subscription_id: subscription.id,
     stripe_price_id: subscription.items.data[0]?.price?.id,
-    plan: plan || 'essentials',
+    plan: validatedPlan, // Use validated plan
     addons: parsedAddons,
     branches: branches ? parseInt(branches) : 1,
+    max_branches: maxBranchesForPlan, // Set max branches based on plan
+    current_branches: 1, // Start with 1 branch
     monthly_amount: totalMonthlyAmount / 100,
     currency: 'MXN',
     status: subscription.status === 'active' ? 'active' : 'pending',
@@ -281,12 +412,12 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   });
 
   if (error) {
-    console.error('Error creating subscription:', error);
-    return;
+    console.error('🚨 [Subscription] Error creating subscription record:', error);
+    throw new Error(`Failed to create subscription record: ${error.message}`);
   }
 
   console.log('✅ Subscription record created for client:', client.id);
-  console.log('   Plan:', plan, '| Branches:', branches, '| Amount:', totalMonthlyAmount / 100, 'MXN');
+  console.log('   Plan:', validatedPlan, '| Max Branches:', maxBranchesForPlan, '| Amount:', totalMonthlyAmount / 100, 'MXN');
 
   // Get the newly created subscription ID
   const { data: newSubscription } = await supabase
@@ -313,7 +444,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     customer_name: customerName || 'Nuevo Cliente',
     customer_phone: customerPhone || undefined,
     vertical: (vertical as 'dental' | 'restaurant' | 'pharmacy' | 'retail' | 'medical' | 'services' | 'other') || 'services',
-    plan: (plan as 'starter' | 'essentials' | 'growth' | 'scale') || 'essentials',
+    plan: validatedPlan, // Use validated plan
     branches_count: branches ? parseInt(branches) : 1,
     subscription_id: newSubscription?.id,
   });
@@ -325,6 +456,17 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       branch_id: provisionResult.branch_id,
       user_id: provisionResult.user_id,
     });
+
+    // ============================================
+    // Update client with tenant_id for future reference
+    // ============================================
+    if (provisionResult.tenant_id) {
+      await supabase
+        .from('clients')
+        .update({ tenant_id: provisionResult.tenant_id })
+        .eq('id', client.id);
+      console.log('✅ [Webhook] Client linked to tenant:', provisionResult.tenant_id);
+    }
 
     // 📧 Enviar email con credenciales de acceso
     // NOTA: Solo se envía si se creó un usuario nuevo (temp_password exists)
@@ -351,7 +493,11 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       console.log('   User can login with their existing account:', customerEmail);
     }
   } else {
-    console.error('❌ [Webhook] Tenant provisioning failed:', provisionResult.error);
+    // ============================================
+    // FIX 5: BLOQUEAR si provisioning falla
+    // Esto hará que Stripe reintente el webhook
+    // ============================================
+    console.error('🚨 [Webhook] Tenant provisioning FAILED:', provisionResult.error);
 
     // Notificar al equipo de TIS TIS sobre el fallo
     await supabase.from('notification_queue').insert({
@@ -368,6 +514,11 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       },
       client_id: client.id,
     });
+
+    // ============================================
+    // FIX 5: THROW to make Stripe retry the webhook
+    // ============================================
+    throw new Error(`Tenant provisioning failed: ${provisionResult.error}`);
   }
 
   // 🚀 TRIGGER ASSEMBLY ENGINE - Auto-provision micro-app
@@ -377,7 +528,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     subscription_id: newSubscription?.id,
     tenant_id: provisionResult.tenant_id, // Ahora incluimos el tenant_id
     vertical: vertical || 'services',
-    plan: (plan as 'starter' | 'essentials' | 'growth' | 'scale') || 'essentials',
+    plan: validatedPlan, // Use validated plan
     addons: parsedAddons,
     branches: branches ? parseInt(branches) : 1,
     proposal_id: proposalId

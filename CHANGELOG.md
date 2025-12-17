@@ -7,6 +7,49 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [2.3.0] - 2024-12-17
+
+### Añadido - 6 Fixes Críticos en Stripe Webhook + Límites de Sucursales
+
+#### Migraciones
+- **048_WEBHOOK_EVENTS_IDEMPOTENCY.sql** - Sistema de idempotencia para webhooks
+- **049_UPDATE_BRANCH_LIMITS.sql** - Nuevos límites de sucursales por plan
+
+#### Límites de Sucursales Actualizados
+| Plan | Sucursales | Precio Sucursal Extra |
+|------|------------|----------------------|
+| Starter | 1 | N/A |
+| Essentials | **5** | $1,850/mes |
+| Growth | **8** | $2,450/mes |
+| Scale | **15** | $2,990/mes |
+
+#### Webhook Route: 6 Fixes Críticos
+
+**FIX 1: Email Obligatorio (CRÍTICO)**
+- BLOQUEA si falta email (throw error → Stripe reintenta)
+
+**FIX 2: Cliente en handleSubscriptionCreated (Race Condition)**
+- Crea cliente si no existe (fallback para race condition)
+
+**FIX 3: STRIPE_WEBHOOK_SECRET Obligatorio**
+- Retorna 500 en producción si falta
+
+**FIX 4: Validación de Plan**
+- `isValidPlan()` con fallback a 'essentials'
+
+**FIX 5: Provisioning Bloqueante**
+- Throw error si provisioning falla → Stripe reintenta
+
+**FIX 6: Idempotencia**
+- Tabla `webhook_events` previene duplicados
+
+### Archivos Modificados
+- `/app/api/stripe/webhook/route.ts` - 6 fixes
+- `/supabase/migrations/048_WEBHOOK_EVENTS_IDEMPOTENCY.sql`
+- `/supabase/migrations/049_UPDATE_BRANCH_LIMITS.sql`
+
+---
+
 ## [2.2.0] - 2024-12-10
 
 ### Añadido - Migración 011_master_correction.sql
