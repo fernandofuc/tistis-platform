@@ -42,7 +42,6 @@ export async function createServerClientWithCookies() {
 // ======================
 // This is the PREFERRED method for API routes
 // It tries Authorization header first (from client-side fetch), then falls back to cookies
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getUserFromRequest(request: NextRequest): Promise<{
   user: { id: string; email?: string } | null;
   supabase: any;
