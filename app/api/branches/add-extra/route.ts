@@ -20,9 +20,9 @@ function getSupabaseAdmin() {
 // Pricing per extra branch by plan (in MXN)
 const EXTRA_BRANCH_PRICING: Record<string, number> = {
   starter: 0, // Starter doesn't allow extra branches
-  essentials: 1990,
-  growth: 2990,
-  scale: 3990,
+  essentials: 1850,
+  growth: 2450,
+  scale: 2990,
 };
 
 // ======================
