@@ -62,19 +62,26 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    // Get current subscription info
+    // Step 1: Get client_id for this tenant
+    const { data: clientData, error: clientError } = await supabaseAdmin
+      .from('clients')
+      .select('id')
+      .eq('tenant_id', userRole.tenant_id)
+      .single();
+
+    if (clientError || !clientData) {
+      console.error('Error fetching client:', clientError);
+      return NextResponse.json(
+        { error: 'No se encontró cliente asociado al tenant' },
+        { status: 404 }
+      );
+    }
+
+    // Step 2: Get subscription for this client
     const { data: subscriptionData, error: subError } = await supabaseAdmin
       .from('subscriptions')
-      .select(`
-        id,
-        plan,
-        max_branches,
-        current_branches,
-        branch_unit_price,
-        client_id,
-        clients!inner(tenant_id)
-      `)
-      .eq('clients.tenant_id', userRole.tenant_id)
+      .select('id, plan, max_branches, current_branches, branch_unit_price, client_id')
+      .eq('client_id', clientData.id)
       .eq('status', 'active')
       .single();
 
@@ -202,37 +209,45 @@ export async function POST(request: NextRequest) {
       // Branch was created but subscription update failed - log but don't fail
     }
 
-    // 3. Log the subscription change
-    await supabaseAdmin.from('subscription_changes').insert({
-      subscription_id: subscriptionData.id,
-      tenant_id: userRole.tenant_id,
-      client_id: subscriptionData.client_id,
-      change_type: 'branch_added',
-      previous_value: { max_branches: maxBranches, current_branches: currentBranches },
-      new_value: { max_branches: maxBranches + 1, current_branches: currentBranches + 1 },
-      price_impact: extraBranchPrice,
-      reason: `Sucursal extra agregada: ${newBranch.name}`,
-      metadata: {
-        branch_id: newBranch.id,
-        branch_name: newBranch.name,
-        plan: plan,
-      },
-      created_by: user.id,
-    });
+    // 3. Log the subscription change (ignore errors - non-critical)
+    try {
+      await supabaseAdmin.from('subscription_changes').insert({
+        subscription_id: subscriptionData.id,
+        tenant_id: userRole.tenant_id,
+        client_id: subscriptionData.client_id,
+        change_type: 'branch_added',
+        previous_value: { max_branches: maxBranches, current_branches: currentBranches },
+        new_value: { max_branches: maxBranches + 1, current_branches: currentBranches + 1 },
+        price_impact: extraBranchPrice,
+        reason: `Sucursal extra agregada: ${newBranch.name}`,
+        metadata: {
+          branch_id: newBranch.id,
+          branch_name: newBranch.name,
+          plan: plan,
+        },
+        created_by: user.id,
+      });
+    } catch (logError) {
+      console.error('Error logging subscription change:', logError);
+    }
 
-    // 4. Log audit
-    await supabaseAdmin.from('audit_logs').insert({
-      tenant_id: userRole.tenant_id,
-      user_id: user.id,
-      action: 'extra_branch_created',
-      entity_type: 'branch',
-      entity_id: newBranch.id,
-      new_data: {
-        branch_name: newBranch.name,
-        branch_id: newBranch.id,
-        extra_cost: extraBranchPrice,
-      },
-    });
+    // 4. Log audit (ignore errors - non-critical)
+    try {
+      await supabaseAdmin.from('audit_logs').insert({
+        tenant_id: userRole.tenant_id,
+        user_id: user.id,
+        action: 'extra_branch_created',
+        entity_type: 'branch',
+        entity_id: newBranch.id,
+        new_data: {
+          branch_name: newBranch.name,
+          branch_id: newBranch.id,
+          extra_cost: extraBranchPrice,
+        },
+      });
+    } catch (auditError) {
+      console.error('Error logging audit:', auditError);
+    }
 
     console.log('✅ Extra branch created:', newBranch.id, newBranch.name, `+$${extraBranchPrice}/mes`);
 
@@ -258,7 +273,7 @@ export async function POST(request: NextRequest) {
 // ======================
 // GET - Get extra branch pricing info
 // ======================
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = createServerClient();
 
@@ -282,18 +297,25 @@ export async function GET(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    // Get subscription info
+    // Step 1: Get client_id for this tenant
+    const { data: clientData } = await supabaseAdmin
+      .from('clients')
+      .select('id')
+      .eq('tenant_id', userRole.tenant_id)
+      .single();
+
+    if (!clientData) {
+      return NextResponse.json({
+        error: 'No client found',
+        can_add_extra: false,
+      }, { status: 404 });
+    }
+
+    // Step 2: Get subscription for this client
     const { data: subscriptionData } = await supabaseAdmin
       .from('subscriptions')
-      .select(`
-        id,
-        plan,
-        max_branches,
-        current_branches,
-        branch_unit_price,
-        clients!inner(tenant_id)
-      `)
-      .eq('clients.tenant_id', userRole.tenant_id)
+      .select('id, plan, max_branches, current_branches, branch_unit_price')
+      .eq('client_id', clientData.id)
       .eq('status', 'active')
       .single();
 
