@@ -300,3 +300,4 @@ Para reportar issues o solicitar features, ver `STATUS_PROYECTO.md` para estado 
 ---
 
 **Powered by Next.js, Supabase & Claude AI**
+
