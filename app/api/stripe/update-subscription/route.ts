@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClientWithCookies } from '@/src/shared/lib/supabase-server';
+import { createServerClient } from '@/src/shared/lib/supabase';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -61,7 +61,7 @@ function getBranchPrice(plan: string, branchNumber: number): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClientWithCookies();
+    const supabase = createServerClient();
     const body = await request.json();
     const { action } = body; // 'add_branch' | 'remove_branch'
 
@@ -333,12 +333,103 @@ export async function GET(request: NextRequest) {
   try {
     console.log('📊 [GET Subscription] Starting...');
 
-    const supabase = await createServerClientWithCookies();
-    console.log('📊 [GET Subscription] Supabase client created');
+    // Get auth token from request header (sent by client)
+    const authHeader = request.headers.get('Authorization');
+    console.log('📊 [GET Subscription] Auth header present:', !!authHeader);
 
-    // Authenticate user
+    const supabase = createServerClient();
+
+    // If we have an auth header, set the session
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+      console.log('📊 [GET Subscription] Auth result:', {
+        hasUser: !!user,
+        userId: user?.id?.substring(0, 8),
+        authError: authError?.message
+      });
+
+      if (!user || authError) {
+        console.log('📊 [GET Subscription] Invalid token, returning 401');
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      // Continue with authenticated user
+      // Get user's tenant
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (!userRole) {
+        return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
+      }
+
+      const supabaseAdmin = getSupabaseAdmin();
+
+      // Get client from tenant
+      const { data: client } = await supabaseAdmin
+        .from('clients')
+        .select('id')
+        .eq('tenant_id', userRole.tenant_id)
+        .single();
+
+      if (!client) {
+        return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+      }
+
+      // Get subscription
+      const { data: subscription, error: subscriptionError } = await supabaseAdmin
+        .from('subscriptions')
+        .select('*')
+        .eq('client_id', client.id)
+        .in('status', ['active', 'past_due'])
+        .single();
+
+      console.log('📊 [GET Subscription] Query result:', {
+        client_id: client.id,
+        subscription_found: !!subscription,
+        subscription_plan: subscription?.plan,
+        subscription_status: subscription?.status,
+        error: subscriptionError?.message,
+      });
+
+      if (!subscription) {
+        return NextResponse.json({ error: 'No subscription found' }, { status: 404 });
+      }
+
+      // Get current branch count
+      const { count: currentBranchCount } = await supabaseAdmin
+        .from('branches')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', userRole.tenant_id)
+        .eq('is_active', true);
+
+      // Get pricing for next branch
+      const nextBranchNumber = (subscription.max_branches || 1) + 1;
+      const nextBranchPrice = getBranchPrice(subscription.plan, nextBranchNumber);
+
+      return NextResponse.json({
+        data: {
+          plan: subscription.plan,
+          status: subscription.status,
+          max_branches: subscription.max_branches || 1,
+          current_branches: currentBranchCount || 1,
+          can_add_branch: subscription.plan !== 'starter',
+          can_remove_branch: (currentBranchCount || 1) > 1,
+          next_branch_price: nextBranchPrice / 100,
+          currency: 'MXN',
+          period_end: subscription.current_period_end,
+        },
+      });
+    }
+
+    // No auth header - try cookie-based auth (fallback)
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log('📊 [GET Subscription] Auth result:', {
+    console.log('📊 [GET Subscription] Cookie auth result:', {
       hasUser: !!user,
       userId: user?.id?.substring(0, 8),
       authError: authError?.message

@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, Button, Badge } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
+import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
 
 // Plan definitions matching the pricing page
@@ -106,7 +107,17 @@ export default function SubscriptionPage() {
   useEffect(() => {
     const fetchSubscription = async () => {
       try {
-        const response = await fetch('/api/stripe/update-subscription');
+        // Get auth token to send with request
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = {};
+
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
+        console.log('📊 Fetching subscription with auth:', !!session?.access_token);
+
+        const response = await fetch('/api/stripe/update-subscription', { headers });
         const data = await response.json();
 
         console.log('📊 Subscription API Response:', data);
@@ -142,9 +153,19 @@ export default function SubscriptionPage() {
     setError(null);
 
     try {
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const response = await fetch('/api/stripe/change-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ newPlan: selectedPlan }),
       });
 
