@@ -488,10 +488,11 @@ export async function processStatusUpdate(
       .from('messages')
       .update({
         status: internalStatus,
-        metadata: supabase.rpc('jsonb_set_key', {
-          path: ['status_timestamp'],
-          value: status.timestamp,
-        }),
+        metadata: {
+          status_timestamp: status.timestamp,
+          whatsapp_status: status.status,
+          updated_at: new Date().toISOString(),
+        },
       })
       .eq('external_id', status.id);
 

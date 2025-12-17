@@ -27,9 +27,9 @@ export async function GET(
       .from('conversations')
       .select(`
         *,
-        lead:leads(id, name, phone, email, classification, score, interested_services),
+        lead:leads(id, first_name, last_name, full_name, phone, email, classification, score, interested_services),
         branch:branches(id, name, city),
-        assigned_staff:staff(id, name, role, email)
+        assigned_staff:staff(id, first_name, last_name, role, email)
       `)
       .eq('tenant_id', ESVA_TENANT_ID)
       .eq('id', id)
@@ -127,8 +127,8 @@ export async function PATCH(
       .eq('id', id)
       .select(`
         *,
-        lead:leads(id, name, phone),
-        assigned_staff:staff(id, name)
+        lead:leads(id, first_name, last_name, full_name, phone),
+        assigned_staff:staff(id, first_name, last_name)
       `)
       .single();
 

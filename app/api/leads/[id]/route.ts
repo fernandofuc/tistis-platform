@@ -25,7 +25,7 @@ export async function GET(
       .select(`
         *,
         branches(id, name, city),
-        assigned_staff:staff(id, name, role),
+        assigned_staff:staff(id, first_name, last_name, role),
         appointments(id, scheduled_at, status, service:services(name)),
         conversations(id, status, channel, last_message_at)
       `)
@@ -71,7 +71,7 @@ export async function PATCH(
 
     // Fields allowed for update
     const allowedFields = [
-      'name', 'email', 'status', 'classification', 'score',
+      'first_name', 'last_name', 'full_name', 'email', 'status', 'classification', 'score',
       'source', 'interested_services', 'branch_id', 'assigned_staff_id',
       'notes', 'tags', 'custom_fields'
     ];

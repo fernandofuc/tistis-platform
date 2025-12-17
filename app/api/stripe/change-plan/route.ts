@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import { getPlanConfig, getAllPlans, PLAN_CONFIG } from '@/src/shared/config/plans';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -27,14 +28,6 @@ const PLAN_PRICE_IDS: Record<string, string> = {
   essentials: process.env.STRIPE_PRICE_ESSENTIALS || 'price_essentials',
   growth: process.env.STRIPE_PRICE_GROWTH || 'price_growth',
   scale: process.env.STRIPE_PRICE_SCALE || 'price_scale',
-};
-
-// Plan prices in MXN centavos
-const PLAN_PRICES: Record<string, number> = {
-  starter: 349000,
-  essentials: 749000,
-  growth: 1249000,
-  scale: 1999000,
 };
 
 export async function POST(request: NextRequest) {
@@ -110,16 +103,12 @@ export async function POST(request: NextRequest) {
 
     const stripe = getStripeClient();
 
-    // Check if upgrading or downgrading
-    const planTiers: Record<string, number> = {
-      starter: 1,
-      essentials: 2,
-      growth: 3,
-      scale: 4,
-    };
+    // Check if upgrading or downgrading using centralized plan order
+    const newPlanOrder = getPlanConfig(newPlan)?.order || 0;
+    const currentPlanOrder = getPlanConfig(subscription.plan)?.order || 0;
 
-    const isUpgrade = planTiers[newPlan] > planTiers[subscription.plan];
-    const isDowngrade = planTiers[newPlan] < planTiers[subscription.plan];
+    const isUpgrade = newPlanOrder > currentPlanOrder;
+    const isDowngrade = newPlanOrder < currentPlanOrder;
 
     // Get current Stripe subscription
     const stripeSubscription = await stripe.subscriptions.retrieve(
@@ -154,10 +143,11 @@ export async function POST(request: NextRequest) {
         description: `Suscripción mensual al plan ${newPlan}`,
       });
 
+      const newPlanConfig = getPlanConfig(newPlan);
       const price = await stripe.prices.create({
         product: product.id,
         currency: 'mxn',
-        unit_amount: PLAN_PRICES[newPlan],
+        unit_amount: newPlanConfig?.monthlyPriceCentavos || 749000,
         recurring: { interval: 'month' },
       });
 
@@ -185,18 +175,23 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    // Get plan configs for branch limits
+    const newPlanCfg = getPlanConfig(newPlan);
+    const oldPlanCfg = getPlanConfig(subscription.plan);
+
     // Update local subscription record
     await supabaseAdmin
       .from('subscriptions')
       .update({
         plan: newPlan,
         updated_at: new Date().toISOString(),
-        // Update max_branches based on plan (Starter = 1, others = 9)
-        max_branches: newPlan === 'starter' ? 1 : 9,
+        // Update max_branches based on centralized plan config
+        max_branches: newPlanCfg?.branchLimit || 1,
       })
       .eq('id', subscription.id);
 
     // Log the plan change
+    const priceImpact = ((newPlanCfg?.monthlyPriceCentavos || 0) - (oldPlanCfg?.monthlyPriceCentavos || 0)) / 100;
     await supabaseAdmin.from('subscription_changes').insert({
       subscription_id: subscription.id,
       tenant_id: userRole.tenant_id,
@@ -204,7 +199,7 @@ export async function POST(request: NextRequest) {
       change_type: isUpgrade ? 'plan_upgraded' : 'plan_downgraded',
       previous_value: { plan: subscription.plan },
       new_value: { plan: newPlan },
-      price_impact: (PLAN_PRICES[newPlan] - PLAN_PRICES[subscription.plan]) / 100,
+      price_impact: priceImpact,
       created_by: user.id,
       metadata: {
         stripe_subscription_id: updatedSubscription.id,

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       query = query.eq('is_active', isActive === 'true');
     }
 
-    query = query.order('name');
+    query = query.order('first_name');
 
     const { data, error } = await query;
 

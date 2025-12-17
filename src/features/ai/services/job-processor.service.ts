@@ -61,12 +61,26 @@ export async function getNextPendingJob(): Promise<Job | null> {
 export async function markJobProcessing(jobId: string): Promise<boolean> {
   const supabase = createServerClient();
 
+  // Primero obtener el valor actual de attempts
+  const { data: currentJob, error: fetchError } = await supabase
+    .from('job_queue')
+    .select('attempts')
+    .eq('id', jobId)
+    .eq('status', 'pending')
+    .single();
+
+  if (fetchError || !currentJob) {
+    console.error('[JobProcessor] Error fetching job for processing:', fetchError);
+    return false;
+  }
+
+  // Actualizar con el nuevo valor de attempts
   const { error } = await supabase
     .from('job_queue')
     .update({
       status: 'processing',
       started_at: new Date().toISOString(),
-      attempts: supabase.rpc('increment', { value: 1 }),
+      attempts: (currentJob.attempts || 0) + 1,
     })
     .eq('id', jobId)
     .eq('status', 'pending');

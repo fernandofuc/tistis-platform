@@ -32,9 +32,9 @@ export async function GET(request: NextRequest) {
       .from('conversations')
       .select(`
         *,
-        lead:leads(id, name, phone, email, classification, score),
+        lead:leads(id, first_name, last_name, full_name, phone, email, classification, score),
         branch:branches(id, name),
-        assigned_staff:staff(id, name, role)
+        assigned_staff:staff(id, first_name, last_name, role)
       `, { count: 'exact' })
       .eq('tenant_id', ESVA_TENANT_ID);
 
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     // Verify lead exists
     const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id, name, branch_id')
+      .select('id, full_name, branch_id')
       .eq('tenant_id', ESVA_TENANT_ID)
       .eq('id', body.lead_id)
       .single();
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
       .insert(conversationData)
       .select(`
         *,
-        lead:leads(id, name, phone),
+        lead:leads(id, full_name, phone),
         branch:branches(id, name)
       `)
       .single();

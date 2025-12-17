@@ -108,8 +108,8 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         preferred_branch:branches!preferred_branch_id(id, name, address),
-        assigned_dentist:staff_members!assigned_dentist_id(id, first_name, last_name, role),
-        lead:leads!lead_id(id, name, status, classification)
+        assigned_dentist:staff!assigned_dentist_id(id, first_name, last_name, role),
+        lead:leads!lead_id(id, first_name, last_name, full_name, status, classification)
       `, { count: 'exact' })
       .eq('tenant_id', effectiveTenantId)
       .order('created_at', { ascending: false })
@@ -285,8 +285,8 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         preferred_branch:branches!preferred_branch_id(id, name, address),
-        assigned_dentist:staff_members!assigned_dentist_id(id, first_name, last_name, role),
-        lead:leads!lead_id(id, name, status, classification)
+        assigned_dentist:staff!assigned_dentist_id(id, first_name, last_name, role),
+        lead:leads!lead_id(id, first_name, last_name, full_name, status, classification)
       `)
       .single();
 

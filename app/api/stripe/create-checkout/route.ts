@@ -2,80 +2,15 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import {
+  PLAN_CONFIG,
+  getPlanConfig,
+  calculateBranchCostCentavos,
+} from '@/src/shared/config/plans';
 
 // Create Stripe client lazily
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
-}
-
-// Plan configuration - prices in MXN centavos
-const PLAN_CONFIG: Record<string, {
-  monthly: number;
-  name: string;
-  branchExtra: number;
-  branchExtraProgressive?: { qty: number; price: number }[];
-}> = {
-  starter: {
-    monthly: 349000,
-    name: 'TIS TIS Starter',
-    branchExtra: 159000,
-  },
-  essentials: {
-    monthly: 749000,
-    name: 'TIS TIS Essentials',
-    branchExtra: 199000,
-    branchExtraProgressive: [
-      { qty: 2, price: 199000 },
-      { qty: 3, price: 179000 },
-      { qty: 4, price: 159000 },
-      { qty: 5, price: 149000 },
-    ],
-  },
-  growth: {
-    monthly: 1249000,
-    name: 'TIS TIS Growth',
-    branchExtra: 289000,
-    branchExtraProgressive: [
-      { qty: 2, price: 289000 },
-      { qty: 3, price: 249000 },
-      { qty: 4, price: 199000 },
-      { qty: 5, price: 159000 },
-    ],
-  },
-  scale: {
-    monthly: 1999000,
-    name: 'TIS TIS Scale',
-    branchExtra: 359000,
-    branchExtraProgressive: [
-      { qty: 2, price: 359000 },
-      { qty: 3, price: 289000 },
-      { qty: 4, price: 249000 },
-      { qty: 5, price: 199000 },
-    ],
-  },
-};
-
-// Calculate branch cost with progressive pricing
-function calculateBranchCost(plan: typeof PLAN_CONFIG[string], branches: number): number {
-  if (branches <= 1) return 0;
-
-  let totalCost = 0;
-  if (plan.branchExtraProgressive) {
-    for (let i = 2; i <= branches; i++) {
-      const tierInfo = plan.branchExtraProgressive.find(t => t.qty === i);
-      if (tierInfo) {
-        totalCost += tierInfo.price;
-      } else {
-        // Use qty=5 price for branches 5+
-        const tier5 = plan.branchExtraProgressive.find(t => t.qty === 5);
-        totalCost += tier5 ? tier5.price : plan.branchExtra;
-      }
-    }
-  } else {
-    // Flat pricing (Starter plan)
-    totalCost = (branches - 1) * plan.branchExtra;
-  }
-  return totalCost;
 }
 
 export async function POST(req: NextRequest) {
@@ -94,19 +29,19 @@ export async function POST(req: NextRequest) {
     } = body;
     const stripe = getStripeClient();
 
-    if (!plan || !PLAN_CONFIG[plan]) {
+    const planConfig = getPlanConfig(plan);
+    if (!planConfig) {
       return NextResponse.json(
         { error: 'Plan invalido' },
         { status: 400 }
       );
     }
 
-    const planConfig = PLAN_CONFIG[plan];
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_URL;
 
-    // Calculate extra branch cost
+    // Calculate extra branch cost using centralized function
     const extraBranches = Math.max(0, branches - 1);
-    const branchCost = calculateBranchCost(planConfig, branches);
+    const branchCost = calculateBranchCostCentavos(plan, branches);
 
     // Build line items array
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
@@ -116,10 +51,10 @@ export async function POST(req: NextRequest) {
       price_data: {
         currency: 'mxn',
         product_data: {
-          name: planConfig.name,
-          description: `Suscripcion mensual al plan ${plan.charAt(0).toUpperCase() + plan.slice(1)}`,
+          name: planConfig.displayName,
+          description: `Suscripcion mensual al plan ${planConfig.name}`,
         },
-        unit_amount: planConfig.monthly,
+        unit_amount: planConfig.monthlyPriceCentavos,
         recurring: {
           interval: 'month',
         },

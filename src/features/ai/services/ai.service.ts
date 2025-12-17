@@ -7,6 +7,20 @@ import OpenAI from 'openai';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import type { AIResponseFormat, AIIntent, AISignal } from '@/src/shared/types/whatsapp';
 import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
+import {
+  AppointmentBookingService,
+  extractBookingData,
+  createBooking,
+  generateBookingConfirmation,
+  getAvailableSlots,
+  type BookingRequest,
+} from './appointment-booking.service';
+import {
+  DataExtractionService,
+  performFullExtraction,
+  updateLeadWithExtractedData,
+  recordServiceInterest,
+} from './data-extraction.service';
 
 // ======================
 // CONFIGURATION
@@ -162,6 +176,19 @@ export interface AIProcessingResult {
   tokens_used: number;
   model_used: string;
   processing_time_ms: number;
+  // Nuevos campos para acciones transaccionales
+  appointment_created?: {
+    appointment_id: string;
+    scheduled_at: string;
+    branch_name: string;
+    service_name?: string;
+    staff_name?: string;
+  };
+  lead_data_updated?: string[];
+  service_interest_detected?: {
+    service_name: string;
+    urgency: string;
+  };
 }
 
 // ======================
@@ -778,6 +805,7 @@ function shouldEscalate(
 
 /**
  * Genera una respuesta AI para un mensaje de cliente
+ * MEJORADO: Ahora soporta acciones transaccionales (crear citas, actualizar datos)
  */
 export async function generateAIResponse(
   tenantId: string,
@@ -808,12 +836,147 @@ export async function generateAIResponse(
     currentMessage
   );
 
-  // 4. Construir prompts
-  const systemPrompt = buildSystemPrompt(tenantContext);
+  // 4. NUEVO: Extraer datos estructurados del mensaje
+  const extractionResult = performFullExtraction(
+    currentMessage,
+    tenantContext.services.map(s => ({ id: s.id, name: s.name, category: s.category }))
+  );
+
+  // Variables para acciones transaccionales
+  let appointmentCreated: AIProcessingResult['appointment_created'];
+  let leadDataUpdated: string[] = [];
+  let serviceInterestDetected: AIProcessingResult['service_interest_detected'];
+
+  // 5. NUEVO: Actualizar datos del lead si se extrajeron nuevos
+  if (extractionResult.should_update_lead) {
+    const updateResult = await updateLeadWithExtractedData(
+      conversationContext.lead_id,
+      extractionResult.lead_data
+    );
+    if (updateResult.success) {
+      leadDataUpdated = updateResult.fieldsUpdated;
+      console.log(`[AI Service] Lead ${conversationContext.lead_id} updated: ${leadDataUpdated.join(', ')}`);
+    }
+  }
+
+  // 6. NUEVO: Registrar interés en servicio si se detectó
+  if (extractionResult.service_interest) {
+    await recordServiceInterest(
+      conversationContext.lead_id,
+      conversationId,
+      extractionResult.service_interest
+    );
+    serviceInterestDetected = {
+      service_name: extractionResult.service_interest.service_name,
+      urgency: extractionResult.service_interest.urgency,
+    };
+    console.log(`[AI Service] Service interest detected: ${extractionResult.service_interest.service_name}`);
+  }
+
+  // 7. NUEVO: Intentar crear cita si la intención es BOOK_APPOINTMENT
+  //    y hay datos de fecha/hora en el mensaje
+  if (intent === 'BOOK_APPOINTMENT') {
+    const bookingData = extractBookingData(currentMessage);
+
+    // Solo intentar crear cita si hay fecha/hora o flexibilidad
+    if (bookingData.date || bookingData.time || bookingData.is_flexible) {
+      // Encontrar sucursal y servicio
+      let branchId: string | undefined;
+      let serviceId: string | undefined;
+
+      // Buscar sucursal por nombre si se mencionó
+      if (extractionResult.preferences.preferred_branch) {
+        const branch = tenantContext.branches.find(b =>
+          b.name.toLowerCase().includes(extractionResult.preferences.preferred_branch!.toLowerCase())
+        );
+        if (branch) branchId = branch.id;
+      }
+
+      // Usar sucursal por defecto si no se especificó
+      if (!branchId && tenantContext.branches.length > 0) {
+        const hq = tenantContext.branches.find(b => b.is_headquarters);
+        branchId = hq?.id || tenantContext.branches[0].id;
+      }
+
+      // Buscar servicio por interés detectado
+      if (extractionResult.service_interest?.service_id) {
+        serviceId = extractionResult.service_interest.service_id;
+      }
+
+      // Intentar crear la cita
+      const bookingRequest: BookingRequest = {
+        tenant_id: tenantId,
+        lead_id: conversationContext.lead_id,
+        conversation_id: conversationId,
+        branch_id: branchId,
+        service_id: serviceId,
+        requested_date: bookingData.date,
+        requested_time: bookingData.time,
+      };
+
+      const bookingResult = await createBooking(bookingRequest);
+
+      if (bookingResult.success) {
+        appointmentCreated = {
+          appointment_id: bookingResult.appointment_id!,
+          scheduled_at: bookingResult.scheduled_at!,
+          branch_name: bookingResult.branch_name!,
+          service_name: bookingResult.service_name,
+          staff_name: bookingResult.staff_name,
+        };
+
+        // Usar mensaje de confirmación en lugar de respuesta genérica de AI
+        const confirmationMessage = generateBookingConfirmation(bookingResult);
+
+        console.log(`[AI Service] Appointment created: ${bookingResult.appointment_id}`);
+
+        const processingTime = Date.now() - startTime;
+        return {
+          response: confirmationMessage,
+          intent,
+          signals,
+          score_change: totalPoints + 25, // Bonus por crear cita
+          escalate: false, // No escalar si se creó cita exitosamente
+          tokens_used: 0,
+          model_used: 'booking_service',
+          processing_time_ms: processingTime,
+          appointment_created: appointmentCreated,
+          lead_data_updated: leadDataUpdated.length > 0 ? leadDataUpdated : undefined,
+          service_interest_detected: serviceInterestDetected,
+        };
+      } else if (bookingResult.suggestion) {
+        // No se pudo crear cita pero tenemos sugerencia
+        console.log(`[AI Service] Booking failed with suggestion: ${bookingResult.suggestion}`);
+        // Continuar con AI para manejar la situación
+      }
+    }
+  }
+
+  // 8. Construir prompts para OpenAI
+  let systemPrompt = buildSystemPrompt(tenantContext);
+
+  // Agregar contexto de disponibilidad si el intent es BOOK_APPOINTMENT
+  if (intent === 'BOOK_APPOINTMENT') {
+    const branchId = tenantContext.branches[0]?.id;
+    if (branchId) {
+      const availableSlots = await getAvailableSlots(tenantId, branchId, undefined, undefined, undefined, 5);
+      if (availableSlots.length > 0) {
+        systemPrompt += `\n\n# HORARIOS DISPONIBLES ACTUALES\n`;
+        systemPrompt += `Ofrece estos horarios disponibles para agendar:\n`;
+        for (const slot of availableSlots) {
+          const date = new Date(slot.date + 'T12:00:00');
+          const dateStr = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+          systemPrompt += `- ${dateStr} a las ${slot.time} en ${slot.branch_name}\n`;
+        }
+        systemPrompt += `\nSi el cliente confirma uno de estos horarios, responde confirmando la cita con todos los detalles.\n`;
+      }
+    }
+  }
+
   const messageHistory = buildMessageHistory(conversationContext);
 
-  // 5. Llamar a GPT-5 Mini (OpenAI)
-  const model = DEFAULT_MODEL; // Siempre usar gpt-5-mini para mensajeria
+  // 9. Llamar a GPT-5 Mini (OpenAI)
+  const model = DEFAULT_MODEL;
   const temperature = tenantContext.ai_config.temperature || OPENAI_CONFIG.defaultTemperature;
 
   let response: string;
@@ -830,7 +993,6 @@ export async function generateAIResponse(
       ],
     });
 
-    // Extraer respuesta
     response = completion.choices[0]?.message?.content || 'Lo siento, no pude procesar tu mensaje. Un asesor te contactará pronto.';
     tokensUsed = (completion.usage?.prompt_tokens || 0) + (completion.usage?.completion_tokens || 0);
   } catch (error) {
@@ -839,7 +1001,7 @@ export async function generateAIResponse(
     tokensUsed = 0;
   }
 
-  // 6. Calcular tiempo de procesamiento
+  // 10. Calcular tiempo de procesamiento
   const processingTime = Date.now() - startTime;
 
   return {
@@ -852,6 +1014,9 @@ export async function generateAIResponse(
     tokens_used: tokensUsed,
     model_used: model,
     processing_time_ms: processingTime,
+    appointment_created: appointmentCreated,
+    lead_data_updated: leadDataUpdated.length > 0 ? leadDataUpdated : undefined,
+    service_interest_detected: serviceInterestDetected,
   };
 }
 

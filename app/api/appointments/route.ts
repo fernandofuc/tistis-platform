@@ -33,9 +33,9 @@ export async function GET(request: NextRequest) {
       .from('appointments')
       .select(`
         *,
-        lead:leads(id, name, phone, email, classification),
+        lead:leads(id, first_name, last_name, full_name, phone, email, classification),
         branch:branches(id, name, city),
-        staff:staff(id, name, role),
+        staff:staff(id, first_name, last_name, role),
         service:services(id, name, duration_minutes, price)
       `, { count: 'exact' })
       .eq('tenant_id', ESVA_TENANT_ID);
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     // Verify lead exists
     const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id, name')
+      .select('id, full_name')
       .eq('tenant_id', ESVA_TENANT_ID)
       .eq('id', body.lead_id)
       .single();
@@ -171,9 +171,9 @@ export async function POST(request: NextRequest) {
       .insert(appointmentData)
       .select(`
         *,
-        lead:leads(id, name, phone),
+        lead:leads(id, full_name, phone),
         branch:branches(id, name),
-        staff:staff(id, name),
+        staff:staff(id, first_name, last_name),
         service:services(id, name)
       `)
       .single();

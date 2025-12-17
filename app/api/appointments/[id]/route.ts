@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import { LeadConversionService } from '@/src/features/ai/services/lead-conversion.service';
 
 const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
 
@@ -24,9 +25,9 @@ export async function GET(
       .from('appointments')
       .select(`
         *,
-        lead:leads(id, name, phone, email, classification, score),
+        lead:leads(id, first_name, last_name, full_name, phone, email, classification, score),
         branch:branches(id, name, city, address, phone),
-        staff:staff(id, name, role, email),
+        staff:staff(id, first_name, last_name, role, email),
         service:services(id, name, duration_minutes, price, description)
       `)
       .eq('tenant_id', ESVA_TENANT_ID)
@@ -106,9 +107,9 @@ export async function PATCH(
       .eq('id', id)
       .select(`
         *,
-        lead:leads(id, name, phone),
+        lead:leads(id, full_name, phone),
         branch:branches(id, name),
-        staff:staff(id, name),
+        staff:staff(id, first_name, last_name),
         service:services(id, name)
       `)
       .single();
@@ -127,12 +128,29 @@ export async function PATCH(
       );
     }
 
-    // Update lead status based on appointment outcome
-    if (updateData.status === 'completed') {
-      await supabase
-        .from('leads')
-        .update({ status: 'converted' })
-        .eq('id', data.lead_id);
+    // Update lead status and auto-convert to patient when appointment completes
+    if (updateData.status === 'completed' && data.lead_id) {
+      try {
+        // Auto-convert lead to patient
+        const conversionResult = await LeadConversionService.autoConvertQualifiedLead(data.lead_id);
+
+        if (conversionResult?.success) {
+          console.log(`[Appointment] Lead ${data.lead_id} auto-converted to patient ${conversionResult.patient_id}`);
+        } else {
+          // Fallback: at least update lead status
+          await supabase
+            .from('leads')
+            .update({ status: 'converted' })
+            .eq('id', data.lead_id);
+        }
+      } catch (conversionError) {
+        console.error('[Appointment] Auto-conversion error:', conversionError);
+        // Fallback: update lead status even if conversion fails
+        await supabase
+          .from('leads')
+          .update({ status: 'converted' })
+          .eq('id', data.lead_id);
+      }
     }
 
     return NextResponse.json({ data });

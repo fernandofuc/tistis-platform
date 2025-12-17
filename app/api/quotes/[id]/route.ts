@@ -113,8 +113,8 @@ export async function GET(
           id, patient_number, first_name, last_name, phone, email,
           address_street, address_city, address_state, address_postal_code
         ),
-        lead:leads!lead_id(id, name, phone, email, classification, services_interested),
-        created_by_user:staff_members!created_by(id, first_name, last_name, email),
+        lead:leads!lead_id(id, first_name, last_name, full_name, phone, email, classification, interested_services),
+        created_by_user:staff!created_by_staff_id(id, first_name, last_name, email),
         quote_items(
           id, service_id, service_name, description, quantity, unit_price,
           discount_percentage, discount_amount, subtotal, sort_order
@@ -290,7 +290,7 @@ export async function PATCH(
       .select(`
         *,
         patient:patients!patient_id(id, patient_number, first_name, last_name, phone, email),
-        lead:leads!lead_id(id, name, phone, email, classification),
+        lead:leads!lead_id(id, first_name, last_name, full_name, phone, email, classification),
         quote_items(id, service_name, quantity, unit_price, subtotal)
       `)
       .single();

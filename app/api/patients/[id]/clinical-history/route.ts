@@ -30,9 +30,9 @@ export async function GET(
       .from('clinical_history')
       .select(`
         *,
-        dentist:staff_members!dentist_id(id, first_name, last_name, role),
+        dentist:staff!dentist_id(id, first_name, last_name, role),
         branch:branches!branch_id(id, name, address),
-        appointment:appointments!appointment_id(id, start_time, end_time, status),
+        appointment:appointments!appointment_id(id, scheduled_at, status),
         patient:patients!patient_id(id, first_name, last_name, patient_number)
       `)
       .eq('patient_id', patientId)
@@ -117,9 +117,9 @@ export async function POST(
       .insert(newRecord)
       .select(`
         *,
-        dentist:staff_members!dentist_id(id, first_name, last_name, role),
+        dentist:staff!dentist_id(id, first_name, last_name, role),
         branch:branches!branch_id(id, name, address),
-        appointment:appointments!appointment_id(id, start_time, end_time, status)
+        appointment:appointments!appointment_id(id, scheduled_at, status)
       `)
       .single();
 

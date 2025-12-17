@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { emailService } from '@/src/lib/email';
 import { provisionTenant } from '@/lib/provisioning';
+import { getPlanConfig, PLAN_CONFIG } from '@/src/shared/config/plans';
 
 // ============================================
 // VALID PLANS - Source of truth
@@ -883,25 +884,15 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 }
 
 // ============================================
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS (using centralized config)
 // ============================================
 
 function getPlanDisplayName(plan: string): string {
-  const planNames: Record<string, string> = {
-    starter: 'Starter',
-    essentials: 'Essentials',
-    growth: 'Growth',
-    scale: 'Scale',
-  };
-  return planNames[plan] || plan;
+  const config = getPlanConfig(plan);
+  return config?.name || plan;
 }
 
 function getPlanPrice(plan: string): number {
-  const planPrices: Record<string, number> = {
-    starter: 2999,
-    essentials: 4999,
-    growth: 7999,
-    scale: 12999,
-  };
-  return planPrices[plan] || 4999;
+  const config = getPlanConfig(plan);
+  return config?.monthlyPricePesos || 4999;
 }

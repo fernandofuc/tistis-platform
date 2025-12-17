@@ -111,15 +111,15 @@ export async function GET(
       .select(`
         *,
         preferred_branch:branches!preferred_branch_id(id, name, address, phone, city, state),
-        assigned_dentist:staff_members!assigned_dentist_id(id, first_name, last_name, role, phone, email),
-        lead:leads!lead_id(id, name, status, classification, score, source, services_interested, notes),
+        assigned_dentist:staff!assigned_dentist_id(id, first_name, last_name, role, phone, email),
+        lead:leads!lead_id(id, first_name, last_name, full_name, status, classification, score, source, interested_services, notes),
         clinical_history(
           id,
           visit_date,
           chief_complaint,
           diagnosis,
           treatment_provided,
-          dentist:staff_members!dentist_id(first_name, last_name),
+          dentist:staff!dentist_id(first_name, last_name),
           branch:branches!branch_id(name)
         ),
         patient_files(
@@ -296,8 +296,8 @@ export async function PATCH(
       .select(`
         *,
         preferred_branch:branches!preferred_branch_id(id, name, address),
-        assigned_dentist:staff_members!assigned_dentist_id(id, first_name, last_name, role),
-        lead:leads!lead_id(id, name, status, classification)
+        assigned_dentist:staff!assigned_dentist_id(id, first_name, last_name, role),
+        lead:leads!lead_id(id, first_name, last_name, full_name, status, classification)
       `)
       .single();
 

@@ -118,12 +118,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Parse name into first_name and last_name
+    const fullName = body.name || body.full_name || '';
+    const nameParts = fullName.trim().split(' ');
+    const firstName = nameParts[0] || null;
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+
     // Create lead
     const leadData = {
       tenant_id: ESVA_TENANT_ID,
       phone: body.phone,
       phone_normalized: normalizedPhone,
-      name: body.name || null,
+      first_name: body.first_name || firstName,
+      last_name: body.last_name || lastName,
+      full_name: fullName || null,
       email: body.email || null,
       source: body.source || 'website',
       status: 'new',

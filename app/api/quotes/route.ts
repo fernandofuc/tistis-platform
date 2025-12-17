@@ -98,8 +98,8 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         patient:patients!patient_id(id, patient_number, first_name, last_name, phone, email),
-        lead:leads!lead_id(id, full_name, phone, email, classification),
-        created_by_user:staff_members!created_by(id, first_name, last_name),
+        lead:leads!lead_id(id, first_name, last_name, full_name, phone, email, classification),
+        created_by_user:staff!created_by_staff_id(id, first_name, last_name),
         quote_items(id, service_name, quantity, unit_price, discount_percentage, discount_amount, subtotal)
       `, { count: 'exact' })
       .eq('tenant_id', effectiveTenantId)
@@ -228,9 +228,9 @@ export async function POST(request: NextRequest) {
       discount_percentage: body.discount_percentage || 0,
       discount_amount: body.discount_amount || 0,
       tax_percentage: body.tax_percentage || 16, // IVA Mexico
-      notes: body.notes?.trim() || null,
+      internal_notes: body.notes?.trim() || null,
       terms_and_conditions: body.terms_and_conditions?.trim() || null,
-      created_by: user?.id || body.created_by || null,
+      created_by_staff_id: body.created_by_staff_id || null,
     };
 
     const { data, error } = await supabase
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         patient:patients!patient_id(id, patient_number, first_name, last_name, phone, email),
-        lead:leads!lead_id(id, name, phone, email, classification)
+        lead:leads!lead_id(id, first_name, last_name, full_name, phone, email, classification)
       `)
       .single();
 

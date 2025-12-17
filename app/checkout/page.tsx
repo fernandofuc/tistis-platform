@@ -6,102 +6,11 @@ import { ArrowRight, Lock, CreditCard, CheckCircle, AlertCircle, Building2 } fro
 import Container from '@/components/layout/Container';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-
-// Plan configuration matching the API
-const PLAN_CONFIG: Record<string, {
-  name: string;
-  price: number;
-  branchExtra: number;
-  branchExtraProgressive?: { qty: number; price: number }[];
-  features: string[];
-}> = {
-  starter: {
-    name: 'Starter',
-    price: 3490,
-    branchExtra: 1590,
-    features: [
-      'Asistente IA 24/7 en WhatsApp',
-      'Hasta 500 conversaciones/mes',
-      'Dashboard basico',
-      'Soporte por email',
-    ],
-  },
-  essentials: {
-    name: 'Essentials',
-    price: 7490,
-    branchExtra: 1990,
-    branchExtraProgressive: [
-      { qty: 2, price: 1990 },
-      { qty: 3, price: 1790 },
-      { qty: 4, price: 1590 },
-      { qty: 5, price: 1490 },
-    ],
-    features: [
-      'Todo lo de Starter',
-      'Hasta 2,000 conversaciones/mes',
-      'Integracion con sistemas existentes',
-      'Soporte prioritario',
-      'Call de configuracion en 30 min',
-    ],
-  },
-  growth: {
-    name: 'Growth',
-    price: 12490,
-    branchExtra: 2890,
-    branchExtraProgressive: [
-      { qty: 2, price: 2890 },
-      { qty: 3, price: 2490 },
-      { qty: 4, price: 1990 },
-      { qty: 5, price: 1590 },
-    ],
-    features: [
-      'Todo lo de Essentials',
-      'Conversaciones ilimitadas',
-      'Multi-canal (WhatsApp, Web, Email)',
-      'Soporte 24/7',
-      'Call de configuracion en 30 min',
-    ],
-  },
-  scale: {
-    name: 'Scale',
-    price: 19990,
-    branchExtra: 3590,
-    branchExtraProgressive: [
-      { qty: 2, price: 3590 },
-      { qty: 3, price: 2890 },
-      { qty: 4, price: 2490 },
-      { qty: 5, price: 1990 },
-    ],
-    features: [
-      'Todo lo de Growth',
-      'IA entrenada con tus datos',
-      'Equipo dedicado',
-      'SLA garantizado',
-      'Call de configuracion en 30 min',
-    ],
-  },
-};
-
-// Calculate branch cost with progressive pricing
-function calculateBranchCost(plan: typeof PLAN_CONFIG[string], branches: number): number {
-  if (branches <= 1) return 0;
-
-  let totalCost = 0;
-  if (plan.branchExtraProgressive) {
-    for (let i = 2; i <= branches; i++) {
-      const tierInfo = plan.branchExtraProgressive.find(t => t.qty === i);
-      if (tierInfo) {
-        totalCost += tierInfo.price;
-      } else {
-        const tier5 = plan.branchExtraProgressive.find(t => t.qty === 5);
-        totalCost += tier5 ? tier5.price : plan.branchExtra;
-      }
-    }
-  } else {
-    totalCost = (branches - 1) * plan.branchExtra;
-  }
-  return totalCost;
-}
+import {
+  PLAN_CONFIG,
+  getPlanConfig,
+  calculateBranchCostPesos,
+} from '@/src/shared/config/plans';
 
 function CheckoutContent() {
   const router = useRouter();
@@ -155,10 +64,10 @@ function CheckoutContent() {
     }
   }, [searchParams]);
 
-  const plan = PLAN_CONFIG[planId] || PLAN_CONFIG.essentials;
+  const plan = getPlanConfig(planId) || PLAN_CONFIG.essentials;
   const extraBranches = Math.max(0, branches - 1);
-  const branchCost = calculateBranchCost(plan, branches);
-  const monthlyTotal = plan.price + branchCost;
+  const branchCost = calculateBranchCostPesos(planId, branches);
+  const monthlyTotal = plan.monthlyPricePesos + branchCost;
 
   const handleCheckout = async () => {
     if (!customerEmail) {
@@ -241,7 +150,7 @@ function CheckoutContent() {
               {/* Plan base */}
               <div className="flex justify-between">
                 <span className="text-tis-text-secondary">Plan {plan.name}</span>
-                <span className="font-semibold">${plan.price.toLocaleString('es-MX')} MXN/mes</span>
+                <span className="font-semibold">${plan.monthlyPricePesos.toLocaleString('es-MX')} MXN/mes</span>
               </div>
 
               {/* Extra branches */}
