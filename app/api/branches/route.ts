@@ -247,3 +247,111 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// ======================
+// DELETE - Delete branch (soft delete)
+// ======================
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = createServerClient();
+    const { searchParams } = new URL(request.url);
+    const branchId = searchParams.get('id');
+
+    if (!branchId) {
+      return NextResponse.json({ error: 'Branch ID required' }, { status: 400 });
+    }
+
+    // Authenticate user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's tenant and role
+    const { data: userRole } = await supabase
+      .from('user_roles')
+      .select('tenant_id, role')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (!userRole) {
+      return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
+    }
+
+    // Only admins can delete branches
+    if (!['admin', 'owner'].includes(userRole.role)) {
+      return NextResponse.json(
+        { error: 'Solo administradores pueden eliminar sucursales' },
+        { status: 403 }
+      );
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // Get the branch to verify ownership and check if it's HQ
+    const { data: branch, error: fetchError } = await supabaseAdmin
+      .from('branches')
+      .select('id, name, tenant_id, is_headquarters')
+      .eq('id', branchId)
+      .single();
+
+    if (fetchError || !branch) {
+      return NextResponse.json({ error: 'Sucursal no encontrada' }, { status: 404 });
+    }
+
+    // Verify branch belongs to user's tenant
+    if (branch.tenant_id !== userRole.tenant_id) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    }
+
+    // Cannot delete headquarters
+    if (branch.is_headquarters) {
+      return NextResponse.json({
+        error: 'No se puede eliminar la sucursal principal',
+        message: 'La sucursal principal no puede ser eliminada. Contacta soporte si necesitas cambiarla.',
+      }, { status: 403 });
+    }
+
+    // Soft delete: set is_active = false
+    const { error: deleteError } = await supabaseAdmin
+      .from('branches')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', branchId);
+
+    if (deleteError) {
+      console.error('Error deleting branch:', deleteError);
+      return NextResponse.json(
+        { error: 'Error al eliminar sucursal', details: deleteError.message },
+        { status: 500 }
+      );
+    }
+
+    // Log the action
+    await supabaseAdmin.from('audit_logs').insert({
+      tenant_id: userRole.tenant_id,
+      user_id: user.id,
+      action: 'branch_deleted',
+      entity_type: 'branch',
+      entity_id: branchId,
+      old_data: { branch_name: branch.name, branch_id: branchId },
+    });
+
+    console.log('🗑️ Branch deleted (soft):', branchId, branch.name);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Sucursal eliminada exitosamente',
+    });
+
+  } catch (error) {
+    console.error('Delete branch error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

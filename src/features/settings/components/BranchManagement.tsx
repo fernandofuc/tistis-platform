@@ -333,23 +333,21 @@ export function BranchManagement() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/branches/${showDeleteModal.id}?migrate=true`, {
+      const res = await fetch(`/api/branches?id=${showDeleteModal.id}`, {
         method: 'DELETE',
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.error === 'cannot_delete_hq') {
-          setError(data.message);
-        } else {
-          setError(data.message || data.error || 'Error al eliminar sucursal');
-        }
+        setError(data.message || data.error || 'Error al eliminar sucursal');
         return;
       }
 
       setShowDeleteModal(null);
       fetchData();
+      // Also refresh auth context branches
+      refetchBranches();
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
       setError(errorMessage);
