@@ -5,11 +5,12 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, Button, Badge } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
+import { useTenant } from '@/src/hooks/useTenant';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
 
@@ -81,20 +82,13 @@ const PLANS = [
   },
 ];
 
-interface SubscriptionData {
-  plan: string;
-  status: string;
-  max_branches: number;
-  current_branches: number;
-  period_end: string;
-  stripe_subscription_id?: string;
-}
-
 export default function SubscriptionPage() {
   const router = useRouter();
   const { staff } = useAuthContext();
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // Use useTenant hook - same source as Sidebar (works correctly)
+  const { tenant, branches, isLoading: loading } = useTenant();
+
   const [changingPlan, setChangingPlan] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,40 +97,14 @@ export default function SubscriptionPage() {
   // Check if user is owner
   const isOwner = staff?.role === 'owner';
 
-  // Fetch current subscription
-  useEffect(() => {
-    const fetchSubscription = async () => {
-      try {
-        // Get auth token to send with request
-        const { data: { session } } = await supabase.auth.getSession();
-        const headers: Record<string, string> = {};
-
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-        }
-
-        console.log('📊 Fetching subscription with auth:', !!session?.access_token);
-
-        const response = await fetch('/api/stripe/update-subscription', { headers });
-        const data = await response.json();
-
-        console.log('📊 Subscription API Response:', data);
-        console.log('📊 Plan from API:', data?.data?.plan);
-
-        if (response.ok && data.data) {
-          setSubscription(data.data);
-        } else {
-          console.error('Subscription fetch failed:', data.error);
-        }
-      } catch (err) {
-        console.error('Error fetching subscription:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSubscription();
-  }, []);
+  // Create subscription-like object from tenant data
+  const subscription = tenant ? {
+    plan: tenant.plan,
+    status: tenant.status === 'active' ? 'active' : tenant.status,
+    max_branches: branches.length || 1,
+    current_branches: branches.filter(b => b.is_active).length || 1,
+    period_end: '', // Not available from tenant, but not critical for display
+  } : null;
 
   // Handle plan selection
   const handleSelectPlan = (planId: string) => {
@@ -303,22 +271,9 @@ export default function SubscriptionPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Planes Disponibles</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {PLANS.map((plan) => {
-              // Normalize plan names with trim to handle any whitespace
-              const subscriptionPlan = subscription?.plan?.toLowerCase()?.trim() || '';
-              const planIdNormalized = plan.id.toLowerCase().trim();
-              const isCurrentPlan = subscriptionPlan === planIdNormalized;
+              // Simple comparison - tenant.plan is already lowercase from DB
+              const isCurrentPlan = subscription?.plan === plan.id;
               const isPlanUpgrade = isUpgrade(plan.id);
-
-              // Debug logging for ALL plans to find the issue
-              console.log(`🔍 Plan Check [${plan.id}]:`, {
-                subscriptionPlan: `"${subscriptionPlan}"`,
-                planIdNormalized: `"${planIdNormalized}"`,
-                isCurrentPlan,
-                rawSubscriptionPlan: subscription?.plan,
-                subscriptionExists: !!subscription,
-                charCodeComparison: subscriptionPlan === planIdNormalized ? 'MATCH' :
-                  `MISMATCH (lengths: ${subscriptionPlan.length} vs ${planIdNormalized.length})`,
-              });
 
               return (
                 <Card
