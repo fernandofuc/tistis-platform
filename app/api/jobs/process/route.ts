@@ -22,6 +22,10 @@ import {
 import { WhatsAppService } from '@/src/features/messaging/services/whatsapp.service';
 import { MetaService } from '@/src/features/messaging/services/meta.service';
 import { TikTokService } from '@/src/features/messaging/services/tiktok.service';
+import {
+  processExpiringMemberships,
+  processInactivePatients,
+} from '@/src/features/loyalty/services/loyalty-messaging.service';
 import type { AIResponseJobPayload, SendMessageJobPayload } from '@/src/shared/types/whatsapp';
 import type { MetaSendMessageJobPayload } from '@/src/shared/types/meta-messaging';
 import type { TikTokSendMessageJobPayload } from '@/src/shared/types/tiktok-messaging';
@@ -48,25 +52,56 @@ function validateRequest(request: NextRequest): boolean {
 }
 
 // ======================
-// GET - Health Check & Stats
+// GET - Daily Cron Job (Health Check + Loyalty Messages)
 // ======================
 export async function GET(request: NextRequest) {
   if (!validateRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const startTime = Date.now();
+
   try {
+    console.log('[Jobs API] Starting daily cron job...');
+
+    // 1. Get queue stats
     const stats = await JobProcessor.getQueueStats();
+
+    // 2. Process loyalty messages (memberships & reactivation)
+    console.log('[Jobs API] Processing loyalty messages...');
+    const loyaltyResults = {
+      memberships: { processed: 0, sent: 0, errors: 0 },
+      reactivation: { processed: 0, sent: 0, errors: 0 },
+    };
+
+    try {
+      loyaltyResults.memberships = await processExpiringMemberships();
+      console.log('[Jobs API] Membership reminders:', loyaltyResults.memberships);
+    } catch (error) {
+      console.error('[Jobs API] Membership processing error:', error);
+    }
+
+    try {
+      loyaltyResults.reactivation = await processInactivePatients();
+      console.log('[Jobs API] Reactivation messages:', loyaltyResults.reactivation);
+    } catch (error) {
+      console.error('[Jobs API] Reactivation processing error:', error);
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`[Jobs API] Daily cron completed in ${duration}ms`);
 
     return NextResponse.json({
       status: 'healthy',
       queue_stats: stats,
+      loyalty_messages: loyaltyResults,
+      duration_ms: duration,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[Jobs API] Health check error:', error);
+    console.error('[Jobs API] Daily cron error:', error);
     return NextResponse.json(
-      { error: 'Health check failed' },
+      { error: 'Daily cron failed' },
       { status: 500 }
     );
   }

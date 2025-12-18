@@ -46,6 +46,7 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
   ai_chat_enabled: false,
   whatsapp_enabled: true,
   email_enabled: true,
+  loyalty_enabled: false, // Loyalty system (essentials+)
 
   // Vertical-specific
   treatment_plans_enabled: false,
@@ -74,6 +75,7 @@ const PLAN_DEFAULT_FLAGS: Record<string, string[]> = {
     'whatsapp_enabled',
     'email_enabled',
     'patients_enabled',
+    'loyalty_enabled',
   ],
   growth: [
     'auth_enabled',
@@ -89,6 +91,7 @@ const PLAN_DEFAULT_FLAGS: Record<string, string[]> = {
     'clinical_history_enabled',
     'ai_chat_enabled',
     'analytics_advanced_enabled',
+    'loyalty_enabled',
   ],
   scale: [
     'auth_enabled',
@@ -105,6 +108,7 @@ const PLAN_DEFAULT_FLAGS: Record<string, string[]> = {
     'ai_chat_enabled',
     'analytics_advanced_enabled',
     'treatment_plans_enabled',
+    'loyalty_enabled',
   ],
 };
 
@@ -268,6 +272,8 @@ export const MODULE_FLAGS: Record<string, string> = {
   analytics: 'analytics_advanced_enabled',
   settings: 'auth_enabled', // Everyone can access settings
   clinical_history: 'clinical_history_enabled',
+  loyalty: 'loyalty_enabled',
+  lealtad: 'loyalty_enabled',
 };
 
 // Helper to check if a route/module should be accessible
