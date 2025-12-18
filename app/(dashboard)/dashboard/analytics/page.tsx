@@ -236,6 +236,35 @@ export default function AnalyticsPage() {
 
         const { data: conversations } = await conversationsQuery;
 
+        // Messages for response time calculation
+        // Get AI messages with processing_time_ms in metadata
+        const conversationIds = conversations?.map(c => c.id) || [];
+        let avgResponseTimeMs = 0;
+
+        if (conversationIds.length > 0) {
+          const { data: aiMessages } = await supabase
+            .from('messages')
+            .select('metadata')
+            .in('conversation_id', conversationIds)
+            .eq('sender_type', 'ai')
+            .not('metadata', 'is', null);
+
+          if (aiMessages && aiMessages.length > 0) {
+            const processingTimes = aiMessages
+              .map(m => {
+                const meta = m.metadata as Record<string, unknown> | null;
+                return meta?.processing_time_ms as number | undefined;
+              })
+              .filter((t): t is number => typeof t === 'number' && t > 0);
+
+            if (processingTimes.length > 0) {
+              avgResponseTimeMs = Math.round(
+                processingTimes.reduce((sum, t) => sum + t, 0) / processingTimes.length
+              );
+            }
+          }
+        }
+
         // ============================================
         // FETCH PREVIOUS PERIOD DATA (for comparison)
         // ============================================
@@ -317,7 +346,7 @@ export default function AnalyticsPage() {
           appointmentsCancelled,
           conversationsTotal,
           conversationsResolved,
-          avgResponseTime: 45, // TODO: Calculate from messages table
+          avgResponseTime: avgResponseTimeMs > 0 ? Math.round(avgResponseTimeMs / 1000) : 2, // Convert ms to seconds, default 2s
           conversionRate,
           conversionRateChange,
         });
