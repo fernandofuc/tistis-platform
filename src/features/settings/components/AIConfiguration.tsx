@@ -247,6 +247,8 @@ export function AIConfiguration() {
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
   const [deletingBranchLoading, setDeletingBranchLoading] = useState(false);
+  const [deletingStaff, setDeletingStaff] = useState<Staff | null>(null);
+  const [deletingStaffLoading, setDeletingStaffLoading] = useState(false);
 
   // Business Identity Edit State
   const [isEditingIdentity, setIsEditingIdentity] = useState(false);
@@ -512,6 +514,38 @@ export function AIConfiguration() {
       alert('Error al eliminar sucursal');
     } finally {
       setDeletingBranchLoading(false);
+    }
+  };
+
+  // Handle delete staff/doctor
+  const handleDeleteStaff = async () => {
+    if (!deletingStaff) return;
+
+    setDeletingStaffLoading(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/settings/staff?id=${deletingStaff.id}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || data.error || 'Error al eliminar doctor');
+        return;
+      }
+
+      // Remove staff from local state
+      setStaff(prev => prev.filter(s => s.id !== deletingStaff.id));
+      // Also remove staff_branches associations
+      setStaffBranches(prev => prev.filter(sb => sb.staff_id !== deletingStaff.id));
+      setDeletingStaff(null);
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+      alert('Error al eliminar doctor');
+    } finally {
+      setDeletingStaffLoading(false);
     }
   };
 
@@ -1087,15 +1121,25 @@ export function AIConfiguration() {
                                 )}
                               </div>
                             </div>
-                            <button
-                              onClick={() => {
-                                setEditingStaff(member);
-                                setShowStaffModal(true);
-                              }}
-                              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-lg"
-                            >
-                              {icons.edit}
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingStaff(member);
+                                  setShowStaffModal(true);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Editar doctor"
+                              >
+                                {icons.edit}
+                              </button>
+                              <button
+                                onClick={() => setDeletingStaff(member)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Eliminar doctor"
+                              >
+                                {icons.trash}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1515,6 +1559,49 @@ export function AIConfiguration() {
                 isLoading={deletingBranchLoading}
               >
                 Sí, Eliminar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Staff/Doctor Confirmation Modal */}
+      {deletingStaff && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-red-600">{icons.trash}</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 text-center">
+                ¿Eliminar doctor?
+              </h2>
+              <p className="text-gray-500 text-center mt-2">
+                Esta acción eliminará a <strong>Dr. {deletingStaff.display_name || `${deletingStaff.first_name || ''} ${deletingStaff.last_name || ''}`.trim()}</strong> del sistema.
+              </p>
+
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800">
+                  <strong>Importante:</strong> El doctor será removido de todas las sucursales y sus citas pendientes quedarán sin asignar.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setDeletingStaff(null)}
+                disabled={deletingStaffLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={handleDeleteStaff}
+                isLoading={deletingStaffLoading}
+              >
+                Sí, Eliminar Doctor
               </Button>
             </div>
           </div>
