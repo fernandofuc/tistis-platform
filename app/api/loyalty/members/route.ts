@@ -87,10 +87,9 @@ export async function GET(request: NextRequest) {
         last_interaction_at,
         created_at,
         loyalty_balances!left (
+          current_balance,
           total_earned,
           total_spent,
-          current_balance,
-          lifetime_value,
           tier
         ),
         loyalty_memberships!left (
@@ -154,14 +153,13 @@ export async function GET(request: NextRequest) {
           current: balance?.current_balance || 0,
           total_earned: balance?.total_earned || 0,
           total_spent: balance?.total_spent || 0,
-          lifetime_value: balance?.lifetime_value || 0,
           tier: balance?.tier || 'bronze',
         },
         membership: activeMembership ? {
           id: activeMembership.id,
           plan_name: activeMembership.loyalty_membership_plans?.plan_name,
           status: activeMembership.status,
-          end_date: activeMembership.end_date,
+          expires_at: activeMembership.end_date,
         } : null,
       };
     });

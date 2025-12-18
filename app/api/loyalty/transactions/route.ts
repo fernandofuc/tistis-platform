@@ -80,10 +80,13 @@ export async function GET(request: NextRequest) {
       .from('loyalty_transactions')
       .select(`
         *,
-        leads (
-          id,
-          name,
-          email
+        loyalty_balances!inner (
+          lead_id,
+          leads (
+            id,
+            name,
+            email
+          )
         )
       `, { count: 'exact' })
       .eq('program_id', context.program.id)
@@ -91,7 +94,7 @@ export async function GET(request: NextRequest) {
 
     // Apply filters
     if (leadId) {
-      query = query.eq('lead_id', leadId);
+      query = query.eq('loyalty_balances.lead_id', leadId);
     }
 
     if (transactionType) {

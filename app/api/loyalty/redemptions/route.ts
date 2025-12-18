@@ -77,10 +77,13 @@ export async function GET(request: NextRequest) {
       .from('loyalty_redemptions')
       .select(`
         *,
-        leads (
-          id,
-          name,
-          email
+        loyalty_balances!inner (
+          lead_id,
+          leads (
+            id,
+            name,
+            email
+          )
         ),
         loyalty_rewards (
           reward_name,
@@ -177,7 +180,7 @@ export async function POST(request: NextRequest) {
 
     // Use the redeem_loyalty_reward function
     const { data: result, error } = await supabase.rpc('redeem_loyalty_reward', {
-      p_program_id: context.program.id,
+      p_tenant_id: context.userRole.tenant_id,
       p_lead_id: lead_id,
       p_reward_id: reward_id,
     });

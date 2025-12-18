@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Get all balances
     const { data: balances } = await supabase
       .from('loyalty_balances')
-      .select('current_balance, total_earned, total_spent, lifetime_value, tier')
+      .select('current_balance, total_earned, total_spent, tier')
       .eq('program_id', context.program.id);
 
     // Token stats

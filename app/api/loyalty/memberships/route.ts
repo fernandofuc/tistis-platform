@@ -244,6 +244,7 @@ export async function POST(request: NextRequest) {
     const { data: membership, error } = await supabase
       .from('loyalty_memberships')
       .insert({
+        tenant_id: context.userRole.tenant_id,
         program_id: context.program.id,
         lead_id,
         plan_id,

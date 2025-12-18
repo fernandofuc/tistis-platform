@@ -83,21 +83,27 @@ CREATE TABLE IF NOT EXISTS loyalty_rewards (
     program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
 
     -- Información de la recompensa
-    name TEXT NOT NULL, -- "10% de descuento", "Limpieza gratis"
-    description TEXT,
+    reward_name TEXT NOT NULL, -- "10% de descuento", "Limpieza gratis"
+    reward_description TEXT,
     image_url TEXT,
 
     -- Costo en tokens
-    tokens_cost INTEGER NOT NULL,
+    tokens_required INTEGER NOT NULL,
 
     -- Tipo de recompensa
-    reward_type TEXT NOT NULL, -- 'discount_percent', 'discount_fixed', 'free_service', 'free_product', 'custom'
-    reward_value DECIMAL(10,2), -- Valor según tipo (% o monto fijo)
+    reward_type TEXT NOT NULL, -- 'discount_percentage', 'discount_fixed', 'free_service', 'gift', 'upgrade', 'custom'
+    discount_type TEXT, -- 'percentage', 'fixed'
+    discount_value DECIMAL(10,2), -- Valor del descuento
 
     -- Restricciones
     service_id UUID REFERENCES services(id) ON DELETE SET NULL, -- Si aplica a servicio específico
-    applicable_services UUID[], -- Lista de servicios donde aplica (NULL = todos)
+    applicable_services UUID[] DEFAULT '{}', -- Lista de servicios donde aplica
     min_purchase DECIMAL(10,2), -- Compra mínima para aplicar
+    terms_conditions TEXT, -- Términos y condiciones
+
+    -- Stock
+    stock_limit INTEGER, -- NULL = ilimitado
+    stock_used INTEGER NOT NULL DEFAULT 0,
 
     -- Disponibilidad
     max_redemptions_total INTEGER, -- NULL = ilimitado
@@ -125,8 +131,8 @@ CREATE TABLE IF NOT EXISTS loyalty_membership_plans (
     program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
 
     -- Información del plan
-    name TEXT NOT NULL, -- "Plan Básico", "Plan Premium", "Plan VIP"
-    description TEXT,
+    plan_name TEXT NOT NULL, -- "Plan Básico", "Plan Premium", "Plan VIP"
+    plan_description TEXT,
     color TEXT DEFAULT '#3B82F6', -- Color para UI
     icon TEXT DEFAULT 'crown',
 
@@ -176,15 +182,15 @@ CREATE TABLE IF NOT EXISTS loyalty_balances (
     program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
 
     -- Balance actual
-    tokens_balance INTEGER NOT NULL DEFAULT 0,
+    current_balance INTEGER NOT NULL DEFAULT 0,
 
     -- Estadísticas históricas
-    tokens_earned_total INTEGER NOT NULL DEFAULT 0,
-    tokens_redeemed_total INTEGER NOT NULL DEFAULT 0,
-    tokens_expired_total INTEGER NOT NULL DEFAULT 0,
+    total_earned INTEGER NOT NULL DEFAULT 0,
+    total_spent INTEGER NOT NULL DEFAULT 0,
+    lifetime_value DECIMAL(10,2) NOT NULL DEFAULT 0,
 
     -- Nivel/Tier (calculado o asignado)
-    tier_level TEXT DEFAULT 'standard', -- 'standard', 'silver', 'gold', 'platinum'
+    tier TEXT DEFAULT 'bronze', -- 'bronze', 'silver', 'gold', 'platinum'
     tier_updated_at TIMESTAMPTZ,
 
     -- Último movimiento
@@ -204,13 +210,14 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     balance_id UUID NOT NULL REFERENCES loyalty_balances(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
 
     -- Tipo de transacción
     transaction_type TEXT NOT NULL, -- 'earn', 'redeem', 'expire', 'adjust', 'transfer_in', 'transfer_out'
 
     -- Monto (positivo = ganar, negativo = gastar/expirar)
-    tokens_amount INTEGER NOT NULL,
-    tokens_balance_after INTEGER NOT NULL, -- Balance después de la transacción
+    tokens INTEGER NOT NULL,
+    balance_after INTEGER NOT NULL, -- Balance después de la transacción
 
     -- Origen de la transacción
     source_type TEXT NOT NULL, -- 'purchase', 'action', 'referral', 'admin', 'expiry', 'redemption', 'membership_bonus'
@@ -237,6 +244,7 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
 CREATE TABLE IF NOT EXISTS loyalty_memberships (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
     lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
     plan_id UUID NOT NULL REFERENCES loyalty_membership_plans(id) ON DELETE RESTRICT,
 
@@ -244,13 +252,13 @@ CREATE TABLE IF NOT EXISTS loyalty_memberships (
     status TEXT NOT NULL DEFAULT 'pending_payment', -- 'active', 'pending_payment', 'cancelled', 'expired', 'paused'
 
     -- Fechas
-    started_at TIMESTAMPTZ,
-    expires_at TIMESTAMPTZ,
+    start_date TIMESTAMPTZ,
+    end_date TIMESTAMPTZ,
     next_billing_at TIMESTAMPTZ,
 
     -- Facturación
-    billing_period TEXT NOT NULL DEFAULT 'monthly', -- 'monthly', 'annual'
-    price_paid DECIMAL(10,2) NOT NULL,
+    billing_cycle TEXT NOT NULL DEFAULT 'monthly', -- 'monthly', 'annual'
+    payment_amount DECIMAL(10,2) NOT NULL,
     currency TEXT NOT NULL DEFAULT 'MXN',
 
     -- Stripe
@@ -288,9 +296,10 @@ CREATE TABLE IF NOT EXISTS loyalty_redemptions (
     balance_id UUID NOT NULL REFERENCES loyalty_balances(id) ON DELETE CASCADE,
     reward_id UUID NOT NULL REFERENCES loyalty_rewards(id) ON DELETE RESTRICT,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
 
     -- Tokens gastados
-    tokens_spent INTEGER NOT NULL,
+    tokens_used INTEGER NOT NULL,
 
     -- Estado del canje
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'used', 'expired', 'cancelled'
@@ -411,19 +420,22 @@ CREATE INDEX IF NOT EXISTS idx_loyalty_balances_program ON loyalty_balances(prog
 -- Transactions
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_balance ON loyalty_transactions(balance_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_tenant ON loyalty_transactions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_program ON loyalty_transactions(program_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_created ON loyalty_transactions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_expires ON loyalty_transactions(expires_at) WHERE expires_at IS NOT NULL;
 
 -- Memberships
 CREATE INDEX IF NOT EXISTS idx_loyalty_memberships_tenant ON loyalty_memberships(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_memberships_program ON loyalty_memberships(program_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_memberships_lead ON loyalty_memberships(lead_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_memberships_status ON loyalty_memberships(status);
-CREATE INDEX IF NOT EXISTS idx_loyalty_memberships_expires ON loyalty_memberships(expires_at);
+CREATE INDEX IF NOT EXISTS idx_loyalty_memberships_end_date ON loyalty_memberships(end_date);
 CREATE INDEX IF NOT EXISTS idx_loyalty_memberships_billing ON loyalty_memberships(next_billing_at) WHERE status = 'active';
 
 -- Redemptions
 CREATE INDEX IF NOT EXISTS idx_loyalty_redemptions_balance ON loyalty_redemptions(balance_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_redemptions_tenant ON loyalty_redemptions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_redemptions_program ON loyalty_redemptions(program_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_redemptions_code ON loyalty_redemptions(redemption_code);
 CREATE INDEX IF NOT EXISTS idx_loyalty_redemptions_status ON loyalty_redemptions(status);
 
@@ -647,7 +659,7 @@ BEGIN
     WHERE lead_id = p_lead_id AND program_id = v_program_id;
 
     IF v_balance_id IS NULL THEN
-        INSERT INTO loyalty_balances (tenant_id, lead_id, program_id, tokens_balance, tokens_earned_total)
+        INSERT INTO loyalty_balances (tenant_id, lead_id, program_id, current_balance, total_earned)
         VALUES (p_tenant_id, p_lead_id, v_program_id, 0, 0)
         RETURNING id INTO v_balance_id;
     END IF;
@@ -661,18 +673,18 @@ BEGIN
 
     -- Update balance
     UPDATE loyalty_balances
-    SET tokens_balance = tokens_balance + p_tokens_amount,
-        tokens_earned_total = tokens_earned_total + p_tokens_amount,
+    SET current_balance = current_balance + p_tokens_amount,
+        total_earned = total_earned + p_tokens_amount,
         last_earn_at = NOW()
     WHERE id = v_balance_id
-    RETURNING tokens_balance INTO v_new_balance;
+    RETURNING current_balance INTO v_new_balance;
 
     -- Create transaction
     INSERT INTO loyalty_transactions (
-        balance_id, tenant_id, transaction_type, tokens_amount, tokens_balance_after,
+        balance_id, tenant_id, program_id, transaction_type, tokens, balance_after,
         source_type, source_id, description, expires_at
     ) VALUES (
-        v_balance_id, p_tenant_id, 'earn', p_tokens_amount, v_new_balance,
+        v_balance_id, p_tenant_id, v_program_id, 'earn', p_tokens_amount, v_new_balance,
         p_source_type, p_source_id, COALESCE(p_description, 'Tokens ganados'), v_expires_at
     )
     RETURNING id INTO v_transaction_id;
@@ -715,11 +727,11 @@ BEGIN
     END IF;
 
     -- Get balance
-    SELECT id, tokens_balance INTO v_balance_id, v_current_balance
+    SELECT id, current_balance INTO v_balance_id, v_current_balance
     FROM loyalty_balances
     WHERE lead_id = p_lead_id AND program_id = v_reward.program_id;
 
-    IF v_balance_id IS NULL OR v_current_balance < v_reward.tokens_cost THEN
+    IF v_balance_id IS NULL OR v_current_balance < v_reward.tokens_required THEN
         RETURN QUERY SELECT false, NULL::TEXT, 'Puntos insuficientes'::TEXT;
         RETURN;
     END IF;
@@ -734,27 +746,27 @@ BEGIN
 
     -- Deduct tokens
     UPDATE loyalty_balances
-    SET tokens_balance = tokens_balance - v_reward.tokens_cost,
-        tokens_redeemed_total = tokens_redeemed_total + v_reward.tokens_cost,
+    SET current_balance = current_balance - v_reward.tokens_required,
+        total_spent = total_spent + v_reward.tokens_required,
         last_redeem_at = NOW()
     WHERE id = v_balance_id
-    RETURNING tokens_balance INTO v_new_balance;
+    RETURNING current_balance INTO v_new_balance;
 
     -- Create transaction
     INSERT INTO loyalty_transactions (
-        balance_id, tenant_id, transaction_type, tokens_amount, tokens_balance_after,
+        balance_id, tenant_id, program_id, transaction_type, tokens, balance_after,
         source_type, source_id, description
     ) VALUES (
-        v_balance_id, p_tenant_id, 'redeem', -v_reward.tokens_cost, v_new_balance,
-        'redemption', p_reward_id, 'Canje: ' || v_reward.name
+        v_balance_id, p_tenant_id, v_reward.program_id, 'redeem', -v_reward.tokens_required, v_new_balance,
+        'redemption', p_reward_id, 'Canje: ' || v_reward.reward_name
     );
 
     -- Create redemption
     INSERT INTO loyalty_redemptions (
-        balance_id, reward_id, tenant_id, tokens_spent, redemption_code,
+        balance_id, reward_id, tenant_id, program_id, tokens_used, redemption_code,
         valid_until, reward_snapshot
     ) VALUES (
-        v_balance_id, p_reward_id, p_tenant_id, v_reward.tokens_cost, v_code,
+        v_balance_id, p_reward_id, p_tenant_id, v_reward.program_id, v_reward.tokens_required, v_code,
         v_valid_until, to_jsonb(v_reward)
     );
 
