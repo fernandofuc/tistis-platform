@@ -158,14 +158,28 @@ function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
     is_featured: plan?.is_featured || false,
   });
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    // Validate form
+    if (!formData.plan_name.trim()) {
+      setFormError('El nombre del plan es requerido');
+      return;
+    }
+
+    if (!formData.price_monthly && !formData.price_annual) {
+      setFormError('Debes especificar al menos un precio (mensual o anual)');
+      return;
+    }
+
     setSaving(true);
     try {
       await onSave({
-        plan_name: formData.plan_name,
-        plan_description: formData.plan_description || null,
+        plan_name: formData.plan_name.trim(),
+        plan_description: formData.plan_description?.trim() || null,
         price_monthly: formData.price_monthly ? Number(formData.price_monthly) : null,
         price_annual: formData.price_annual ? Number(formData.price_annual) : null,
         benefits: formData.benefits.split('\n').filter(b => b.trim()),
@@ -177,7 +191,9 @@ function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
       });
       onClose();
     } catch (err) {
-      console.error(err);
+      console.error('Error saving plan:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido al guardar';
+      setFormError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -192,6 +208,15 @@ function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
           </h2>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Error Display */}
+          {formError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-600 text-sm flex items-start gap-2">
+              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{formError}</span>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Nombre del Plan</label>
             <input

@@ -12,6 +12,7 @@ import {
   ChannelConnections,
   AIConfiguration,
   SecuritySection,
+  PaymentsSection,
   fetchNotificationPreferences,
   updateNotificationPreferences,
   type NotificationPreferences,
@@ -62,17 +63,23 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
     </svg>
   ),
+  payments: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  ),
 };
 
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'security';
+type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'payments' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
   { key: 'channels', label: 'Canales', icon: icons.channels },
   { key: 'ai', label: 'AI Agent', icon: icons.ai },
+  { key: 'payments', label: 'Pagos', icon: icons.payments },
   { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
   { key: 'security', label: 'Seguridad', icon: icons.lock },
 ];
@@ -632,6 +639,11 @@ export default function SettingsPage() {
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {/* Payments Tab */}
+          {activeTab === 'payments' && (
+            <PaymentsSection />
           )}
 
           {/* Security Tab */}

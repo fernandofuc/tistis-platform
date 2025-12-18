@@ -128,15 +128,23 @@ export async function POST(request: NextRequest) {
     const supabase = createAuthenticatedClient(accessToken);
     const context = await getUserTenantAndProgram(supabase);
 
-    if (!context?.program) {
-      return NextResponse.json({ error: 'Programa no encontrado' }, { status: 404 });
+    if (!context) {
+      console.error('[Membership Plans API] No context returned');
+      return NextResponse.json({ error: 'Error de autenticación' }, { status: 401 });
+    }
+
+    if (!context.program) {
+      console.error('[Membership Plans API] No program found for tenant:', context.userRole.tenant_id);
+      return NextResponse.json({ error: 'Programa no encontrado. Por favor, recarga la página.' }, { status: 404 });
     }
 
     if (!['owner', 'admin'].includes(context.userRole.role)) {
-      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 });
+      return NextResponse.json({ error: 'Sin permisos para crear planes' }, { status: 403 });
     }
 
     const body = await request.json();
+    console.log('[Membership Plans API] POST body:', JSON.stringify(body));
+
     const {
       plan_name,
       plan_description,
@@ -144,53 +152,63 @@ export async function POST(request: NextRequest) {
       price_annual,
       benefits,
       discount_percentage,
-      included_services,
       tokens_multiplier,
       priority_booking,
-      stripe_monthly_price_id,
-      stripe_annual_price_id,
       is_active,
       is_featured,
     } = body;
 
-    if (!plan_name) {
+    if (!plan_name || plan_name.trim() === '') {
       return NextResponse.json({ error: 'Nombre del plan requerido' }, { status: 400 });
     }
 
-    if (price_monthly === undefined && price_annual === undefined) {
-      return NextResponse.json({ error: 'Al menos un precio es requerido' }, { status: 400 });
+    // Validate at least one price
+    const monthlyPrice = price_monthly ? Number(price_monthly) : null;
+    const annualPrice = price_annual ? Number(price_annual) : null;
+
+    if (monthlyPrice === null && annualPrice === null) {
+      return NextResponse.json({ error: 'Debes especificar al menos un precio (mensual o anual)' }, { status: 400 });
     }
+
+    // Build insert data with only valid fields
+    const insertData: Record<string, unknown> = {
+      program_id: context.program.id,
+      plan_name: plan_name.trim(),
+      plan_description: plan_description?.trim() || null,
+      price_monthly: monthlyPrice,
+      price_annual: annualPrice,
+      benefits: Array.isArray(benefits) ? benefits.filter((b: string) => b && b.trim()) : [],
+      discount_percentage: Number(discount_percentage) || 0,
+      tokens_multiplier: Number(tokens_multiplier) || 1.0,
+      priority_booking: Boolean(priority_booking),
+      is_active: is_active !== false,
+      is_featured: Boolean(is_featured),
+    };
+
+    console.log('[Membership Plans API] Insert data:', JSON.stringify(insertData));
 
     const { data: plan, error } = await supabase
       .from('loyalty_membership_plans')
-      .insert({
-        program_id: context.program.id,
-        plan_name,
-        plan_description,
-        price_monthly: price_monthly || null,
-        price_annual: price_annual || null,
-        benefits: benefits || [],
-        discount_percentage: discount_percentage || 0,
-        included_services: included_services || [],
-        tokens_multiplier: tokens_multiplier || 1.0,
-        priority_booking: priority_booking || false,
-        stripe_monthly_price_id: stripe_monthly_price_id || null,
-        stripe_annual_price_id: stripe_annual_price_id || null,
-        is_active: is_active !== false,
-        is_featured: is_featured || false,
-      })
+      .insert(insertData)
       .select()
       .single();
 
     if (error) {
       console.error('[Membership Plans API] POST error:', error);
-      return NextResponse.json({ error: 'Error al crear plan' }, { status: 500 });
+      console.error('[Membership Plans API] Error details:', JSON.stringify(error));
+      return NextResponse.json({
+        error: `Error al crear plan: ${error.message || 'Error desconocido'}`,
+        details: error.code
+      }, { status: 500 });
     }
 
+    console.log('[Membership Plans API] Plan created:', plan.id);
     return NextResponse.json({ success: true, data: plan });
   } catch (error) {
-    console.error('[Membership Plans API] POST error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    console.error('[Membership Plans API] POST catch error:', error);
+    return NextResponse.json({
+      error: `Error interno: ${error instanceof Error ? error.message : 'Error desconocido'}`
+    }, { status: 500 });
   }
 }
 
