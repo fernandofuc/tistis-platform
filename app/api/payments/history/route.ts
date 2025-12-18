@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
           .from('stripe_payment_intents')
           .select(`
             *,
-            leads (name, email),
+            leads (full_name, first_name, last_name, email, phone),
             loyalty_memberships (
               id,
               loyalty_membership_plans (plan_name)
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
           .from('stripe_subscriptions')
           .select(`
             *,
-            leads (name, email),
+            leads (full_name, first_name, last_name, email, phone),
             loyalty_membership_plans (plan_name, price_monthly, price_annual)
           `, { count: 'exact' })
           .eq('tenant_id', context.userRole.tenant_id)
@@ -130,9 +130,24 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 });
     }
 
+    // Transform data to include computed name field for frontend compatibility
+    const transformedData = (data || []).map((item: Record<string, unknown>) => {
+      const leads = item.leads as { full_name?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null;
+      if (leads) {
+        return {
+          ...item,
+          leads: {
+            ...leads,
+            name: leads.full_name || `${leads.first_name || ''} ${leads.last_name || ''}`.trim() || 'Sin nombre',
+          },
+        };
+      }
+      return item;
+    });
+
     return NextResponse.json({
       success: true,
-      data,
+      data: transformedData,
       pagination: {
         total: count,
         limit,

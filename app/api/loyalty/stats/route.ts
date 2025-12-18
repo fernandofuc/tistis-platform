@@ -253,7 +253,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         end_date,
-        leads (name, email),
+        leads (full_name, first_name, last_name, email, phone),
         loyalty_membership_plans (plan_name)
       `)
       .eq('program_id', context.program.id)
@@ -261,6 +261,18 @@ export async function GET(request: NextRequest) {
       .lte('end_date', sevenDaysFromNow.toISOString())
       .order('end_date')
       .limit(10);
+
+    // Transform expiring memberships to include computed name field
+    const transformedExpiringMemberships = (expiringMemberships || []).map((m: Record<string, unknown>) => {
+      const leads = m.leads as { full_name?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null;
+      return {
+        ...m,
+        leads: leads ? {
+          ...leads,
+          name: leads.full_name || `${leads.first_name || ''} ${leads.last_name || ''}`.trim() || 'Sin nombre',
+        } : null,
+      };
+    });
 
     return NextResponse.json({
       success: true,
@@ -280,7 +292,7 @@ export async function GET(request: NextRequest) {
         },
         redemptions: redemptionStats,
         top_rewards: rewardsWithCounts,
-        expiring_memberships: expiringMemberships || [],
+        expiring_memberships: transformedExpiringMemberships,
       }
     });
   } catch (error) {

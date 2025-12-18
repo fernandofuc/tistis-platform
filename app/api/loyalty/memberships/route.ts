@@ -102,7 +102,9 @@ export async function GET(request: NextRequest) {
         *,
         leads (
           id,
-          name,
+          full_name,
+          first_name,
+          last_name,
           email,
           phone
         ),
@@ -156,10 +158,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Transform memberships to include computed name field for frontend compatibility
+    const transformedMemberships = (memberships || []).map((m: Record<string, unknown>) => {
+      const leads = m.leads as { full_name?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null;
+      return {
+        ...m,
+        leads: leads ? {
+          ...leads,
+          name: leads.full_name || `${leads.first_name || ''} ${leads.last_name || ''}`.trim() || 'Sin nombre',
+        } : null,
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        memberships: memberships || [],
+        memberships: transformedMemberships,
         summary,
         pagination: {
           page,
@@ -282,7 +296,7 @@ export async function POST(request: NextRequest) {
       })
       .select(`
         *,
-        leads (name, email),
+        leads (full_name, first_name, last_name, email, phone),
         loyalty_membership_plans (plan_name)
       `)
       .single();
@@ -340,7 +354,7 @@ export async function PUT(request: NextRequest) {
       .eq('program_id', context.program.id)
       .select(`
         *,
-        leads (name, email),
+        leads (full_name, first_name, last_name, email, phone),
         loyalty_membership_plans (plan_name)
       `)
       .single();

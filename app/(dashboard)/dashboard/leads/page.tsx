@@ -250,11 +250,19 @@ export default function LeadsPage() {
     setCreateError(null);
 
     try {
+      // Parse full_name into first_name and last_name
+      const fullNameTrimmed = newLeadForm.full_name.trim();
+      const nameParts = fullNameTrimmed.split(' ').filter(Boolean);
+      const firstName = nameParts[0] || null;
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+
       const leadData = {
         tenant_id: tenant.id,
         branch_id: selectedBranchId || null,
         phone: newLeadForm.phone.trim(),
-        full_name: newLeadForm.full_name.trim() || null,
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullNameTrimmed || null,
         email: newLeadForm.email.trim() || null,
         source: newLeadForm.source,
         status: newLeadForm.status,

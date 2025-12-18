@@ -103,7 +103,9 @@ export async function GET(request: NextRequest) {
           lead_id,
           leads (
             id,
-            name,
+            full_name,
+            first_name,
+            last_name,
             email
           )
         ),
@@ -128,12 +130,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Error al obtener redenciones' }, { status: 500 });
     }
 
-    // Transform data to flatten leads from loyalty_balances
-    const transformedRedemptions = (redemptions || []).map((r: Record<string, unknown>) => ({
-      ...r,
-      leads: (r.loyalty_balances as Record<string, unknown>)?.leads || null,
-      loyalty_balances: undefined, // Remove nested structure
-    }));
+    // Transform data to flatten leads from loyalty_balances and add computed name
+    const transformedRedemptions = (redemptions || []).map((r: Record<string, unknown>) => {
+      const leadsData = (r.loyalty_balances as Record<string, unknown>)?.leads as {
+        id?: string;
+        full_name?: string;
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+      } | null;
+
+      return {
+        ...r,
+        leads: leadsData ? {
+          ...leadsData,
+          name: leadsData.full_name || `${leadsData.first_name || ''} ${leadsData.last_name || ''}`.trim() || 'Sin nombre',
+        } : null,
+        loyalty_balances: undefined, // Remove nested structure
+      };
+    });
 
     return NextResponse.json({
       success: true,
@@ -178,16 +193,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify lead belongs to this tenant
-    const { data: lead } = await supabase
+    const { data: leadData } = await supabase
       .from('leads')
-      .select('id, name')
+      .select('id, full_name, first_name, last_name')
       .eq('id', lead_id)
       .eq('tenant_id', context.userRole.tenant_id)
       .single();
 
-    if (!lead) {
+    if (!leadData) {
       return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
     }
+
+    // Compute lead name for response
+    const leadName = leadData.full_name || `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim() || 'Sin nombre';
 
     // Verify reward exists and is active
     const { data: reward } = await supabase
@@ -237,7 +255,7 @@ export async function POST(request: NextRequest) {
         redemption_id: result?.redemption_id,
         redemption_code: result?.redemption_code,
         reward_name: reward.reward_name,
-        patient_name: lead.name,
+        patient_name: leadName,
         tokens_used: reward.tokens_required,
       }
     });
