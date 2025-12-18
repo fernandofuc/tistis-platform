@@ -1199,27 +1199,22 @@ function ChannelSetupModal({
                   </div>
 
                   {/* Delay Presets */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {[
-                      { value: 0, label: 'Inmediato', desc: 'Responde al instante', icon: '⚡' },
-                      { value: 480, label: 'Natural', desc: '8 min primer mensaje', icon: '💬', recommended: true },
-                      { value: 900, label: 'Ocupado', desc: '15 min primer mensaje', icon: '⏰' },
-                      { value: -1, label: 'Personalizado', desc: 'Configura manualmente', icon: '⚙️' },
+                      { value: 0, label: 'Inmediato', desc: 'Al instante', icon: '⚡' },
+                      { value: 480, label: 'Natural', desc: '8 min', icon: '💬', recommended: true },
+                      { value: 900, label: 'Ocupado', desc: '15 min', icon: '⏰' },
                     ].map((preset) => {
-                      const isSelected = preset.value === -1
-                        ? formData.firstMessageDelay > 0 && ![0, 480, 900].includes(formData.firstMessageDelay)
-                        : formData.firstMessageDelay === preset.value;
+                      const isSelected = formData.firstMessageDelay === preset.value;
                       return (
                         <button
                           key={preset.value}
                           type="button"
                           onClick={() => {
-                            if (preset.value !== -1) {
-                              setFormData({ ...formData, firstMessageDelay: preset.value, subsequentMessageDelay: 0 });
-                            }
+                            setFormData({ ...formData, firstMessageDelay: preset.value, subsequentMessageDelay: 0 });
                           }}
                           className={cn(
-                            'relative p-3 rounded-xl border-2 text-left transition-all',
+                            'relative p-3 rounded-xl border-2 text-center transition-all',
                             isSelected
                               ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-orange-50'
                               : 'border-gray-200 hover:border-gray-300 bg-white'
@@ -1237,43 +1232,13 @@ function ChannelSetupModal({
                               </svg>
                             </div>
                           )}
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">{preset.icon}</span>
-                            <span className="font-medium text-gray-900 text-sm">{preset.label}</span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">{preset.desc}</p>
+                          <span className="text-lg block mb-1">{preset.icon}</span>
+                          <span className="font-medium text-gray-900 text-sm block">{preset.label}</span>
+                          <p className="text-xs text-gray-500">{preset.desc}</p>
                         </button>
                       );
                     })}
                   </div>
-
-                  {/* Custom delay input - show if custom is selected */}
-                  {formData.firstMessageDelay > 0 && ![0, 480, 900].includes(formData.firstMessageDelay) && (
-                    <div className="p-3 bg-gray-50 rounded-xl space-y-3 animate-in fade-in duration-200">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700">Primer mensaje (segundos)</label>
-                        <input
-                          type="number"
-                          value={formData.firstMessageDelay}
-                          onChange={(e) => setFormData({ ...formData, firstMessageDelay: Number(e.target.value) })}
-                          min={0}
-                          max={1800}
-                          className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700">Siguientes mensajes (seg)</label>
-                        <input
-                          type="number"
-                          value={formData.subsequentMessageDelay}
-                          onChange={(e) => setFormData({ ...formData, subsequentMessageDelay: Number(e.target.value) })}
-                          min={0}
-                          max={300}
-                          className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
