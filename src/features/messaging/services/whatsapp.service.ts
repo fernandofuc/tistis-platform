@@ -546,12 +546,16 @@ export async function processStatusUpdate(
 // ======================
 
 /**
- * Encola un trabajo de respuesta AI
+ * Encola un trabajo de respuesta AI con delay configurable por canal
  */
 export async function enqueueAIResponseJob(
-  payload: AIResponseJobPayload
+  payload: AIResponseJobPayload,
+  delaySeconds: number = 0
 ): Promise<string> {
   const supabase = createServerClient();
+
+  // Calculate scheduled time with delay
+  const scheduledFor = new Date(Date.now() + delaySeconds * 1000);
 
   const { data: job, error } = await supabase
     .from('job_queue')
@@ -562,7 +566,7 @@ export async function enqueueAIResponseJob(
       status: 'pending',
       priority: 1, // Alta prioridad para respuestas
       max_attempts: 3,
-      scheduled_for: new Date().toISOString(), // Ejecutar inmediatamente
+      scheduled_for: scheduledFor.toISOString(),
     })
     .select('id')
     .single();
@@ -572,7 +576,8 @@ export async function enqueueAIResponseJob(
     throw new Error(`Failed to enqueue job: ${error.message}`);
   }
 
-  console.log(`[WhatsApp] AI response job queued: ${job.id}`);
+  const delayInfo = delaySeconds > 0 ? ` (delay: ${delaySeconds}s)` : '';
+  console.log(`[WhatsApp] AI response job queued: ${job.id}${delayInfo}`);
   return job.id;
 }
 
@@ -745,6 +750,7 @@ export async function processWhatsAppWebhook(
 
 /**
  * Procesa un mensaje entrante individual
+ * Aplica delay de respuesta y configuración de personalidad por canal
  */
 async function processIncomingMessage(
   context: TenantContext,
@@ -785,14 +791,31 @@ async function processIncomingMessage(
 
   // 5. Encolar trabajo de AI si está habilitado
   if (context.ai_enabled) {
-    await enqueueAIResponseJob({
-      conversation_id: conversation.id,
-      message_id: messageId,
-      lead_id: lead.id,
-      tenant_id: context.tenant_id,
-      channel: 'whatsapp',
-      channel_connection_id: context.channel_connection.id,
-    });
+    const conn = context.channel_connection;
+
+    // Determine if this is the first message in conversation
+    const isFirstMessage = conversation.isNew;
+
+    // Get appropriate delay based on message position
+    const delaySeconds = isFirstMessage
+      ? (conn.first_message_delay_seconds || 0)
+      : (conn.subsequent_message_delay_seconds || 0);
+
+    await enqueueAIResponseJob(
+      {
+        conversation_id: conversation.id,
+        message_id: messageId,
+        lead_id: lead.id,
+        tenant_id: context.tenant_id,
+        channel: 'whatsapp',
+        channel_connection_id: conn.id,
+        // Pass per-channel AI configuration
+        ai_personality_override: conn.ai_personality_override || null,
+        custom_instructions_override: conn.custom_instructions_override || null,
+        is_first_message: isFirstMessage,
+      },
+      delaySeconds
+    );
   }
 
   console.log(

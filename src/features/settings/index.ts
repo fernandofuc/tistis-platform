@@ -5,10 +5,20 @@
 
 // Components
 export { ChannelConnections } from './components/ChannelConnections';
+export { ChannelAISettings } from './components/ChannelAISettings';
 export { AIConfiguration } from './components/AIConfiguration';
 export { BranchManagement } from './components/BranchManagement';
 export { SecuritySection } from './components/SecuritySection';
 export { PaymentsSection } from './components/PaymentsSection';
+
+// Hooks
+export { useChannels, useChannelAIConfig, useChannel } from './hooks/useChannels';
+
+// Types
+export * from './types/channels.types';
+
+// Services
+export * as channelsService from './services/channels.service';
 
 // Services
 export {

@@ -40,6 +40,11 @@ interface TenantContext {
   client_key: string;
   access_token: string;
   ai_enabled: boolean;
+  // Per-channel AI configuration
+  ai_personality_override?: string | null;
+  first_message_delay_seconds?: number;
+  subsequent_message_delay_seconds?: number;
+  custom_instructions_override?: string | null;
 }
 
 interface ProcessResult {
@@ -214,6 +219,11 @@ export async function getTikTokTenantContext(
     client_key: clientKey,
     access_token: connection.tiktok_access_token,
     ai_enabled: connection.ai_enabled,
+    // Per-channel AI configuration
+    ai_personality_override: connection.ai_personality_override || null,
+    first_message_delay_seconds: connection.first_message_delay_seconds || 0,
+    subsequent_message_delay_seconds: connection.subsequent_message_delay_seconds || 0,
+    custom_instructions_override: connection.custom_instructions_override || null,
   };
 }
 
@@ -428,12 +438,16 @@ export async function saveTikTokIncomingMessage(
 // ======================
 
 /**
- * Encola trabajo de respuesta AI
+ * Encola trabajo de respuesta AI con delay configurable por canal
  */
 export async function enqueueTikTokAIJob(
-  payload: AIResponseJobPayload
+  payload: AIResponseJobPayload,
+  delaySeconds: number = 0
 ): Promise<string> {
   const supabase = createServerClient();
+
+  // Calculate scheduled time with delay
+  const scheduledFor = new Date(Date.now() + delaySeconds * 1000);
 
   const { data: job, error } = await supabase
     .from('job_queue')
@@ -444,7 +458,7 @@ export async function enqueueTikTokAIJob(
       status: 'pending',
       priority: 1,
       max_attempts: 3,
-      scheduled_for: new Date().toISOString(),
+      scheduled_for: scheduledFor.toISOString(),
     })
     .select('id')
     .single();
@@ -454,6 +468,8 @@ export async function enqueueTikTokAIJob(
     throw new Error(`Failed to enqueue job: ${error.message}`);
   }
 
+  const delayInfo = delaySeconds > 0 ? ` (delay: ${delaySeconds}s)` : '';
+  console.log(`[TikTok] AI response job queued: ${job.id}${delayInfo}`);
   return job.id;
 }
 
@@ -610,14 +626,29 @@ export async function processTikTokWebhook(
 
     // Encolar trabajo de AI si está habilitado
     if (context.ai_enabled) {
-      await enqueueTikTokAIJob({
-        conversation_id: conversation.id,
-        message_id: messageId,
-        lead_id: lead.id,
-        tenant_id: context.tenant_id,
-        channel: 'tiktok',
-        channel_connection_id: context.channel_connection_id,
-      });
+      // Determine if this is the first message in conversation
+      const isFirstMessage = conversation.isNew;
+
+      // Get appropriate delay based on message position
+      const delaySeconds = isFirstMessage
+        ? (context.first_message_delay_seconds || 0)
+        : (context.subsequent_message_delay_seconds || 0);
+
+      await enqueueTikTokAIJob(
+        {
+          conversation_id: conversation.id,
+          message_id: messageId,
+          lead_id: lead.id,
+          tenant_id: context.tenant_id,
+          channel: 'tiktok',
+          channel_connection_id: context.channel_connection_id,
+          // Pass per-channel AI configuration
+          ai_personality_override: context.ai_personality_override as AIResponseJobPayload['ai_personality_override'],
+          custom_instructions_override: context.custom_instructions_override,
+          is_first_message: isFirstMessage,
+        },
+        delaySeconds
+      );
     }
 
     result.messages_processed++;
