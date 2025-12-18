@@ -84,8 +84,10 @@ export async function GET(request: NextRequest) {
     const supabase = createAuthenticatedClient(accessToken);
     const context = await getUserTenantAndProgram(supabase);
 
-    if (!context?.program) {
-      return NextResponse.json({ error: 'Programa no encontrado' }, { status: 404 });
+    // Allow listing leads even without a loyalty program
+    // The program is only needed for loyalty-specific operations like awarding tokens
+    if (!context?.userRole) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -99,6 +101,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     // Get leads with their loyalty balances and memberships
+    // Using left joins so we get ALL leads, not just those with loyalty data
     let query = supabase
       .from('leads')
       .select(`
@@ -108,6 +111,7 @@ export async function GET(request: NextRequest) {
         last_name,
         email,
         phone,
+        phone_normalized,
         last_interaction_at,
         created_at,
         loyalty_balances!left (
@@ -128,9 +132,18 @@ export async function GET(request: NextRequest) {
       `, { count: 'exact' })
       .eq('tenant_id', context.userRole.tenant_id);
 
-    // Apply search filter
+    // Apply search filter - search across multiple name fields and contact info
     if (search) {
-      query = query.or(`full_name.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+      // Build search conditions that handle NULL values properly
+      const searchTerm = `%${search}%`;
+      query = query.or([
+        `full_name.ilike.${searchTerm}`,
+        `first_name.ilike.${searchTerm}`,
+        `last_name.ilike.${searchTerm}`,
+        `email.ilike.${searchTerm}`,
+        `phone.ilike.${searchTerm}`,
+        `phone_normalized.ilike.${searchTerm}`,
+      ].join(','));
     }
 
     // Apply pagination
