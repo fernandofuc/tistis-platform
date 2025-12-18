@@ -1060,7 +1060,7 @@ function ChannelSetupModal({
         </div>
 
         {/* Content */}
-        <div className="p-8 overflow-y-auto max-h-[60vh]">
+        <div className="p-6 overflow-y-auto max-h-[55vh]">
           {/* Step 1: Account Info */}
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -1182,6 +1182,98 @@ function ChannelSetupModal({
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* Response Delay Settings */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 pt-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-tis-coral to-orange-500 flex items-center justify-center shadow-md shadow-tis-coral/20">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">Delay de Respuesta</p>
+                      <p className="text-xs text-gray-500">Simula tiempo de escritura natural</p>
+                    </div>
+                  </div>
+
+                  {/* Delay Presets */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { value: 0, label: 'Inmediato', desc: 'Responde al instante', icon: '⚡' },
+                      { value: 480, label: 'Natural', desc: '8 min primer mensaje', icon: '💬', recommended: true },
+                      { value: 900, label: 'Ocupado', desc: '15 min primer mensaje', icon: '⏰' },
+                      { value: -1, label: 'Personalizado', desc: 'Configura manualmente', icon: '⚙️' },
+                    ].map((preset) => {
+                      const isSelected = preset.value === -1
+                        ? formData.firstMessageDelay > 0 && ![0, 480, 900].includes(formData.firstMessageDelay)
+                        : formData.firstMessageDelay === preset.value;
+                      return (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          onClick={() => {
+                            if (preset.value !== -1) {
+                              setFormData({ ...formData, firstMessageDelay: preset.value, subsequentMessageDelay: 0 });
+                            }
+                          }}
+                          className={cn(
+                            'relative p-3 rounded-xl border-2 text-left transition-all',
+                            isSelected
+                              ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-orange-50'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
+                          )}
+                        >
+                          {preset.recommended && (
+                            <span className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-tis-coral text-white text-[10px] font-bold rounded-full">
+                              Rec
+                            </span>
+                          )}
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-tis-coral flex items-center justify-center">
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{preset.icon}</span>
+                            <span className="font-medium text-gray-900 text-sm">{preset.label}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{preset.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom delay input - show if custom is selected */}
+                  {formData.firstMessageDelay > 0 && ![0, 480, 900].includes(formData.firstMessageDelay) && (
+                    <div className="p-3 bg-gray-50 rounded-xl space-y-3 animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Primer mensaje (segundos)</label>
+                        <input
+                          type="number"
+                          value={formData.firstMessageDelay}
+                          onChange={(e) => setFormData({ ...formData, firstMessageDelay: Number(e.target.value) })}
+                          min={0}
+                          max={1800}
+                          className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Siguientes mensajes (seg)</label>
+                        <input
+                          type="number"
+                          value={formData.subsequentMessageDelay}
+                          onChange={(e) => setFormData({ ...formData, subsequentMessageDelay: Number(e.target.value) })}
+                          min={0}
+                          max={300}
+                          className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
