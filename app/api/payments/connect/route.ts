@@ -180,27 +180,37 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
+    console.log('[Payments API] POST /connect - Starting');
+
     // Validate Stripe configuration
     if (!process.env.STRIPE_SECRET_KEY) {
       console.error('[Payments API] STRIPE_SECRET_KEY not configured');
-      return NextResponse.json({ error: 'Stripe no configurado' }, { status: 500 });
+      return NextResponse.json({ error: 'Stripe no configurado en el servidor' }, { status: 500 });
     }
+    console.log('[Payments API] STRIPE_SECRET_KEY present:', process.env.STRIPE_SECRET_KEY.substring(0, 7) + '...');
 
     const accessToken = getAccessToken(request);
     if (!accessToken) {
+      console.error('[Payments API] No access token in request');
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
+    console.log('[Payments API] Access token present');
 
     const supabase = createAuthenticatedClient(accessToken);
     const context = await getUserTenant(supabase);
+    console.log('[Payments API] User context:', context ? { tenant_id: context.userRole?.tenant_id, hasPermission: context.hasPermission } : null);
 
     if (!context) {
+      console.error('[Payments API] User context not found');
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
     if (!context.hasPermission) {
+      console.error('[Payments API] User lacks permission');
       return NextResponse.json({ error: 'Sin permisos para gestionar pagos' }, { status: 403 });
     }
+
+    console.log('[Payments API] Querying stripe_connect_accounts for tenant:', context.userRole.tenant_id);
 
     // Get or create Stripe Connect account record
     let { data: account, error: selectError } = await supabase
@@ -208,6 +218,8 @@ export async function POST(request: NextRequest) {
       .select('*')
       .eq('tenant_id', context.userRole.tenant_id)
       .single();
+
+    console.log('[Payments API] Query result - account:', account?.id, 'error:', selectError?.code, selectError?.message);
 
     // Handle table not existing (migration not run)
     if (selectError && selectError.code === '42P01') {
@@ -220,21 +232,31 @@ export async function POST(request: NextRequest) {
     const stateExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
     if (!account) {
+      console.log('[Payments API] No existing account, creating new Stripe Express account...');
+
       // Create new Stripe Express account
-      const stripeAccount = await getStripeClient().accounts.create({
-        type: 'express',
-        country: 'MX',
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        business_type: 'individual',
-        metadata: {
-          tenant_id: context.userRole.tenant_id,
-        },
-      });
+      let stripeAccount;
+      try {
+        stripeAccount = await getStripeClient().accounts.create({
+          type: 'express',
+          country: 'MX',
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: 'individual',
+          metadata: {
+            tenant_id: context.userRole.tenant_id,
+          },
+        });
+        console.log('[Payments API] Stripe account created:', stripeAccount.id);
+      } catch (stripeCreateError) {
+        console.error('[Payments API] Failed to create Stripe account:', stripeCreateError);
+        throw stripeCreateError;
+      }
 
       // Save to database
+      console.log('[Payments API] Saving to database...');
       const { data: newAccount, error: insertError } = await supabase
         .from('stripe_connect_accounts')
         .insert({
@@ -251,8 +273,9 @@ export async function POST(request: NextRequest) {
 
       if (insertError) {
         console.error('[Payments API] Insert error:', insertError);
-        return NextResponse.json({ error: 'Error al crear cuenta' }, { status: 500 });
+        return NextResponse.json({ error: 'Error al crear cuenta: ' + insertError.message }, { status: 500 });
       }
+      console.log('[Payments API] Account saved:', newAccount?.id);
 
       account = newAccount;
     } else {
@@ -296,12 +319,22 @@ export async function POST(request: NextRequest) {
 
     // Create onboarding link
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const accountLink = await getStripeClient().accountLinks.create({
-      account: account.stripe_account_id,
-      refresh_url: `${baseUrl}/dashboard/settings?tab=payments&refresh=true`,
-      return_url: `${baseUrl}/dashboard/settings?tab=payments&success=true`,
-      type: 'account_onboarding',
-    });
+    console.log('[Payments API] Creating account link with base URL:', baseUrl);
+    console.log('[Payments API] Using Stripe account ID:', account.stripe_account_id);
+
+    let accountLink;
+    try {
+      accountLink = await getStripeClient().accountLinks.create({
+        account: account.stripe_account_id,
+        refresh_url: `${baseUrl}/dashboard/settings?tab=payments&refresh=true`,
+        return_url: `${baseUrl}/dashboard/settings?tab=payments&success=true`,
+        type: 'account_onboarding',
+      });
+      console.log('[Payments API] Account link created successfully');
+    } catch (linkError) {
+      console.error('[Payments API] Failed to create account link:', linkError);
+      throw linkError;
+    }
 
     return NextResponse.json({
       success: true,
@@ -312,10 +345,21 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Payments API] POST error:', error);
+    console.error('[Payments API] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
 
     // Handle specific Stripe errors
     if (error instanceof Stripe.errors.StripeError) {
-      console.error('[Payments API] Stripe error:', error.message);
+      console.error('[Payments API] Stripe error type:', error.type);
+      console.error('[Payments API] Stripe error code:', error.code);
+      console.error('[Payments API] Stripe error message:', error.message);
+
+      // Common Stripe Connect errors
+      if (error.message.includes('Connect') || error.code === 'account_invalid') {
+        return NextResponse.json({
+          error: 'Stripe Connect no está habilitado en tu cuenta de Stripe. Actívalo en dashboard.stripe.com/settings/connect'
+        }, { status: 500 });
+      }
+
       return NextResponse.json({ error: `Error de Stripe: ${error.message}` }, { status: 500 });
     }
 
