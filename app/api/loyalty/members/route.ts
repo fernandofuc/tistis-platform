@@ -138,9 +138,10 @@ export async function GET(request: NextRequest) {
         ? member.loyalty_balances[0]
         : member.loyalty_balances;
 
-      const activeMembership = Array.isArray(member.loyalty_memberships)
-        ? member.loyalty_memberships.find((m: { status: string }) => m.status === 'active')
-        : member.loyalty_memberships?.status === 'active' ? member.loyalty_memberships : null;
+      const memberships = member.loyalty_memberships as Array<{ id: string; status: string; start_date: string; end_date: string; loyalty_membership_plans: { plan_name: string } | null }> | { id: string; status: string; start_date: string; end_date: string; loyalty_membership_plans: { plan_name: string } | null } | null;
+      const activeMembership = Array.isArray(memberships)
+        ? memberships.find((m) => m.status === 'active')
+        : memberships?.status === 'active' ? memberships : null;
 
       return {
         id: member.id,

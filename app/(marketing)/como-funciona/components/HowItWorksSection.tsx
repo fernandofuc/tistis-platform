@@ -36,7 +36,7 @@ const steps = [
 ];
 
 // Hook para detectar cuando un elemento está visible
-function useInView(options = {}) {
+function useInView() {
   const ref = useRef<HTMLDivElement>(null);
   const [isInView, setIsInView] = useState(false);
 
@@ -45,7 +45,7 @@ function useInView(options = {}) {
       if (entry.isIntersecting) {
         setIsInView(true);
       }
-    }, { threshold: 0.2, ...options });
+    }, { threshold: 0.2 });
 
     if (ref.current) {
       observer.observe(ref.current);
