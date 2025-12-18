@@ -132,7 +132,7 @@ function PersonalityCard({ personality, selected, onSelect }: PersonalityCardPro
           </div>
           <p className="text-sm text-gray-600 mt-0.5">{meta.description}</p>
           <div className="mt-2 p-3 bg-gray-100 rounded-xl">
-            <p className="text-sm text-gray-700 italic">"{meta.example}"</p>
+            <p className="text-sm text-gray-700 italic">&ldquo;{meta.example}&rdquo;</p>
           </div>
         </div>
       </div>
