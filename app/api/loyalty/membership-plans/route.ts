@@ -40,11 +40,33 @@ async function getUserTenantAndProgram(supabase: ReturnType<typeof createAuthent
 
   if (!userRole) return null;
 
-  const { data: program } = await supabase
+  // Get or create loyalty program
+  let { data: program } = await supabase
     .from('loyalty_programs')
     .select('id')
     .eq('tenant_id', userRole.tenant_id)
     .single();
+
+  // If no program exists, create a default one
+  if (!program) {
+    const { data: newProgram, error: createError } = await supabase
+      .from('loyalty_programs')
+      .insert({
+        tenant_id: userRole.tenant_id,
+        program_name: 'Programa de Lealtad',
+        tokens_name: 'Punto',
+        tokens_name_plural: 'Puntos',
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      console.error('[Membership Plans API] Error creating program:', createError);
+      return { userRole, program: null };
+    }
+
+    program = newProgram;
+  }
 
   return { userRole, program };
 }
