@@ -269,6 +269,11 @@ export async function processExpiringMemberships(): Promise<{
     if (!programs) return results;
 
     for (const program of programs) {
+      // Handle tenant from nested relation (can be array or object)
+      const tenantsRaw = program.tenants as unknown;
+      const programTenant = (Array.isArray(tenantsRaw) ? tenantsRaw[0] : tenantsRaw) as { id: string; name: string; vertical: string } | null;
+      if (!programTenant?.id) continue;
+
       const reminderDate = new Date();
       reminderDate.setDate(reminderDate.getDate() + program.membership_reminder_days);
       const reminderDateStr = reminderDate.toISOString().split('T')[0];
@@ -299,11 +304,18 @@ export async function processExpiringMemberships(): Promise<{
       for (const membership of memberships) {
         results.processed++;
 
+        // Extract lead from nested relation (can be array or object)
+        const leadsRaw = membership.leads as unknown;
+        const lead = Array.isArray(leadsRaw) ? leadsRaw[0] : leadsRaw;
+        const typedLead = lead as { id: string; name: string; phone: string; email?: string } | null;
+
+        if (!typedLead?.id) continue;
+
         // Check if already reminded
         const { data: existingLog } = await supabase
           .from('loyalty_reactivation_logs')
           .select('id')
-          .eq('lead_id', (membership.leads as { id: string })?.id)
+          .eq('lead_id', typedLead.id)
           .eq('message_type', 'membership_reminder')
           .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
           .single();
@@ -320,19 +332,18 @@ export async function processExpiringMemberships(): Promise<{
             .eq('is_active', true)
             .single();
 
-          const tenant = program.tenants as { id: string; name: string; vertical: string };
-          const lead = membership.leads as { id: string; name: string; phone: string; email?: string };
-          const plan = membership.loyalty_membership_plans as { plan_name: string };
+          const plansRaw = membership.loyalty_membership_plans as unknown;
+          const plan = (Array.isArray(plansRaw) ? plansRaw[0] : plansRaw) as { plan_name: string } | null;
 
           const message = await generateMembershipReminderMessage({
-            patient: { name: lead.name, phone: lead.phone, email: lead.email },
+            patient: { name: typedLead.name, phone: typedLead.phone, email: typedLead.email },
             program: {
               name: program.program_name,
               tokens_name: program.tokens_name,
               tokens_name_plural: program.tokens_name_plural,
             },
-            tenant: { name: tenant.name, vertical: tenant.vertical },
-            plan_name: plan.plan_name,
+            tenant: { name: programTenant.name, vertical: programTenant.vertical },
+            plan_name: plan?.plan_name || 'Plan',
             end_date: membership.end_date,
             days_remaining: program.membership_reminder_days,
           }, template?.whatsapp_template || template?.message_template);
@@ -340,7 +351,7 @@ export async function processExpiringMemberships(): Promise<{
           // Log the message (actual sending would be done by WhatsApp service)
           await supabase.from('loyalty_reactivation_logs').insert({
             program_id: program.id,
-            lead_id: lead.id,
+            lead_id: typedLead.id,
             message_type: 'membership_reminder',
             message_sent: message,
             channel: 'whatsapp',
@@ -348,7 +359,7 @@ export async function processExpiringMemberships(): Promise<{
           });
 
           results.sent++;
-          console.log(`[Loyalty] Membership reminder queued for ${lead.name}`);
+          console.log(`[Loyalty] Membership reminder queued for ${typedLead.name}`);
         } catch (err) {
           results.errors++;
           console.error('[Loyalty] Error processing membership reminder:', err);
@@ -398,7 +409,10 @@ export async function processInactivePatients(): Promise<{
       const inactiveDate = new Date();
       inactiveDate.setMonth(inactiveDate.getMonth() - program.reactivation_months);
 
-      const tenant = program.tenants as { id: string; name: string; vertical: string };
+      // Handle tenant from nested relation (can be array or object)
+      const tenantsRaw = program.tenants as unknown;
+      const tenant = (Array.isArray(tenantsRaw) ? tenantsRaw[0] : tenantsRaw) as { id: string; name: string; vertical: string } | null;
+      if (!tenant?.id) continue;
 
       // Get inactive leads that haven't been contacted for reactivation
       const { data: inactiveLeads } = await supabase
