@@ -66,7 +66,7 @@ const TEMPLATE_CONFIG: Record<TemplateType, { name: string; description: string;
 // ======================
 interface ProgramSettingsProps {
   program: LoyaltyProgram;
-  onUpdate: (updates: Partial<LoyaltyProgram>) => Promise<void>;
+  onUpdate: (updates: Partial<LoyaltyProgram>) => Promise<void | LoyaltyProgram>;
 }
 
 function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
