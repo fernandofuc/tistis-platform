@@ -512,57 +512,112 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
   const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_annual;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="text-xl font-bold text-gray-900">Asignar Paciente a Membresía</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Plan: <span className="font-medium text-tis-coral">{plan.plan_name}</span>
-          </p>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+        {/* Header with decorative gradient */}
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-tis-coral/10 via-orange-50 to-amber-50" />
+          <div className="absolute top-0 right-0 w-40 h-40 bg-tis-coral/5 rounded-full -translate-y-20 translate-x-20" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-100/30 rounded-full translate-y-16 -translate-x-16" />
+
+          <div className="relative px-6 py-5 border-b border-gray-100/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-tis-coral to-orange-500 flex items-center justify-center shadow-lg shadow-tis-coral/20">
+                  <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Asignar Paciente</h2>
+                  <p className="text-sm text-gray-500 flex items-center gap-2 mt-0.5">
+                    Plan:
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-tis-coral/10 text-tis-coral">
+                      {plan.plan_name}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-10 h-10 rounded-xl bg-white/80 hover:bg-white shadow-sm border border-gray-200/50 flex items-center justify-center transition-all hover:scale-105"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-600 text-sm">
-              {error}
+            <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-red-50 to-rose-50 border border-red-200/50 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-red-500/20">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-sm text-red-700 font-medium">{error}</p>
             </div>
           )}
 
-          {/* Patient Search */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Buscar Paciente</label>
+          {/* Patient Search - Enhanced */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <span className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center text-xs">🔍</span>
+              Buscar Paciente
+            </label>
             {selectedLead ? (
-              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
-                <div>
-                  <p className="font-medium text-gray-900">{selectedLead.name}</p>
-                  <p className="text-sm text-gray-500">{selectedLead.email} • {selectedLead.phone}</p>
+              <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 animate-in fade-in duration-200">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-green-200/20 rounded-full -translate-y-8 translate-x-8" />
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20">
+                      <span className="text-white font-bold text-sm">
+                        {selectedLead.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{selectedLead.name}</p>
+                      <p className="text-xs text-gray-500">{selectedLead.email} • {selectedLead.phone}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLead(null)}
+                    className="w-8 h-8 rounded-lg bg-white shadow-sm border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  >
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedLead(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
               </div>
             ) : (
               <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Escribe nombre, email o teléfono..."
-                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
-                />
-                {loadingLeads && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-tis-coral"></div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Escribe nombre, email o teléfono..."
+                    className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white pl-11"
+                  />
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                    {loadingLeads ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-tis-coral border-t-transparent"></div>
+                    ) : (
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    )}
                   </div>
-                )}
+                </div>
                 {leads.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {leads.map((lead) => (
+                  <div className="absolute z-10 w-full mt-2 bg-white border-2 border-gray-100 rounded-2xl shadow-xl max-h-52 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                    {leads.map((lead, index) => (
                       <button
                         key={lead.id}
                         type="button"
@@ -571,10 +626,21 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
                           setSearchQuery('');
                           setLeads([]);
                         }}
-                        className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors"
+                        className={cn(
+                          'w-full px-4 py-3 text-left hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all flex items-center gap-3',
+                          index === 0 && 'rounded-t-xl',
+                          index === leads.length - 1 && 'rounded-b-xl'
+                        )}
                       >
-                        <p className="font-medium text-gray-900">{lead.name}</p>
-                        <p className="text-sm text-gray-500">{lead.email}</p>
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
+                          <span className="text-gray-600 font-semibold text-sm">
+                            {lead.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{lead.name}</p>
+                          <p className="text-xs text-gray-500">{lead.email}</p>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -583,23 +649,36 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
             )}
           </div>
 
-          {/* Billing Cycle */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Ciclo de Facturación</label>
+          {/* Billing Cycle - Enhanced */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <span className="w-5 h-5 rounded-md bg-purple-100 flex items-center justify-center text-xs">📅</span>
+              Ciclo de Facturación
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setBillingCycle('monthly')}
                 className={cn(
-                  'px-4 py-3 rounded-lg border-2 text-left transition-all',
+                  'relative overflow-hidden px-4 py-4 rounded-2xl border-2 text-left transition-all',
                   billingCycle === 'monthly'
-                    ? 'border-tis-coral bg-tis-coral/5'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-orange-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
                 )}
               >
-                <p className="font-medium text-gray-900">Mensual</p>
+                {billingCycle === 'monthly' && (
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-tis-coral flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">📆</span>
+                  <p className="font-semibold text-gray-900">Mensual</p>
+                </div>
                 {plan.price_monthly && (
-                  <p className="text-sm text-gray-500">${plan.price_monthly}/mes</p>
+                  <p className="text-lg font-bold text-tis-coral">${plan.price_monthly}<span className="text-sm font-normal text-gray-500">/mes</span></p>
                 )}
               </button>
               <button
@@ -607,16 +686,26 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
                 onClick={() => setBillingCycle('annual')}
                 disabled={!plan.price_annual}
                 className={cn(
-                  'px-4 py-3 rounded-lg border-2 text-left transition-all',
+                  'relative overflow-hidden px-4 py-4 rounded-2xl border-2 text-left transition-all',
                   billingCycle === 'annual'
-                    ? 'border-tis-coral bg-tis-coral/5'
-                    : 'border-gray-200 hover:border-gray-300',
+                    ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-orange-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white',
                   !plan.price_annual && 'opacity-50 cursor-not-allowed'
                 )}
               >
-                <p className="font-medium text-gray-900">Anual</p>
+                {billingCycle === 'annual' && plan.price_annual && (
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-tis-coral flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">🗓️</span>
+                  <p className="font-semibold text-gray-900">Anual</p>
+                </div>
                 {plan.price_annual ? (
-                  <p className="text-sm text-gray-500">${plan.price_annual}/año</p>
+                  <p className="text-lg font-bold text-tis-coral">${plan.price_annual}<span className="text-sm font-normal text-gray-500">/año</span></p>
                 ) : (
                   <p className="text-sm text-gray-400">No disponible</p>
                 )}
@@ -624,69 +713,105 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
             </div>
           </div>
 
-          {/* Payment Method */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
+          {/* Payment Method - Enhanced */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <span className="w-5 h-5 rounded-md bg-green-100 flex items-center justify-center text-xs">💳</span>
+              Método de Pago
+            </label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
+              className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white appearance-none cursor-pointer"
             >
-              <option value="manual">Registro Manual (Pago en efectivo/transferencia)</option>
-              <option value="cash">Efectivo</option>
-              <option value="transfer">Transferencia Bancaria</option>
-              <option value="stripe">Stripe (próximamente)</option>
+              <option value="manual">💵 Registro Manual (Efectivo/Transferencia)</option>
+              <option value="cash">💰 Efectivo</option>
+              <option value="transfer">🏦 Transferencia Bancaria</option>
+              <option value="stripe">💳 Stripe (próximamente)</option>
             </select>
           </div>
 
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Notas (opcional)</label>
+          {/* Notes - Enhanced */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <span className="w-5 h-5 rounded-md bg-amber-100 flex items-center justify-center text-xs">📝</span>
+              Notas
+              <span className="text-gray-400 text-xs font-normal">(opcional)</span>
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notas adicionales..."
-              className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
+              placeholder="Notas adicionales sobre esta membresía..."
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white resize-none"
               rows={2}
             />
           </div>
 
-          {/* Summary */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-2">Resumen</h4>
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Plan:</span>
-                <span className="font-medium">{plan.plan_name}</span>
+          {/* Summary - Enhanced */}
+          <div className="relative overflow-hidden p-5 bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-200">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gray-100/50 rounded-full -translate-y-10 translate-x-10" />
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900">Resumen de Membresía</h4>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Ciclo:</span>
-                <span className="font-medium">{billingCycle === 'monthly' ? 'Mensual' : 'Anual'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Precio:</span>
-                <span className="font-medium text-tis-coral">${price || 0} MXN</span>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-gray-500 text-sm">Plan</span>
+                  <span className="font-semibold text-gray-900">{plan.plan_name}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-gray-500 text-sm">Ciclo</span>
+                  <span className="font-medium text-gray-700">{billingCycle === 'monthly' ? 'Mensual' : 'Anual'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 text-sm">Total a cobrar</span>
+                  <span className="text-xl font-bold text-tis-coral">${price || 0} MXN</span>
+                </div>
               </div>
             </div>
           </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !selectedLead}
-              className="flex-1 px-4 py-2.5 bg-tis-coral text-white rounded-lg hover:bg-tis-coral/90 transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Creando...' : 'Crear Membresía'}
-            </button>
-          </div>
         </form>
+
+        {/* Footer - Enhanced */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-white flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-all"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            onClick={handleSubmit}
+            disabled={saving || !selectedLead}
+            className={cn(
+              'flex-1 px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2',
+              saving || !selectedLead
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-tis-coral to-orange-500 text-white hover:from-tis-coral-dark hover:to-orange-600 shadow-lg shadow-tis-coral/20'
+            )}
+          >
+            {saving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Creando...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Crear Membresía</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

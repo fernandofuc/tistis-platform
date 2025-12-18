@@ -963,50 +963,99 @@ function ChannelSetupModal({
     }
   };
 
+  // Step labels for progress indicator
+  const stepLabels = [
+    { icon: '👤', label: 'Cuenta' },
+    { icon: '🔑', label: 'Credenciales' },
+    { icon: '🔗', label: 'Token' },
+    { icon: '✅', label: 'Completado' },
+  ];
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-        {/* Header */}
-        <div className="px-8 py-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div
-                className={cn(
-                  'w-14 h-14 rounded-2xl flex items-center justify-center shadow-md',
-                  metadata.bgColor,
-                  metadata.textColor
-                )}
-              >
-                <ChannelIcon channel={channel} className="w-7 h-7" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+        {/* Header with decorative gradient */}
+        <div className="relative overflow-hidden">
+          {/* Decorative background */}
+          <div className={cn(
+            'absolute inset-0 opacity-10',
+            channel === 'whatsapp' && 'bg-gradient-to-br from-green-400 to-green-600',
+            channel === 'instagram' && 'bg-gradient-to-br from-purple-400 via-pink-500 to-orange-400',
+            channel === 'facebook' && 'bg-gradient-to-br from-blue-400 to-blue-600',
+            channel === 'tiktok' && 'bg-gradient-to-br from-gray-800 to-gray-900'
+          )} />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24" />
+
+          <div className="relative px-8 py-6 border-b border-gray-100/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div
+                  className={cn(
+                    'w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ring-4 ring-white/50',
+                    metadata.bgColor,
+                    metadata.textColor
+                  )}
+                >
+                  <ChannelIcon channel={channel} className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {isEditing ? 'Editar' : 'Configurar'} {metadata.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 flex items-center gap-2">
+                    <span className={cn(
+                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                      accountNumber === 1 ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                    )}>
+                      {accountNumber === 1 ? '● Principal' : '● Secundario'}
+                    </span>
+                    <span className="text-gray-300">•</span>
+                    <span>Paso {step} de {totalSteps}</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">
-                  {isEditing ? 'Editar' : 'Configurar'} {metadata.name}
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Cuenta #{accountNumber} • Paso {step} de {totalSteps}
-                </p>
+              <button
+                onClick={onClose}
+                className="w-10 h-10 rounded-xl bg-white/80 hover:bg-white shadow-sm border border-gray-200/50 flex items-center justify-center transition-all hover:scale-105"
+              >
+                <XIcon className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Enhanced Progress bar with step labels */}
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-3">
+                {stepLabels.map((stepInfo, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'flex items-center gap-1.5 transition-all duration-300',
+                      i + 1 === step ? 'opacity-100 scale-105' : i + 1 < step ? 'opacity-70' : 'opacity-40'
+                    )}
+                  >
+                    <span className="text-sm">{stepInfo.icon}</span>
+                    <span className={cn(
+                      'text-xs font-medium hidden sm:inline',
+                      i + 1 === step ? 'text-gray-900' : 'text-gray-500'
+                    )}>
+                      {stepInfo.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map(s => (
+                  <div
+                    key={s}
+                    className={cn(
+                      'h-2 rounded-full flex-1 transition-all duration-500',
+                      s < step ? 'bg-tis-coral' : s === step ? 'bg-gradient-to-r from-tis-coral to-orange-400' : 'bg-gray-200'
+                    )}
+                  />
+                ))}
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-            >
-              <XIcon className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
-
-          {/* Progress bar */}
-          <div className="mt-6 flex gap-2">
-            {[1, 2, 3, 4].map(s => (
-              <div
-                key={s}
-                className={cn(
-                  'h-1.5 rounded-full flex-1 transition-colors',
-                  s <= step ? 'bg-tis-coral' : 'bg-gray-200'
-                )}
-              />
-            ))}
           </div>
         </div>
 
@@ -1014,77 +1063,123 @@ function ChannelSetupModal({
         <div className="p-8 overflow-y-auto max-h-[60vh]">
           {/* Step 1: Account Info */}
           {step === 1 && (
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Información de la Cuenta</h4>
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Step Header */}
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <UserIcon className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900">Información de la Cuenta</h4>
+                  <p className="text-sm text-gray-500">Personaliza cómo identificarás esta conexión</p>
+                </div>
+              </div>
 
-                {/* Account Name */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nombre de la cuenta
-                    </label>
+              {/* Account Name - Enhanced Card */}
+              <div className="space-y-5">
+                <div className="group">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                    <span className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center text-xs">📝</span>
+                    Nombre de la cuenta
+                  </label>
+                  <div className="relative">
                     <input
                       type="text"
                       value={formData.accountName}
                       onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
                       placeholder={`Ej: ${metadata.shortName} de mi clínica`}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
+                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white group-hover:border-gray-300"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Este nombre te ayudará a identificar esta cuenta
-                    </p>
-                  </div>
-
-                  {/* Branch Selector */}
-                  {branches.length > 1 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Sucursal (opcional)
-                      </label>
-                      <select
-                        value={formData.branchId}
-                        onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
-                      >
-                        <option value="">Todas las sucursales</option>
-                        {branches.map((branch) => (
-                          <option key={branch.id} value={branch.id}>
-                            {branch.name} ({branch.city}) {branch.is_headquarters ? '• Principal' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Personal Brand Toggle */}
-                  <div className="p-4 bg-purple-50 rounded-xl">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                          <UserIcon className="w-5 h-5 text-purple-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">Marca Personal</p>
-                          <p className="text-sm text-gray-600">
-                            Esta cuenta es para mi perfil personal
-                          </p>
-                        </div>
+                    {formData.accountName && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <CheckCircleIcon className="w-5 h-5 text-green-500" />
                       </div>
-                      <button
-                        onClick={() => setFormData({ ...formData, isPersonalBrand: !formData.isPersonalBrand })}
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Este nombre te ayudará a identificar esta cuenta en tu dashboard
+                  </p>
+                </div>
+
+                {/* Branch Selector - Enhanced */}
+                {branches.length > 1 && (
+                  <div className="group">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <span className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center text-xs">🏢</span>
+                      Sucursal (opcional)
+                    </label>
+                    <select
+                      value={formData.branchId}
+                      onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white appearance-none cursor-pointer group-hover:border-gray-300"
+                    >
+                      <option value="">Todas las sucursales</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.city}) {branch.is_headquarters ? '★ Principal' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Personal Brand Toggle - Enhanced Card */}
+                <div className={cn(
+                  'relative p-5 rounded-2xl border-2 transition-all cursor-pointer overflow-hidden',
+                  formData.isPersonalBrand
+                    ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200'
+                    : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                )}
+                  onClick={() => setFormData({ ...formData, isPersonalBrand: !formData.isPersonalBrand })}
+                >
+                  {/* Decorative elements when active */}
+                  {formData.isPersonalBrand && (
+                    <>
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-purple-200/30 rounded-full -translate-y-12 translate-x-12" />
+                      <div className="absolute bottom-0 left-0 w-16 h-16 bg-pink-200/30 rounded-full translate-y-8 -translate-x-8" />
+                    </>
+                  )}
+                  <div className="relative flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-sm',
+                        formData.isPersonalBrand
+                          ? 'bg-gradient-to-br from-purple-500 to-pink-500 shadow-purple-500/20'
+                          : 'bg-gray-200'
+                      )}>
+                        <UserIcon className={cn(
+                          'w-6 h-6 transition-colors',
+                          formData.isPersonalBrand ? 'text-white' : 'text-gray-500'
+                        )} />
+                      </div>
+                      <div>
+                        <p className={cn(
+                          'font-semibold transition-colors',
+                          formData.isPersonalBrand ? 'text-purple-900' : 'text-gray-700'
+                        )}>
+                          Marca Personal
+                        </p>
+                        <p className={cn(
+                          'text-sm transition-colors',
+                          formData.isPersonalBrand ? 'text-purple-600' : 'text-gray-500'
+                        )}>
+                          Esta cuenta es para mi perfil personal
+                        </p>
+                      </div>
+                    </div>
+                    <div className={cn(
+                      'relative w-14 h-8 rounded-full transition-all duration-300',
+                      formData.isPersonalBrand ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-300'
+                    )}>
+                      <span
                         className={cn(
-                          'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-                          formData.isPersonalBrand ? 'bg-purple-600' : 'bg-gray-200'
+                          'absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300',
+                          formData.isPersonalBrand ? 'translate-x-6' : 'translate-x-0'
                         )}
-                      >
-                        <span
-                          className={cn(
-                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200',
-                            formData.isPersonalBrand ? 'translate-x-5' : 'translate-x-0'
-                          )}
-                        />
-                      </button>
+                      />
                     </div>
                   </div>
                 </div>
@@ -1094,87 +1189,148 @@ function ChannelSetupModal({
 
           {/* Step 2: API Credentials - Part 1 */}
           {step === 2 && (
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-1">Credenciales de API</h4>
-                <p className="text-sm text-gray-500 mb-4">
-                  Ingresa los datos de tu {metadata.name}
-                </p>
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Step Header */}
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900">Credenciales de API</h4>
+                  <p className="text-sm text-gray-500">Ingresa los datos de tu {metadata.name}</p>
+                </div>
+              </div>
 
-                {/* Channel-specific fields */}
-                {channel === 'whatsapp' && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-green-50 rounded-xl text-sm text-green-800">
-                      <strong>¿Dónde encuentro estos datos?</strong>
-                      <p className="mt-1">Meta Business Suite → WhatsApp → Configuración de API</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Phone Number ID *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.phoneNumberId}
-                        onChange={(e) => setFormData({ ...formData, phoneNumberId: e.target.value })}
-                        placeholder="123456789012345"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Business Account ID *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.businessAccountId}
-                        onChange={(e) => setFormData({ ...formData, businessAccountId: e.target.value })}
-                        placeholder="123456789012345"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
-                      />
+              {/* Channel-specific fields */}
+              {channel === 'whatsapp' && (
+                <div className="space-y-5">
+                  {/* Info Card - Enhanced */}
+                  <div className="relative overflow-hidden p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200/50">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-green-200/20 rounded-full -translate-y-10 translate-x-10" />
+                    <div className="relative flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-green-500/20">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-green-900">¿Dónde encuentro estos datos?</p>
+                        <p className="text-sm text-green-700 mt-1">Meta Business Suite → WhatsApp → Configuración de API</p>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {channel === 'instagram' && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-pink-50 rounded-xl text-sm text-pink-800">
-                      <strong>Requisitos:</strong>
-                      <ul className="list-disc list-inside mt-1 space-y-0.5">
-                        <li>Cuenta Instagram Business/Creator</li>
-                        <li>Vinculada a una página de Facebook</li>
-                      </ul>
+                  {/* Input Fields */}
+                  <div className="grid gap-4">
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-green-100 flex items-center justify-center text-xs">📱</span>
+                        Phone Number ID
+                        <span className="text-tis-coral">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.phoneNumberId}
+                          onChange={(e) => setFormData({ ...formData, phoneNumberId: e.target.value })}
+                          placeholder="123456789012345"
+                          className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
+                        />
+                        {formData.phoneNumberId && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Instagram Page ID *
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-green-100 flex items-center justify-center text-xs">🏢</span>
+                        Business Account ID
+                        <span className="text-tis-coral">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.businessAccountId}
+                          onChange={(e) => setFormData({ ...formData, businessAccountId: e.target.value })}
+                          placeholder="123456789012345"
+                          className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
+                        />
+                        {formData.businessAccountId && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {channel === 'instagram' && (
+                <div className="space-y-5">
+                  {/* Info Card - Enhanced */}
+                  <div className="relative overflow-hidden p-4 bg-gradient-to-br from-pink-50 via-purple-50 to-orange-50 rounded-2xl border border-pink-200/50">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-pink-200/30 to-purple-200/30 rounded-full -translate-y-10 translate-x-10" />
+                    <div className="relative flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-pink-500/20">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-pink-900">Requisitos</p>
+                        <ul className="text-sm text-pink-700 mt-1 space-y-0.5">
+                          <li className="flex items-center gap-1">
+                            <span className="text-green-500">✓</span> Cuenta Instagram Business/Creator
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <span className="text-green-500">✓</span> Vinculada a una página de Facebook
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Input Fields */}
+                  <div className="grid gap-4">
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-pink-100 flex items-center justify-center text-xs">📄</span>
+                        Instagram Page ID
+                        <span className="text-tis-coral">*</span>
                       </label>
                       <input
                         type="text"
                         value={formData.igPageId}
                         onChange={(e) => setFormData({ ...formData, igPageId: e.target.value })}
                         placeholder="17841400..."
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
+                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Instagram Account ID *
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-pink-100 flex items-center justify-center text-xs">🆔</span>
+                        Instagram Account ID
+                        <span className="text-tis-coral">*</span>
                       </label>
                       <input
                         type="text"
                         value={formData.igAccountId}
                         onChange={(e) => setFormData({ ...formData, igAccountId: e.target.value })}
                         placeholder="17841400..."
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
+                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-pink-100 flex items-center justify-center text-xs">@</span>
                         Username de Instagram
                       </label>
                       <input
@@ -1182,34 +1338,51 @@ function ChannelSetupModal({
                         value={formData.igUsername}
                         onChange={(e) => setFormData({ ...formData, igUsername: e.target.value })}
                         placeholder="@tu_cuenta"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
+                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white group-hover:border-gray-300"
                       />
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {channel === 'facebook' && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-blue-50 rounded-xl text-sm text-blue-800">
-                      <strong>¿Dónde encuentro estos datos?</strong>
-                      <p className="mt-1">Meta Developers → Tu App → Messenger → Settings</p>
+              {channel === 'facebook' && (
+                <div className="space-y-5">
+                  {/* Info Card - Enhanced */}
+                  <div className="relative overflow-hidden p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/50">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200/20 rounded-full -translate-y-10 translate-x-10" />
+                    <div className="relative flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-blue-900">¿Dónde encuentro estos datos?</p>
+                        <p className="text-sm text-blue-700 mt-1">Meta Developers → Tu App → Messenger → Settings</p>
+                      </div>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Page ID *
+                  {/* Input Fields */}
+                  <div className="grid gap-4">
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center text-xs">📄</span>
+                        Page ID
+                        <span className="text-tis-coral">*</span>
                       </label>
                       <input
                         type="text"
                         value={formData.fbPageId}
                         onChange={(e) => setFormData({ ...formData, fbPageId: e.target.value })}
                         placeholder="123456789012345"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
+                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center text-xs">🏷️</span>
                         Nombre de la Página
                       </label>
                       <input
@@ -1217,68 +1390,100 @@ function ChannelSetupModal({
                         value={formData.fbPageName}
                         onChange={(e) => setFormData({ ...formData, fbPageName: e.target.value })}
                         placeholder="Mi Negocio"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
+                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white group-hover:border-gray-300"
                       />
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {channel === 'tiktok' && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-gray-100 rounded-xl text-sm text-gray-800">
-                      <strong>Requisitos:</strong>
-                      <ul className="list-disc list-inside mt-1 space-y-0.5">
-                        <li>Cuenta TikTok Business verificada</li>
-                        <li>App en TikTok for Developers</li>
-                      </ul>
+              {channel === 'tiktok' && (
+                <div className="space-y-5">
+                  {/* Info Card - Enhanced */}
+                  <div className="relative overflow-hidden p-4 bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-gray-700">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -translate-y-10 translate-x-10" />
+                    <div className="relative flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-lg">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white">Requisitos</p>
+                        <ul className="text-sm text-gray-300 mt-1 space-y-0.5">
+                          <li className="flex items-center gap-1">
+                            <span className="text-cyan-400">✓</span> Cuenta TikTok Business verificada
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <span className="text-cyan-400">✓</span> App en TikTok for Developers
+                          </li>
+                        </ul>
+                      </div>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Client Key *
+                  {/* Input Fields */}
+                  <div className="grid gap-4">
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-gray-900 flex items-center justify-center text-xs text-white">🔑</span>
+                        Client Key
+                        <span className="text-tis-coral">*</span>
                       </label>
                       <input
                         type="text"
                         value={formData.ttClientKey}
                         onChange={(e) => setFormData({ ...formData, ttClientKey: e.target.value })}
                         placeholder="awxxxxxxxx"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
+                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Client Secret *
+                    <div className="group">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                        <span className="w-5 h-5 rounded-md bg-gray-900 flex items-center justify-center text-xs text-white">🔐</span>
+                        Client Secret
+                        <span className="text-tis-coral">*</span>
                       </label>
                       <input
                         type="password"
                         value={formData.ttClientSecret}
                         onChange={(e) => setFormData({ ...formData, ttClientSecret: e.target.value })}
                         placeholder="••••••••"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
+                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
                       />
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Step 3: API Credentials - Part 2 (Token + Test) */}
           {step === 3 && (
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-1">Access Token</h4>
-                <p className="text-sm text-gray-500 mb-4">
-                  Ingresa tu token de acceso y prueba la conexión
-                </p>
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Step Header */}
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900">Access Token y Conexión</h4>
+                  <p className="text-sm text-gray-500">Ingresa tu token y verifica la conexión</p>
+                </div>
+              </div>
 
-                <div className="space-y-4">
-                  {/* Access Token Input */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Access Token *
-                    </label>
+              <div className="space-y-5">
+                {/* Access Token Input - Enhanced */}
+                <div className="group">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                    <span className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center text-xs">🎫</span>
+                    Access Token
+                    <span className="text-tis-coral">*</span>
+                  </label>
+                  <div className="relative">
                     <input
                       type="password"
                       value={
@@ -1295,194 +1500,297 @@ function ChannelSetupModal({
                         if (channel === 'tiktok') setFormData({ ...formData, ttAccessToken: token });
                       }}
                       placeholder={channel === 'tiktok' ? 'act.xxxxx' : 'EAA...'}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
+                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Tu token se almacena de forma segura y encriptada
+                  </p>
+                </div>
+
+                {/* Webhook Secret (WhatsApp only) - Enhanced */}
+                {channel === 'whatsapp' && (
+                  <div className="group">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <span className="w-5 h-5 rounded-md bg-amber-100 flex items-center justify-center text-xs">🔒</span>
+                      App Secret
+                      <span className="text-gray-400 text-xs font-normal">(para verificar webhooks)</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.webhookSecret}
+                      onChange={(e) => setFormData({ ...formData, webhookSecret: e.target.value })}
+                      placeholder="abc123..."
+                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-tis-coral/10 focus:border-tis-coral transition-all bg-white font-mono text-sm group-hover:border-gray-300"
                     />
                   </div>
+                )}
 
-                  {/* Webhook Secret (WhatsApp only) */}
-                  {channel === 'whatsapp' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        App Secret (para verificar webhooks)
-                      </label>
-                      <input
-                        type="password"
-                        value={formData.webhookSecret}
-                        onChange={(e) => setFormData({ ...formData, webhookSecret: e.target.value })}
-                        placeholder="abc123..."
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors font-mono"
-                      />
-                    </div>
+                {/* Test Connection Button - Enhanced */}
+                <button
+                  onClick={handleTestConnection}
+                  disabled={testing || !canProceed()}
+                  className={cn(
+                    'w-full flex items-center justify-center gap-3 px-4 py-4 rounded-2xl font-semibold transition-all relative overflow-hidden group',
+                    testing
+                      ? 'bg-gray-100 text-gray-500'
+                      : canProceed()
+                        ? 'bg-gradient-to-r from-gray-100 to-gray-50 hover:from-gray-200 hover:to-gray-100 text-gray-700 border-2 border-gray-200 hover:border-gray-300'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   )}
+                >
+                  {testing ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                      <span>Verificando conexión...</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                      <span>Probar Conexión</span>
+                    </>
+                  )}
+                </button>
 
-                  {/* Test Connection Button */}
-                  <button
-                    onClick={handleTestConnection}
-                    disabled={testing || !canProceed()}
+                {/* Test Result - Enhanced */}
+                {testResult && (
+                  <div
                     className={cn(
-                      'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-colors',
-                      testing ? 'bg-gray-100 text-gray-500' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      'relative overflow-hidden p-5 rounded-2xl flex items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300',
+                      testResult.success
+                        ? 'bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200/50'
+                        : 'bg-gradient-to-br from-red-50 to-rose-50 border border-red-200/50'
                     )}
                   >
-                    {testing ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                        Probando conexión...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircleIcon className="w-5 h-5" />
-                        Probar Conexión
-                      </>
-                    )}
-                  </button>
-
-                  {/* Test Result */}
-                  {testResult && (
-                    <div
-                      className={cn(
-                        'p-4 rounded-xl flex items-start gap-3',
-                        testResult.success ? 'bg-green-50' : 'bg-red-50'
-                      )}
-                    >
+                    {/* Decorative element */}
+                    <div className={cn(
+                      'absolute top-0 right-0 w-24 h-24 rounded-full -translate-y-12 translate-x-12',
+                      testResult.success ? 'bg-green-200/20' : 'bg-red-200/20'
+                    )} />
+                    <div className={cn(
+                      'relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg',
+                      testResult.success
+                        ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/20'
+                        : 'bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/20'
+                    )}>
                       {testResult.success ? (
-                        <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <CheckCircleIcon className="w-5 h-5 text-white" />
                       ) : (
-                        <XCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <XCircleIcon className="w-5 h-5 text-white" />
                       )}
-                      <span className={cn('text-sm', testResult.success ? 'text-green-800' : 'text-red-800')}>
+                    </div>
+                    <div className="relative">
+                      <p className={cn(
+                        'font-semibold',
+                        testResult.success ? 'text-green-900' : 'text-red-900'
+                      )}>
+                        {testResult.success ? '¡Conexión exitosa!' : 'Error de conexión'}
+                      </p>
+                      <p className={cn(
+                        'text-sm mt-0.5',
+                        testResult.success ? 'text-green-700' : 'text-red-700'
+                      )}>
                         {testResult.message}
-                      </span>
+                      </p>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {saveError && (
-                    <div className="p-4 bg-red-50 rounded-xl flex items-start gap-3">
-                      <XCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-red-800">{saveError}</span>
+                {saveError && (
+                  <div className="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-red-50 to-rose-50 border border-red-200/50 flex items-start gap-4 animate-in fade-in duration-300">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-red-500/20">
+                      <XCircleIcon className="w-5 h-5 text-white" />
                     </div>
-                  )}
-                </div>
+                    <div>
+                      <p className="font-semibold text-red-900">Error al guardar</p>
+                      <p className="text-sm text-red-700 mt-0.5">{saveError}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* Step 4: Success + Webhook Info */}
           {step === 4 && (
-            <div className="space-y-6">
-              {/* Success Message */}
-              <div className="text-center py-4">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircleIcon className="w-8 h-8 text-green-600" />
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Success Message - Enhanced */}
+              <div className="relative text-center py-6 overflow-hidden">
+                {/* Decorative background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-3xl" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-green-200/20 rounded-full -translate-y-16 translate-x-16" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-200/20 rounded-full translate-y-12 -translate-x-12" />
+
+                <div className="relative">
+                  {/* Animated success icon */}
+                  <div className="w-20 h-20 mx-auto mb-4 relative">
+                    <div className="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl shadow-lg shadow-green-500/30 animate-pulse" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <CheckCircleIcon className="w-10 h-10 text-white" />
+                    </div>
+                  </div>
+                  <h4 className="text-2xl font-bold text-gray-900 mb-1">
+                    {testResult?.success ? '¡Conexión Exitosa!' : '¡Configuración Guardada!'}
+                  </h4>
+                  <p className="text-gray-600">
+                    {testResult?.success
+                      ? 'Tu cuenta está lista para recibir mensajes'
+                      : 'Solo queda un paso: configurar el webhook'}
+                  </p>
                 </div>
-                <h4 className="text-xl font-bold text-gray-900">
-                  {testResult?.success ? '¡Conexión Exitosa!' : 'Configuración Guardada'}
-                </h4>
-                <p className="text-gray-600 mt-1">
-                  {testResult?.success
-                    ? 'Tu cuenta está lista para recibir mensajes'
-                    : 'Ahora configura el webhook en la plataforma'}
-                </p>
               </div>
 
-              {/* Webhook URL */}
+              {/* Webhook URL - Enhanced */}
               <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <span className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center text-xs">🔗</span>
                   URL del Webhook
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={webhookUrl}
-                    className="flex-1 px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-sm font-mono"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      readOnly
+                      value={webhookUrl}
+                      className="w-full px-4 py-3.5 bg-gradient-to-r from-gray-50 to-white border-2 border-gray-200 rounded-xl text-sm font-mono pr-12"
+                    />
+                  </div>
                   <button
                     onClick={() => handleCopy(webhookUrl, 'webhook')}
-                    className="px-4 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                    className={cn(
+                      'px-4 py-3.5 rounded-xl transition-all flex items-center gap-2 font-medium',
+                      copied === 'webhook'
+                        ? 'bg-green-100 text-green-700 border-2 border-green-200'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-200'
+                    )}
                   >
                     {copied === 'webhook' ? (
-                      <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                      <>
+                        <CheckCircleIcon className="w-5 h-5" />
+                        <span className="hidden sm:inline">Copiado</span>
+                      </>
                     ) : (
-                      <CopyIcon className="w-5 h-5 text-gray-600" />
+                      <>
+                        <CopyIcon className="w-5 h-5" />
+                        <span className="hidden sm:inline">Copiar</span>
+                      </>
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* Verify Token */}
+              {/* Verify Token - Enhanced */}
               <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <span className="w-5 h-5 rounded-md bg-purple-100 flex items-center justify-center text-xs">🔑</span>
                   Verify Token
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={getVerifyToken()}
-                    className="flex-1 px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-sm font-mono"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getVerifyToken()}
+                      className="w-full px-4 py-3.5 bg-gradient-to-r from-gray-50 to-white border-2 border-gray-200 rounded-xl text-sm font-mono pr-12"
+                    />
+                  </div>
                   <button
                     onClick={() => handleCopy(getVerifyToken(), 'verify')}
-                    className="px-4 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                    className={cn(
+                      'px-4 py-3.5 rounded-xl transition-all flex items-center gap-2 font-medium',
+                      copied === 'verify'
+                        ? 'bg-green-100 text-green-700 border-2 border-green-200'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-200'
+                    )}
                   >
                     {copied === 'verify' ? (
-                      <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                      <>
+                        <CheckCircleIcon className="w-5 h-5" />
+                        <span className="hidden sm:inline">Copiado</span>
+                      </>
                     ) : (
-                      <CopyIcon className="w-5 h-5 text-gray-600" />
+                      <>
+                        <CopyIcon className="w-5 h-5" />
+                        <span className="hidden sm:inline">Copiar</span>
+                      </>
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* Instructions */}
-              <div className="p-4 bg-amber-50 rounded-xl">
-                <h5 className="font-medium text-amber-900 mb-2">Siguiente paso:</h5>
-                <ol className="list-decimal list-inside text-sm text-amber-800 space-y-1">
-                  {channel === 'whatsapp' && (
-                    <>
-                      <li>Ve a Meta Developers → Tu App → WhatsApp → Configuración</li>
-                      <li>En Webhooks, pega la URL de arriba</li>
-                      <li>Usa el Verify Token mostrado</li>
-                      <li>Suscribe a: messages, message_deliveries</li>
-                    </>
-                  )}
-                  {channel === 'instagram' && (
-                    <>
-                      <li>Ve a Meta Developers → Tu App → Webhooks</li>
-                      <li>Selecciona &quot;Instagram&quot;</li>
-                      <li>Configura la URL y el Verify Token</li>
-                      <li>Suscribe a: messages, messaging_postbacks</li>
-                    </>
-                  )}
-                  {channel === 'facebook' && (
-                    <>
-                      <li>Ve a Meta Developers → Tu App → Messenger → Settings</li>
-                      <li>En Webhooks, configura la URL y el Verify Token</li>
-                      <li>Suscribe a: messages, messaging_postbacks</li>
-                      <li>Vincula tu página a la app</li>
-                    </>
-                  )}
-                  {channel === 'tiktok' && (
-                    <>
-                      <li>Ve a TikTok for Developers → Tu App</li>
-                      <li>Configura el Webhook URL y Verify Token</li>
-                      <li>Habilita eventos de mensajes directos</li>
-                    </>
-                  )}
-                </ol>
+              {/* Instructions - Enhanced */}
+              <div className="relative overflow-hidden p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200/50">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-amber-200/20 rounded-full -translate-y-12 translate-x-12" />
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h5 className="font-semibold text-amber-900">Siguiente paso en {metadata.name}</h5>
+                  </div>
+                  <ol className="space-y-2 text-sm text-amber-800">
+                    {channel === 'whatsapp' && (
+                      <>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span><span>Ve a Meta Developers → Tu App → WhatsApp → Configuración</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span><span>En Webhooks, pega la URL de arriba</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Usa el Verify Token mostrado</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span><span>Suscribe a: messages, message_deliveries</span></li>
+                      </>
+                    )}
+                    {channel === 'instagram' && (
+                      <>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span><span>Ve a Meta Developers → Tu App → Webhooks</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span><span>Selecciona &quot;Instagram&quot;</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Configura la URL y el Verify Token</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span><span>Suscribe a: messages, messaging_postbacks</span></li>
+                      </>
+                    )}
+                    {channel === 'facebook' && (
+                      <>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span><span>Ve a Meta Developers → Tu App → Messenger → Settings</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span><span>En Webhooks, configura la URL y el Verify Token</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Suscribe a: messages, messaging_postbacks</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span><span>Vincula tu página a la app</span></li>
+                      </>
+                    )}
+                    {channel === 'tiktok' && (
+                      <>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span><span>Ve a TikTok for Developers → Tu App</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span><span>Configura el Webhook URL y Verify Token</span></li>
+                        <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Habilita eventos de mensajes directos</span></li>
+                      </>
+                    )}
+                  </ol>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-8 py-6 border-t border-gray-100 bg-gray-50/50 flex justify-between">
+        {/* Footer - Enhanced */}
+        <div className="px-8 py-5 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
           {step > 1 && step < 4 ? (
             <button
               onClick={() => setStep(step - 1)}
-              className="px-6 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+              className="flex items-center gap-2 px-5 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-all"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
               Anterior
             </button>
           ) : (
@@ -1494,13 +1802,16 @@ function ChannelSetupModal({
               onClick={() => setStep(step + 1)}
               disabled={!canProceed()}
               className={cn(
-                'px-6 py-3 rounded-xl font-medium transition-colors',
+                'flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all shadow-lg',
                 canProceed()
-                  ? 'bg-tis-coral text-white hover:bg-tis-coral-dark'
-                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-tis-coral to-orange-500 text-white hover:from-tis-coral-dark hover:to-orange-600 shadow-tis-coral/20'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
               )}
             >
               Siguiente
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           )}
 
@@ -1509,14 +1820,17 @@ function ChannelSetupModal({
               onClick={handleSubmit}
               disabled={saving || !canProceed()}
               className={cn(
-                'px-6 py-3 rounded-xl font-medium transition-colors flex items-center gap-2',
+                'flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all shadow-lg',
                 saving || !canProceed()
-                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'bg-tis-coral text-white hover:bg-tis-coral-dark'
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
+                  : 'bg-gradient-to-r from-tis-coral to-orange-500 text-white hover:from-tis-coral-dark hover:to-orange-600 shadow-tis-coral/20'
               )}
             >
               {saving && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-              Guardar y Continuar
+              <span>Guardar y Continuar</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           )}
 
@@ -1528,9 +1842,10 @@ function ChannelSetupModal({
                 }
                 onClose();
               }}
-              className="px-6 py-3 bg-tis-coral text-white rounded-xl font-medium hover:bg-tis-coral-dark transition-colors"
+              className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg shadow-green-500/20"
             >
-              Finalizar
+              <CheckCircleIcon className="w-5 h-5" />
+              Finalizar Configuración
             </button>
           )}
         </div>
