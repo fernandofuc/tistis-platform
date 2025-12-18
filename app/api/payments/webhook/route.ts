@@ -350,9 +350,3 @@ async function handlePayoutEvent(payout: Stripe.Payout, eventType: string, conne
     });
 }
 
-// Disable body parsing for webhook signature verification
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
