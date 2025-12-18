@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/shared/utils';
 import { useRewards, useLoyaltyProgram } from '../hooks/useLoyalty';
 import * as loyaltyService from '../services/loyalty.service';
@@ -341,11 +341,7 @@ function RedemptionsList() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'used'>('pending');
 
-  useEffect(() => {
-    loadRedemptions();
-  }, [filter]);
-
-  const loadRedemptions = async () => {
+  const loadRedemptions = useCallback(async () => {
     setLoading(true);
     try {
       const data = await loyaltyService.getRedemptions({
@@ -358,7 +354,11 @@ function RedemptionsList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadRedemptions();
+  }, [loadRedemptions]);
 
   const handleMarkUsed = async (redemption: Redemption) => {
     await loyaltyService.markRedemptionUsed(redemption.id);
@@ -580,7 +580,7 @@ export function RewardsManagement() {
           <div className="bg-white rounded-2xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Eliminar Recompensa</h3>
             <p className="text-gray-500 mb-6">
-              ¿Estás seguro de eliminar "{deleteConfirm.reward_name}"? Esta acción no se puede deshacer.
+              ¿Estás seguro de eliminar &ldquo;{deleteConfirm.reward_name}&rdquo;? Esta acción no se puede deshacer.
             </p>
             <div className="flex gap-3">
               <button

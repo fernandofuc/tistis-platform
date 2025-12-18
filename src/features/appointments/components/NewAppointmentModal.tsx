@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Modal, Button, Badge, Avatar } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { useBranch } from '@/src/shared/stores';
@@ -169,36 +169,8 @@ export function NewAppointmentModal({
   const [leadSearch, setLeadSearch] = useState('');
   const [showLeadDropdown, setShowLeadDropdown] = useState(false);
 
-  // Fetch all data when modal opens
-  useEffect(() => {
-    if (isOpen && tenant?.id) {
-      fetchAllData();
-    }
-  }, [isOpen, tenant?.id]);
-
-  // Set preselected values
-  useEffect(() => {
-    if (isOpen) {
-      if (preselectedDate) {
-        setScheduledDate(preselectedDate.toISOString().split('T')[0]);
-      } else {
-        setScheduledDate(new Date().toISOString().split('T')[0]);
-      }
-
-      if (preselectedLeadId) {
-        setSelectedLeadId(preselectedLeadId);
-      }
-
-      // Set default branch from global store
-      if (selectedBranchId) {
-        setSelectedBranchIdLocal(selectedBranchId);
-      } else if (authBranches.length > 0) {
-        setSelectedBranchIdLocal(authBranches[0].id);
-      }
-    }
-  }, [isOpen, preselectedDate, preselectedLeadId, selectedBranchId, authBranches]);
-
-  async function fetchAllData() {
+  // Fetch all data function
+  const fetchAllData = useCallback(async () => {
     if (!tenant?.id) return;
 
     setLoadingData(true);
@@ -241,7 +213,36 @@ export function NewAppointmentModal({
     } finally {
       setLoadingData(false);
     }
-  }
+  }, [tenant?.id]);
+
+  // Fetch all data when modal opens
+  useEffect(() => {
+    if (isOpen && tenant?.id) {
+      fetchAllData();
+    }
+  }, [isOpen, tenant?.id, fetchAllData]);
+
+  // Set preselected values
+  useEffect(() => {
+    if (isOpen) {
+      if (preselectedDate) {
+        setScheduledDate(preselectedDate.toISOString().split('T')[0]);
+      } else {
+        setScheduledDate(new Date().toISOString().split('T')[0]);
+      }
+
+      if (preselectedLeadId) {
+        setSelectedLeadId(preselectedLeadId);
+      }
+
+      // Set default branch from global store
+      if (selectedBranchId) {
+        setSelectedBranchIdLocal(selectedBranchId);
+      } else if (authBranches.length > 0) {
+        setSelectedBranchIdLocal(authBranches[0].id);
+      }
+    }
+  }, [isOpen, preselectedDate, preselectedLeadId, selectedBranchId, authBranches]);
 
   // Filter leads by search
   const filteredLeads = useMemo(() => {

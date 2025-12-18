@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/shared/utils';
 import { useMembershipPlans } from '../hooks/useLoyalty';
 import * as loyaltyService from '../services/loyalty.service';
@@ -334,11 +334,7 @@ function MembershipsList() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'expired'>('all');
 
-  useEffect(() => {
-    loadMemberships();
-  }, [filter]);
-
-  const loadMemberships = async () => {
+  const loadMemberships = useCallback(async () => {
     setLoading(true);
     try {
       const data = await loyaltyService.getMemberships({
@@ -351,7 +347,11 @@ function MembershipsList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadMemberships();
+  }, [loadMemberships]);
 
   const handleCancel = async (id: string) => {
     if (confirm('¿Cancelar esta membresía?')) {
@@ -579,7 +579,7 @@ export function MembershipsManagement() {
           <div className="bg-white rounded-2xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Eliminar Plan</h3>
             <p className="text-gray-500 mb-6">
-              ¿Estás seguro de eliminar "{deleteConfirm.plan_name}"? Los pacientes con este plan mantendrán su membresía actual.
+              ¿Estás seguro de eliminar &ldquo;{deleteConfirm.plan_name}&rdquo;? Los pacientes con este plan mantendrán su membresía actual.
             </p>
             <div className="flex gap-3">
               <button

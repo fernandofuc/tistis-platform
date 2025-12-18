@@ -429,7 +429,7 @@ export function TokensManagement() {
           <div className="bg-white rounded-2xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Eliminar Regla</h3>
             <p className="text-gray-500 mb-6">
-              ¿Estás seguro de eliminar "{deleteConfirm.action_name}"? Esta acción no se puede deshacer.
+              ¿Estás seguro de eliminar &ldquo;{deleteConfirm.action_name}&rdquo;? Esta acción no se puede deshacer.
             </p>
             <div className="flex gap-3">
               <button
