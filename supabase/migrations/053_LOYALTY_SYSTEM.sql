@@ -451,20 +451,8 @@ ALTER TABLE loyalty_redemptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loyalty_reactivation_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loyalty_message_templates ENABLE ROW LEVEL SECURITY;
 
--- Helper function to get user's tenant_id
-CREATE OR REPLACE FUNCTION get_user_tenant_id()
-RETURNS UUID AS $$
-DECLARE
-    v_tenant_id UUID;
-BEGIN
-    SELECT tenant_id INTO v_tenant_id
-    FROM user_roles
-    WHERE user_id = auth.uid()
-    LIMIT 1;
-
-    RETURN v_tenant_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+-- NOTE: get_user_tenant_id() function already exists from previous migrations (011, 031-033)
+-- We reuse the existing function for RLS policies
 
 -- Loyalty Programs Policies
 CREATE POLICY "Users can view their tenant loyalty program"
