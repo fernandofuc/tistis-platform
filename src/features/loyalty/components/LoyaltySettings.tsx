@@ -332,10 +332,9 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
     tokens_name: program.tokens_name,
     tokens_name_plural: program.tokens_name_plural,
     tokens_per_currency: program.tokens_per_currency,
-    currency_per_token: program.currency_per_token,
-    tokens_expiry_months: program.tokens_expiry_months || '',
-    membership_reminder_days: program.membership_reminder_days,
-    reactivation_months: program.reactivation_months,
+    tokens_currency_threshold: program.tokens_currency_threshold,
+    tokens_expiry_days: program.tokens_expiry_days || '',
+    reactivation_days_inactive: program.reactivation_days_inactive,
     is_active: program.is_active,
   });
   const [saving, setSaving] = useState(false);
@@ -349,10 +348,9 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
         tokens_name: formData.tokens_name,
         tokens_name_plural: formData.tokens_name_plural,
         tokens_per_currency: formData.tokens_per_currency,
-        currency_per_token: formData.currency_per_token,
-        tokens_expiry_months: formData.tokens_expiry_months ? Number(formData.tokens_expiry_months) : null,
-        membership_reminder_days: formData.membership_reminder_days,
-        reactivation_months: formData.reactivation_months,
+        tokens_currency_threshold: formData.tokens_currency_threshold,
+        tokens_expiry_days: formData.tokens_expiry_days ? Number(formData.tokens_expiry_days) : 365,
+        reactivation_days_inactive: formData.reactivation_days_inactive,
         is_active: formData.is_active,
       });
       setSaved(true);
@@ -438,69 +436,57 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              {formData.tokens_name_plural} por cada $100
+              {formData.tokens_name_plural} por cada $
             </label>
             <input
               type="number"
               value={formData.tokens_per_currency}
               onChange={(e) => setFormData({ ...formData, tokens_per_currency: Number(e.target.value) })}
-              min={1}
-              className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
-            />
-            <p className="text-xs text-gray-500 mt-1">Paciente gasta $500 = gana {formData.tokens_per_currency * 5} {formData.tokens_name_plural.toLowerCase()}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Valor de 1 {formData.tokens_name} ($)</label>
-            <input
-              type="number"
-              value={formData.currency_per_token}
-              onChange={(e) => setFormData({ ...formData, currency_per_token: Number(e.target.value) })}
               min={0.01}
               step={0.01}
               className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
             />
-            <p className="text-xs text-gray-500 mt-1">Para calcular el valor de las recompensas</p>
+            <p className="text-xs text-gray-500 mt-1">Ratio de conversión de gasto a tokens</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Expiración (meses)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Mínimo para ganar tokens ($)</label>
             <input
               type="number"
-              value={formData.tokens_expiry_months}
-              onChange={(e) => setFormData({ ...formData, tokens_expiry_months: e.target.value })}
-              placeholder="Sin expiración"
-              min={1}
+              value={formData.tokens_currency_threshold}
+              onChange={(e) => setFormData({ ...formData, tokens_currency_threshold: Number(e.target.value) })}
+              min={0}
               className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
             />
-            <p className="text-xs text-gray-500 mt-1">Dejar vacío = no expiran</p>
+            <p className="text-xs text-gray-500 mt-1">Gasto mínimo para acumular tokens</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Expiración (días)</label>
+            <input
+              type="number"
+              value={formData.tokens_expiry_days}
+              onChange={(e) => setFormData({ ...formData, tokens_expiry_days: e.target.value })}
+              placeholder="365"
+              min={0}
+              className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
+            />
+            <p className="text-xs text-gray-500 mt-1">0 = no expiran</p>
           </div>
         </div>
       </div>
 
       <div className="border-t border-gray-100 pt-6">
-        <h4 className="font-medium text-gray-900 mb-4">Automatización de Mensajes</h4>
+        <h4 className="font-medium text-gray-900 mb-4">Reactivación de Pacientes</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Recordatorio de membresía (días antes)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Días de inactividad para reactivación</label>
             <input
               type="number"
-              value={formData.membership_reminder_days}
-              onChange={(e) => setFormData({ ...formData, membership_reminder_days: Number(e.target.value) })}
-              min={1}
-              max={30}
+              value={formData.reactivation_days_inactive}
+              onChange={(e) => setFormData({ ...formData, reactivation_days_inactive: Number(e.target.value) })}
+              min={30}
               className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
             />
-            <p className="text-xs text-gray-500 mt-1">Enviar recordatorio X días antes de que expire</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reactivación (meses de inactividad)</label>
-            <input
-              type="number"
-              value={formData.reactivation_months}
-              onChange={(e) => setFormData({ ...formData, reactivation_months: Number(e.target.value) })}
-              min={1}
-              className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
-            />
-            <p className="text-xs text-gray-500 mt-1">Paciente inactivo por X meses = enviar mensaje de reactivación</p>
+            <p className="text-xs text-gray-500 mt-1">Días sin visita para considerar paciente inactivo</p>
           </div>
         </div>
       </div>

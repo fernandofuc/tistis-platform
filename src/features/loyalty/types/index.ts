@@ -10,14 +10,26 @@ export interface LoyaltyProgram {
   id: string;
   tenant_id: string;
   program_name: string;
+  program_description?: string | null;
+  is_active: boolean;
+  // Feature toggles
+  tokens_enabled: boolean;
+  membership_enabled: boolean;
+  // Token configuration
   tokens_name: string;
   tokens_name_plural: string;
+  tokens_icon?: string;
   tokens_per_currency: number;
-  currency_per_token: number;
-  tokens_expiry_months: number | null;
-  membership_reminder_days: number;
-  reactivation_months: number;
-  is_active: boolean;
+  tokens_currency_threshold: number;
+  tokens_expiry_days: number;
+  // Reactivation configuration
+  reactivation_enabled: boolean;
+  reactivation_days_inactive: number;
+  reactivation_message_template?: string;
+  reactivation_offer_type?: string;
+  reactivation_offer_value?: number;
+  reactivation_max_attempts: number;
+  // Timestamps
   created_at: string;
   updated_at: string;
 }

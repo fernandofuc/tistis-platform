@@ -48,7 +48,8 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 // ======================
 export async function getProgram(): Promise<LoyaltyProgram> {
   const result = await fetchWithAuth('/api/loyalty');
-  return result.data;
+  // API returns { data: { program, tokenRules, ... } }
+  return result.data.program;
 }
 
 export async function updateProgram(updates: Partial<LoyaltyProgram>): Promise<LoyaltyProgram> {
