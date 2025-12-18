@@ -151,7 +151,8 @@ export async function POST(request: NextRequest) {
       price_monthly,
       price_annual,
       benefits,
-      discount_percentage,
+      discount_percentage, // Frontend sends this name
+      discount_percent,    // Database column name
       tokens_multiplier,
       priority_booking,
       is_active,
@@ -171,6 +172,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Build insert data with only valid fields
+    // Note: Database column is 'discount_percent', frontend may send 'discount_percentage'
+    const discountValue = discount_percent ?? discount_percentage ?? 0;
+
     const insertData: Record<string, unknown> = {
       program_id: context.program.id,
       plan_name: plan_name.trim(),
@@ -178,7 +182,7 @@ export async function POST(request: NextRequest) {
       price_monthly: monthlyPrice,
       price_annual: annualPrice,
       benefits: Array.isArray(benefits) ? benefits.filter((b: string) => b && b.trim()) : [],
-      discount_percentage: Number(discount_percentage) || 0,
+      discount_percent: Number(discountValue) || 0, // Correct column name
       tokens_multiplier: Number(tokens_multiplier) || 1.0,
       priority_booking: Boolean(priority_booking),
       is_active: is_active !== false,

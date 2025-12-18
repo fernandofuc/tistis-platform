@@ -92,7 +92,8 @@ export interface MembershipPlan {
   price_monthly: number | null;
   price_annual: number | null;
   benefits: string[];
-  discount_percentage: number;
+  discount_percent: number; // Database column name
+  discount_percentage?: number; // Alias for frontend compatibility
   included_services: string[];
   tokens_multiplier: number;
   priority_booking: boolean;

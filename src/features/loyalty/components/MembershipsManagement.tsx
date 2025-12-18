@@ -115,9 +115,9 @@ function PlanCard({ plan, onEdit, onToggle, onDelete }: PlanCardProps) {
 
       {/* Extra info */}
       <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-100">
-        {plan.discount_percentage > 0 && (
+        {(plan.discount_percent > 0 || (plan.discount_percentage && plan.discount_percentage > 0)) && (
           <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-            {plan.discount_percentage}% descuento
+            {plan.discount_percent || plan.discount_percentage}% descuento
           </span>
         )}
         {plan.tokens_multiplier > 1 && (
@@ -151,7 +151,7 @@ function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
     price_monthly: plan?.price_monthly || '',
     price_annual: plan?.price_annual || '',
     benefits: plan?.benefits?.join('\n') || '',
-    discount_percentage: plan?.discount_percentage || 0,
+    discount_percentage: plan?.discount_percent || plan?.discount_percentage || 0, // Support both names
     tokens_multiplier: plan?.tokens_multiplier || 1,
     priority_booking: plan?.priority_booking || false,
     is_active: plan?.is_active ?? true,
