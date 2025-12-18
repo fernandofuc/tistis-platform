@@ -3,6 +3,7 @@
 // API client for loyalty system
 // =====================================================
 
+import { supabase } from '@/src/shared/lib/supabase';
 import type {
   LoyaltyProgram,
   TokenRule,
@@ -20,15 +21,15 @@ import type {
 // HELPER
 // ======================
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  const token = typeof window !== 'undefined'
-    ? localStorage.getItem('supabase.auth.token')
-    : null;
+  // Get access token from Supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+  const accessToken = session?.access_token;
 
   const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${JSON.parse(token)?.access_token}` } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...options.headers,
     },
   });
