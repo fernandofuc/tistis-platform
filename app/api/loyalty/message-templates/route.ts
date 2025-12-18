@@ -138,7 +138,8 @@ export async function GET(request: NextRequest) {
       subject: t.subject,
       message_template: t.template_content, // Alias for frontend
       template_content: t.template_content,
-      whatsapp_template: t.template_content, // Use same content
+      // Use separate whatsapp_template column if exists, otherwise fallback to template_content
+      whatsapp_template: t.whatsapp_template || t.template_content,
       variables: [], // Frontend manages this locally
       send_days_before: t.send_days_before,
       send_time_preference: t.send_time_preference,
@@ -187,7 +188,9 @@ export async function POST(request: NextRequest) {
     // Support both old and new field names
     const messageType = body.message_type || body.template_type;
     const name = body.name || body.template_name;
-    const templateContent = body.template_content || body.message_template || body.whatsapp_template;
+    const templateContent = body.template_content || body.message_template;
+    // WhatsApp template is stored separately - use its own value or fallback to main template
+    const whatsappTemplate = body.whatsapp_template || templateContent;
     const subject = body.subject;
     const sendDaysBefore = body.send_days_before;
     const sendTimePreference = body.send_time_preference || 'morning';
@@ -230,6 +233,7 @@ export async function POST(request: NextRequest) {
           name,
           subject: subject || null,
           template_content: templateContent,
+          whatsapp_template: whatsappTemplate,
           send_days_before: sendDaysBefore || null,
           send_time_preference: sendTimePreference,
           channels,
@@ -259,6 +263,7 @@ export async function POST(request: NextRequest) {
         name,
         subject: subject || null,
         template_content: templateContent,
+        whatsapp_template: whatsappTemplate,
         send_days_before: sendDaysBefore || null,
         send_time_preference: sendTimePreference,
         channels,
@@ -316,8 +321,12 @@ export async function PUT(request: NextRequest) {
     if (body.subject !== undefined) {
       updateData.subject = body.subject || null;
     }
-    if (body.template_content || body.message_template || body.whatsapp_template) {
-      updateData.template_content = body.template_content || body.message_template || body.whatsapp_template;
+    if (body.template_content || body.message_template) {
+      updateData.template_content = body.template_content || body.message_template;
+    }
+    // Handle whatsapp_template separately - it has its own column
+    if (body.whatsapp_template !== undefined) {
+      updateData.whatsapp_template = body.whatsapp_template || null;
     }
     if (body.send_days_before !== undefined) {
       updateData.send_days_before = body.send_days_before;
@@ -417,7 +426,8 @@ function transformTemplate(t: Record<string, unknown>) {
     subject: t.subject,
     message_template: t.template_content,
     template_content: t.template_content,
-    whatsapp_template: t.template_content,
+    // Use separate whatsapp_template column if exists, otherwise fallback to template_content
+    whatsapp_template: (t.whatsapp_template as string) || (t.template_content as string),
     variables: [], // Frontend manages this locally
     send_days_before: t.send_days_before,
     send_time_preference: t.send_time_preference,

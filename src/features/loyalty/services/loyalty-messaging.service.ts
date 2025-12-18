@@ -329,9 +329,10 @@ export async function processExpiringMemberships(): Promise<{
 
         try {
           // Get template (DB uses message_type, not template_type)
+          // Select both template_content and whatsapp_template
           const { data: template } = await supabase
             .from('loyalty_message_templates')
-            .select('template_content')
+            .select('template_content, whatsapp_template')
             .eq('program_id', program.id)
             .eq('message_type', 'membership_reminder')
             .eq('is_active', true)
@@ -339,6 +340,9 @@ export async function processExpiringMemberships(): Promise<{
 
           const plansRaw = membership.loyalty_membership_plans as unknown;
           const plan = (Array.isArray(plansRaw) ? plansRaw[0] : plansRaw) as { plan_name: string } | null;
+
+          // Use whatsapp_template if available, otherwise fallback to template_content
+          const templateToUse = template?.whatsapp_template || template?.template_content;
 
           const message = await generateMembershipReminderMessage({
             patient: { name: leadName, phone: typedLead.phone, email: typedLead.email },
@@ -351,7 +355,7 @@ export async function processExpiringMemberships(): Promise<{
             plan_name: plan?.plan_name || 'Plan',
             end_date: membership.end_date,
             days_remaining: program.membership_reminder_days,
-          }, template?.template_content);
+          }, templateToUse);
 
           // Log the message (actual sending would be done by WhatsApp service)
           await supabase.from('loyalty_reactivation_logs').insert({
@@ -457,9 +461,10 @@ export async function processInactivePatients(): Promise<{
 
         try {
           // Get template (DB uses message_type, not template_type)
+          // Select both template_content and whatsapp_template
           const { data: template } = await supabase
             .from('loyalty_message_templates')
-            .select('template_content')
+            .select('template_content, whatsapp_template')
             .eq('program_id', program.id)
             .eq('message_type', 'reactivation')
             .eq('is_active', true)
@@ -468,6 +473,9 @@ export async function processInactivePatients(): Promise<{
           const monthsInactive = Math.floor(
             (Date.now() - new Date(leadData.last_interaction_at).getTime()) / (30 * 24 * 60 * 60 * 1000)
           );
+
+          // Use whatsapp_template if available, otherwise fallback to template_content
+          const templateToUse = template?.whatsapp_template || template?.template_content;
 
           const message = await generateReactivationMessage({
             patient: { name: leadName, phone: leadData.phone, email: leadData.email || undefined },
@@ -479,7 +487,7 @@ export async function processInactivePatients(): Promise<{
             tenant: { name: tenant.name, vertical: tenant.vertical },
             months_inactive: monthsInactive,
             last_visit_date: leadData.last_interaction_at,
-          }, template?.template_content);
+          }, templateToUse);
 
           // Log the reactivation message
           await supabase.from('loyalty_reactivation_logs').insert({

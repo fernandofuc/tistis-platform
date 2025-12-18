@@ -134,16 +134,14 @@ export async function GET(request: NextRequest) {
 
     // Apply search filter - search across multiple name fields and contact info
     if (search) {
-      // Build search conditions that handle NULL values properly
-      const searchTerm = `%${search}%`;
-      query = query.or([
-        `full_name.ilike.${searchTerm}`,
-        `first_name.ilike.${searchTerm}`,
-        `last_name.ilike.${searchTerm}`,
-        `email.ilike.${searchTerm}`,
-        `phone.ilike.${searchTerm}`,
-        `phone_normalized.ilike.${searchTerm}`,
-      ].join(','));
+      // Escape special characters for ilike and build OR conditions
+      const escapedSearch = search.replace(/[%_]/g, '\\$&');
+      const searchTerm = `%${escapedSearch}%`;
+
+      // Use filter format that works better with special characters
+      query = query.or(
+        `full_name.ilike.${searchTerm},first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm},phone_normalized.ilike.${searchTerm}`
+      );
     }
 
     // Apply pagination
