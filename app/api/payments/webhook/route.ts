@@ -267,6 +267,19 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, conn
     return;
   }
 
+  // Get period dates from subscription (handle different Stripe API versions)
+  const subscriptionData = subscription as Stripe.Subscription & {
+    current_period_start?: number;
+    current_period_end?: number;
+  };
+
+  const periodStart = subscriptionData.current_period_start
+    ? new Date(subscriptionData.current_period_start * 1000).toISOString()
+    : null;
+  const periodEnd = subscriptionData.current_period_end
+    ? new Date(subscriptionData.current_period_end * 1000).toISOString()
+    : null;
+
   await supabaseAdmin
     .from('stripe_subscriptions')
     .upsert({
@@ -276,8 +289,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, conn
       stripe_connected_account_id: stripeAccountId,
       stripe_price_id: subscription.items.data[0]?.price.id || '',
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      current_period_start: periodStart,
+      current_period_end: periodEnd,
       cancel_at_period_end: subscription.cancel_at_period_end,
       canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
       updated_at: new Date().toISOString(),
