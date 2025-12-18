@@ -884,7 +884,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
 // MAIN COMPONENT
 // ======================
 export function MembershipsManagement() {
-  const { plans, loading, error, createPlan, updatePlan, deletePlan, refetch } = useMembershipPlans(true);
+  const { plans, loading, error, createPlan, updatePlan, deletePlan, refresh } = useMembershipPlans(true);
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<MembershipPlan | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<MembershipPlan | null>(null);
