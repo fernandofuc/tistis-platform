@@ -286,7 +286,9 @@ export async function processExpiringMemberships(): Promise<{
           end_date,
           leads (
             id,
-            name,
+            full_name,
+            first_name,
+            last_name,
             phone,
             email
           ),
@@ -306,10 +308,13 @@ export async function processExpiringMemberships(): Promise<{
 
         // Extract lead from nested relation (can be array or object)
         const leadsRaw = membership.leads as unknown;
-        const lead = Array.isArray(leadsRaw) ? leadsRaw[0] : leadsRaw;
-        const typedLead = lead as { id: string; name: string; phone: string; email?: string } | null;
+        const leadData = Array.isArray(leadsRaw) ? leadsRaw[0] : leadsRaw;
+        const typedLead = leadData as { id: string; full_name?: string; first_name?: string; last_name?: string; phone: string; email?: string } | null;
 
         if (!typedLead?.id) continue;
+
+        // Compute lead name from available fields
+        const leadName = typedLead.full_name || `${typedLead.first_name || ''} ${typedLead.last_name || ''}`.trim() || 'Paciente';
 
         // Check if already reminded
         const { data: existingLog } = await supabase
@@ -323,12 +328,12 @@ export async function processExpiringMemberships(): Promise<{
         if (existingLog) continue;
 
         try {
-          // Get template
+          // Get template (DB uses message_type, not template_type)
           const { data: template } = await supabase
             .from('loyalty_message_templates')
-            .select('whatsapp_template, message_template')
+            .select('template_content')
             .eq('program_id', program.id)
-            .eq('template_type', 'membership_reminder')
+            .eq('message_type', 'membership_reminder')
             .eq('is_active', true)
             .single();
 
@@ -336,7 +341,7 @@ export async function processExpiringMemberships(): Promise<{
           const plan = (Array.isArray(plansRaw) ? plansRaw[0] : plansRaw) as { plan_name: string } | null;
 
           const message = await generateMembershipReminderMessage({
-            patient: { name: typedLead.name, phone: typedLead.phone, email: typedLead.email },
+            patient: { name: leadName, phone: typedLead.phone, email: typedLead.email },
             program: {
               name: program.program_name,
               tokens_name: program.tokens_name,
@@ -346,7 +351,7 @@ export async function processExpiringMemberships(): Promise<{
             plan_name: plan?.plan_name || 'Plan',
             end_date: membership.end_date,
             days_remaining: program.membership_reminder_days,
-          }, template?.whatsapp_template || template?.message_template);
+          }, template?.template_content);
 
           // Log the message (actual sending would be done by WhatsApp service)
           await supabase.from('loyalty_reactivation_logs').insert({
@@ -359,7 +364,7 @@ export async function processExpiringMemberships(): Promise<{
           });
 
           results.sent++;
-          console.log(`[Loyalty] Membership reminder queued for ${typedLead.name}`);
+          console.log(`[Loyalty] Membership reminder queued for ${leadName}`);
         } catch (err) {
           results.errors++;
           console.error('[Loyalty] Error processing membership reminder:', err);
@@ -419,7 +424,9 @@ export async function processInactivePatients(): Promise<{
         .from('leads')
         .select(`
           id,
-          name,
+          full_name,
+          first_name,
+          last_name,
           phone,
           email,
           last_interaction_at,
@@ -433,35 +440,37 @@ export async function processInactivePatients(): Promise<{
 
       if (!inactiveLeads) continue;
 
-      for (const lead of inactiveLeads) {
+      for (const leadData of inactiveLeads) {
+        // Compute lead name from available fields
+        const leadName = leadData.full_name || `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim() || 'Paciente';
         results.processed++;
 
         // Check if already sent reactivation (only send once)
         const { data: existingLog } = await supabase
           .from('loyalty_reactivation_logs')
           .select('id')
-          .eq('lead_id', lead.id)
+          .eq('lead_id', leadData.id)
           .eq('message_type', 'reactivation')
           .single();
 
         if (existingLog) continue; // Skip - already sent
 
         try {
-          // Get template
+          // Get template (DB uses message_type, not template_type)
           const { data: template } = await supabase
             .from('loyalty_message_templates')
-            .select('whatsapp_template, message_template')
+            .select('template_content')
             .eq('program_id', program.id)
-            .eq('template_type', 'reactivation')
+            .eq('message_type', 'reactivation')
             .eq('is_active', true)
             .single();
 
           const monthsInactive = Math.floor(
-            (Date.now() - new Date(lead.last_interaction_at).getTime()) / (30 * 24 * 60 * 60 * 1000)
+            (Date.now() - new Date(leadData.last_interaction_at).getTime()) / (30 * 24 * 60 * 60 * 1000)
           );
 
           const message = await generateReactivationMessage({
-            patient: { name: lead.name, phone: lead.phone, email: lead.email || undefined },
+            patient: { name: leadName, phone: leadData.phone, email: leadData.email || undefined },
             program: {
               name: program.program_name,
               tokens_name: program.tokens_name,
@@ -469,13 +478,13 @@ export async function processInactivePatients(): Promise<{
             },
             tenant: { name: tenant.name, vertical: tenant.vertical },
             months_inactive: monthsInactive,
-            last_visit_date: lead.last_interaction_at,
-          }, template?.whatsapp_template || template?.message_template);
+            last_visit_date: leadData.last_interaction_at,
+          }, template?.template_content);
 
           // Log the reactivation message
           await supabase.from('loyalty_reactivation_logs').insert({
             program_id: program.id,
-            lead_id: lead.id,
+            lead_id: leadData.id,
             message_type: 'reactivation',
             message_sent: message,
             channel: 'whatsapp',
@@ -483,7 +492,7 @@ export async function processInactivePatients(): Promise<{
           });
 
           results.sent++;
-          console.log(`[Loyalty] Reactivation message queued for ${lead.name} (${monthsInactive} months inactive)`);
+          console.log(`[Loyalty] Reactivation message queued for ${leadName} (${monthsInactive} months inactive)`);
         } catch (err) {
           results.errors++;
           console.error('[Loyalty] Error processing reactivation:', err);

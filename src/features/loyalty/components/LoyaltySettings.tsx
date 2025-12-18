@@ -369,31 +369,22 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
           <h3 className="font-semibold text-gray-900">Configuración General</h3>
           <p className="text-sm text-gray-500">Personaliza el nombre y funcionamiento del programa</p>
         </div>
-        <label className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-lg">
+        <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-lg">
           <span className="text-sm font-medium text-gray-700">Programa Activo</span>
-          <div className="relative">
-            <input
-              type="checkbox"
-              checked={formData.is_active}
-              onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-              className="sr-only"
-            />
-            <div
-              onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
-              className={cn(
-                'w-11 h-6 rounded-full cursor-pointer transition-colors',
-                formData.is_active ? 'bg-green-500' : 'bg-gray-300'
-              )}
-            >
-              <div
-                className={cn(
-                  'w-5 h-5 bg-white rounded-full shadow-sm transform transition-transform mt-0.5',
-                  formData.is_active ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
-                )}
-              />
-            </div>
-          </div>
-        </label>
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
+            className={cn(
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-tis-coral focus:ring-offset-2',
+              formData.is_active ? 'bg-green-500' : 'bg-gray-300'
+            )}
+          >
+            <span className={cn(
+              'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
+              formData.is_active ? 'translate-x-6' : 'translate-x-1'
+            )} />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -508,12 +508,12 @@ function RewardForm({ reward, onSave, onClose }: RewardFormProps) {
                 type="button"
                 onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
                 className={cn(
-                  'relative w-12 h-7 rounded-full transition-colors',
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-tis-coral focus:ring-offset-2',
                   formData.is_active ? 'bg-green-500' : 'bg-gray-300'
                 )}
               >
                 <span className={cn(
-                  'absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
                   formData.is_active ? 'translate-x-6' : 'translate-x-1'
                 )} />
               </button>

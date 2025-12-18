@@ -76,14 +76,16 @@ async function getUserTenantAndProgram(supabase: ReturnType<typeof createAuthent
   return { userRole, program };
 }
 
-// Template types available (must match DB values)
+// Template types available (must match DB values and frontend types)
 const MESSAGE_TYPES = [
   'reactivation',             // For inactive patients
   'membership_reminder',      // X days before expiration
   'membership_expired',       // When membership expires
   'tokens_earned',            // When tokens are awarded
   'tokens_expiring',          // When tokens are about to expire
-  'reward_available',         // When reward can be redeemed
+  'reward_available',         // When reward can be redeemed (alias)
+  'reward_redeemed',          // When reward is redeemed
+  'tier_upgrade',             // When tier level increases
   'welcome',                  // When joining program
   'birthday',                 // Birthday message with bonus
 ];
@@ -137,6 +139,7 @@ export async function GET(request: NextRequest) {
       message_template: t.template_content, // Alias for frontend
       template_content: t.template_content,
       whatsapp_template: t.template_content, // Use same content
+      variables: [], // Frontend manages this locally
       send_days_before: t.send_days_before,
       send_time_preference: t.send_time_preference,
       channels: t.channels || ['whatsapp'],
@@ -415,6 +418,7 @@ function transformTemplate(t: Record<string, unknown>) {
     message_template: t.template_content,
     template_content: t.template_content,
     whatsapp_template: t.template_content,
+    variables: [], // Frontend manages this locally
     send_days_before: t.send_days_before,
     send_time_preference: t.send_time_preference,
     channels: t.channels || ['whatsapp'],
