@@ -5,11 +5,12 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
+import { supabase } from '@/src/shared/lib/supabase';
 
 // Import tab components
 import { LoyaltyOverview } from '@/src/features/loyalty/components/LoyaltyOverview';
@@ -17,6 +18,103 @@ import { TokensManagement } from '@/src/features/loyalty/components/TokensManage
 import { MembershipsManagement } from '@/src/features/loyalty/components/MembershipsManagement';
 import { RewardsManagement } from '@/src/features/loyalty/components/RewardsManagement';
 import { LoyaltySettings } from '@/src/features/loyalty/components/LoyaltySettings';
+
+// ======================
+// TOGGLE SWITCH COMPONENT
+// ======================
+interface ToggleSwitchProps {
+  enabled: boolean;
+  onToggle: () => void;
+  loading?: boolean;
+}
+
+function ToggleSwitch({ enabled, onToggle, loading }: ToggleSwitchProps) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={loading}
+      className={cn(
+        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-tis-coral focus:ring-offset-2',
+        enabled ? 'bg-tis-coral' : 'bg-gray-200',
+        loading && 'opacity-50 cursor-not-allowed'
+      )}
+    >
+      <span
+        className={cn(
+          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+          enabled ? 'translate-x-5' : 'translate-x-0'
+        )}
+      />
+    </button>
+  );
+}
+
+// ======================
+// FEATURE TOGGLE CARD
+// ======================
+interface FeatureToggleCardProps {
+  title: string;
+  description: string;
+  enabled: boolean;
+  onToggle: () => void;
+  loading?: boolean;
+  icon: React.ReactNode;
+  activeLabel?: string;
+  inactiveLabel?: string;
+}
+
+function FeatureToggleCard({
+  title,
+  description,
+  enabled,
+  onToggle,
+  loading,
+  icon,
+  activeLabel = 'Activo',
+  inactiveLabel = 'Inactivo',
+}: FeatureToggleCardProps) {
+  return (
+    <div className={cn(
+      'relative rounded-xl border-2 p-5 transition-all duration-200',
+      enabled
+        ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-orange-50'
+        : 'border-gray-200 bg-gray-50'
+    )}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className={cn(
+            'flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center',
+            enabled
+              ? 'bg-gradient-to-br from-tis-coral to-orange-500 text-white'
+              : 'bg-gray-200 text-gray-500'
+          )}>
+            {icon}
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">{title}</h3>
+            <p className="text-sm text-gray-500 mt-0.5">{description}</p>
+            <div className="mt-2">
+              <span className={cn(
+                'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full',
+                enabled
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-gray-200 text-gray-600'
+              )}>
+                <span className={cn(
+                  'w-1.5 h-1.5 rounded-full',
+                  enabled ? 'bg-green-500' : 'bg-gray-400'
+                )} />
+                {enabled ? activeLabel : inactiveLabel}
+              </span>
+            </div>
+          </div>
+        </div>
+        <ToggleSwitch enabled={enabled} onToggle={onToggle} loading={loading} />
+      </div>
+    </div>
+  );
+}
 
 // ======================
 // TYPES
@@ -118,6 +216,17 @@ function UpgradePrompt() {
 }
 
 // ======================
+// LOYALTY PROGRAM STATE INTERFACE
+// ======================
+interface LoyaltyProgramState {
+  id: string;
+  program_name: string;
+  tokens_enabled: boolean;
+  membership_enabled: boolean;
+  is_active: boolean;
+}
+
+// ======================
 // MAIN PAGE COMPONENT
 // ======================
 export default function LealtadPage() {
@@ -125,12 +234,113 @@ export default function LealtadPage() {
   const { tenant, isLoading: tenantLoading } = useTenant();
   const { isEnabled, flagsLoading } = useFeatureFlags();
 
+  // Loyalty program state
+  const [program, setProgram] = useState<LoyaltyProgramState | null>(null);
+  const [programLoading, setProgramLoading] = useState(true);
+  const [tokensToggleLoading, setTokensToggleLoading] = useState(false);
+  const [membershipsToggleLoading, setMembershipsToggleLoading] = useState(false);
+
+  // Fetch loyalty program config
+  const fetchProgram = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const response = await fetch('/api/loyalty', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data?.program) {
+          setProgram({
+            id: result.data.program.id,
+            program_name: result.data.program.program_name,
+            tokens_enabled: result.data.program.tokens_enabled ?? true,
+            membership_enabled: result.data.program.membership_enabled ?? true,
+            is_active: result.data.program.is_active ?? true,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching loyalty program:', error);
+    } finally {
+      setProgramLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProgram();
+  }, [fetchProgram]);
+
+  // Toggle tokens
+  const handleToggleTokens = async () => {
+    if (!program || tokensToggleLoading) return;
+
+    setTokensToggleLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const newValue = !program.tokens_enabled;
+
+      const response = await fetch('/api/loyalty', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ tokens_enabled: newValue }),
+      });
+
+      if (response.ok) {
+        setProgram(prev => prev ? { ...prev, tokens_enabled: newValue } : null);
+      }
+    } catch (error) {
+      console.error('Error toggling tokens:', error);
+    } finally {
+      setTokensToggleLoading(false);
+    }
+  };
+
+  // Toggle memberships
+  const handleToggleMemberships = async () => {
+    if (!program || membershipsToggleLoading) return;
+
+    setMembershipsToggleLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const newValue = !program.membership_enabled;
+
+      const response = await fetch('/api/loyalty', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ membership_enabled: newValue }),
+      });
+
+      if (response.ok) {
+        setProgram(prev => prev ? { ...prev, membership_enabled: newValue } : null);
+      }
+    } catch (error) {
+      console.error('Error toggling memberships:', error);
+    } finally {
+      setMembershipsToggleLoading(false);
+    }
+  };
+
   // Check if loyalty is enabled for this tenant
   const loyaltyEnabled = isEnabled('loyalty_enabled');
   const isStarterPlan = tenant?.plan === 'starter';
 
   // Show loading state
-  if (tenantLoading || flagsLoading) {
+  if (tenantLoading || flagsLoading || programLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tis-coral"></div>
@@ -143,8 +353,23 @@ export default function LealtadPage() {
     return <UpgradePrompt />;
   }
 
+  // Filter tabs based on enabled features
+  const availableTabs = TABS.filter(tab => {
+    if (tab.id === 'tokens' && !program?.tokens_enabled) return false;
+    if (tab.id === 'memberships' && !program?.membership_enabled) return false;
+    return true;
+  });
+
   // Render active tab content
   const renderTabContent = () => {
+    // If trying to view disabled tab, redirect to overview
+    if (activeTab === 'tokens' && !program?.tokens_enabled) {
+      return <LoyaltyOverview />;
+    }
+    if (activeTab === 'memberships' && !program?.membership_enabled) {
+      return <LoyaltyOverview />;
+    }
+
     switch (activeTab) {
       case 'overview':
         return <LoyaltyOverview />;
@@ -173,10 +398,67 @@ export default function LealtadPage() {
         </div>
       </div>
 
+      {/* Feature Toggles */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FeatureToggleCard
+          title="Sistema de Tokens"
+          description="Otorga puntos por citas, compras y acciones de tus pacientes"
+          enabled={program?.tokens_enabled ?? true}
+          onToggle={handleToggleTokens}
+          loading={tokensToggleLoading}
+          activeLabel="Tokens Activos"
+          inactiveLabel="Tokens Desactivados"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        />
+
+        <FeatureToggleCard
+          title="Sistema de Membresías"
+          description="Ofrece planes de suscripción con beneficios exclusivos"
+          enabled={program?.membership_enabled ?? true}
+          onToggle={handleToggleMemberships}
+          loading={membershipsToggleLoading}
+          activeLabel="Membresías Activas"
+          inactiveLabel="Membresías Desactivadas"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+          }
+        />
+      </div>
+
+      {/* Info banner when features are disabled */}
+      {(!program?.tokens_enabled || !program?.membership_enabled) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                Funciones desactivadas
+              </p>
+              <p className="text-sm text-amber-700 mt-0.5">
+                {!program?.tokens_enabled && !program?.membership_enabled
+                  ? 'El sistema de tokens y membresías están desactivados. Actívalos para gestionar la lealtad de tus pacientes.'
+                  : !program?.tokens_enabled
+                    ? 'El sistema de tokens está desactivado. Actívalo para otorgar puntos a tus pacientes.'
+                    : 'El sistema de membresías está desactivado. Actívalo para ofrecer planes de suscripción.'
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
-          {TABS.map((tab) => (
+          {availableTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
