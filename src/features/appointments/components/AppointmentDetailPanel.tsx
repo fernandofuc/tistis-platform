@@ -230,13 +230,13 @@ export function AppointmentDetailPanel({
     } finally {
       setLoading(false);
     }
-  }, [appointment?.id]);
+  }, [appointment]);
 
   useEffect(() => {
     if (isOpen && appointment) {
       fetchFullData();
     }
-  }, [isOpen, appointment, fetchFullData]);
+  }, [isOpen, fetchFullData, appointment]);
 
   // Handle status change
   const handleStatusChange = async (newStatus: string) => {

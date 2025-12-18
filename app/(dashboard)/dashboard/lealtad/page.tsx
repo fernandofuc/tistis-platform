@@ -5,12 +5,11 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
-import { useAuthStore } from '@/shared/stores';
 
 // Import tab components
 import { LoyaltyOverview } from '@/src/features/loyalty/components/LoyaltyOverview';
@@ -125,7 +124,6 @@ export default function LealtadPage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const { tenant, isLoading: tenantLoading } = useTenant();
   const { isEnabled, flagsLoading } = useFeatureFlags();
-  const accessToken = useAuthStore((state) => state.accessToken);
 
   // Check if loyalty is enabled for this tenant
   const loyaltyEnabled = isEnabled('loyalty_enabled');
