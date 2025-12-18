@@ -128,10 +128,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Error al obtener redenciones' }, { status: 500 });
     }
 
+    // Transform data to flatten leads from loyalty_balances
+    const transformedRedemptions = (redemptions || []).map((r: Record<string, unknown>) => ({
+      ...r,
+      leads: (r.loyalty_balances as Record<string, unknown>)?.leads || null,
+      loyalty_balances: undefined, // Remove nested structure
+    }));
+
     return NextResponse.json({
       success: true,
       data: {
-        redemptions: redemptions || [],
+        redemptions: transformedRedemptions,
         pagination: {
           page,
           limit,

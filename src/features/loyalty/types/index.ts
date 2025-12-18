@@ -295,6 +295,7 @@ export interface LoyaltyStats {
   };
   redemptions: {
     total_redemptions: number;
+    total_all_time: number;
     pending: number;
     used: number;
     expired: number;

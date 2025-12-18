@@ -203,6 +203,7 @@ export async function GET(request: NextRequest) {
 
     const redemptionStats = {
       total_redemptions: redemptions?.length || 0,
+      total_all_time: redemptions?.length || 0,
       pending: 0,
       used: 0,
       expired: 0,
