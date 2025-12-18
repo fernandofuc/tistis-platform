@@ -138,10 +138,27 @@ export async function GET(request: NextRequest) {
         ? member.loyalty_balances[0]
         : member.loyalty_balances;
 
-      const memberships = member.loyalty_memberships as Array<{ id: string; status: string; start_date: string; end_date: string; loyalty_membership_plans: { plan_name: string } | null }> | { id: string; status: string; start_date: string; end_date: string; loyalty_membership_plans: { plan_name: string } | null } | null;
-      const activeMembership = Array.isArray(memberships)
-        ? memberships.find((m) => m.status === 'active')
-        : memberships?.status === 'active' ? memberships : null;
+      // Handle memberships - can be array or single object from Supabase
+      const membershipsRaw = member.loyalty_memberships as unknown;
+      let activeMembership: { id: string; status: string; end_date: string; loyalty_membership_plans: unknown } | null = null;
+
+      if (Array.isArray(membershipsRaw)) {
+        activeMembership = membershipsRaw.find((m: { status: string }) => m.status === 'active') || null;
+      } else if (membershipsRaw && typeof membershipsRaw === 'object' && 'status' in membershipsRaw) {
+        const single = membershipsRaw as { id: string; status: string; end_date: string; loyalty_membership_plans: unknown };
+        activeMembership = single.status === 'active' ? single : null;
+      }
+
+      // Extract plan name from nested relation (can also be array)
+      let planName: string | null = null;
+      if (activeMembership?.loyalty_membership_plans) {
+        const plans = activeMembership.loyalty_membership_plans;
+        if (Array.isArray(plans) && plans.length > 0) {
+          planName = plans[0]?.plan_name || null;
+        } else if (typeof plans === 'object' && plans !== null && 'plan_name' in plans) {
+          planName = (plans as { plan_name: string }).plan_name;
+        }
+      }
 
       return {
         id: member.id,
@@ -158,7 +175,7 @@ export async function GET(request: NextRequest) {
         },
         membership: activeMembership ? {
           id: activeMembership.id,
-          plan_name: activeMembership.loyalty_membership_plans?.plan_name,
+          plan_name: planName,
           status: activeMembership.status,
           expires_at: activeMembership.end_date,
         } : null,
