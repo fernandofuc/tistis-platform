@@ -103,7 +103,9 @@ export async function GET(request: NextRequest) {
       .from('leads')
       .select(`
         id,
-        name,
+        full_name,
+        first_name,
+        last_name,
         email,
         phone,
         last_interaction_at,
@@ -128,7 +130,7 @@ export async function GET(request: NextRequest) {
 
     // Apply search filter
     if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+      query = query.or(`full_name.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
     }
 
     // Apply pagination
@@ -137,7 +139,7 @@ export async function GET(request: NextRequest) {
     // Apply sorting
     switch (sortBy) {
       case 'name':
-        query = query.order('name', { ascending: sortOrder === 'asc' });
+        query = query.order('full_name', { ascending: sortOrder === 'asc' });
         break;
       case 'last_activity':
         query = query.order('last_interaction_at', { ascending: sortOrder === 'asc', nullsFirst: false });
@@ -184,7 +186,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: member.id,
-        name: member.name,
+        name: member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre',
         email: member.email,
         phone: member.phone,
         last_interaction_at: member.last_interaction_at,
