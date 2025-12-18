@@ -477,6 +477,10 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
     }
 
     // 4. Verificar disponibilidad del slot
+    if (!request.branch_id) {
+      return { success: false, error: 'No se pudo determinar la sucursal' };
+    }
+
     const availability = await checkSlotAvailability(
       request.tenant_id,
       request.branch_id,
