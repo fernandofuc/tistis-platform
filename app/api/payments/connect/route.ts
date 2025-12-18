@@ -180,6 +180,12 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
+    // Validate Stripe configuration
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('[Payments API] STRIPE_SECRET_KEY not configured');
+      return NextResponse.json({ error: 'Stripe no configurado' }, { status: 500 });
+    }
+
     const accessToken = getAccessToken(request);
     if (!accessToken) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
@@ -197,11 +203,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get or create Stripe Connect account record
-    let { data: account } = await supabase
+    let { data: account, error: selectError } = await supabase
       .from('stripe_connect_accounts')
       .select('*')
       .eq('tenant_id', context.userRole.tenant_id)
       .single();
+
+    // Handle table not existing (migration not run)
+    if (selectError && selectError.code === '42P01') {
+      console.error('[Payments API] Table stripe_connect_accounts does not exist. Run migration 054.');
+      return NextResponse.json({ error: 'Sistema de pagos no configurado. Contacta soporte.' }, { status: 500 });
+    }
 
     // Generate OAuth state for security
     const oauthState = crypto.randomBytes(32).toString('hex');
@@ -300,6 +312,21 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Payments API] POST error:', error);
+
+    // Handle specific Stripe errors
+    if (error instanceof Stripe.errors.StripeError) {
+      console.error('[Payments API] Stripe error:', error.message);
+      return NextResponse.json({ error: `Error de Stripe: ${error.message}` }, { status: 500 });
+    }
+
+    // Handle database errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const dbError = error as { code: string; message?: string };
+      if (dbError.code === '42P01') {
+        return NextResponse.json({ error: 'Sistema de pagos no configurado. Contacta soporte.' }, { status: 500 });
+      }
+    }
+
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
