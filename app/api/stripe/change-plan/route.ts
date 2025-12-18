@@ -8,8 +8,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@/src/shared/lib/supabase';
-import { getPlanConfig, getAllPlans, PLAN_CONFIG } from '@/src/shared/config/plans';
+import { getPlanConfig } from '@/src/shared/config/plans';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -22,6 +21,30 @@ function getSupabaseAdmin() {
   );
 }
 
+// Create authenticated client from Bearer token
+function createAuthenticatedClient(accessToken: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    }
+  );
+}
+
+// Get access token from request headers
+function getAccessToken(request: NextRequest): string | null {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  return null;
+}
+
 // Plan price IDs from Stripe (you need to set these in your .env or Stripe dashboard)
 const PLAN_PRICE_IDS: Record<string, string> = {
   starter: process.env.STRIPE_PRICE_STARTER || 'price_starter',
@@ -32,7 +55,14 @@ const PLAN_PRICE_IDS: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    // Get access token from Authorization header
+    const accessToken = getAccessToken(request);
+    if (!accessToken) {
+      console.error('[Change Plan] No access token in request');
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
+    const supabase = createAuthenticatedClient(accessToken);
     const body = await request.json();
     const { newPlan } = body;
 
@@ -45,8 +75,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Authenticate user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('[Change Plan] Auth error:', authError);
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
