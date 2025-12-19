@@ -73,6 +73,7 @@ async function getUserTenantAndProgram(supabase: ReturnType<typeof createAuthent
 
 // ======================
 // GET - Get all members with loyalty info
+// Searches in BOTH leads AND patients tables
 // ======================
 export async function GET(request: NextRequest) {
   try {
@@ -100,9 +101,10 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit;
 
-    // Get leads with their loyalty balances and memberships
-    // Using left joins so we get ALL leads, not just those with loyalty data
-    let query = supabase
+    // =====================================================
+    // QUERY 1: Get leads with their loyalty balances and memberships
+    // =====================================================
+    let leadsQuery = supabase
       .from('leads')
       .select(`
         id,
@@ -132,52 +134,110 @@ export async function GET(request: NextRequest) {
       `, { count: 'exact' })
       .eq('tenant_id', context.userRole.tenant_id);
 
-    // Apply search filter - search across multiple name fields and contact info
+    // =====================================================
+    // QUERY 2: Get patients (may or may not have linked lead)
+    // =====================================================
+    let patientsQuery = supabase
+      .from('patients')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        lead_id,
+        created_at
+      `, { count: 'exact' })
+      .eq('tenant_id', context.userRole.tenant_id)
+      .eq('status', 'active');
+
+    // Apply search filter to BOTH queries
     if (search) {
       // Use wildcard pattern for ILIKE search
-      // Note: The * wildcard is supported in PostgREST ilike as an alternative to %
       const pattern = `*${search}*`;
 
-      // Build OR conditions for multiple columns
-      // Using * instead of % as it's more reliable in PostgREST filter strings
-      query = query.or(
+      // Search in leads
+      leadsQuery = leadsQuery.or(
         `full_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern},phone_normalized.ilike.${pattern}`
+      );
+
+      // Search in patients
+      patientsQuery = patientsQuery.or(
+        `first_name.ilike.${pattern},last_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern}`
       );
 
       console.log('[Members API] Search pattern:', pattern);
     }
 
-    // Apply pagination
-    query = query.range(offset, offset + limit - 1);
+    // Apply pagination to leads query only (we'll combine results)
+    leadsQuery = leadsQuery.range(offset, offset + limit - 1);
 
-    // Apply sorting
+    // Apply sorting to leads
     switch (sortBy) {
       case 'name':
-        query = query.order('full_name', { ascending: sortOrder === 'asc' });
+        leadsQuery = leadsQuery.order('full_name', { ascending: sortOrder === 'asc' });
+        patientsQuery = patientsQuery.order('first_name', { ascending: sortOrder === 'asc' });
         break;
       case 'last_activity':
-        query = query.order('last_interaction_at', { ascending: sortOrder === 'asc', nullsFirst: false });
+        leadsQuery = leadsQuery.order('last_interaction_at', { ascending: sortOrder === 'asc', nullsFirst: false });
+        patientsQuery = patientsQuery.order('created_at', { ascending: sortOrder === 'asc' });
         break;
       default:
-        // Sort by tokens - we'll sort in JS since it's a joined table
-        query = query.order('created_at', { ascending: false });
+        leadsQuery = leadsQuery.order('created_at', { ascending: false });
+        patientsQuery = patientsQuery.order('created_at', { ascending: false });
     }
 
-    const { data: members, error, count } = await query;
+    // Execute both queries in parallel
+    const [leadsResult, patientsResult] = await Promise.all([
+      leadsQuery,
+      patientsQuery
+    ]);
 
-    if (error) {
-      console.error('[Members API] GET error:', error);
-      console.error('[Members API] Error details:', JSON.stringify(error, null, 2));
-      return NextResponse.json({
-        error: 'Error al obtener miembros',
-        details: error.message || 'Unknown error'
-      }, { status: 500 });
+    if (leadsResult.error) {
+      console.error('[Members API] Leads query error:', leadsResult.error);
     }
 
-    console.log(`[Members API] Found ${members?.length || 0} leads, total: ${count}`);
+    if (patientsResult.error) {
+      console.error('[Members API] Patients query error:', patientsResult.error);
+    }
 
-    // Transform data for frontend
-    let transformedMembers = (members || []).map(member => {
+    const leads = leadsResult.data || [];
+    const patients = patientsResult.data || [];
+    const leadsCount = leadsResult.count || 0;
+
+    console.log(`[Members API] Found ${leads.length} leads, ${patients.length} patients`);
+
+    // Create a set of lead IDs to avoid duplicates
+    const leadIds = new Set(leads.map(l => l.id));
+    // Also track patient lead_ids to avoid showing patients that are already leads
+    const patientLeadIds = new Set(patients.filter(p => p.lead_id).map(p => p.lead_id));
+
+    // Define member type that can be from either source
+    type TransformedMember = {
+      id: string;
+      source: 'lead' | 'patient';
+      lead_id?: string | null;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      last_interaction_at: string | null;
+      created_at: string;
+      tokens: {
+        current: number;
+        total_earned: number;
+        total_spent: number;
+        tier: string;
+      };
+      membership: {
+        id: string;
+        plan_name: string | null;
+        status: string;
+        expires_at: string;
+      } | null;
+    };
+
+    // Transform leads to members
+    let transformedMembers: TransformedMember[] = leads.map(member => {
       const balance = Array.isArray(member.loyalty_balances)
         ? member.loyalty_balances[0]
         : member.loyalty_balances;
@@ -206,6 +266,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: member.id,
+        source: 'lead' as const,
         name: member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre',
         email: member.email,
         phone: member.phone,
@@ -225,6 +286,36 @@ export async function GET(request: NextRequest) {
         } : null,
       };
     });
+
+    // Add patients that don't already have a linked lead in our results
+    const patientsToAdd = patients.filter(p => {
+      // Skip if this patient's lead_id is already in our leads list
+      if (p.lead_id && leadIds.has(p.lead_id)) {
+        return false;
+      }
+      return true;
+    });
+
+    const transformedPatients = patientsToAdd.map(patient => ({
+      id: patient.id,
+      source: 'patient' as const,
+      lead_id: patient.lead_id || null, // If patient has a lead, include it
+      name: `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || 'Sin nombre',
+      email: patient.email,
+      phone: patient.phone,
+      last_interaction_at: null,
+      created_at: patient.created_at,
+      tokens: {
+        current: 0,
+        total_earned: 0,
+        total_spent: 0,
+        tier: 'bronze',
+      },
+      membership: null,
+    }));
+
+    // Combine leads and patients
+    transformedMembers = [...transformedMembers, ...transformedPatients];
 
     // Apply filter
     switch (filter) {
@@ -251,15 +342,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Limit results after combining
+    const limitedMembers = transformedMembers.slice(0, limit);
+
     return NextResponse.json({
       success: true,
       data: {
-        members: transformedMembers,
+        members: limitedMembers,
         pagination: {
           page,
           limit,
-          total: count || 0,
-          totalPages: Math.ceil((count || 0) / limit),
+          total: leadsCount + patientsToAdd.length,
+          totalPages: Math.ceil((leadsCount + patientsToAdd.length) / limit),
         }
       }
     });

@@ -19,6 +19,8 @@ interface Lead {
   name: string;
   email: string;
   phone: string;
+  source?: 'lead' | 'patient'; // Where this record came from
+  lead_id?: string | null; // For patients: the linked lead ID (if any)
 }
 
 // ======================
@@ -462,12 +464,14 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
       const data = await response.json();
       console.log('[MembershipsManagement] Search response:', data);
       if (data.success && data.data?.members) {
-        // Transform to Lead format
-        setLeads(data.data.members.map((m: { id: string; name: string; email: string; phone: string }) => ({
+        // Transform to Lead format - include source and lead_id for patients
+        setLeads(data.data.members.map((m: { id: string; name: string; email: string; phone: string; source?: string; lead_id?: string }) => ({
           id: m.id,
           name: m.name || 'Sin nombre',
           email: m.email || '',
           phone: m.phone || '',
+          source: m.source || 'lead', // 'lead' or 'patient'
+          lead_id: m.lead_id || null, // Only for patients that have a linked lead
         })));
       } else if (data.error) {
         console.error('[MembershipsManagement] API Error:', data.error, data.details);
@@ -501,8 +505,63 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
     setSaving(true);
     setError(null);
     try {
+      let leadIdToUse = selectedLead.id;
+
+      // If the selected item is a patient (not a lead), we need to get or create a lead
+      if (selectedLead.source === 'patient') {
+        // If patient already has a linked lead, use that
+        if (selectedLead.lead_id) {
+          leadIdToUse = selectedLead.lead_id;
+        } else {
+          // Create a new lead from the patient data
+          const { supabase } = await import('@/src/shared/lib/supabase');
+          const { data: { session } } = await supabase.auth.getSession();
+
+          // Get patient details to create lead
+          const { data: patient, error: patientError } = await supabase
+            .from('patients')
+            .select('first_name, last_name, phone, email, tenant_id')
+            .eq('id', selectedLead.id)
+            .single();
+
+          if (patientError || !patient) {
+            throw new Error('No se pudo obtener la información del paciente');
+          }
+
+          // Create lead from patient data
+          const { data: newLead, error: leadError } = await supabase
+            .from('leads')
+            .insert({
+              tenant_id: patient.tenant_id,
+              first_name: patient.first_name,
+              last_name: patient.last_name,
+              full_name: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
+              phone: patient.phone,
+              email: patient.email,
+              source: 'patient_conversion',
+              status: 'converted',
+            })
+            .select('id')
+            .single();
+
+          if (leadError || !newLead) {
+            console.error('Error creating lead:', leadError);
+            throw new Error('No se pudo crear el lead del paciente');
+          }
+
+          // Update patient with lead_id reference
+          await supabase
+            .from('patients')
+            .update({ lead_id: newLead.id })
+            .eq('id', selectedLead.id);
+
+          leadIdToUse = newLead.id;
+          console.log('[MembershipsManagement] Created lead from patient:', newLead.id);
+        }
+      }
+
       await onAssign({
-        lead_id: selectedLead.id,
+        lead_id: leadIdToUse,
         plan_id: plan.id,
         billing_cycle: billingCycle,
         payment_method: paymentMethod,
@@ -640,14 +699,29 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
                           index === leads.length - 1 && 'rounded-b-xl'
                         )}
                       >
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
-                          <span className="text-gray-600 font-semibold text-sm">
+                        <div className={cn(
+                          'w-9 h-9 rounded-lg flex items-center justify-center',
+                          lead.source === 'patient'
+                            ? 'bg-gradient-to-br from-blue-100 to-blue-50'
+                            : 'bg-gradient-to-br from-gray-100 to-gray-50'
+                        )}>
+                          <span className={cn(
+                            'font-semibold text-sm',
+                            lead.source === 'patient' ? 'text-blue-600' : 'text-gray-600'
+                          )}>
                             {lead.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{lead.name}</p>
-                          <p className="text-xs text-gray-500">{lead.email}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900 text-sm">{lead.name}</p>
+                            {lead.source === 'patient' && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded-full font-medium">
+                                Paciente
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">{lead.email || lead.phone}</p>
                         </div>
                       </button>
                     ))}
