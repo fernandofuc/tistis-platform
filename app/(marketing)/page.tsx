@@ -6,7 +6,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ArrowRight, MessageSquare, Zap, Clock, Shield, CheckCircle, ChevronRight, TrendingUp, Brain } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 // ============================================================
 // TIPOS Y CONSTANTES
@@ -480,21 +479,29 @@ export default function LandingPage() {
     'Necesito organizar mi inventario automaticamente...',
   ], []);
 
-  // Verificar si el usuario esta autenticado
+  // Verificar si el usuario esta autenticado (de forma segura)
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
+      try {
+        // Importar Supabase dinamicamente para evitar errores si no esta configurado
+        const { supabase } = await import('@/lib/supabase');
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsAuthenticated(!!session);
+
+        // Escuchar cambios de autenticacion
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+          setIsAuthenticated(!!session);
+        });
+
+        return () => subscription.unsubscribe();
+      } catch (error) {
+        // Si Supabase no esta configurado, simplemente no mostramos Dashboard
+        console.warn('Auth check skipped:', error);
+        setIsAuthenticated(false);
+      }
     };
 
     checkAuth();
-
-    // Escuchar cambios de autenticacion
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsAuthenticated(!!session);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   // Animacion del placeholder
