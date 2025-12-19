@@ -23,6 +23,7 @@ function CheckoutContent() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [vertical, setVertical] = useState('dental'); // Default vertical
 
   const cancelled = searchParams.get('cancelled');
 
@@ -46,6 +47,12 @@ function CheckoutContent() {
       } catch (e) {
         console.error('Error parsing addons:', e);
       }
+    }
+
+    // Get vertical from sessionStorage (set by pricing page)
+    const savedVertical = sessionStorage.getItem('selected_vertical');
+    if (savedVertical) {
+      setVertical(savedVertical);
     }
 
     // Get contact info from questionnaire if available
@@ -91,6 +98,7 @@ function CheckoutContent() {
           customerPhone,
           branches,
           addons,
+          vertical, // Enviar vertical seleccionada
           metadata: {
             proposalId: sessionStorage.getItem('proposal_id') || '',
           },

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
   Check,
@@ -19,10 +20,37 @@ import {
   Phone,
 } from 'lucide-react';
 import { PLAN_CONFIG, getPlanConfig, calculateBranchCostPesos, getNextBranchPrice, canAddBranch } from '@/src/shared/config/plans';
+import type { VerticalType } from '@/src/shared/config/verticals';
 
 // ============================================================
 // TIPOS Y CONSTANTES
 // ============================================================
+
+// Verticales principales para el selector
+const VERTICALS_DISPLAY = [
+  {
+    id: 'dental' as VerticalType,
+    name: 'Clinica Dental',
+    icon: '🦷',
+    description: 'Consultorios y clinicas odontologicas',
+    features: {
+      starter: ['Agenda de citas automatizada', 'Recordatorios por WhatsApp', 'Dashboard de pacientes'],
+      essentials: ['Historial clinico digital', 'Presupuestos automaticos', 'Seguimiento de tratamientos'],
+      growth: ['IA con voz para llamadas', 'Multi-sucursal sincronizado', 'Reportes de productividad'],
+    },
+  },
+  {
+    id: 'restaurant' as VerticalType,
+    name: 'Restaurante',
+    icon: '🍽️',
+    description: 'Restaurantes, cafeterias y bares',
+    features: {
+      starter: ['Reservaciones automaticas', 'Confirmaciones por WhatsApp', 'Control de mesas'],
+      essentials: ['Menu digital integrado', 'Pedidos para llevar', 'Historial de clientes'],
+      growth: ['IA para pedidos telefonicos', 'Multi-sucursal', 'Analiticas de ocupacion'],
+    },
+  },
+] as const;
 
 interface PlanDisplay {
   id: string;
@@ -37,12 +65,12 @@ interface PlanDisplay {
   icon: React.ReactNode;
 }
 
-// Planes simplificados para display (sin add-ons, créditos, referidos)
+// Planes simplificados para display - Features diferenciadas por vertical
 const PLANS_DISPLAY: PlanDisplay[] = [
   {
     id: 'starter',
     name: 'Starter',
-    description: 'Para negocios que inician su automatizacion',
+    description: 'Automatiza lo esencial',
     monthlyPrice: 3490,
     branchLimit: 1,
     conversationsLabel: '500 conversaciones/mes',
@@ -50,16 +78,16 @@ const PLANS_DISPLAY: PlanDisplay[] = [
     icon: <Zap className="w-6 h-6" />,
     features: [
       'Asistente IA 24/7 en WhatsApp',
-      'Hasta 500 conversaciones/mes',
-      'Dashboard basico',
+      'Agenda automatizada de citas',
+      'Recordatorios automaticos',
+      'Dashboard de metricas',
       'Soporte por email',
-      '1 sucursal incluida',
     ],
   },
   {
     id: 'essentials',
     name: 'Essentials',
-    description: 'La opcion mas popular para crecer',
+    description: 'El favorito de los negocios en crecimiento',
     monthlyPrice: 7490,
     branchLimit: 5,
     conversationsLabel: '2,000 conversaciones/mes',
@@ -67,35 +95,79 @@ const PLANS_DISPLAY: PlanDisplay[] = [
     highlighted: true,
     icon: <Sparkles className="w-6 h-6" />,
     features: [
-      'Todo lo de Starter',
-      'Hasta 2,000 conversaciones/mes',
-      'Integracion con sistemas existentes',
-      'Soporte prioritario',
-      'Call de configuracion 30 min',
+      'Todo lo de Starter +',
+      'Facturacion automatica',
+      'Integracion con tu sistema actual',
+      'Historial completo de clientes',
+      'Soporte prioritario + Call 30 min',
       'Hasta 5 sucursales',
     ],
   },
   {
     id: 'growth',
     name: 'Growth',
-    description: 'Para operaciones en expansion',
+    description: 'Para los que quieren dominar',
     monthlyPrice: 12490,
     branchLimit: 8,
     conversationsLabel: 'Conversaciones ilimitadas',
     supportLevel: '24/7',
     icon: <Building2 className="w-6 h-6" />,
     features: [
-      'Todo lo de Essentials',
-      'Conversaciones ilimitadas',
-      'Multi-canal (WhatsApp, Web, Email)',
-      'Soporte 24/7',
-      'IA multi-sucursal',
+      'Todo lo de Essentials +',
+      'Agente IA con voz (llamadas)',
+      'Multi-canal: WhatsApp, Web, Email',
+      'Analiticas avanzadas y reportes',
+      'Soporte 24/7 dedicado',
       'Hasta 8 sucursales',
     ],
   },
 ];
 
 // Header y Footer vienen del layout de (marketing)
+
+// ============================================================
+// COMPONENTE: Selector de Vertical
+// ============================================================
+
+function VerticalSelector({
+  selectedVertical,
+  onSelect,
+}: {
+  selectedVertical: VerticalType;
+  onSelect: (vertical: VerticalType) => void;
+}) {
+  return (
+    <motion.div
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.4, delay: 0.1 }}
+      className="flex flex-col items-center gap-4 mb-8"
+    >
+      <p className="text-sm text-slate-500 font-medium">Selecciona tu tipo de negocio</p>
+      <div className="inline-flex bg-white rounded-2xl p-1.5 shadow-lg border border-slate-200">
+        {VERTICALS_DISPLAY.map((vertical) => (
+          <button
+            key={vertical.id}
+            onClick={() => onSelect(vertical.id)}
+            className={`
+              flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200
+              ${selectedVertical === vertical.id
+                ? 'bg-gradient-to-r from-tis-coral to-tis-pink text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }
+            `}
+          >
+            <span className="text-xl">{vertical.icon}</span>
+            <span>{vertical.name}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-slate-400">
+        Las funciones se adaptan a tu industria
+      </p>
+    </motion.div>
+  );
+}
 
 // ============================================================
 // COMPONENTE: Plan Card
@@ -107,13 +179,18 @@ function PlanCard({
   onSelect,
   branches,
   onBranchChange,
+  selectedVertical,
 }: {
   plan: PlanDisplay;
   isSelected: boolean;
   onSelect: () => void;
   branches: number;
   onBranchChange: (delta: number) => void;
+  selectedVertical: VerticalType;
 }) {
+  // Obtener features específicas de la vertical
+  const verticalData = VERTICALS_DISPLAY.find(v => v.id === selectedVertical);
+  const verticalFeatures = verticalData?.features[plan.id as keyof typeof verticalData.features] || [];
   const canAdd = canAddBranch(plan.id, branches);
   const canRemove = branches > 1;
   const branchCost = calculateBranchCostPesos(plan.id, branches);
@@ -215,10 +292,23 @@ function PlanCard({
         </div>
       )}
 
-      {/* Features */}
+      {/* Features - Combinadas: generales + verticales */}
       <ul className="space-y-3 mb-6">
-        {plan.features.map((feature, index) => (
-          <li key={index} className="flex items-start gap-3">
+        {/* Features específicas de la vertical primero */}
+        {verticalFeatures.map((feature, index) => (
+          <li key={`vertical-${index}`} className="flex items-start gap-3">
+            <div className={`
+              w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5
+              ${isSelected ? 'bg-tis-coral/10 text-tis-coral' : 'bg-slate-100 text-slate-400'}
+            `}>
+              <Check className="w-3 h-3" />
+            </div>
+            <span className="text-sm text-slate-700 font-medium">{feature}</span>
+          </li>
+        ))}
+        {/* Features generales del plan */}
+        {plan.features.slice(0, 3).map((feature, index) => (
+          <li key={`general-${index}`} className="flex items-start gap-3">
             <div className={`
               w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5
               ${isSelected ? 'bg-tis-coral/10 text-tis-coral' : 'bg-slate-100 text-slate-400'}
@@ -366,6 +456,7 @@ function PricingContent() {
   const searchParams = useSearchParams();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [branches, setBranches] = useState(1);
+  const [selectedVertical, setSelectedVertical] = useState<VerticalType>('dental');
 
   // Cargar plan recomendado desde URL o sessionStorage
   useEffect(() => {
@@ -416,14 +507,15 @@ function PricingContent() {
     sessionStorage.setItem('selected_plan', selectedPlanId);
     sessionStorage.setItem('pricing_branches', branches.toString());
     sessionStorage.setItem('pricing_addons', JSON.stringify([])); // Sin add-ons
+    sessionStorage.setItem('selected_vertical', selectedVertical); // Guardar vertical
 
     router.push(`/checkout?plan=${selectedPlanId}`);
   };
 
   return (
     <>
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6">
+      {/* Hero Section - Estilo Apple */}
+      <section className="pt-24 pb-12 px-6">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
@@ -431,16 +523,29 @@ function PricingContent() {
             transition={{ duration: 0.5 }}
           >
             <span className="inline-block px-4 py-1.5 bg-tis-coral/10 text-tis-coral text-sm font-medium rounded-full mb-6">
-              Precios simples y transparentes
+              Invierte en tiempo, no en tareas
             </span>
-            <h1 className="text-4xl md:text-5xl font-bold text-slate-800 mb-4">
-              Elige el plan perfecto para tu negocio
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 mb-6 leading-tight">
+              Tu competencia ya{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-tis-coral to-tis-pink">
+                automatizo.
+              </span>
             </h1>
-            <p className="text-xl text-slate-500 max-w-2xl mx-auto">
-              Automatiza tu operacion y recupera horas cada semana.
-              Sin contratos a largo plazo, cancela cuando quieras.
+            <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+              Cada dia sin automatizar son horas perdidas y clientes que no atiendes.
+              Empieza hoy. Sin contratos. Sin riesgos.
             </p>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Vertical Selector */}
+      <section className="px-6 pb-4">
+        <div className="max-w-6xl mx-auto">
+          <VerticalSelector
+            selectedVertical={selectedVertical}
+            onSelect={setSelectedVertical}
+          />
         </div>
       </section>
 
@@ -456,6 +561,7 @@ function PricingContent() {
                 onSelect={() => handleSelectPlan(plan.id)}
                 branches={selectedPlanId === plan.id ? branches : 1}
                 onBranchChange={handleBranchChange}
+                selectedVertical={selectedVertical}
               />
             ))}
           </div>
@@ -465,37 +571,66 @@ function PricingContent() {
         </div>
       </section>
 
-      {/* Trust Section */}
+      {/* Trust Section - Urgencia sutil */}
       <section className="px-6 py-16 bg-white">
         <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            whileInView={{ y: 0, opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-3">
+              Mientras lo piensas, tu competencia avanza
+            </h2>
+            <p className="text-slate-500">
+              Miles de negocios ya operan en automatico. Es tu turno.
+            </p>
+          </motion.div>
+
           <div className="grid md:grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <MessageSquare className="w-6 h-6 text-slate-600" />
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+            >
+              <div className="w-14 h-14 bg-tis-coral/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-7 h-7 text-tis-coral" />
               </div>
-              <h3 className="font-semibold text-slate-800 mb-2">Atencion 24/7</h3>
-              <p className="text-sm text-slate-500">
-                Tu asistente nunca duerme. Atiende clientes a cualquier hora.
+              <h3 className="font-bold text-slate-900 mb-2">Nunca duerme</h3>
+              <p className="text-sm text-slate-600">
+                Responde a las 3am igual que a las 3pm. Sin excusas, sin descansos.
               </p>
-            </div>
-            <div>
-              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Clock className="w-6 h-6 text-slate-600" />
+            </motion.div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="w-14 h-14 bg-tis-coral/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Clock className="w-7 h-7 text-tis-coral" />
               </div>
-              <h3 className="font-semibold text-slate-800 mb-2">Implementacion rapida</h3>
-              <p className="text-sm text-slate-500">
-                Configuracion completa en menos de 48 horas.
+              <h3 className="font-bold text-slate-900 mb-2">48 horas y listo</h3>
+              <p className="text-sm text-slate-600">
+                No esperes meses. En dos dias tu negocio opera diferente.
               </p>
-            </div>
-            <div>
-              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-6 h-6 text-slate-600" />
+            </motion.div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+            >
+              <div className="w-14 h-14 bg-tis-coral/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-7 h-7 text-tis-coral" />
               </div>
-              <h3 className="font-semibold text-slate-800 mb-2">Sin compromiso</h3>
-              <p className="text-sm text-slate-500">
-                Cancela cuando quieras. Sin penalizaciones.
+              <h3 className="font-bold text-slate-900 mb-2">Cero riesgo</h3>
+              <p className="text-sm text-slate-600">
+                Sin contratos. Cancelas cuando quieras. Asi de simple.
               </p>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>

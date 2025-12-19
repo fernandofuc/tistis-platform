@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Gift } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Container from './Container';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -79,13 +78,6 @@ export default function Header() {
 
           {/* Botones Derecha */}
           <div className="flex items-center gap-3">
-            <button
-              className="p-2 hover:bg-tis-bg-secondary rounded-lg transition-colors"
-              title="Sistema de Referidos"
-            >
-              <Gift className="w-5 h-5 text-tis-text-primary" />
-            </button>
-
             {loading ? (
               <div className="w-20 h-8 bg-gray-100 animate-pulse rounded-lg" />
             ) : user ? (
