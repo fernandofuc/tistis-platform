@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
   Check,
@@ -96,61 +95,7 @@ const PLANS_DISPLAY: PlanDisplay[] = [
   },
 ];
 
-// ============================================================
-// COMPONENTE: Header
-// ============================================================
-
-function PricingHeader() {
-  return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logos/tis-brain-logo.png"
-            alt="TIS TIS"
-            width={36}
-            height={36}
-            className="w-9 h-9 object-contain"
-          />
-          <span className="text-lg font-semibold text-slate-800">TIS TIS</span>
-        </Link>
-
-        {/* Navigation */}
-        <nav className="hidden md:flex items-center gap-8">
-          <Link
-            href="/pricing"
-            className="text-sm font-medium text-tis-coral"
-          >
-            Planes
-          </Link>
-          <Link
-            href="/como-funciona"
-            className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            Como funciona
-          </Link>
-        </nav>
-
-        {/* Auth buttons */}
-        <div className="flex items-center gap-4">
-          <Link
-            href="/login"
-            className="text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
-          >
-            Iniciar sesion
-          </Link>
-          <Link
-            href="/discovery"
-            className="px-4 py-2 bg-tis-coral text-white text-sm font-medium rounded-lg hover:bg-tis-pink transition-colors"
-          >
-            Comenzar
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
+// Header y Footer vienen del layout de (marketing)
 
 // ============================================================
 // COMPONENTE: Plan Card
@@ -594,9 +539,8 @@ function PricingContent() {
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-slate-50">
-      <PricingHeader />
       <Suspense fallback={
-        <div className="pt-32 flex items-center justify-center">
+        <div className="pt-8 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-tis-coral" />
         </div>
       }>
