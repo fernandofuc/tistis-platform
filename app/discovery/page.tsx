@@ -488,6 +488,7 @@ export default function DiscoveryPage() {
   }, [sessionToken, router]);
 
   // Cargar mensaje inicial
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const initialMessage = sessionStorage.getItem('initial_message');
     if (initialMessage) {

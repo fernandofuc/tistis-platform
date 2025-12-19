@@ -265,7 +265,7 @@ function TestimonialsSection() {
               className="bg-white rounded-2xl p-8 shadow-sm"
             >
               <p className="text-xl text-slate-700 mb-6 leading-relaxed">
-                "{testimonial.quote}"
+                &ldquo;{testimonial.quote}&rdquo;
               </p>
               <div>
                 <p className="font-semibold text-slate-800">{testimonial.author}</p>
