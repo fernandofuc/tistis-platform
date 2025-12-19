@@ -187,18 +187,17 @@ export async function POST(request: NextRequest) {
       console.error('[Payments API] STRIPE_SECRET_KEY not configured');
       return NextResponse.json({ error: 'Stripe no configurado en el servidor' }, { status: 500 });
     }
-    console.log('[Payments API] STRIPE_SECRET_KEY present:', process.env.STRIPE_SECRET_KEY.substring(0, 7) + '...');
+    // STRIPE_SECRET_KEY validated - not logging for security
 
     const accessToken = getAccessToken(request);
     if (!accessToken) {
       console.error('[Payments API] No access token in request');
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
-    console.log('[Payments API] Access token present');
+    // Access token validated
 
     const supabase = createAuthenticatedClient(accessToken);
     const context = await getUserTenant(supabase);
-    console.log('[Payments API] User context:', context ? { tenant_id: context.userRole?.tenant_id, hasPermission: context.hasPermission } : null);
 
     if (!context) {
       console.error('[Payments API] User context not found');
@@ -210,7 +209,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos para gestionar pagos' }, { status: 403 });
     }
 
-    console.log('[Payments API] Querying stripe_connect_accounts for tenant:', context.userRole.tenant_id);
 
     // Get or create Stripe Connect account record
     let { data: account, error: selectError } = await supabase
@@ -219,7 +217,6 @@ export async function POST(request: NextRequest) {
       .eq('tenant_id', context.userRole.tenant_id)
       .single();
 
-    console.log('[Payments API] Query result - account:', account?.id, 'error:', selectError?.code, selectError?.message);
 
     // Handle table not existing (migration not run)
     if (selectError && selectError.code === '42P01') {

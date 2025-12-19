@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
   try {
     const { messages, sessionToken } = await req.json();
 
-    console.log('Chat Discovery request:', { messageCount: messages.length, sessionToken });
+    // Chat Discovery request received
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(
@@ -180,8 +180,7 @@ export async function POST(req: NextRequest) {
 
     const accumulatedText = response_ai.choices[0]?.message?.content || '';
 
-    console.log('AI Response:', accumulatedText.substring(0, 200));
-    console.log('Tokens used:', response_ai.usage);
+    // AI response processed
 
     // Guardar en base de datos
     if (sessionToken && accumulatedText) {
@@ -224,7 +223,7 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        console.log('Session saved:', { sessionToken, isComplete, businessType: aiAnalysis?.business_type });
+        // Session saved to database
       } catch (dbError) {
         console.error('Database error:', dbError);
       }

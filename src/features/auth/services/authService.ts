@@ -76,7 +76,7 @@ export async function resetPassword(email: string): Promise<{ error: string | nu
     return { error: error.message };
   }
 
-  console.log('🟢 Reset password email sent to:', email);
+  // Reset password email sent
   return { error: null };
 }
 
@@ -90,7 +90,7 @@ export async function updatePassword(newPassword: string): Promise<{ error: stri
     return { error: error.message };
   }
 
-  console.log('🟢 Password updated successfully');
+  // Password updated successfully
   return { error: null };
 }
 
@@ -268,7 +268,7 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
         return doubleCheck[0] as Staff;
       }
 
-      console.log('🟡 No staff record found for email, creating via API:', email);
+      // No staff record found, creating via API
 
       try {
         // Get current session token
@@ -294,7 +294,7 @@ export async function fetchStaffByEmail(email: string): Promise<Staff | null> {
           return null;
         }
 
-        console.log('🟢 Staff record created via API:', result.staff?.display_name);
+        // Staff record created via API
 
         // Fetch the complete staff record (use array to handle duplicates)
         const { data: newStaffArray } = await supabase
