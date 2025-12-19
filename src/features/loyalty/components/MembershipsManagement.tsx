@@ -538,7 +538,7 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
               full_name: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
               phone: patient.phone,
               email: patient.email,
-              source: 'patient_conversion',
+              source: 'other', // Valid LeadSource value for patient-to-lead conversion
               status: 'converted',
             })
             .select('id')

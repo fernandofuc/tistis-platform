@@ -292,12 +292,13 @@ export async function findOrCreateTikTokLead(
   const profile = await getTikTokUserProfile(openId, accessToken);
   const name = profile?.display_name || 'Usuario TikTok';
 
-  // Crear nuevo lead
+  // Crear nuevo lead (use 'other' as 'tiktok' is not valid in leads.source constraint)
   const leadData: Record<string, unknown> = {
     tenant_id: tenantId,
     branch_id: branchId,
     name,
-    source: 'tiktok',
+    source: 'other',
+    source_details: { platform: 'tiktok' },
     status: 'new',
     classification: 'warm',
     score: 50,

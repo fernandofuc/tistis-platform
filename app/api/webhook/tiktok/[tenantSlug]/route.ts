@@ -313,10 +313,10 @@ async function processFollowEvent(
     if (lead.isNew) {
       console.log(`[TikTok Webhook] New follower lead created: ${lead.id}`);
 
-      // Actualizar source si es nuevo
+      // Actualizar source si es nuevo (use 'other' as 'tiktok_follow' is not valid in constraint)
       await supabase
         .from('leads')
-        .update({ source: 'tiktok_follow' })
+        .update({ source: 'other', source_details: { platform: 'tiktok', type: 'follow' } })
         .eq('id', lead.id);
     }
   } catch (error) {
