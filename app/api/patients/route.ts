@@ -130,10 +130,10 @@ export async function GET(request: NextRequest) {
 
     // Search by name, email, phone, patient_number
     if (search) {
-      // Sanitize search input to prevent SQL injection in ilike
-      const sanitizedSearch = search.replace(/[%_]/g, '\\$&');
+      // Use * wildcard for more reliable PostgREST pattern matching
+      const pattern = `*${search}*`;
       query = query.or(
-        `first_name.ilike.%${sanitizedSearch}%,last_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%,phone.ilike.%${sanitizedSearch}%,patient_number.ilike.%${sanitizedSearch}%`
+        `first_name.ilike.${pattern},last_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern},patient_number.ilike.${pattern}`
       );
     }
 

@@ -40,7 +40,10 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
     if (search) {
-      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`);
+      // Use * wildcard for more reliable PostgREST pattern matching
+      // Search in full_name, first_name, last_name (not "name" which doesn't exist)
+      const pattern = `*${search}*`;
+      query = query.or(`full_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern},phone.ilike.${pattern},email.ilike.${pattern}`);
     }
 
     // Apply sorting

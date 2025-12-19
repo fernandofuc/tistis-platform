@@ -460,6 +460,7 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
         },
       });
       const data = await response.json();
+      console.log('[MembershipsManagement] Search response:', data);
       if (data.success && data.data?.members) {
         // Transform to Lead format
         setLeads(data.data.members.map((m: { id: string; name: string; email: string; phone: string }) => ({
@@ -468,9 +469,16 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
           email: m.email || '',
           phone: m.phone || '',
         })));
+      } else if (data.error) {
+        console.error('[MembershipsManagement] API Error:', data.error, data.details);
+        setLeads([]);
+      } else {
+        console.log('[MembershipsManagement] No members found or unexpected response format');
+        setLeads([]);
       }
     } catch (err) {
-      console.error('Error searching leads:', err);
+      console.error('[MembershipsManagement] Error searching leads:', err);
+      setLeads([]);
     } finally {
       setLoadingLeads(false);
     }

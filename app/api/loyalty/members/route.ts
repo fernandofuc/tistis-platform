@@ -134,14 +134,17 @@ export async function GET(request: NextRequest) {
 
     // Apply search filter - search across multiple name fields and contact info
     if (search) {
-      // Escape special characters for ilike and build OR conditions
-      const escapedSearch = search.replace(/[%_]/g, '\\$&');
-      const searchTerm = `%${escapedSearch}%`;
+      // Use wildcard pattern for ILIKE search
+      // Note: The * wildcard is supported in PostgREST ilike as an alternative to %
+      const pattern = `*${search}*`;
 
-      // Use filter format that works better with special characters
+      // Build OR conditions for multiple columns
+      // Using * instead of % as it's more reliable in PostgREST filter strings
       query = query.or(
-        `full_name.ilike.${searchTerm},first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm},phone_normalized.ilike.${searchTerm}`
+        `full_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern},phone_normalized.ilike.${pattern}`
       );
+
+      console.log('[Members API] Search pattern:', pattern);
     }
 
     // Apply pagination
@@ -164,8 +167,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[Members API] GET error:', error);
-      return NextResponse.json({ error: 'Error al obtener miembros' }, { status: 500 });
+      console.error('[Members API] Error details:', JSON.stringify(error, null, 2));
+      return NextResponse.json({
+        error: 'Error al obtener miembros',
+        details: error.message || 'Unknown error'
+      }, { status: 500 });
     }
+
+    console.log(`[Members API] Found ${members?.length || 0} leads, total: ${count}`);
 
     // Transform data for frontend
     let transformedMembers = (members || []).map(member => {
