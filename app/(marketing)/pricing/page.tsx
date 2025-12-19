@@ -99,6 +99,7 @@ const PLANS_DISPLAY: PlanDisplay[] = [
       'Facturacion automatica',
       'Integracion con tu sistema actual',
       'Historial completo de clientes',
+      'Tokens de lealtad',
       'Soporte prioritario + Call 30 min',
       'Hasta 5 sucursales',
     ],

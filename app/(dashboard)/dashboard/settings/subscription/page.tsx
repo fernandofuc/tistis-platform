@@ -60,6 +60,7 @@ const DASHBOARD_PLANS: DashboardPlanDisplay[] = [
       'Facturacion automatica',
       'Integracion con tu sistema actual',
       'Historial completo de clientes',
+      'Tokens de lealtad',
       'Soporte prioritario + Call 30 min',
       'Hasta 5 sucursales',
     ],
