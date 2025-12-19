@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { ArrowRight, MessageSquare, Zap, Clock, Shield, CheckCircle, ChevronRight, TrendingUp, Brain } from 'lucide-react';
+import { ArrowRight, Zap, Clock, CheckCircle, ChevronRight, TrendingUp, Brain } from 'lucide-react';
 
 // ============================================================
 // TIPOS Y CONSTANTES
@@ -48,26 +48,26 @@ const TESTIMONIALS = [
 ];
 
 // Posiciones fijas para cerebros flotantes
-const BRAIN_POSITIONS = [8, 18, 32, 48, 62, 78, 88, 95];
+const BRAIN_POSITIONS = [5, 15, 28, 42, 55, 68, 82, 92];
 
 // ============================================================
 // COMPONENTES
 // ============================================================
 
-function FloatingBrain({ delay, size = 24, index = 0 }: { delay: number; size?: number; index?: number }) {
+function FloatingBrain({ delay, size = 32, index = 0 }: { delay: number; size?: number; index?: number }) {
   const leftPosition = BRAIN_POSITIONS[index % BRAIN_POSITIONS.length];
 
   return (
     <motion.div
-      initial={{ y: -50, opacity: 0, rotate: -15 }}
+      initial={{ y: -100, opacity: 0, rotate: -10 }}
       animate={{
-        y: [0, 300, 600],
-        opacity: [0, 0.4, 0.4, 0],
-        rotate: [-15, 15, -15],
-        x: [0, 15, -15, 0],
+        y: [0, 250, 500],
+        opacity: [0, 0.6, 0.6, 0],
+        rotate: [-10, 10, -10],
+        x: [0, 20, -20, 0],
       }}
       transition={{
-        duration: 12,
+        duration: 15,
         delay,
         repeat: Infinity,
         ease: "easeInOut",
@@ -75,7 +75,7 @@ function FloatingBrain({ delay, size = 24, index = 0 }: { delay: number; size?: 
       className="absolute pointer-events-none"
       style={{
         left: `${leftPosition}%`,
-        top: -50,
+        top: -100,
       }}
     >
       <Image
@@ -83,73 +83,10 @@ function FloatingBrain({ delay, size = 24, index = 0 }: { delay: number; size?: 
         alt=""
         width={size}
         height={size}
-        className="opacity-30"
+        className="opacity-50"
+        style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
       />
     </motion.div>
-  );
-}
-
-function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
-  return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/logos/tis-brain-logo.png"
-            alt="TIS TIS"
-            width={40}
-            height={40}
-            className="w-10 h-10 object-contain"
-          />
-          <Image
-            src="/logos/tis-text-logo.png"
-            alt="TIS TIS"
-            width={80}
-            height={24}
-            className="h-6 w-auto object-contain"
-          />
-        </Link>
-
-        <nav className="hidden md:flex items-center gap-8">
-          <Link
-            href="/pricing"
-            className="text-sm font-medium text-slate-800 hover:text-tis-coral transition-colors"
-          >
-            Planes
-          </Link>
-          <Link
-            href="/como-funciona"
-            className="text-sm font-medium text-slate-800 hover:text-tis-coral transition-colors"
-          >
-            Como funciona
-          </Link>
-        </nav>
-
-        <div className="flex items-center gap-4">
-          {isAuthenticated ? (
-            <Link
-              href="/dashboard"
-              className="text-sm font-medium text-slate-800 hover:text-tis-coral transition-colors"
-            >
-              Dashboard
-            </Link>
-          ) : (
-            <Link
-              href="/auth/login"
-              className="text-sm font-medium text-slate-800 hover:text-tis-coral transition-colors"
-            >
-              Iniciar sesion
-            </Link>
-          )}
-          <Link
-            href="/discovery"
-            className="px-4 py-2 bg-tis-coral text-white text-sm font-medium rounded-lg hover:bg-tis-pink transition-colors"
-          >
-            Comenzar
-          </Link>
-        </div>
-      </div>
-    </header>
   );
 }
 
@@ -160,15 +97,15 @@ function HeroSection({ message, setMessage, placeholderText, onSubmit }: {
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
-    <section className="relative pt-32 pb-20 px-6 overflow-hidden">
+    <section className="relative pt-12 pb-20 px-6 overflow-hidden min-h-[70vh] flex items-center">
       {/* Cerebros flotantes de fondo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(8)].map((_, i) => (
-          <FloatingBrain key={i} index={i} delay={i * 2} size={24 + (i % 3) * 8} />
+          <FloatingBrain key={i} index={i} delay={i * 2.5} size={28 + (i % 3) * 12} />
         ))}
       </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto text-center">
+      <div className="relative z-10 max-w-4xl mx-auto text-center w-full">
         {/* Badge */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
@@ -200,7 +137,7 @@ function HeroSection({ message, setMessage, placeholderText, onSubmit }: {
           </span>
         </motion.h1>
 
-        {/* Subheadline - La frase que ya tienes, es perfecta */}
+        {/* Subheadline */}
         <motion.p
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -218,7 +155,7 @@ function HeroSection({ message, setMessage, placeholderText, onSubmit }: {
           onSubmit={onSubmit}
           className="max-w-2xl mx-auto mb-8"
         >
-          <div className="bg-white rounded-2xl shadow-xl p-2 flex items-center border-2 border-tis-coral/30 focus-within:border-tis-coral focus-within:shadow-2xl focus-within:shadow-tis-coral/10 transition-all duration-300">
+          <div className="bg-white rounded-2xl shadow-xl p-2 flex items-center border-2 border-tis-coral/40 focus-within:border-tis-coral focus-within:shadow-2xl focus-within:shadow-tis-coral/10 transition-all duration-300">
             <input
               type="text"
               value={message}
@@ -414,51 +351,6 @@ function CTASection() {
   );
 }
 
-function Footer() {
-  return (
-    <footer className="py-12 px-6 bg-white border-t border-slate-100">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/logos/tis-brain-logo.png"
-              alt="TIS TIS"
-              width={32}
-              height={32}
-              className="w-8 h-8 object-contain"
-            />
-            <Image
-              src="/logos/tis-text-logo.png"
-              alt="TIS TIS"
-              width={64}
-              height={20}
-              className="h-5 w-auto object-contain"
-            />
-          </div>
-
-          <nav className="flex items-center gap-6 text-sm">
-            <Link href="/terms" className="text-slate-600 hover:text-slate-900 transition-colors">
-              Terminos
-            </Link>
-            <Link href="/privacy" className="text-slate-600 hover:text-slate-900 transition-colors">
-              Privacidad
-            </Link>
-            <Link href="/contact" className="text-slate-600 hover:text-slate-900 transition-colors">
-              Contacto
-            </Link>
-          </nav>
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-slate-100 text-center">
-          <p className="text-sm text-slate-500">
-            2025 TIS TIS. Todos los derechos reservados.
-          </p>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
 // ============================================================
 // COMPONENTE PRINCIPAL
 // ============================================================
@@ -470,7 +362,6 @@ export default function LandingPage() {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [charIndex, setCharIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const placeholders = useMemo(() => [
     'Tengo una clinica y quiero automatizar las citas...',
@@ -478,31 +369,6 @@ export default function LandingPage() {
     'Quiero que WhatsApp se responda solo...',
     'Necesito organizar mi inventario automaticamente...',
   ], []);
-
-  // Verificar si el usuario esta autenticado (de forma segura)
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Importar Supabase dinamicamente para evitar errores si no esta configurado
-        const { supabase } = await import('@/lib/supabase');
-        const { data: { session } } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session);
-
-        // Escuchar cambios de autenticacion
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          setIsAuthenticated(!!session);
-        });
-
-        return () => subscription.unsubscribe();
-      } catch (error) {
-        // Si Supabase no esta configurado, simplemente no mostramos Dashboard
-        console.warn('Auth check skipped:', error);
-        setIsAuthenticated(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
 
   // Animacion del placeholder
   useEffect(() => {
@@ -539,7 +405,6 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Header isAuthenticated={isAuthenticated} />
       <HeroSection
         message={message}
         setMessage={setMessage}
@@ -550,7 +415,6 @@ export default function LandingPage() {
       <FeaturesSection />
       <TestimonialsSection />
       <CTASection />
-      <Footer />
     </div>
   );
 }
