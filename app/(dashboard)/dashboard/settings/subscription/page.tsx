@@ -1,91 +1,96 @@
 // =====================================================
 // TIS TIS PLATFORM - Subscription Management Page
-// Change plan, view billing, manage subscription (Claude-style)
+// Change plan, view billing, manage subscription
+// USES CENTRALIZED PLAN CONFIG - Single source of truth
 // =====================================================
 
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, Button, Badge } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
+import { ArrowRight, Shield, Users, Phone, Check } from 'lucide-react';
 
-// Plan definitions matching the pricing page
-const PLANS = [
+// Import centralized plan config - SINGLE SOURCE OF TRUTH
+import { PLAN_CONFIG, getPlanConfig, type PlanConfig } from '@/src/shared/config/plans';
+
+// ==============================================
+// PLAN DISPLAY CONFIG - Features for dashboard
+// Synchronized with pricing page
+// ==============================================
+
+interface DashboardPlanDisplay {
+  id: string;
+  name: string;
+  subtitle: string;
+  price: number;
+  features: string[];
+  maxBranches: number;
+  popular?: boolean;
+}
+
+// Plans for dashboard display (excludes Scale - replaced by Enterprise card)
+const DASHBOARD_PLANS: DashboardPlanDisplay[] = [
   {
     id: 'starter',
     name: 'Starter',
-    subtitle: 'Para Empezar (1 Sucursal)',
-    price: 3490,
+    subtitle: 'Automatiza lo esencial',
+    price: PLAN_CONFIG.starter.monthlyPricePesos,
     features: [
-      'Panel de control básico',
-      'Asistente automatizado 24/7',
-      '2,500 mensajes/mes',
-      'Alertas de inventario básicas',
-      'Reportes diarios automáticos',
-      '5 créditos/mes',
+      'Asistente IA 24/7 en WhatsApp',
+      'Agenda automatizada de citas',
+      'Recordatorios automaticos',
+      'Dashboard de metricas',
+      'Soporte por email',
     ],
-    maxBranches: 1,
+    maxBranches: PLAN_CONFIG.starter.branchLimit,
   },
   {
     id: 'essentials',
     name: 'Essentials',
-    subtitle: 'Multi-Sucursal con Automatización',
-    price: 7490,
+    subtitle: 'El favorito de los negocios en crecimiento',
+    price: PLAN_CONFIG.essentials.monthlyPricePesos,
     features: [
       'Todo lo de Starter',
-      'Facturación CFDI 4.0 incluida',
-      'Multi-sucursal',
-      'Auto-reorden 3 productos',
-      'Cierre diario con IA',
-      'Tokens lealtad básico',
-      '8 créditos/mes',
+      'Facturacion automatica',
+      'Integracion con tu sistema actual',
+      'Historial completo de clientes',
+      'Soporte prioritario + Call 30 min',
+      'Hasta 5 sucursales',
     ],
-    maxBranches: 9,
+    maxBranches: PLAN_CONFIG.essentials.branchLimit,
+    popular: true,
   },
   {
     id: 'growth',
     name: 'Growth',
-    subtitle: 'Operación Inteligente',
-    price: 12490,
-    popular: true,
+    subtitle: 'Para los que quieren dominar',
+    price: PLAN_CONFIG.growth.monthlyPricePesos,
     features: [
       'Todo lo de Essentials',
-      'Auto-reorden ilimitado',
-      'Predicción demanda ML',
-      'Anomalías tiempo real',
-      'Campañas WhatsApp segmentadas',
-      'Voz-IA avanzado',
-      '13 créditos/mes',
+      'Agente IA con voz (llamadas)',
+      'Multi-canal: WhatsApp, Web, Email',
+      'Analiticas avanzadas y reportes',
+      'Soporte 24/7 dedicado',
+      'Hasta 8 sucursales',
     ],
-    maxBranches: 9,
-  },
-  {
-    id: 'scale',
-    name: 'Scale',
-    subtitle: 'Enterprise - Máxima Capacidad',
-    price: 19990,
-    features: [
-      'Todo lo de Growth',
-      'ML predicción avanzada',
-      'BI con insights automáticos',
-      'Automatización end-to-end',
-      'Account Manager dedicado',
-      'Disaster recovery incluido',
-      '25 créditos/mes',
-    ],
-    maxBranches: 9,
+    maxBranches: PLAN_CONFIG.growth.branchLimit,
   },
 ];
+
+// ==============================================
+// COMPONENT
+// ==============================================
 
 export default function SubscriptionPage() {
   const router = useRouter();
 
   // Use ONLY useAuthContext - it has everything we need (staff, tenant, branches)
-  // This avoids race conditions between two different hooks
   const { staff, tenant, branches, loading, initialized } = useAuthContext();
 
   const [changingPlan, setChangingPlan] = useState(false);
@@ -108,7 +113,7 @@ export default function SubscriptionPage() {
 
   // Handle plan selection
   const handleSelectPlan = (planId: string) => {
-    if (planId === currentPlan) return; // Already on this plan
+    if (planId === currentPlan) return;
     setSelectedPlan(planId);
     setShowConfirmModal(true);
   };
@@ -121,7 +126,6 @@ export default function SubscriptionPage() {
     setError(null);
 
     try {
-      // Get auth token
       const { data: { session } } = await supabase.auth.getSession();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -176,21 +180,20 @@ export default function SubscriptionPage() {
       starter: 1,
       essentials: 2,
       growth: 3,
-      scale: 4,
     };
     return tiers[planId.toLowerCase()] || 0;
   };
 
   // Check if plan is upgrade or downgrade
   const isUpgrade = (planId: string): boolean => {
-    if (!currentPlan) return true; // If no current plan, any plan is an "upgrade"
+    if (!currentPlan) return true;
     return getPlanTier(planId) > getPlanTier(currentPlan);
   };
 
-  // Wait for auth to initialize before showing access denied
+  // Wait for auth to initialize
   if (!initialized || loading) {
     return (
-      <PageWrapper title="Gestión de Suscripción" subtitle="Cargando...">
+      <PageWrapper title="Gestion de Suscripcion" subtitle="Cargando...">
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C5CFC]"></div>
         </div>
@@ -200,16 +203,14 @@ export default function SubscriptionPage() {
 
   if (!isOwner) {
     return (
-      <PageWrapper title="Gestión de Suscripción" subtitle="Solo el propietario puede gestionar la suscripción">
+      <PageWrapper title="Gestion de Suscripcion" subtitle="Solo el propietario puede gestionar la suscripcion">
         <Card variant="bordered">
           <CardContent className="py-12 text-center">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+              <Shield className="w-8 h-8 text-amber-600" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Acceso Restringido</h3>
-            <p className="text-gray-600 mb-6">Solo el propietario de la cuenta puede gestionar la suscripción.</p>
+            <p className="text-gray-600 mb-6">Solo el propietario de la cuenta puede gestionar la suscripcion.</p>
             <Button variant="outline" onClick={() => router.back()}>
               Volver
             </Button>
@@ -220,7 +221,7 @@ export default function SubscriptionPage() {
   }
 
   return (
-    <PageWrapper title="Gestión de Suscripción" subtitle="Cambia tu plan o gestiona tu facturación">
+    <PageWrapper title="Gestion de Suscripcion" subtitle="Cambia tu plan o gestiona tu facturacion">
       <div className="space-y-8">
         {/* Current Plan Summary */}
         {currentPlan && (
@@ -242,7 +243,7 @@ export default function SubscriptionPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-600 mb-1">Próximo cobro</p>
+                  <p className="text-sm text-gray-600 mb-1">Proximo cobro</p>
                   <p className="text-lg font-semibold text-gray-900">
                     N/A
                   </p>
@@ -262,12 +263,11 @@ export default function SubscriptionPage() {
           </div>
         )}
 
-        {/* Plans Grid */}
+        {/* Plans Grid - 3 plans + Enterprise card */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Planes Disponibles</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {PLANS.map((plan) => {
-              // Direct comparison - both are lowercase
+            {DASHBOARD_PLANS.map((plan) => {
               const isCurrentPlan = currentPlan === plan.id;
               const isPlanUpgrade = isUpgrade(plan.id);
 
@@ -308,9 +308,7 @@ export default function SubscriptionPage() {
                     <ul className="space-y-2 mb-6">
                       {plan.features.map((feature, idx) => (
                         <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
-                          <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
+                          <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                           {feature}
                         </li>
                       ))}
@@ -333,6 +331,61 @@ export default function SubscriptionPage() {
                 </Card>
               );
             })}
+
+            {/* Software Personalizado Card - Enterprise */}
+            <Card
+              variant="bordered"
+              className="relative bg-gradient-to-br from-slate-800 to-slate-900 text-white"
+            >
+              <CardContent className="pt-6">
+                <div className="text-center mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center mx-auto mb-3">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-xl font-bold">Software Personalizado</h4>
+                  <p className="text-sm text-slate-300">Enterprise - A tu medida</p>
+                </div>
+
+                <div className="text-center mb-6">
+                  <span className="text-2xl font-bold text-white">
+                    Cotizacion
+                  </span>
+                </div>
+
+                <ul className="space-y-2 mb-6">
+                  <li className="flex items-start gap-2 text-sm text-slate-300">
+                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    Todo lo de Growth
+                  </li>
+                  <li className="flex items-start gap-2 text-sm text-slate-300">
+                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    Integraciones personalizadas
+                  </li>
+                  <li className="flex items-start gap-2 text-sm text-slate-300">
+                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    Equipo dedicado
+                  </li>
+                  <li className="flex items-start gap-2 text-sm text-slate-300">
+                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    SLA 2 horas
+                  </li>
+                  <li className="flex items-start gap-2 text-sm text-slate-300">
+                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    Sucursales ilimitadas
+                  </li>
+                </ul>
+
+                <Link href="/enterprise" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full bg-white text-slate-800 hover:bg-slate-100 border-0"
+                  >
+                    Solicitar Cotizacion
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
@@ -342,7 +395,7 @@ export default function SubscriptionPage() {
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Volver a Configuración
+            Volver a Configuracion
           </Button>
         </div>
       </div>
@@ -362,8 +415,8 @@ export default function SubscriptionPage() {
               </h3>
               <p className="text-gray-600">
                 {isUpgrade(selectedPlan)
-                  ? `Estás por mejorar a ${PLANS.find(p => p.id === selectedPlan)?.name}. Se te cobrará la diferencia prorrateada.`
-                  : `Estás por cambiar a ${PLANS.find(p => p.id === selectedPlan)?.name}. El cambio se aplicará en tu próximo ciclo de facturación.`}
+                  ? `Estas por mejorar a ${DASHBOARD_PLANS.find(p => p.id === selectedPlan)?.name}. Se te cobrara la diferencia prorrateada.`
+                  : `Estas por cambiar a ${DASHBOARD_PLANS.find(p => p.id === selectedPlan)?.name}. El cambio se aplicara en tu proximo ciclo de facturacion.`}
               </p>
             </div>
 
