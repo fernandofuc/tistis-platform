@@ -1,35 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Building2, Users, Clock, CheckCircle2, ArrowLeft, Send, Loader2 } from 'lucide-react';
+import { Building2, Users, Clock, CheckCircle2, ArrowLeft, Send, Loader2, Zap, Shield, Target } from 'lucide-react';
 
 const industries = [
-  'Salud y Clínicas',
+  'Salud y Clinicas',
   'Restaurantes y Hospitalidad',
   'Retail y Comercio',
   'Servicios Profesionales',
-  'Educación',
+  'Educacion',
   'Manufactura',
-  'Logística y Transporte',
-  'Bienes Raíces',
+  'Logistica y Transporte',
+  'Bienes Raices',
   'Finanzas y Seguros',
   'Otro'
 ];
 
 const branchRanges = [
+  '1-4 sucursales',
   '5-10 sucursales',
   '11-25 sucursales',
   '26-50 sucursales',
-  '51-100 sucursales',
-  'Más de 100 sucursales'
+  'Mas de 50 sucursales'
 ];
 
 const enterpriseFeatures = [
-  { icon: '🎯', title: 'Sin Límites', description: 'Todos los add-ons, créditos ilimitados, API calls ilimitados' },
-  { icon: '👥', title: 'Equipo Dedicado', description: '3 personas dedicadas, SLA de 2 horas, training ilimitado' },
-  { icon: '🏢', title: 'Enterprise Features', description: 'Integración SAP/Oracle, compliance regulatorio, disaster recovery' },
+  { icon: Target, title: 'Sin Limites', description: 'Conversaciones ilimitadas, integraciones completas' },
+  { icon: Users, title: 'Equipo Dedicado', description: 'Soporte prioritario con SLA de 2 horas' },
+  { icon: Shield, title: 'Enterprise Features', description: 'Integraciones personalizadas y compliance' },
 ];
 
 export default function EnterprisePage() {
@@ -45,6 +45,28 @@ export default function EnterprisePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
+
+  // Pre-llenar con datos del Discovery si vienen de "otro" tipo de negocio
+  useEffect(() => {
+    const storedAnalysis = sessionStorage.getItem('discovery_analysis');
+    if (storedAnalysis) {
+      try {
+        const analysis = JSON.parse(storedAnalysis);
+        if (analysis.contact_info) {
+          setFormData(prev => ({
+            ...prev,
+            contactName: analysis.contact_info.name || '',
+            email: analysis.contact_info.email || '',
+            phone: analysis.contact_info.phone || '',
+            companyName: analysis.contact_info.company || '',
+            businessDescription: analysis.primary_pain || ''
+          }));
+        }
+      } catch (e) {
+        console.error('Error parsing discovery analysis:', e);
+      }
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({
@@ -133,13 +155,18 @@ export default function EnterprisePage() {
       {/* Features Summary */}
       <div className="max-w-4xl mx-auto px-4 -mt-8">
         <div className="bg-white rounded-2xl shadow-lg p-6 grid md:grid-cols-3 gap-6">
-          {enterpriseFeatures.map((feature, index) => (
-            <div key={index} className="text-center">
-              <div className="text-3xl mb-2">{feature.icon}</div>
-              <h3 className="font-semibold text-gray-900 mb-1">{feature.title}</h3>
-              <p className="text-sm text-gray-600">{feature.description}</p>
-            </div>
-          ))}
+          {enterpriseFeatures.map((feature, index) => {
+            const IconComponent = feature.icon;
+            return (
+              <div key={index} className="text-center">
+                <div className="w-12 h-12 bg-tis-coral/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <IconComponent className="w-6 h-6 text-tis-coral" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-1">{feature.title}</h3>
+                <p className="text-sm text-gray-600">{feature.description}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
