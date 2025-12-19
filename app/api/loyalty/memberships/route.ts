@@ -250,19 +250,69 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Plan no encontrado' }, { status: 404 });
     }
 
-    // Check if lead already has an active membership
+    // Check if lead already has a membership with this plan (any status)
     const { data: existingMembership } = await supabase
       .from('loyalty_memberships')
-      .select('id')
+      .select('id, status')
       .eq('lead_id', lead_id)
-      .eq('program_id', context.program.id)
-      .eq('status', 'active')
+      .eq('plan_id', plan_id)
       .single();
 
     if (existingMembership) {
+      if (existingMembership.status === 'active') {
+        return NextResponse.json({
+          error: 'Este paciente ya tiene una membresía activa con este plan'
+        }, { status: 400 });
+      }
+
+      // Reactivate cancelled/expired membership instead of creating new
+      const reactivateEndDate = new Date();
+      if (billing_cycle === 'annual') {
+        reactivateEndDate.setFullYear(reactivateEndDate.getFullYear() + 1);
+      } else {
+        reactivateEndDate.setMonth(reactivateEndDate.getMonth() + 1);
+      }
+
+      const planPrice = billing_cycle === 'annual' ? plan.price_annual : plan.price_monthly;
+      const reactivateAmount = payment_amount ?? planPrice ?? 0;
+
+      const { data: reactivatedMembership, error: reactivateError } = await supabase
+        .from('loyalty_memberships')
+        .update({
+          status: 'active',
+          start_date: new Date().toISOString(),
+          end_date: reactivateEndDate.toISOString(),
+          billing_cycle,
+          payment_amount: reactivateAmount,
+          auto_renew: false,
+          cancelled_at: null,
+          cancellation_reason: null,
+          metadata: {
+            payment_method: payment_method || 'manual',
+            notes: notes || null,
+            reactivated_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', existingMembership.id)
+        .select(`
+          *,
+          leads (full_name, first_name, last_name, email, phone),
+          loyalty_membership_plans (plan_name)
+        `)
+        .single();
+
+      if (reactivateError) {
+        console.error('[Memberships API] Reactivation error:', reactivateError);
+        return NextResponse.json({
+          error: `Error al reactivar membresía: ${reactivateError.message}`
+        }, { status: 500 });
+      }
+
       return NextResponse.json({
-        error: 'Este paciente ya tiene una membresía activa'
-      }, { status: 400 });
+        success: true,
+        data: reactivatedMembership,
+        reactivated: true
+      });
     }
 
     // Calculate dates
@@ -274,26 +324,40 @@ export async function POST(request: NextRequest) {
       endDate.setMonth(endDate.getMonth() + 1);
     }
 
-    // Determine payment amount
-    const amount = payment_amount || (billing_cycle === 'annual' ? plan.price_annual : plan.price_monthly);
+    // Determine payment amount - ensure it's always a valid number
+    const planPrice = billing_cycle === 'annual' ? plan.price_annual : plan.price_monthly;
+    const amount = payment_amount ?? planPrice ?? 0;
+
+    // Build insert data - only include fields that exist in the table
+    const insertData: Record<string, unknown> = {
+      tenant_id: context.userRole.tenant_id,
+      program_id: context.program.id,
+      lead_id,
+      plan_id,
+      status: 'active',
+      start_date: startDate.toISOString(),
+      end_date: endDate.toISOString(),
+      billing_cycle,
+      payment_amount: amount,
+      auto_renew: !!stripe_subscription_id,
+    };
+
+    // Only add stripe fields if provided
+    if (stripe_subscription_id) {
+      insertData.stripe_subscription_id = stripe_subscription_id;
+    }
+
+    // Store payment_method and notes in metadata since they're not columns
+    if (payment_method || notes) {
+      insertData.metadata = {
+        payment_method: payment_method || 'manual',
+        notes: notes || null,
+      };
+    }
 
     const { data: membership, error } = await supabase
       .from('loyalty_memberships')
-      .insert({
-        tenant_id: context.userRole.tenant_id,
-        program_id: context.program.id,
-        lead_id,
-        plan_id,
-        status: 'active',
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-        billing_cycle,
-        payment_method: payment_method || 'manual',
-        payment_amount: amount,
-        stripe_subscription_id: stripe_subscription_id || null,
-        auto_renew: !!stripe_subscription_id,
-        notes,
-      })
+      .insert(insertData)
       .select(`
         *,
         leads (full_name, first_name, last_name, email, phone),
@@ -303,7 +367,19 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[Memberships API] POST error:', error);
-      return NextResponse.json({ error: 'Error al crear membresía' }, { status: 500 });
+      console.error('[Memberships API] Insert data was:', JSON.stringify(insertData));
+
+      // Handle specific errors
+      if (error.code === '23505') {
+        // Unique constraint violation
+        return NextResponse.json({
+          error: 'Este paciente ya tiene una membresía con este plan'
+        }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        error: `Error al crear membresía: ${error.message}`
+      }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, data: membership });
