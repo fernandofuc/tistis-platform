@@ -40,7 +40,7 @@ interface TopReward {
 interface ExpiringMembership {
   id: string;
   end_date: string;
-  leads: { name: string; email: string };
+  leads: { full_name?: string; first_name?: string; last_name?: string; email?: string };
   loyalty_membership_plans: { plan_name: string };
 }
 
@@ -461,11 +461,11 @@ function ExpiringMemberships({ memberships }: ExpiringMembershipsProps) {
                 className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors"
               >
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-semibold text-sm">
-                  {m.leads.name.charAt(0).toUpperCase()}
+                  {(m.leads.full_name || m.leads.first_name || 'P').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate">
-                    {m.leads.name}
+                    {m.leads.full_name || `${m.leads.first_name || ''} ${m.leads.last_name || ''}`.trim() || 'Sin nombre'}
                   </p>
                   <p className="text-xs text-gray-500 truncate">
                     {m.loyalty_membership_plans.plan_name}

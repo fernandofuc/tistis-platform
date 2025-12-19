@@ -76,7 +76,7 @@ export default function InboxPage() {
       try {
         let query = supabase
           .from('conversations')
-          .select('*, leads(id, name, phone, classification, score)')
+          .select('*, leads(id, full_name, first_name, last_name, phone, classification, score)')
           .eq('tenant_id', tenant.id)
           .in('status', ['active', 'waiting_response', 'escalated']);
 

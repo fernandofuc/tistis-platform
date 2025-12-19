@@ -106,7 +106,17 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!client) {
-      return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
+      console.error('[Change Plan] No client found for tenant:', userRole.tenant_id);
+      return NextResponse.json({
+        error: 'No se encontró información de facturación. Por favor contacta a soporte para configurar tu cuenta.'
+      }, { status: 404 });
+    }
+
+    if (!client.stripe_customer_id) {
+      console.error('[Change Plan] Client has no Stripe customer ID:', client.id);
+      return NextResponse.json({
+        error: 'Tu cuenta no tiene configurado un método de pago. Por favor contacta a soporte.'
+      }, { status: 400 });
     }
 
     // Get active subscription
