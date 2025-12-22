@@ -7,18 +7,15 @@
 // =====================================================
 
 import { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '@/features/auth';
+import { useAuth } from '@/src/features/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { Card, CardHeader, CardContent, Button } from '@/src/shared/components/ui';
 import {
   PageWrapper,
-  Card,
-  CardHeader,
-  CardContent,
   StatsGrid,
   StatCard,
-  Button,
-} from '@/src/features/dashboard/components';
+} from '@/src/features/dashboard';
 import type {
   VoiceAgentConfig,
   VoicePhoneNumber,
