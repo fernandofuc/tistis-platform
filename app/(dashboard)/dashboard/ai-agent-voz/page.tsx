@@ -3,53 +3,28 @@
 // =====================================================
 // TIS TIS PLATFORM - Voice Agent Page
 // Dashboard de configuración del AI Agent por Voz
+// Design System: TIS TIS Premium (Apple-like aesthetics)
 // =====================================================
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/features/auth';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Phone,
-  Mic,
-  Settings,
-  Lock,
-  ArrowRight,
-  RefreshCw,
-  AlertCircle,
-  CheckCircle,
-  Play,
-  Pause,
-  Volume2,
-  PhoneCall,
-  PhoneOff,
-  Clock,
-  TrendingUp,
-  Users,
-  DollarSign,
-  ChevronRight,
-  ChevronDown,
-  Plus,
-  Trash2,
-  Edit3,
-  Save,
-  X,
-  MessageSquare,
-  Bot,
-  Sparkles,
-  Headphones,
-  Globe,
-  Shield,
-  Zap,
-  History,
-} from 'lucide-react';
 import Link from 'next/link';
+import {
+  PageWrapper,
+  Card,
+  CardHeader,
+  CardContent,
+  StatsGrid,
+  StatCard,
+  Button,
+} from '@/src/features/dashboard/components';
 import type {
   VoiceAgentConfig,
   VoicePhoneNumber,
   VoiceCall,
   VoiceUsageSummary,
   AvailableVoice,
-  AreaCode,
   VoicePersonality,
 } from '@/src/features/voice-agent/types';
 import {
@@ -57,6 +32,191 @@ import {
   MEXICO_AREA_CODES,
 } from '@/src/features/voice-agent/types';
 import { TalkToAssistant } from '@/src/features/voice-agent/components';
+
+// ======================
+// ICONS (SVG TIS TIS Style)
+// ======================
+
+const PhoneIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+);
+
+const PhoneCallIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+);
+
+const PhoneOffIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/>
+    <line x1="23" y1="1" x2="1" y2="23"/>
+  </svg>
+);
+
+const MicIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+    <line x1="12" y1="19" x2="12" y2="23"/>
+    <line x1="8" y1="23" x2="16" y2="23"/>
+  </svg>
+);
+
+const VolumeIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+  </svg>
+);
+
+const SettingsIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+);
+
+const LockIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+
+const CheckIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+);
+
+const AlertIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
+
+const RefreshIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+);
+
+const ArrowRightIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"/>
+    <polyline points="12 5 19 12 12 19"/>
+  </svg>
+);
+
+const ClockIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const TrendingUpIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+    <polyline points="17 6 23 6 23 12"/>
+  </svg>
+);
+
+const DollarIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="1" x2="12" y2="23"/>
+    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+  </svg>
+);
+
+const PlusIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+
+const TrashIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+);
+
+const EditIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
+const SaveIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+    <polyline points="17 21 17 13 7 13 7 21"/>
+    <polyline points="7 3 7 8 15 8"/>
+  </svg>
+);
+
+const PlayIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="5 3 19 12 5 21 5 3"/>
+  </svg>
+);
+
+const PauseIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="4" width="4" height="16"/>
+    <rect x="14" y="4" width="4" height="16"/>
+  </svg>
+);
+
+const BotIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="10" rx="2"/>
+    <circle cx="12" cy="5" r="2"/>
+    <path d="M12 7v4"/>
+    <line x1="8" y1="16" x2="8" y2="16"/>
+    <line x1="16" y1="16" x2="16" y2="16"/>
+  </svg>
+);
+
+const HeadphonesIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+  </svg>
+);
+
+const HistoryIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3v5h5"/>
+    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+    <path d="M12 7v5l4 2"/>
+  </svg>
+);
+
+const ChevronRightIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+);
+
+const MessageIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+);
 
 // ======================
 // TYPES
@@ -77,113 +237,122 @@ interface VoiceAgentResponse {
 }
 
 // ======================
-// PERSONALITY CONFIG
+// PERSONALITY CONFIG (with SVG icons instead of emojis)
 // ======================
 
-const PERSONALITY_CONFIG: Record<VoicePersonality, { label: string; description: string; emoji: string }> = {
+const PERSONALITY_CONFIG: Record<VoicePersonality, { label: string; description: string; color: string }> = {
   professional: {
     label: 'Profesional',
-    description: 'Tono serio y formal, ideal para consultorios médicos',
-    emoji: '👔',
+    description: 'Tono serio y formal, ideal para consultorios',
+    color: 'tis-purple',
   },
   professional_friendly: {
     label: 'Profesional Amigable',
     description: 'Balance entre profesionalismo y calidez',
-    emoji: '😊',
+    color: 'tis-coral',
   },
   casual: {
     label: 'Casual',
     description: 'Tono relajado y conversacional',
-    emoji: '🗣️',
+    color: 'tis-green',
   },
   formal: {
     label: 'Formal',
     description: 'Máxima formalidad y respeto',
-    emoji: '🎩',
+    color: 'tis-pink',
   },
 };
 
 // ======================
-// COMPONENTS
+// BLOCKED STATE COMPONENT
 // ======================
 
 function BlockedState() {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="max-w-lg w-full text-center">
-        <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-6 relative">
-          <Phone className="w-10 h-10 text-gray-400" />
-          <div className="absolute -bottom-2 -right-2 bg-white dark:bg-gray-800 rounded-full p-1 shadow-lg">
-            <Lock className="w-5 h-5 text-gray-500" />
-          </div>
-        </div>
-
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-          AI Agent Voz
-        </h2>
-        <p className="text-gray-600 dark:text-gray-300 mb-6">
-          Asistente telefónico con inteligencia artificial. Responde llamadas, agenda citas y atiende a tus clientes 24/7.
-          Disponible en el plan Growth.
-        </p>
-
-        {/* Blurred Preview */}
-        <div className="relative mb-8 overflow-hidden rounded-2xl">
-          <div className="blur-sm opacity-50 pointer-events-none">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 mb-3">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg" />
-                <div className="h-4 bg-gray-200 rounded w-32" />
-              </div>
-              <div className="h-3 bg-gray-100 rounded w-full mb-2" />
-              <div className="h-3 bg-gray-100 rounded w-3/4" />
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg" />
-                <div className="h-4 bg-gray-200 rounded w-40" />
-              </div>
-              <div className="h-3 bg-gray-100 rounded w-full mb-2" />
-              <div className="h-3 bg-gray-100 rounded w-2/3" />
-            </div>
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-white/80 to-transparent dark:from-gray-900/80">
-            <Lock className="w-8 h-8 text-gray-400" />
-          </div>
-        </div>
-
-        {/* Features List */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-6 mb-6 text-left">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
-            Con AI Agent Voz podrás:
-          </h3>
-          <ul className="space-y-3">
-            {[
-              'Responder llamadas automáticamente 24/7',
-              'Agendar citas directamente en tu calendario',
-              'Responder preguntas frecuentes sobre tu negocio',
-              'Escalar llamadas a tu equipo cuando sea necesario',
-              'Obtener transcripciones y análisis de cada llamada',
-              'Número telefónico local con LADA mexicana',
-            ].map((feature, idx) => (
-              <li key={idx} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <CheckCircle className="w-4 h-4 text-emerald-500" />
-                {feature}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <Link
-          href="/dashboard/settings/subscription"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all"
+    <PageWrapper
+      title="AI Agent Voz"
+      subtitle="Asistente telefónico con inteligencia artificial"
+    >
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-lg w-full text-center"
         >
-          Actualizar a Growth
-          <ArrowRight className="w-4 h-4" />
-        </Link>
+          {/* Icon with lock */}
+          <div className="relative w-24 h-24 mx-auto mb-6">
+            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 rounded-3xl flex items-center justify-center shadow-lg">
+              <PhoneIcon className="w-12 h-12 text-gray-400" />
+            </div>
+            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg flex items-center justify-center border border-gray-100 dark:border-gray-700">
+              <LockIcon className="w-5 h-5 text-gray-500" />
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+            AI Agent Voz
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
+            Asistente telefónico con inteligencia artificial que responde llamadas,
+            agenda citas y atiende a tus clientes 24/7.
+          </p>
+
+          {/* Features List */}
+          <Card className="mb-8 text-left">
+            <CardContent className="p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-tis-coral-100 flex items-center justify-center">
+                  <PhoneCallIcon className="w-4 h-4 text-tis-coral" />
+                </span>
+                Con AI Agent Voz podrás:
+              </h3>
+              <ul className="space-y-3">
+                {[
+                  'Responder llamadas automáticamente 24/7',
+                  'Agendar citas directamente en tu calendario',
+                  'Responder preguntas frecuentes sobre tu negocio',
+                  'Escalar llamadas a tu equipo cuando sea necesario',
+                  'Obtener transcripciones y análisis de cada llamada',
+                  'Número telefónico local con LADA mexicana',
+                ].map((feature, idx) => (
+                  <li key={idx} className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+                    <span className="w-5 h-5 rounded-full bg-tis-green-100 flex items-center justify-center flex-shrink-0">
+                      <CheckIcon className="w-3 h-3 text-tis-green" />
+                    </span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          {/* Plan badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl mb-6">
+            <span className="text-sm text-gray-600 dark:text-gray-400">Disponible en</span>
+            <span className="px-3 py-1 bg-gradient-coral text-white text-sm font-semibold rounded-lg shadow-coral">
+              Plan Growth
+            </span>
+          </div>
+
+          <div className="block">
+            <Link
+              href="/dashboard/settings/subscription"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-coral text-white font-semibold rounded-2xl hover:shadow-xl transition-all duration-300 transform hover:scale-105 shadow-coral"
+            >
+              Actualizar a Growth
+              <ArrowRightIcon className="w-5 h-5" />
+            </Link>
+          </div>
+        </motion.div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }
+
+// ======================
+// VOICE SELECTOR COMPONENT
+// ======================
 
 function VoiceSelector({
   selectedVoiceId,
@@ -195,7 +364,6 @@ function VoiceSelector({
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
 
   const playPreview = (voice: AvailableVoice) => {
-    // TODO: Implementar reproducción de preview cuando tengamos URLs
     setPlayingVoice(voice.id);
     setTimeout(() => setPlayingVoice(null), 3000);
   };
@@ -208,25 +376,25 @@ function VoiceSelector({
           onClick={() => onSelect(voice.id)}
           className={`p-4 rounded-xl border-2 transition-all text-left ${
             selectedVoiceId === voice.id
-              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-              : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              ? 'border-tis-coral bg-tis-coral-100/50 dark:bg-tis-coral/10'
+              : 'border-gray-200 dark:border-gray-700 hover:border-tis-coral/50'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                 voice.gender === 'male'
-                  ? 'bg-blue-100 text-blue-600'
-                  : 'bg-pink-100 text-pink-600'
+                  ? 'bg-tis-purple/10 text-tis-purple'
+                  : 'bg-tis-pink/10 text-tis-pink'
               }`}>
-                {voice.gender === 'male' ? '👨' : '👩'}
+                <VolumeIcon className="w-5 h-5" />
               </div>
               <div>
                 <span className="font-medium text-gray-900 dark:text-white">
                   {voice.name}
                 </span>
                 {voice.is_default && (
-                  <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full">
+                  <span className="ml-2 px-2 py-0.5 bg-tis-green-100 text-tis-green text-xs font-medium rounded-full">
                     Recomendado
                   </span>
                 )}
@@ -240,9 +408,9 @@ function VoiceSelector({
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               {playingVoice === voice.id ? (
-                <Pause className="w-4 h-4 text-blue-500" />
+                <PauseIcon className="w-4 h-4 text-tis-coral" />
               ) : (
-                <Play className="w-4 h-4 text-gray-500" />
+                <PlayIcon className="w-4 h-4 text-gray-500" />
               )}
             </button>
           </div>
@@ -254,6 +422,10 @@ function VoiceSelector({
     </div>
   );
 }
+
+// ======================
+// PHONE NUMBER MANAGER COMPONENT
+// ======================
 
 function PhoneNumberManager({
   phoneNumbers,
@@ -270,159 +442,163 @@ function PhoneNumberManager({
   const [selectedAreaCode, setSelectedAreaCode] = useState<string | null>(null);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
-            <Phone className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">
-              Números Telefónicos
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Gestiona los números de tu asistente
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => setShowAreaCodes(!showAreaCodes)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Agregar Número
-        </button>
-      </div>
-
-      {/* Lista de números existentes */}
-      {phoneNumbers.length > 0 ? (
-        <div className="space-y-3 mb-6">
-          {phoneNumbers.map((number) => (
-            <div
-              key={number.id}
-              className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  number.status === 'active'
-                    ? 'bg-emerald-100 text-emerald-600'
-                    : 'bg-amber-100 text-amber-600'
-                }`}>
-                  <Phone className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="font-mono font-medium text-gray-900 dark:text-white">
-                    {number.phone_number_display || number.phone_number}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>LADA {number.area_code}</span>
-                    <span>•</span>
-                    <span className={`capitalize ${
-                      number.status === 'active' ? 'text-emerald-600' : 'text-amber-600'
-                    }`}>
-                      {number.status === 'active' ? 'Activo' : number.status}
-                    </span>
+    <Card>
+      <CardHeader
+        title="Números Telefónicos"
+        subtitle="Gestiona los números de tu asistente"
+        icon={<PhoneIcon className="w-5 h-5 text-tis-green" />}
+        iconBgColor="bg-tis-green-100"
+        action={
+          <Button
+            onClick={() => setShowAreaCodes(!showAreaCodes)}
+            size="sm"
+          >
+            <PlusIcon className="w-4 h-4 mr-2" />
+            Agregar Número
+          </Button>
+        }
+      />
+      <CardContent>
+        {/* Lista de números existentes */}
+        {phoneNumbers.length > 0 ? (
+          <div className="space-y-3 mb-6">
+            {phoneNumbers.map((number) => (
+              <div
+                key={number.id}
+                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    number.status === 'active'
+                      ? 'bg-tis-green-100'
+                      : 'bg-amber-100'
+                  }`}>
+                    <PhoneIcon className={`w-6 h-6 ${
+                      number.status === 'active' ? 'text-tis-green' : 'text-amber-600'
+                    }`} />
+                  </div>
+                  <div>
+                    <p className="font-mono font-semibold text-gray-900 dark:text-white text-lg">
+                      {number.phone_number_display || number.phone_number}
+                    </p>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>LADA {number.area_code}</span>
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <span className={`font-medium ${
+                        number.status === 'active' ? 'text-tis-green' : 'text-amber-600'
+                      }`}>
+                        {number.status === 'active' ? 'Activo' : number.status}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right text-sm">
-                  <p className="text-gray-500">{number.total_calls} llamadas</p>
-                  <p className="text-gray-400">{number.total_minutes} min</p>
-                </div>
-                <button
-                  onClick={() => onReleaseNumber(number.id)}
-                  className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                  title="Liberar número"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8 mb-6">
-          <Phone className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">
-            No tienes números telefónicos configurados
-          </p>
-          <p className="text-sm text-gray-400 dark:text-gray-500">
-            Solicita un número para comenzar a recibir llamadas
-          </p>
-        </div>
-      )}
-
-      {/* Selector de LADA */}
-      <AnimatePresence>
-        {showAreaCodes && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                Selecciona una LADA para tu número:
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-60 overflow-y-auto">
-                {MEXICO_AREA_CODES.map((area) => (
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{number.total_calls} llamadas</p>
+                    <p className="text-xs text-gray-500">{number.total_minutes} minutos</p>
+                  </div>
                   <button
-                    key={area.code}
-                    onClick={() => setSelectedAreaCode(area.code)}
-                    className={`p-3 rounded-lg text-left transition-all ${
-                      selectedAreaCode === area.code
-                        ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500'
-                        : 'bg-gray-50 dark:bg-gray-700/50 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
-                    }`}
+                    onClick={() => onReleaseNumber(number.id)}
+                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                    title="Liberar número"
                   >
-                    <p className="font-mono font-bold text-gray-900 dark:text-white">
-                      ({area.code})
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">{area.city}</p>
-                  </button>
-                ))}
-              </div>
-              {selectedAreaCode && (
-                <div className="mt-4 flex justify-end gap-3">
-                  <button
-                    onClick={() => {
-                      setShowAreaCodes(false);
-                      setSelectedAreaCode(null);
-                    }}
-                    className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => {
-                      onRequestNumber(selectedAreaCode);
-                      setShowAreaCodes(false);
-                      setSelectedAreaCode(null);
-                    }}
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {loading ? 'Solicitando...' : `Solicitar número (${selectedAreaCode})`}
+                    <TrashIcon className="w-5 h-5" />
                   </button>
                 </div>
-              )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 mb-6">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <PhoneIcon className="w-8 h-8 text-gray-400" />
             </div>
-          </motion.div>
+            <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">
+              No tienes números telefónicos configurados
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-500">
+              Solicita un número para comenzar a recibir llamadas
+            </p>
+          </div>
         )}
-      </AnimatePresence>
-    </div>
+
+        {/* Selector de LADA */}
+        <AnimatePresence>
+          {showAreaCodes && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-tis-coral-100 flex items-center justify-center">
+                    <PhoneIcon className="w-3 h-3 text-tis-coral" />
+                  </span>
+                  Selecciona una LADA para tu número:
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-60 overflow-y-auto">
+                  {MEXICO_AREA_CODES.map((area) => (
+                    <button
+                      key={area.code}
+                      onClick={() => setSelectedAreaCode(area.code)}
+                      className={`p-3 rounded-xl text-left transition-all ${
+                        selectedAreaCode === area.code
+                          ? 'bg-tis-coral-100 dark:bg-tis-coral/20 border-2 border-tis-coral'
+                          : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    >
+                      <p className="font-mono font-bold text-gray-900 dark:text-white">
+                        ({area.code})
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">{area.city}</p>
+                    </button>
+                  ))}
+                </div>
+                {selectedAreaCode && (
+                  <div className="mt-4 flex justify-end gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setShowAreaCodes(false);
+                        setSelectedAreaCode(null);
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onRequestNumber(selectedAreaCode);
+                        setShowAreaCodes(false);
+                        setSelectedAreaCode(null);
+                      }}
+                      disabled={loading}
+                    >
+                      {loading ? 'Solicitando...' : `Solicitar número (${selectedAreaCode})`}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </CardContent>
+    </Card>
   );
 }
+
+// ======================
+// CALL HISTORY TABLE COMPONENT
+// ======================
 
 function CallHistoryTable({ calls }: { calls: VoiceCall[] }) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-emerald-100 text-emerald-700';
+        return 'bg-tis-green-100 text-tis-green';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-tis-coral-100 text-tis-coral';
       case 'failed':
         return 'bg-red-100 text-red-700';
       case 'escalated':
@@ -455,12 +631,14 @@ function CallHistoryTable({ calls }: { calls: VoiceCall[] }) {
 
   if (calls.length === 0) {
     return (
-      <div className="text-center py-12">
-        <History className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-        <p className="text-gray-500 dark:text-gray-400">
+      <div className="text-center py-16">
+        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <HistoryIcon className="w-8 h-8 text-gray-400" />
+        </div>
+        <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">
           No hay llamadas recientes
         </p>
-        <p className="text-sm text-gray-400 dark:text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-500">
           Las llamadas aparecerán aquí cuando tu asistente esté activo
         </p>
       </div>
@@ -472,22 +650,22 @@ function CallHistoryTable({ calls }: { calls: VoiceCall[] }) {
       <table className="w-full">
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
-            <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Fecha
             </th>
-            <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Teléfono
             </th>
-            <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Duración
             </th>
-            <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Estado
             </th>
-            <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Resultado
             </th>
-            <th className="text-right py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Acciones
             </th>
           </tr>
@@ -498,8 +676,8 @@ function CallHistoryTable({ calls }: { calls: VoiceCall[] }) {
               key={call.id}
               className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
             >
-              <td className="py-3 px-4">
-                <p className="text-sm text-gray-900 dark:text-white">
+              <td className="py-4 px-4">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
                   {new Date(call.created_at).toLocaleDateString('es-MX', {
                     day: '2-digit',
                     month: 'short',
@@ -512,29 +690,29 @@ function CallHistoryTable({ calls }: { calls: VoiceCall[] }) {
                   })}
                 </p>
               </td>
-              <td className="py-3 px-4">
-                <p className="font-mono text-sm text-gray-900 dark:text-white">
+              <td className="py-4 px-4">
+                <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">
                   {call.caller_phone}
                 </p>
               </td>
-              <td className="py-3 px-4">
-                <p className="text-sm text-gray-900 dark:text-white">
+              <td className="py-4 px-4">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
                   {formatDuration(call.duration_seconds)}
                 </p>
               </td>
-              <td className="py-3 px-4">
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(call.status)}`}>
+              <td className="py-4 px-4">
+                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(call.status)}`}>
                   {call.status === 'completed' ? 'Completada' : call.status}
                 </span>
               </td>
-              <td className="py-3 px-4">
+              <td className="py-4 px-4">
                 <p className="text-sm text-gray-600 dark:text-gray-300">
                   {getOutcomeLabel(call.outcome)}
                 </p>
               </td>
-              <td className="py-3 px-4 text-right">
-                <button className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                  <ChevronRight className="w-4 h-4" />
+              <td className="py-4 px-4 text-right">
+                <button className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                  <ChevronRightIcon className="w-5 h-5" />
                 </button>
               </td>
             </tr>
@@ -545,31 +723,9 @@ function CallHistoryTable({ calls }: { calls: VoiceCall[] }) {
   );
 }
 
-function TalkToAssistantButton({
-  config,
-  onStartTest,
-  disabled,
-}: {
-  config: VoiceAgentConfig | null;
-  onStartTest: () => void;
-  disabled: boolean;
-}) {
-  return (
-    <button
-      onClick={onStartTest}
-      disabled={disabled || !config}
-      className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-medium transition-all ${
-        disabled || !config
-          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-          : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl'
-      }`}
-    >
-      <Headphones className="w-5 h-5" />
-      <span>Hablar con Asistente</span>
-      <span className="px-2 py-0.5 bg-white/20 rounded text-xs">PRUEBA</span>
-    </button>
-  );
-}
+// ======================
+// CONFIG SECTION COMPONENT
+// ======================
 
 function ConfigSection({
   config,
@@ -598,288 +754,282 @@ function ConfigSection({
   return (
     <div className="space-y-6">
       {/* Nombre y Personalidad */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-              <Bot className="w-5 h-5 text-blue-600" />
-            </div>
+      <Card>
+        <CardHeader
+          title="Configuración del Asistente"
+          subtitle="Personaliza cómo se presenta tu asistente"
+          icon={<BotIcon className="w-5 h-5 text-tis-coral" />}
+          iconBgColor="bg-tis-coral-100"
+          action={
+            !isEditing ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+              >
+                <EditIcon className="w-4 h-4 mr-2" />
+                Editar
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsEditing(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  <SaveIcon className="w-4 h-4 mr-2" />
+                  {saving ? 'Guardando...' : 'Guardar'}
+                </Button>
+              </div>
+            )
+          }
+        />
+        <CardContent>
+          <div className="space-y-6">
+            {/* Nombre del asistente */}
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                Configuración del Asistente
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Personaliza cómo se presenta tu asistente
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Nombre del Asistente
+              </label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={formData.assistant_name}
+                  onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-tis-coral focus:border-transparent transition-all"
+                  placeholder="Ej: Ana, Carlos, Asistente"
+                />
+              ) : (
+                <p className="text-lg font-medium text-gray-900 dark:text-white">
+                  {config.assistant_name}
+                </p>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Este nombre se usará en el saludo inicial
+              </p>
+            </div>
+
+            {/* Personalidad */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                Personalidad
+              </label>
+              {isEditing ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(PERSONALITY_CONFIG).map(([key, val]) => (
+                    <button
+                      key={key}
+                      onClick={() => setFormData({ ...formData, assistant_personality: key as VoicePersonality })}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        formData.assistant_personality === key
+                          ? `border-${val.color} bg-${val.color}-100/50`
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-xl bg-${val.color}/10 flex items-center justify-center mb-3`}>
+                        <BotIcon className={`w-5 h-5 text-${val.color}`} />
+                      </div>
+                      <p className="font-semibold text-gray-900 dark:text-white">{val.label}</p>
+                      <p className="text-xs text-gray-500 mt-1">{val.description}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                  <div className="w-12 h-12 rounded-xl bg-tis-coral-100 flex items-center justify-center">
+                    <BotIcon className="w-6 h-6 text-tis-coral" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white">
+                      {PERSONALITY_CONFIG[config.assistant_personality].label}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {PERSONALITY_CONFIG[config.assistant_personality].description}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Primer mensaje */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Mensaje de Bienvenida
+              </label>
+              {isEditing ? (
+                <textarea
+                  value={formData.first_message}
+                  onChange={(e) => setFormData({ ...formData, first_message: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-tis-coral focus:border-transparent transition-all resize-none"
+                  placeholder="Ej: Hola, soy Ana de Clínica Dental Sonrisa. ¿En qué puedo ayudarte?"
+                />
+              ) : (
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+                  <p className="text-gray-700 dark:text-gray-300 italic leading-relaxed">
+                    &quot;{config.first_message}&quot;
+                  </p>
+                </div>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Lo primero que dirá tu asistente al contestar
               </p>
             </div>
           </div>
-          {!isEditing ? (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-            >
-              <Edit3 className="w-4 h-4" />
-              Editar
-            </button>
+        </CardContent>
+      </Card>
+
+      {/* Voz */}
+      <Card>
+        <CardHeader
+          title="Voz del Asistente"
+          subtitle="Selecciona cómo sonará tu asistente"
+          icon={<VolumeIcon className="w-5 h-5 text-tis-purple" />}
+          iconBgColor="bg-tis-purple/10"
+        />
+        <CardContent>
+          {isEditing ? (
+            <VoiceSelector
+              selectedVoiceId={formData.voice_id}
+              onSelect={(voiceId) => setFormData({ ...formData, voice_id: voiceId })}
+            />
           ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsEditing(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                {saving ? 'Guardando...' : 'Guardar'}
-              </button>
+            <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+              {(() => {
+                const voice = AVAILABLE_VOICES.find((v) => v.id === config.voice_id);
+                return voice ? (
+                  <>
+                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+                      voice.gender === 'male'
+                        ? 'bg-tis-purple/10'
+                        : 'bg-tis-pink/10'
+                    }`}>
+                      <VolumeIcon className={`w-7 h-7 ${
+                        voice.gender === 'male' ? 'text-tis-purple' : 'text-tis-pink'
+                      }`} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 dark:text-white">{voice.name}</p>
+                      <p className="text-sm text-gray-500">
+                        Acento {voice.accent} • {voice.gender === 'male' ? 'Masculino' : 'Femenino'}
+                      </p>
+                    </div>
+                    <button className="p-3 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl transition-colors">
+                      <PlayIcon className="w-5 h-5 text-gray-500" />
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-gray-500">Voz no seleccionada</p>
+                );
+              })()}
             </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        <div className="space-y-6">
-          {/* Nombre del asistente */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Nombre del Asistente
-            </label>
-            {isEditing ? (
-              <input
-                type="text"
-                value={formData.assistant_name}
-                onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ej: Ana, Carlos, Asistente"
-              />
-            ) : (
-              <p className="text-gray-900 dark:text-white font-medium">
-                {config.assistant_name}
-              </p>
-            )}
-            <p className="mt-1 text-xs text-gray-500">
-              Este nombre se usará en el saludo inicial
-            </p>
-          </div>
-
-          {/* Personalidad */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Personalidad
-            </label>
-            {isEditing ? (
-              <div className="grid grid-cols-2 gap-3">
-                {Object.entries(PERSONALITY_CONFIG).map(([key, val]) => (
-                  <button
-                    key={key}
-                    onClick={() => setFormData({ ...formData, assistant_personality: key as VoicePersonality })}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${
-                      formData.assistant_personality === key
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="text-2xl mb-2 block">{val.emoji}</span>
-                    <p className="font-medium text-gray-900 dark:text-white">{val.label}</p>
-                    <p className="text-xs text-gray-500">{val.description}</p>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{PERSONALITY_CONFIG[config.assistant_personality].emoji}</span>
+      {/* Opciones avanzadas */}
+      <Card>
+        <CardHeader
+          title="Opciones Avanzadas"
+          subtitle="Configuración adicional del comportamiento"
+          icon={<SettingsIcon className="w-5 h-5 text-amber-600" />}
+          iconBgColor="bg-amber-100"
+        />
+        <CardContent>
+          <div className="space-y-4">
+            {/* Frases de relleno */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-tis-coral-100 flex items-center justify-center">
+                  <MessageIcon className="w-6 h-6 text-tis-coral" />
+                </div>
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {PERSONALITY_CONFIG[config.assistant_personality].label}
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    Frases de Relleno Naturales
                   </p>
                   <p className="text-sm text-gray-500">
-                    {PERSONALITY_CONFIG[config.assistant_personality].description}
+                    &quot;Mmm...&quot;, &quot;Bueno...&quot;, &quot;Claro...&quot; para sonar más humano
                   </p>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Primer mensaje */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Mensaje de Bienvenida
-            </label>
-            {isEditing ? (
-              <textarea
-                value={formData.first_message}
-                onChange={(e) => setFormData({ ...formData, first_message: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ej: Hola, soy Ana de Clínica Dental Sonrisa. ¿En qué puedo ayudarte?"
-              />
-            ) : (
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                <p className="text-gray-700 dark:text-gray-300 italic">
-                  &quot;{config.first_message}&quot;
-                </p>
-              </div>
-            )}
-            <p className="mt-1 text-xs text-gray-500">
-              Lo primero que dirá tu asistente al contestar
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Voz */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
-            <Volume2 className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">
-              Voz del Asistente
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Selecciona cómo sonará tu asistente
-            </p>
-          </div>
-        </div>
-
-        {isEditing ? (
-          <VoiceSelector
-            selectedVoiceId={formData.voice_id}
-            onSelect={(voiceId) => setFormData({ ...formData, voice_id: voiceId })}
-          />
-        ) : (
-          <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-            {(() => {
-              const voice = AVAILABLE_VOICES.find((v) => v.id === config.voice_id);
-              return voice ? (
-                <>
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    voice.gender === 'male'
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'bg-pink-100 text-pink-600'
-                  }`}>
-                    {voice.gender === 'male' ? '👨' : '👩'}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{voice.name}</p>
-                    <p className="text-sm text-gray-500">
-                      Acento {voice.accent} • {voice.gender === 'male' ? 'Masculino' : 'Femenino'}
-                    </p>
-                  </div>
-                  <button className="ml-auto p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors">
-                    <Play className="w-5 h-5 text-gray-500" />
-                  </button>
-                </>
+              {isEditing ? (
+                <button
+                  onClick={() => setFormData({ ...formData, use_filler_phrases: !formData.use_filler_phrases })}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                    formData.use_filler_phrases ? 'bg-tis-coral' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${
+                      formData.use_filler_phrases ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               ) : (
-                <p className="text-gray-500">Voz no seleccionada</p>
-              );
-            })()}
-          </div>
-        )}
-      </div>
-
-      {/* Opciones avanzadas */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
-            <Settings className="w-5 h-5 text-amber-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">
-              Opciones Avanzadas
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Configuración adicional del comportamiento
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {/* Frases de relleno */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-            <div className="flex items-center gap-3">
-              <MessageSquare className="w-5 h-5 text-gray-500" />
-              <div>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  Frases de Relleno Naturales
-                </p>
-                <p className="text-sm text-gray-500">
-                  &quot;Mmm...&quot;, &quot;Bueno...&quot;, &quot;Claro...&quot; para sonar más humano
-                </p>
-              </div>
+                <span className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+                  config.use_filler_phrases
+                    ? 'bg-tis-green-100 text-tis-green'
+                    : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {config.use_filler_phrases ? 'Activado' : 'Desactivado'}
+                </span>
+              )}
             </div>
-            {isEditing ? (
-              <button
-                onClick={() => setFormData({ ...formData, use_filler_phrases: !formData.use_filler_phrases })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  formData.use_filler_phrases ? 'bg-blue-600' : 'bg-gray-300'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    formData.use_filler_phrases ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            ) : (
-              <span className={`px-3 py-1 rounded-full text-sm ${
-                config.use_filler_phrases
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-gray-200 text-gray-600'
-              }`}>
-                {config.use_filler_phrases ? 'Activado' : 'Desactivado'}
-              </span>
-            )}
-          </div>
 
-          {/* Grabación */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-            <div className="flex items-center gap-3">
-              <Mic className="w-5 h-5 text-gray-500" />
-              <div>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  Grabación de Llamadas
-                </p>
-                <p className="text-sm text-gray-500">
-                  Guarda audio de las llamadas para revisión
-                </p>
+            {/* Grabación */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-tis-purple/10 flex items-center justify-center">
+                  <MicIcon className="w-6 h-6 text-tis-purple" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    Grabación de Llamadas
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Guarda audio de las llamadas para revisión
+                  </p>
+                </div>
               </div>
-            </div>
-            {isEditing ? (
-              <button
-                onClick={() => setFormData({ ...formData, recording_enabled: !formData.recording_enabled })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  formData.recording_enabled ? 'bg-blue-600' : 'bg-gray-300'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    formData.recording_enabled ? 'translate-x-6' : 'translate-x-1'
+              {isEditing ? (
+                <button
+                  onClick={() => setFormData({ ...formData, recording_enabled: !formData.recording_enabled })}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                    formData.recording_enabled ? 'bg-tis-coral' : 'bg-gray-300'
                   }`}
-                />
-              </button>
-            ) : (
-              <span className={`px-3 py-1 rounded-full text-sm ${
-                config.recording_enabled
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-gray-200 text-gray-600'
-              }`}>
-                {config.recording_enabled ? 'Activado' : 'Desactivado'}
-              </span>
-            )}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${
+                      formData.recording_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              ) : (
+                <span className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+                  config.recording_enabled
+                    ? 'bg-tis-green-100 text-tis-green'
+                    : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {config.recording_enabled ? 'Activado' : 'Desactivado'}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 // ======================
-// MAIN PAGE
+// MAIN PAGE COMPONENT
 // ======================
 
 export default function AIAgentVozPage() {
@@ -1023,59 +1173,82 @@ export default function AIAgentVozPage() {
     }
   };
 
-  const handleStartTest = () => {
-    setShowTalkToAssistant(true);
-  };
-
   // Handle unauthenticated state
   if (!accessToken && !loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <p className="text-gray-900 dark:text-white font-medium mb-2">Sesión no encontrada</p>
-          <p className="text-gray-600 dark:text-gray-300">Inicia sesión para acceder a AI Agent Voz</p>
+      <PageWrapper
+        title="AI Agent Voz"
+        subtitle="Asistente telefónico inteligente"
+      >
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center"
+          >
+            <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <AlertIcon className="w-8 h-8 text-amber-600" />
+            </div>
+            <p className="text-gray-900 dark:text-white font-semibold mb-2">Sesión no encontrada</p>
+            <p className="text-gray-600 dark:text-gray-400">Inicia sesión para acceder a AI Agent Voz</p>
+          </motion.div>
         </div>
-      </div>
+      </PageWrapper>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Cargando Voice Agent...</p>
+      <PageWrapper
+        title="AI Agent Voz"
+        subtitle="Cargando..."
+      >
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <div className="w-12 h-12 mx-auto mb-4">
+              <RefreshIcon className="w-12 h-12 text-tis-coral animate-spin" />
+            </div>
+            <p className="text-gray-600 dark:text-gray-400">Cargando Voice Agent...</p>
+          </motion.div>
         </div>
-      </div>
+      </PageWrapper>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-900 dark:text-white font-medium mb-2">Error al cargar</p>
-          <p className="text-gray-600 dark:text-gray-300 mb-4">{error}</p>
-          <button
-            onClick={fetchVoiceAgent}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+      <PageWrapper
+        title="AI Agent Voz"
+        subtitle="Error"
+      >
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center"
           >
-            Reintentar
-          </button>
+            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <AlertIcon className="w-8 h-8 text-red-600" />
+            </div>
+            <p className="text-gray-900 dark:text-white font-semibold mb-2">Error al cargar</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">{error}</p>
+            <Button onClick={fetchVoiceAgent}>
+              <RefreshIcon className="w-4 h-4 mr-2" />
+              Reintentar
+            </Button>
+          </motion.div>
         </div>
-      </div>
+      </PageWrapper>
     );
   }
 
   // Blocked state (not Growth plan)
   if (data?.status === 'blocked') {
-    return (
-      <div className="p-6">
-        <BlockedState />
-      </div>
-    );
+    return <BlockedState />;
   }
 
   const config = data?.data?.config;
@@ -1084,230 +1257,256 @@ export default function AIAgentVozPage() {
   const recentCalls = data?.data?.recent_calls || [];
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <Phone className="w-7 h-7 text-blue-600" />
-            AI Agent Voz
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">
-            Asistente telefónico inteligente para tu negocio
-          </p>
-        </div>
+    <PageWrapper
+      title="AI Agent Voz"
+      subtitle="Asistente telefónico inteligente para tu negocio"
+      actions={
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={fetchVoiceAgent}
-            className="flex items-center gap-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshIcon className="w-4 h-4 mr-2" />
             Actualizar
-          </button>
+          </Button>
           {config && (
-            <button
+            <Button
+              variant={config.voice_enabled ? 'danger' : 'primary'}
+              size="sm"
               onClick={handleToggleVoice}
               disabled={saving}
-              className={`flex items-center gap-2 px-6 py-2 rounded-xl font-medium transition-all ${
-                config.voice_enabled
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
-              }`}
             >
               {config.voice_enabled ? (
                 <>
-                  <PhoneOff className="w-4 h-4" />
+                  <PhoneOffIcon className="w-4 h-4 mr-2" />
                   Desactivar
                 </>
               ) : (
                 <>
-                  <PhoneCall className="w-4 h-4" />
+                  <PhoneCallIcon className="w-4 h-4 mr-2" />
                   Activar
                 </>
               )}
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="space-y-8"
+      >
+        {/* Status Banner */}
+        {config && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`p-5 rounded-2xl flex items-center gap-4 border ${
+              config.voice_enabled
+                ? 'bg-tis-green-100/50 border-tis-green/30'
+                : 'bg-amber-50 border-amber-200'
+            }`}
+          >
+            <div className={`p-3 rounded-xl ${
+              config.voice_enabled
+                ? 'bg-tis-green-100'
+                : 'bg-amber-100'
+            }`}>
+              {config.voice_enabled ? (
+                <CheckIcon className="w-6 h-6 text-tis-green" />
+              ) : (
+                <AlertIcon className="w-6 h-6 text-amber-600" />
+              )}
+            </div>
+            <div className="flex-1">
+              <p className={`font-semibold ${
+                config.voice_enabled
+                  ? 'text-tis-green'
+                  : 'text-amber-700'
+              }`}>
+                {config.voice_enabled
+                  ? 'Tu asistente de voz está activo'
+                  : 'Tu asistente de voz está desactivado'}
+              </p>
+              <p className={`text-sm ${
+                config.voice_enabled
+                  ? 'text-tis-green/80'
+                  : 'text-amber-600'
+              }`}>
+                {config.voice_enabled
+                  ? 'Recibiendo llamadas en los números configurados'
+                  : 'Actívalo para comenzar a recibir llamadas'}
+              </p>
+            </div>
+            {phoneNumbers.length > 0 && config.voice_enabled && (
+              <div className="text-right">
+                <p className="font-mono font-semibold text-tis-green text-lg">
+                  {phoneNumbers[0].phone_number_display || phoneNumbers[0].phone_number}
+                </p>
+                <p className="text-xs text-tis-green/70">
+                  Número principal
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Stats */}
+        {usageSummary && (
+          <StatsGrid columns={4}>
+            <StatCard
+              title="Llamadas"
+              value={usageSummary.total_calls.toString()}
+              icon={<PhoneCallIcon className="w-5 h-5" />}
+              iconBgColor="bg-tis-coral-100"
+              iconColor="text-tis-coral"
+            />
+            <StatCard
+              title="Minutos"
+              value={usageSummary.total_minutes.toString()}
+              icon={<ClockIcon className="w-5 h-5" />}
+              iconBgColor="bg-tis-green-100"
+              iconColor="text-tis-green"
+            />
+            <StatCard
+              title="Citas Agendadas"
+              value={`${Math.round(usageSummary.appointment_booking_rate * 100)}%`}
+              icon={<TrendingUpIcon className="w-5 h-5" />}
+              iconBgColor="bg-tis-purple/10"
+              iconColor="text-tis-purple"
+            />
+            <StatCard
+              title="Costo"
+              value={`$${usageSummary.total_cost_usd.toFixed(2)}`}
+              icon={<DollarIcon className="w-5 h-5" />}
+              iconBgColor="bg-amber-100"
+              iconColor="text-amber-600"
+            />
+          </StatsGrid>
+        )}
+
+        {/* Talk to Assistant Button */}
+        <Card>
+          <CardContent className="p-6">
+            <button
+              onClick={() => setShowTalkToAssistant(true)}
+              disabled={saving || !config}
+              className={`w-full flex items-center justify-center gap-3 py-5 rounded-2xl font-semibold text-lg transition-all ${
+                saving || !config
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-coral text-white hover:shadow-xl shadow-coral transform hover:scale-[1.02]'
+              }`}
+            >
+              <HeadphonesIcon className="w-6 h-6" />
+              <span>Hablar con Asistente</span>
+              <span className="px-3 py-1 bg-white/20 rounded-lg text-sm font-medium">PRUEBA</span>
             </button>
-          )}
-        </div>
-      </div>
+          </CardContent>
+        </Card>
 
-      {/* Status Banner */}
-      {config && (
-        <div className={`mb-6 p-4 rounded-2xl flex items-center gap-4 ${
-          config.voice_enabled
-            ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800'
-            : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
-        }`}>
-          <div className={`p-3 rounded-xl ${
-            config.voice_enabled
-              ? 'bg-emerald-100 dark:bg-emerald-900/40'
-              : 'bg-amber-100 dark:bg-amber-900/40'
-          }`}>
-            {config.voice_enabled ? (
-              <CheckCircle className="w-6 h-6 text-emerald-600" />
-            ) : (
-              <AlertCircle className="w-6 h-6 text-amber-600" />
+        {/* Tabs */}
+        <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`px-6 py-4 font-semibold transition-colors relative ${
+              activeTab === 'config'
+                ? 'text-tis-coral'
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <SettingsIcon className="w-5 h-5" />
+              Configuración
+            </div>
+            {activeTab === 'config' && (
+              <motion.div
+                layoutId="tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-tis-coral"
+              />
             )}
-          </div>
-          <div className="flex-1">
-            <p className={`font-medium ${
-              config.voice_enabled
-                ? 'text-emerald-800 dark:text-emerald-200'
-                : 'text-amber-800 dark:text-amber-200'
-            }`}>
-              {config.voice_enabled
-                ? 'Tu asistente de voz está activo'
-                : 'Tu asistente de voz está desactivado'}
-            </p>
-            <p className={`text-sm ${
-              config.voice_enabled
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-amber-600 dark:text-amber-400'
-            }`}>
-              {config.voice_enabled
-                ? 'Recibiendo llamadas en los números configurados'
-                : 'Actívalo para comenzar a recibir llamadas'}
-            </p>
-          </div>
-          {phoneNumbers.length > 0 && config.voice_enabled && (
-            <div className="text-right">
-              <p className="font-mono font-medium text-emerald-700 dark:text-emerald-300">
-                {phoneNumbers[0].phone_number_display || phoneNumbers[0].phone_number}
-              </p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                Número principal
-              </p>
+          </button>
+          <button
+            onClick={() => setActiveTab('calls')}
+            className={`px-6 py-4 font-semibold transition-colors relative ${
+              activeTab === 'calls'
+                ? 'text-tis-coral'
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <HistoryIcon className="w-5 h-5" />
+              Historial de Llamadas
+              {recentCalls.length > 0 && (
+                <span className="px-2 py-0.5 bg-tis-coral-100 text-tis-coral text-xs font-semibold rounded-full">
+                  {recentCalls.length}
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Stats */}
-      {usageSummary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-2">
-              <PhoneCall className="w-4 h-4 text-blue-500" />
-              <span className="text-sm text-gray-500 dark:text-gray-400">Llamadas</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {usageSummary.total_calls}
-            </p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm text-gray-500 dark:text-gray-400">Minutos</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {usageSummary.total_minutes}
-            </p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-purple-500" />
-              <span className="text-sm text-gray-500 dark:text-gray-400">Citas Agendadas</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {Math.round(usageSummary.appointment_booking_rate * 100)}%
-            </p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-4 h-4 text-amber-500" />
-              <span className="text-sm text-gray-500 dark:text-gray-400">Costo</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              ${usageSummary.total_cost_usd.toFixed(2)}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Talk to Assistant Button */}
-      <div className="mb-8">
-        <TalkToAssistantButton
-          config={config || null}
-          onStartTest={handleStartTest}
-          disabled={saving || !config}
-        />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2 mb-6 border-b border-gray-200 dark:border-gray-700">
-        <button
-          onClick={() => setActiveTab('config')}
-          className={`px-4 py-3 font-medium transition-colors relative ${
-            activeTab === 'config'
-              ? 'text-blue-600'
-              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4" />
-            Configuración
-          </div>
-          {activeTab === 'config' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('calls')}
-          className={`px-4 py-3 font-medium transition-colors relative ${
-            activeTab === 'calls'
-              ? 'text-blue-600'
-              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4" />
-            Historial de Llamadas
-            {recentCalls.length > 0 && (
-              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                {recentCalls.length}
-              </span>
+            {activeTab === 'calls' && (
+              <motion.div
+                layoutId="tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-tis-coral"
+              />
             )}
-          </div>
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <AnimatePresence mode="wait">
+          {activeTab === 'config' && config && (
+            <motion.div
+              key="config"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              {/* Phone Numbers */}
+              <PhoneNumberManager
+                phoneNumbers={phoneNumbers}
+                onRequestNumber={handleRequestPhoneNumber}
+                onReleaseNumber={handleReleasePhoneNumber}
+                loading={saving}
+              />
+
+              {/* Config Sections */}
+              <ConfigSection
+                config={config}
+                onSave={handleSaveConfig}
+                saving={saving}
+              />
+            </motion.div>
+          )}
+
           {activeTab === 'calls' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+            <motion.div
+              key="calls"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <Card>
+                <CardContent className="p-0">
+                  <CallHistoryTable calls={recentCalls} />
+                </CardContent>
+              </Card>
+            </motion.div>
           )}
-        </button>
-      </div>
+        </AnimatePresence>
 
-      {/* Tab Content */}
-      {activeTab === 'config' && config && (
-        <div className="space-y-6">
-          {/* Phone Numbers */}
-          <PhoneNumberManager
-            phoneNumbers={phoneNumbers}
-            onRequestNumber={handleRequestPhoneNumber}
-            onReleaseNumber={handleReleasePhoneNumber}
-            loading={saving}
-          />
-
-          {/* Config Sections */}
-          <ConfigSection
+        {/* Talk to Assistant Modal */}
+        {config && accessToken && (
+          <TalkToAssistant
+            isOpen={showTalkToAssistant}
+            onClose={() => setShowTalkToAssistant(false)}
             config={config}
-            onSave={handleSaveConfig}
-            saving={saving}
+            accessToken={accessToken}
           />
-        </div>
-      )}
-
-      {activeTab === 'calls' && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-          <CallHistoryTable calls={recentCalls} />
-        </div>
-      )}
-
-      {/* Talk to Assistant Modal */}
-      {config && accessToken && (
-        <TalkToAssistant
-          isOpen={showTalkToAssistant}
-          onClose={() => setShowTalkToAssistant(false)}
-          config={config}
-          accessToken={accessToken}
-        />
-      )}
-    </div>
+        )}
+      </motion.div>
+    </PageWrapper>
   );
 }
