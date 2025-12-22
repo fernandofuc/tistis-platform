@@ -440,21 +440,24 @@ function PhoneNumberManager({
 
   return (
     <Card>
-      <CardHeader
-        title="Números Telefónicos"
-        subtitle="Gestiona los números de tu asistente"
-        icon={<PhoneIcon className="w-5 h-5 text-tis-green" />}
-        iconBgColor="bg-tis-green-100"
-        action={
-          <Button
-            onClick={() => setShowAreaCodes(!showAreaCodes)}
-            size="sm"
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Agregar Número
-          </Button>
-        }
-      />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-tis-green-100 flex items-center justify-center">
+            <PhoneIcon className="w-5 h-5 text-tis-green" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Números Telefónicos</h3>
+            <p className="text-sm text-slate-500">Gestiona los números de tu asistente</p>
+          </div>
+        </div>
+        <Button
+          onClick={() => setShowAreaCodes(!showAreaCodes)}
+          size="sm"
+        >
+          <PlusIcon className="w-4 h-4 mr-2" />
+          Agregar Número
+        </Button>
+      </div>
       <CardContent>
         {/* Lista de números existentes */}
         {phoneNumbers.length > 0 ? (
@@ -752,42 +755,45 @@ function ConfigSection({
     <div className="space-y-6">
       {/* Nombre y Personalidad */}
       <Card>
-        <CardHeader
-          title="Configuración del Asistente"
-          subtitle="Personaliza cómo se presenta tu asistente"
-          icon={<BotIcon className="w-5 h-5 text-tis-coral" />}
-          iconBgColor="bg-tis-coral-100"
-          action={
-            !isEditing ? (
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-tis-coral-100 flex items-center justify-center">
+              <BotIcon className="w-5 h-5 text-tis-coral" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Configuración del Asistente</h3>
+              <p className="text-sm text-slate-500">Personaliza cómo se presenta tu asistente</p>
+            </div>
+          </div>
+          {!isEditing ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsEditing(true)}
+            >
+              <EditIcon className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setIsEditing(true)}
+                onClick={() => setIsEditing(false)}
               >
-                <EditIcon className="w-4 h-4 mr-2" />
-                Editar
+                Cancelar
               </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsEditing(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={saving}
-                >
-                  <SaveIcon className="w-4 h-4 mr-2" />
-                  {saving ? 'Guardando...' : 'Guardar'}
-                </Button>
-              </div>
-            )
-          }
-        />
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                <SaveIcon className="w-4 h-4 mr-2" />
+                {saving ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </div>
+          )}
+        </div>
         <CardContent>
           <div className="space-y-6">
             {/* Nombre del asistente */}
@@ -885,12 +891,15 @@ function ConfigSection({
 
       {/* Voz */}
       <Card>
-        <CardHeader
-          title="Voz del Asistente"
-          subtitle="Selecciona cómo sonará tu asistente"
-          icon={<VolumeIcon className="w-5 h-5 text-tis-purple" />}
-          iconBgColor="bg-tis-purple/10"
-        />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-tis-purple/10 flex items-center justify-center">
+            <VolumeIcon className="w-5 h-5 text-tis-purple" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Voz del Asistente</h3>
+            <p className="text-sm text-slate-500">Selecciona cómo sonará tu asistente</p>
+          </div>
+        </div>
         <CardContent>
           {isEditing ? (
             <VoiceSelector
@@ -933,12 +942,15 @@ function ConfigSection({
 
       {/* Opciones avanzadas */}
       <Card>
-        <CardHeader
-          title="Opciones Avanzadas"
-          subtitle="Configuración adicional del comportamiento"
-          icon={<SettingsIcon className="w-5 h-5 text-amber-600" />}
-          iconBgColor="bg-amber-100"
-        />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+            <SettingsIcon className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Opciones Avanzadas</h3>
+            <p className="text-sm text-slate-500">Configuración adicional del comportamiento</p>
+          </div>
+        </div>
         <CardContent>
           <div className="space-y-4">
             {/* Frases de relleno */}
@@ -1358,29 +1370,21 @@ export default function AIAgentVozPage() {
               title="Llamadas"
               value={usageSummary.total_calls.toString()}
               icon={<PhoneCallIcon className="w-5 h-5" />}
-              iconBgColor="bg-tis-coral-100"
-              iconColor="text-tis-coral"
             />
             <StatCard
               title="Minutos"
               value={usageSummary.total_minutes.toString()}
               icon={<ClockIcon className="w-5 h-5" />}
-              iconBgColor="bg-tis-green-100"
-              iconColor="text-tis-green"
             />
             <StatCard
               title="Citas Agendadas"
               value={`${Math.round(usageSummary.appointment_booking_rate * 100)}%`}
               icon={<TrendingUpIcon className="w-5 h-5" />}
-              iconBgColor="bg-tis-purple/10"
-              iconColor="text-tis-purple"
             />
             <StatCard
               title="Costo"
               value={`$${usageSummary.total_cost_usd.toFixed(2)}`}
               icon={<DollarIcon className="w-5 h-5" />}
-              iconBgColor="bg-amber-100"
-              iconColor="text-amber-600"
             />
           </StatsGrid>
         )}
