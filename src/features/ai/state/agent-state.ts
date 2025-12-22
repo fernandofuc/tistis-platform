@@ -57,7 +57,7 @@ export interface LeadInfo {
  */
 export interface ConversationInfo {
   conversation_id: string;
-  channel: 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat';
+  channel: 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat' | 'voice';
   status: 'active' | 'escalated' | 'closed';
   ai_handling: boolean;
   message_count: number;
@@ -315,7 +315,7 @@ export const TISTISAgentState = Annotation.Root({
   }),
 
   /** Canal de origen del mensaje */
-  channel: Annotation<'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat'>({
+  channel: Annotation<'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat' | 'voice'>({
     reducer: (_, next) => next,
     default: () => 'whatsapp',
   }),
