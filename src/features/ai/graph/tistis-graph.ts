@@ -389,7 +389,7 @@ export interface GraphExecutionInput {
   conversation_id: string;
   lead_id: string;
   current_message: string;
-  channel: 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat';
+  channel: 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat' | 'voice';
   tenant_context: TISTISAgentStateType['tenant'];
   lead_context: TISTISAgentStateType['lead'];
   conversation_context: TISTISAgentStateType['conversation'];

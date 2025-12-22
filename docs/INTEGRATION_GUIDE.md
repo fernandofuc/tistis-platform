@@ -1,19 +1,20 @@
 # TIS TIS Platform - Integration Guide
 
-**Versión:** 3.0.0
-**Última actualización:** 12 de Diciembre, 2024
+**Versión:** 3.1.0
+**Última actualización:** 22 de Diciembre, 2024
 
 ## 🔌 Overview
 
-This document describes how to complete the multi-channel messaging and AI integrations for the TIS TIS Platform.
+This document describes how to complete the multi-channel messaging, Voice Agent, and AI integrations for the TIS TIS Platform.
 
 The platform now includes a **complete AI multi-channel system** with:
 1. WhatsApp Business Cloud API
 2. Instagram Direct Messages (Meta Graph API)
 3. Facebook Messenger (Meta Graph API)
 4. TikTok Direct Messages (TikTok Business API)
-5. Claude AI integration for automated responses
-6. Job queue system for asynchronous processing
+5. Voice Agent with VAPI (inbound/outbound calls)
+6. Claude AI integration for automated responses
+7. Job queue system for asynchronous processing
 
 **Status:** All code, webhooks, and services are fully implemented and ready for configuration.
 
@@ -703,4 +704,273 @@ curl -X POST http://localhost:3000/api/jobs/process \
 
 ---
 
-*The AI multi-channel system is fully implemented and ready for production. For complete technical documentation, see `/docs/MULTI_CHANNEL_AI_SYSTEM.md`.*
+## 📞 Voice Agent Integration (VAPI)
+
+### Prerequisites
+
+1. **VAPI Account** from [vapi.ai](https://vapi.ai)
+2. **VAPI API Key** with webhook access
+3. **11Labs Account** for voice synthesis (optional but recommended)
+4. **Deepgram Account** for transcription (optional, defaults to Deepgram free tier)
+
+### Environment Variables
+
+Add these to your `.env.local`:
+
+```bash
+# VAPI
+VAPI_AUTH_TOKEN=your_vapi_api_key
+VAPI_WEBHOOK_SECRET=your_webhook_secret
+
+# 11Labs (Voice)
+ELEVENLABS_API_KEY=your_elevenlabs_key
+
+# Anthropic (Claude for Voice)
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+
+# Deepgram (Transcription - optional)
+DEEPGRAM_API_KEY=your_deepgram_key
+```
+
+### Phone Number Setup
+
+1. **Request Phone Numbers** via dashboard or API
+   - Requires Growth plan
+   - Creates pending phone number request
+   - Provisioning happens asynchronously
+
+2. **Activate Phone Numbers**
+   - Once provisioned, activate in voice_phone_numbers table
+   - Associate with branch (optional)
+
+```typescript
+import { requestPhoneNumber } from '@/src/features/voice-agent/services/voice-agent.service';
+
+const result = await requestPhoneNumber('tenant-uuid', '664', 'branch-uuid');
+if (result.success) {
+  console.log('Phone number requested:', result.phoneNumber.id);
+}
+```
+
+### Voice Agent Configuration
+
+Each tenant configures their Voice Agent:
+
+```typescript
+import { updateVoiceConfig } from '@/src/features/voice-agent/services/voice-agent.service';
+
+await updateVoiceConfig('tenant-uuid', {
+  voice_enabled: true,
+  assistant_name: 'María',
+
+  // AI Model
+  ai_model: 'claude-3-5-sonnet-20241022',
+  ai_temperature: 0.7,
+  ai_max_tokens: 500,
+
+  // Voice (11Labs)
+  voice_id: 'EXAVITQu4vr4xnSDxMaL',  // Default: Bella
+  voice_stability: 0.75,
+  voice_similarity_boost: 0.75,
+
+  // Greeting
+  first_message: 'Hola, soy {assistant_name} de {business_name}. ¿En qué puedo ayudarte?',
+  first_message_mode: 'assistant_speaks_first',
+
+  // Timing
+  wait_seconds: 0,
+  on_punctuation_seconds: 0.1,
+  on_no_punctuation_seconds: 1.5,
+}, 'staff-uuid');
+```
+
+### Auto-Generate Prompt
+
+The system automatically generates prompts based on tenant data:
+
+```typescript
+import { generatePrompt } from '@/src/features/voice-agent/services/voice-agent.service';
+
+const prompt = await generatePrompt('tenant-uuid');
+// Automatically includes:
+// - Business name and contact info
+// - All services with prices
+// - Staff with specialties
+// - Branches with hours
+// - Knowledge base (custom instructions)
+// - And more...
+```
+
+### Webhook Configuration
+
+1. Configure webhook URL in VAPI dashboard
+2. URL format: `https://your-domain.com/api/voice-agent/webhook`
+3. Add `VAPI_WEBHOOK_SECRET` to environment
+
+**Supported VAPI Events:**
+- `assistant-request` - VAPI requests assistant config
+- `transcript` - Conversation transcript
+- `function-call` - LLM function calls
+- `end-of-call-report` - Call ended
+- `status-update` - Call status changes
+
+### Available Functions in System Prompt
+
+The Voice Agent can call these functions:
+
+```typescript
+// In system prompt, include:
+{
+  "functions": [
+    {
+      "name": "schedule_appointment",
+      "description": "Agendar una cita",
+      "parameters": {
+        "service": "string",
+        "date": "string (YYYY-MM-DD)",
+        "time": "string (HH:MM)",
+        "customer_name": "string",
+        "customer_phone": "string"
+      }
+    },
+    {
+      "name": "transfer_to_agent",
+      "description": "Transferir a agente humano",
+      "parameters": {
+        "reason": "string"
+      }
+    },
+    {
+      "name": "get_business_info",
+      "description": "Obtener información del negocio",
+      "parameters": {}
+    }
+  ]
+}
+```
+
+### Plan Restrictions
+
+Voice Agent is only available for **Growth** plan tenants:
+
+```typescript
+import { canAccessVoiceAgent } from '@/src/features/voice-agent/services/voice-agent.service';
+
+const access = await canAccessVoiceAgent('tenant-uuid');
+if (!access.canAccess) {
+  console.error(access.reason); // "Voice Agent solo está disponible en el plan Growth"
+}
+```
+
+### Call Analytics
+
+Get call statistics and performance metrics:
+
+```typescript
+import { getUsageSummary, getRecentCalls } from '@/src/features/voice-agent/services/voice-agent.service';
+
+// Get calls (last 20)
+const calls = await getRecentCalls('tenant-uuid', 20, 0);
+
+// Get detailed metrics (last 30 days)
+const summary = await getUsageSummary('tenant-uuid');
+// Returns: {
+//   total_calls,
+//   total_minutes,
+//   total_cost_usd,
+//   avg_call_duration_seconds,
+//   appointment_booking_rate (%),
+//   escalation_rate (%),
+//   by_day: [{date, calls, minutes, cost_usd}]
+// }
+```
+
+### Call Details & Transcripts
+
+Retrieve call information and conversation transcripts:
+
+```typescript
+import { getCallDetails, getCallMessages } from '@/src/features/voice-agent/services/voice-agent.service';
+
+const call = await getCallDetails('call-uuid', 'tenant-uuid');
+// Returns: {
+//   id, tenant_id, vapi_call_id,
+//   customer_phone, customer_name,
+//   status, duration_seconds, cost_usd,
+//   outcome, escalated,
+//   transcript, recording_url,
+//   started_at, ended_at
+// }
+
+const messages = await getCallMessages('call-uuid');
+// Returns: [{
+//   id, role: 'user'|'assistant'|'system',
+//   content, sequence_number, created_at
+// }]
+```
+
+### Voice ID Options (11Labs)
+
+Popular voice IDs for Spanish:
+- `EXAVITQu4vr4xnSDxMaL` - Bella (Default, warm & friendly)
+- `TxGEqnHWrfncoIPqAKQe` - Adam (Professional, male)
+- `FGthdsQc5BLike5CT8zO` - Liam (Conversational, young)
+- `piTKgcLEGmPE4e6mEKli` - Charlotte (Warm, female)
+
+### Database Tables
+
+Voice Agent uses these tables:
+- `voice_calls` - Call metadata
+- `voice_call_messages` - Transcripts
+- `voice_agent_config` - Tenant configuration
+- `voice_phone_numbers` - Phone numbers
+- `voice_prompt_templates` - System prompt templates
+
+See `/docs/VOICE_AGENT_SYSTEM.md` for detailed schema documentation.
+
+### Testing Voice Agent
+
+1. **Verify Setup:**
+```sql
+-- Check tenant config
+SELECT * FROM voice_agent_config WHERE tenant_id = 'tenant-uuid';
+
+-- Check phone numbers
+SELECT * FROM voice_phone_numbers WHERE tenant_id = 'tenant-uuid';
+
+-- Generate prompt
+SELECT public.generate_voice_agent_prompt('tenant-uuid'::UUID);
+```
+
+2. **Simulate Webhook:**
+```bash
+curl -X POST http://localhost:3000/api/voice-agent/webhook \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_VAPI_SECRET" \
+  -d '{
+    "type": "assistant-request",
+    "call": {
+      "id": "call-123",
+      "phoneNumber": { "number": "+52 664 123 4567" },
+      "customer": { "number": "+52 664 999 8888" }
+    }
+  }'
+```
+
+### Voice Agent Checklist
+
+- [ ] VAPI account created and API key added to env
+- [ ] 11Labs account created (for voice quality)
+- [ ] Phone number(s) requested and provisioned
+- [ ] Phone number(s) associated with tenant
+- [ ] Voice Agent config created
+- [ ] System prompt generated and customized
+- [ ] Voice settings configured (voice_id, stability, etc)
+- [ ] Webhook URL registered in VAPI
+- [ ] Test call received and logged
+- [ ] Transcripts being saved to voice_call_messages
+- [ ] Analytics available in dashboard
+
+---
+
+*The multi-channel AI system is fully implemented and ready for production. For Voice Agent technical details, see `/docs/VOICE_AGENT_SYSTEM.md`. For messaging integration details, see `/docs/MULTI_CHANNEL_AI_SYSTEM.md`.*
