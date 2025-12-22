@@ -37,11 +37,12 @@ Las RLS policies de 7 tablas principales usaban `auth.jwt() -> 'tenant_id'` que 
 **Nuevos precios de planes:**
 
 ```
-Starter:     $3,490/mes  (antes $799)   - SIN cuota de activación
-Essentials:  $7,490/mes  (antes $1,499) - SIN cuota de activación
-Growth:     $12,490/mes  (antes $2,999) - SIN cuota de activación
-Scale:      $19,990/mes  (antes $5,999) - SIN cuota de activación
+Starter:     $3,490/mes  (antes $799)   - SIN cuota de activación (1 sucursal)
+Essentials:  $7,490/mes  (antes $1,499) - SIN cuota de activación (hasta 8 sucursales)
+Growth:     $12,490/mes  (antes $2,999) - SIN cuota de activación (hasta 20 sucursales)
 ```
+
+> **Nota:** El plan Scale fue descontinuado. Growth es ahora el plan de mayor capacidad.
 
 **Frontend actualizado:**
 - ✅ /app/proposal/page.tsx - Precios nuevos
@@ -131,7 +132,6 @@ SELECT id, monthly_price, activation_fee FROM public.plans;
 #   starter: 3490, 0
 #   essentials: 7490, 0
 #   growth: 12490, 0
-#   scale: 19990, 0
 
 # 3. Verificar vertical_configs
 SELECT vertical, display_name FROM public.vertical_configs;

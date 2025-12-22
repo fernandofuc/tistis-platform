@@ -18,11 +18,11 @@ function getSupabaseAdmin() {
 }
 
 // Pricing per extra branch by plan (in MXN)
+// Nota: Ahora es $1,500/mes para todas las sucursales extra
 const EXTRA_BRANCH_PRICING: Record<string, number> = {
   starter: 0, // Starter doesn't allow extra branches
-  essentials: 1850,
-  growth: 2450,
-  scale: 2990,
+  essentials: 1500,
+  growth: 1500,
 };
 
 // ======================

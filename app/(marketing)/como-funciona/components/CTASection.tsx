@@ -63,8 +63,8 @@ export default function CTASection() {
             </h2>
 
             <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto mb-8 leading-relaxed">
-              Únete a más de 500 negocios que ya usan TIS TIS para automatizar
-              su atención al cliente y multiplicar sus ventas.
+              Negocios como el tuyo ya están automatizando su atención al cliente
+              y multiplicando sus ventas. No te quedes atrás.
             </p>
 
             {/* CTAs */}

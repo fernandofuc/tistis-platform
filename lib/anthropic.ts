@@ -47,7 +47,7 @@ ANALYSIS_COMPLETE::{
   "financial_impact": number (estimado mensual en MXN),
   "time_impact": number (horas semanales perdidas),
   "urgency_score": 1-10,
-  "recommended_plan": "starter|essentials|growth|scale",
+  "recommended_plan": "starter|essentials|growth",
   "recommended_addons": ["addon_id"],
   "recommended_especialidad": "restaurante|retail|salud|industrial|null",
   "reasoning": "Por qué recomendaste este plan (2-3 oraciones)"

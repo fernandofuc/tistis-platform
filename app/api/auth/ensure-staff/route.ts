@@ -3,6 +3,8 @@
 // Creates staff record if missing (uses service role to bypass RLS)
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 

@@ -3,6 +3,8 @@
 // Internal API for sending templated emails
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { emailService } from '@/src/lib/email';
 import type { EmailTemplateType } from '@/src/lib/email';

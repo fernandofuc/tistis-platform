@@ -50,7 +50,6 @@ const PLAN_PRICE_IDS: Record<string, string> = {
   starter: process.env.STRIPE_PRICE_STARTER || 'price_starter',
   essentials: process.env.STRIPE_PRICE_ESSENTIALS || 'price_essentials',
   growth: process.env.STRIPE_PRICE_GROWTH || 'price_growth',
-  scale: process.env.STRIPE_PRICE_SCALE || 'price_scale',
 };
 
 export async function POST(request: NextRequest) {
@@ -67,7 +66,7 @@ export async function POST(request: NextRequest) {
     const { newPlan } = body;
 
     // Validate plan
-    if (!newPlan || !['starter', 'essentials', 'growth', 'scale'].includes(newPlan)) {
+    if (!newPlan || !['starter', 'essentials', 'growth'].includes(newPlan)) {
       return NextResponse.json(
         { error: 'Plan inválido' },
         { status: 400 }
@@ -98,25 +97,92 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
+    // Get tenant info for creating Stripe customer if needed
+    const { data: tenant } = await supabaseAdmin
+      .from('tenants')
+      .select('id, name, slug')
+      .eq('id', userRole.tenant_id)
+      .single();
+
+    if (!tenant) {
+      console.error('[Change Plan] Tenant not found:', userRole.tenant_id);
+      return NextResponse.json({
+        error: 'Tenant no encontrado'
+      }, { status: 404 });
+    }
+
     // Get client from tenant
-    const { data: client } = await supabaseAdmin
+    let { data: client } = await supabaseAdmin
       .from('clients')
       .select('id, stripe_customer_id')
       .eq('tenant_id', userRole.tenant_id)
       .single();
 
+    // If no client exists, create one with Stripe customer
     if (!client) {
-      console.error('[Change Plan] No client found for tenant:', userRole.tenant_id);
-      return NextResponse.json({
-        error: 'No se encontró información de facturación. Por favor contacta a soporte para configurar tu cuenta.'
-      }, { status: 404 });
+      console.log('[Change Plan] Creating client for tenant:', userRole.tenant_id);
+
+      const stripe = getStripeClient();
+
+      // Create Stripe customer
+      const stripeCustomer = await stripe.customers.create({
+        email: user.email || '',
+        name: tenant.name,
+        metadata: {
+          tenant_id: userRole.tenant_id,
+          tenant_slug: tenant.slug,
+        },
+      });
+
+      // Create client record
+      const { data: newClient, error: createError } = await supabaseAdmin
+        .from('clients')
+        .insert({
+          user_id: user.id,
+          tenant_id: userRole.tenant_id,
+          business_name: tenant.name,
+          contact_email: user.email || '',
+          stripe_customer_id: stripeCustomer.id,
+          status: 'active',
+        })
+        .select('id, stripe_customer_id')
+        .single();
+
+      if (createError) {
+        console.error('[Change Plan] Error creating client:', createError);
+        return NextResponse.json({
+          error: 'Error al crear información de facturación. Por favor contacta a soporte.'
+        }, { status: 500 });
+      }
+
+      client = newClient;
+      console.log('[Change Plan] Client created:', client.id);
     }
 
+    // If client exists but has no Stripe customer, create one
     if (!client.stripe_customer_id) {
-      console.error('[Change Plan] Client has no Stripe customer ID:', client.id);
-      return NextResponse.json({
-        error: 'Tu cuenta no tiene configurado un método de pago. Por favor contacta a soporte.'
-      }, { status: 400 });
+      console.log('[Change Plan] Creating Stripe customer for existing client:', client.id);
+
+      const stripe = getStripeClient();
+
+      const stripeCustomer = await stripe.customers.create({
+        email: user.email || '',
+        name: tenant.name,
+        metadata: {
+          tenant_id: userRole.tenant_id,
+          tenant_slug: tenant.slug,
+          client_id: client.id,
+        },
+      });
+
+      // Update client with Stripe customer ID
+      await supabaseAdmin
+        .from('clients')
+        .update({ stripe_customer_id: stripeCustomer.id })
+        .eq('id', client.id);
+
+      client.stripe_customer_id = stripeCustomer.id;
+      console.log('[Change Plan] Stripe customer created:', stripeCustomer.id);
     }
 
     // Get active subscription
@@ -127,11 +193,59 @@ export async function POST(request: NextRequest) {
       .eq('status', 'active')
       .single();
 
+    // If no subscription exists, create a checkout session for the new plan
     if (!subscription) {
-      return NextResponse.json(
-        { error: 'No se encontró una suscripción activa' },
-        { status: 404 }
-      );
+      console.log('[Change Plan] No active subscription, creating checkout session');
+
+      const stripe = getStripeClient();
+
+      // Get or create the price for the new plan
+      let priceId = PLAN_PRICE_IDS[newPlan];
+
+      // If price doesn't exist in env, create it dynamically
+      if (priceId.startsWith('price_')) {
+        const product = await stripe.products.create({
+          name: `TIS TIS - Plan ${newPlan.charAt(0).toUpperCase() + newPlan.slice(1)}`,
+          description: `Suscripción mensual al plan ${newPlan}`,
+        });
+
+        const newPlanConfig = getPlanConfig(newPlan);
+        const price = await stripe.prices.create({
+          product: product.id,
+          currency: 'mxn',
+          unit_amount: newPlanConfig?.monthlyPriceCentavos || 749000,
+          recurring: { interval: 'month' },
+        });
+
+        priceId = price.id;
+      }
+
+      // Create checkout session
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const checkoutSession = await stripe.checkout.sessions.create({
+        customer: client.stripe_customer_id,
+        mode: 'subscription',
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        success_url: `${baseUrl}/dashboard/settings?tab=billing&success=true`,
+        cancel_url: `${baseUrl}/dashboard/settings?tab=billing&cancelled=true`,
+        metadata: {
+          tenant_id: userRole.tenant_id,
+          client_id: client.id,
+          plan: newPlan,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        requiresCheckout: true,
+        checkoutUrl: checkoutSession.url,
+        message: 'No tienes una suscripción activa. Serás redirigido al proceso de pago.',
+      });
     }
 
     // Check if already on this plan

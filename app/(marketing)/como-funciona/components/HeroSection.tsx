@@ -29,7 +29,7 @@ export default function HeroSection() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-tis-green"></span>
             </span>
             <span className="text-sm font-medium text-slate-700">
-              +500 negocios ya automatizados
+              Solo quedan 50 lugares este mes
             </span>
           </div>
         </div>

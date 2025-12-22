@@ -92,7 +92,8 @@ SELECT * FROM public.staff;
 | Starter | $799/mes | **$3,490/mes** | $0 (antes $1,500) |
 | Essentials | $1,499/mes | **$7,490/mes** | $0 (antes $2,500) |
 | Growth | $2,999/mes | **$12,490/mes** | $0 (antes $3,500) |
-| Scale | $5,999/mes | **$19,990/mes** | $0 (antes $5,000) |
+
+> **Nota:** El plan Scale fue descontinuado en Dic 2024.
 
 **Cambios en tabla `plans`:**
 ```sql
@@ -301,8 +302,8 @@ const PLANS = {
   starter: { price: 3490, ... },
   essentials: { price: 7490, ... },
   growth: { price: 12490, ... },
-  scale: { price: 19990, ... },
 };
+// Nota: Scale fue descontinuado
 
 // ELIMINADO:
 setup_fee: 1500  // Ya no existe
@@ -379,8 +380,9 @@ ORDER BY monthly_price;
 starter      | Starter      | 3490  | 0
 essentials   | Essentials   | 7490  | 0
 growth       | Growth       | 12490 | 0
-scale        | Scale        | 19990 | 0
 ```
+
+> **Nota:** Scale fue descontinuado. Growth es el plan de mayor capacidad.
 
 ### Verificar Addons
 ```sql

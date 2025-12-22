@@ -1,9 +1,175 @@
 # Changelog - TIS TIS Platform
 
-Todos los cambios notables del proyecto serán documentados en este archivo.
+Todos los cambios notables del proyecto seran documentados en este archivo.
 
-El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
+El formato esta basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
+
+---
+
+## [4.1.0] - 2024-12-21
+
+### Anadido - Integracion LangGraph con Configuraciones del Cliente
+
+#### Problema Resuelto
+Los agentes de LangGraph no usaban las configuraciones personalizadas del cliente. Ahora los 11 agentes tienen acceso completo al contexto del negocio.
+
+#### Contexto Disponible para Agentes
+
+| Tipo de Datos | Descripcion |
+|---------------|-------------|
+| Instrucciones personalizadas | Identidad, tono, casos especiales |
+| Politicas del negocio | Cancelaciones, pagos, garantias |
+| Servicios y precios | Con promociones activas |
+| FAQs personalizadas | Respuestas pre-configuradas |
+| Knowledge Base | Documentos y conocimiento del negocio |
+| Sucursales | Horarios y personal por ubicacion |
+| Manejo de competencia | Respuestas ante menciones de competidores |
+| Plantillas de respuesta | Templates configurados |
+| Estilo de comunicacion | Configurado por tenant |
+
+#### Archivos Modificados
+
+- `src/features/ai/state/agent-state.ts` - BusinessContext extendido con campos de Knowledge Base
+- `src/features/ai/services/langgraph-ai.service.ts` - Ahora usa el RPC `get_tenant_ai_context`
+- `src/features/ai/agents/specialists/base.agent.ts` - Nueva funcion `buildFullBusinessContext()`
+
+### Anadido - Sistema de Aprendizaje Automatico de Mensajes
+
+#### Concepto
+Sistema que analiza mensajes entrantes para extraer patrones y mejorar respuestas de IA con el tiempo.
+
+#### Funcionalidades
+
+- **Analisis de patrones** - Extrae patrones de mensajes entrantes
+- **Vocabulario especifico** - Aprende terminos y jerga del negocio
+- **Preferencias de horarios** - Detecta horarios preferidos por clientes
+- **Objeciones comunes** - Identifica objeciones frecuentes
+- **Insights automaticos** - Genera insights basados en datos
+- **Especifico por vertical** - Dental, restaurant, medical tienen diferentes patrones
+
+#### Disponibilidad
+Solo disponible para planes **Essentials** y superiores.
+
+#### Archivos Creados
+
+**Migracion:**
+- `supabase/migrations/065_AI_MESSAGE_LEARNING_SYSTEM.sql`
+
+**Servicio:**
+- `src/features/ai/services/message-learning.service.ts`
+
+**Endpoint CRON:**
+- `app/api/cron/process-learning/route.ts`
+
+#### Tablas Nuevas
+
+| Tabla | Proposito |
+|-------|-----------|
+| `ai_message_patterns` | Patrones extraidos de mensajes |
+| `ai_learned_vocabulary` | Vocabulario especifico del negocio |
+| `ai_business_insights` | Insights automaticos generados |
+| `ai_learning_config` | Configuracion por tenant |
+| `ai_learning_queue` | Cola de procesamiento |
+
+---
+
+## [4.0.0] - 2024-12-21
+
+### Anadido - Sistema de IA Multi-Agente con LangGraph
+
+#### Arquitectura LangGraph Multi-Agente
+Se implemento un nuevo sistema de IA basado en LangGraph que reemplaza el enfoque de "cerebro unico" con un equipo de agentes especializados.
+
+**Concepto:**
+- **Antes:** Un solo servicio de IA procesaba todos los mensajes
+- **Ahora:** Multiples agentes especializados trabajan en equipo con handoffs inteligentes
+
+#### Agentes Implementados
+
+| Agente | Archivo | Funcion |
+|--------|---------|---------|
+| Supervisor | `supervisor.agent.ts` | Orquestador principal, detecta intencion |
+| Vertical Router | `vertical-router.agent.ts` | Enruta segun vertical del negocio |
+| Greeting Agent | `greeting.agent.ts` | Saludos y bienvenidas |
+| Pricing Agent | `pricing.agent.ts` | Precios y cotizaciones |
+| Location Agent | `location.agent.ts` | Ubicaciones y direcciones |
+| Hours Agent | `hours.agent.ts` | Horarios de atencion |
+| FAQ Agent | `faq.agent.ts` | Preguntas frecuentes |
+| Booking Agent | `booking.agent.ts` | Citas (+ variantes por vertical) |
+| General Agent | `general.agent.ts` | Fallback general |
+| Escalation Agent | `escalation.agent.ts` | Escalacion a humano |
+| Urgent Care Agent | `urgent-care.agent.ts` | Emergencias y dolor |
+
+#### Archivos Creados
+
+**Estado del Grafo:**
+- `src/features/ai/state/agent-state.ts` - Estado compartido con tipos completos
+- `src/features/ai/state/index.ts` - Exports
+
+**Agentes:**
+- `src/features/ai/agents/supervisor/supervisor.agent.ts`
+- `src/features/ai/agents/routing/vertical-router.agent.ts`
+- `src/features/ai/agents/specialists/*.agent.ts` (9 agentes)
+- `src/features/ai/agents/index.ts`
+
+**Grafo Principal:**
+- `src/features/ai/graph/tistis-graph.ts` - Grafo compilado con todos los nodos y edges
+- `src/features/ai/graph/index.ts`
+
+**Integracion:**
+- `src/features/ai/services/langgraph-ai.service.ts` - Servicio que integra con el sistema existente
+
+#### Migracion de Base de Datos
+
+**064_LANGGRAPH_FEATURE_FLAG.sql:**
+- Columna `use_langgraph` en `ai_tenant_config` (boolean, default: false)
+- Columna `langgraph_config` (JSONB) para configuracion avanzada
+- Indice `idx_ai_tenant_config_langgraph` para busquedas rapidas
+- Funcion `tenant_uses_langgraph(tenant_id)` para verificacion
+
+#### Feature Flag
+
+```sql
+-- Activar LangGraph para un tenant
+UPDATE ai_tenant_config SET use_langgraph = true WHERE tenant_id = 'xxx';
+
+-- Desactivar (rollback)
+UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
+```
+
+#### Beneficios
+
+1. **Respuestas especializadas** - Cada agente es experto en su dominio
+2. **Manejo de verticales** - Dental, Restaurant, Medical responden diferente
+3. **Handoffs inteligentes** - Agentes pasan control entre si segun contexto
+4. **Trazabilidad completa** - Log de que agente proceso cada mensaje
+5. **Escalacion automatica** - Detecta cuando un humano debe intervenir
+6. **Urgencias priorizadas** - Detecta dolor/emergencias automaticamente
+
+#### Limpieza de Codigo
+
+**Archivos Eliminados:**
+- `n8n-workflows/` - Carpeta completa (reemplazado por sistema nativo)
+- `tistis-platform-entrega-20251207/` - Backup obsoleto
+- Documentos redundantes de entregas anteriores
+
+### Cambiado
+
+- Actualizacion de README.md con documentacion de LangGraph
+- Actualizacion de DOCUMENTATION_INDEX.md
+- Actualizacion de STATUS_PROYECTO.md a version 4.0.0
+
+---
+
+## [3.1.0] - 2024-12-21
+
+### Anadido - Mejoras Completas de Produccion
+
+- Validacion de pagos por transferencia con AI Vision
+- Recordatorios automaticos de citas (1 semana, 24h, 4h)
+- Configuracion de AI por canal conectado
+- Rediseno de pagina Enterprise
 
 ---
 
@@ -19,9 +185,10 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 | Plan | Sucursales | Precio Sucursal Extra |
 |------|------------|----------------------|
 | Starter | 1 | N/A |
-| Essentials | **5** | $1,850/mes |
-| Growth | **8** | $2,450/mes |
-| Scale | **15** | $2,990/mes |
+| Essentials | **8** | $1,500/mes |
+| Growth | **20** | $1,500/mes |
+
+> **Nota:** El plan Scale fue descontinuado. Growth es ahora el plan de mayor capacidad.
 
 #### Webhook Route: 6 Fixes Críticos
 
@@ -92,7 +259,8 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 | Starter | $799/mes | **$3,490/mes** | $0 (antes $1,500) |
 | Essentials | $1,499/mes | **$7,490/mes** | $0 (antes $2,500) |
 | Growth | $2,999/mes | **$12,490/mes** | $0 (antes $3,500) |
-| Scale | $5,999/mes | **$19,990/mes** | $0 (antes $5,000) |
+
+> **Nota:** El plan Scale fue descontinuado en Dic 2024.
 
 **Addons:**
 - Facturación Automática: $1,990/mes
@@ -245,4 +413,4 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
-**Última actualización:** 10 de Diciembre, 2024
+**Ultima actualizacion:** 21 de Diciembre, 2024

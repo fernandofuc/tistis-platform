@@ -348,3 +348,55 @@ export async function deleteMessageTemplate(id: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+// ======================
+// PAYMENT PROOF VALIDATION
+// ======================
+export interface PaymentValidationResult {
+  isValid: boolean;
+  confidence: number;
+  extractedData: {
+    amount?: number;
+    date?: string;
+    reference?: string;
+    bank?: string;
+    senderName?: string;
+  };
+  issues: string[];
+  rawAnalysis: string;
+}
+
+export async function validatePaymentProof(params: {
+  image_url?: string;
+  image_base64?: string;
+  expected_amount: number;
+  membership_id?: string;
+  lead_id?: string;
+}): Promise<PaymentValidationResult> {
+  const result = await fetchWithAuth('/api/loyalty/memberships/validate-payment', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  return result.data;
+}
+
+// ======================
+// TRANSFER MEMBERSHIP
+// ======================
+export async function createTransferMembership(params: {
+  lead_id: string;
+  plan_id: string;
+  billing_cycle: 'monthly' | 'annual';
+  payment_amount: number;
+  transfer_proof_url?: string;
+  notes?: string;
+}): Promise<Membership> {
+  const result = await fetchWithAuth('/api/loyalty/memberships', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...params,
+      payment_method: 'transfer',
+    }),
+  });
+  return result.data;
+}

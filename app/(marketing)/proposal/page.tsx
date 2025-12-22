@@ -13,14 +13,14 @@ import PlanCard from '@/components/proposal/PlanCard';
 import { AIAnalysis, QuestionnaireAnswers } from '@/types';
 import { supabase } from '@/lib/auth';
 
-type PlanType = 'starter' | 'essentials' | 'growth' | 'scale';
+type PlanType = 'starter' | 'essentials' | 'growth';
 
 // Helper: Determine recommended plan based on answers
 function getRecommendedPlan(answers: QuestionnaireAnswers): PlanType {
   const employees = parseInt(answers.employees_count || '1');
   const locations = parseInt(answers.locations || '1');
 
-  if (locations > 3 || employees > 50) return 'scale';
+  // Growth is now the top tier (supports up to 20 branches)
   if (locations > 1 || employees > 15) return 'growth';
   if (employees > 5) return 'essentials';
   return 'starter';
@@ -33,7 +33,6 @@ function generateReasoning(answers: QuestionnaireAnswers): string {
     starter: 'Starter',
     essentials: 'Essentials',
     growth: 'Growth',
-    scale: 'Scale'
   };
   return `El plan ${planNames[plan]} es ideal para tu negocio de ${answers.business_type || 'servicios'} con ${answers.employees_count || '1-5'} empleados. Te permitirá automatizar la atención al cliente y optimizar tus operaciones desde el primer día.`;
 }
@@ -77,21 +76,8 @@ const PLANS = {
       'Multi-canal (WhatsApp, Web, Email)',
       'Analytics avanzado',
       'Soporte 24/7',
-      'Call de configuración en 30 min'
-    ]
-  },
-  scale: {
-    name: 'Scale',
-    price: 19990,
-    branchExtra: 1500,
-    features: [
-      'Todo lo de Growth',
-      'Soporte multi-sucursal',
-      'IA entrenada con tus datos',
-      'Integraciones custom ilimitadas',
-      'Equipo dedicado',
-      'SLA garantizado',
-      'Consultoría estratégica mensual'
+      'Call de configuración en 30 min',
+      'Hasta 20 sucursales',
     ]
   }
 };

@@ -89,7 +89,7 @@ const PLANS_DISPLAY: PlanDisplay[] = [
     name: 'Essentials',
     description: 'El favorito de los negocios en crecimiento',
     monthlyPrice: 7490,
-    branchLimit: 5,
+    branchLimit: 8,
     conversationsLabel: '2,000 conversaciones/mes',
     supportLevel: 'Prioritario',
     highlighted: true,
@@ -101,7 +101,7 @@ const PLANS_DISPLAY: PlanDisplay[] = [
       'Historial completo de clientes',
       'Tokens de lealtad',
       'Soporte prioritario + Call 30 min',
-      'Hasta 5 sucursales',
+      'Hasta 8 sucursales',
     ],
   },
   {
@@ -109,7 +109,7 @@ const PLANS_DISPLAY: PlanDisplay[] = [
     name: 'Growth',
     description: 'Para los que quieren dominar',
     monthlyPrice: 12490,
-    branchLimit: 8,
+    branchLimit: 20,
     conversationsLabel: 'Conversaciones ilimitadas',
     supportLevel: '24/7',
     icon: <Building2 className="w-6 h-6" />,
@@ -119,7 +119,7 @@ const PLANS_DISPLAY: PlanDisplay[] = [
       'Multi-canal: WhatsApp, Web, Email',
       'Analiticas avanzadas y reportes',
       'Soporte 24/7 dedicado',
-      'Hasta 8 sucursales',
+      'Hasta 20 sucursales',
     ],
   },
 ];
@@ -336,7 +336,7 @@ function PlanCard({
 }
 
 // ============================================================
-// COMPONENTE: Software Personalizado Card
+// COMPONENTE: Sistema AI Personalizado Card
 // ============================================================
 
 function CustomSoftwareCard() {
@@ -358,7 +358,7 @@ function CustomSoftwareCard() {
                 Enterprise
               </span>
             </div>
-            <h3 className="text-2xl font-bold mb-2">Software Personalizado</h3>
+            <h3 className="text-2xl font-bold mb-2">Sistema AI Personalizado</h3>
             <p className="text-slate-300 max-w-lg">
               Para negocios con necesidades especificas que requieren una solucion a la medida.
               Incluye integraciones personalizadas, equipo dedicado y soporte premium.
@@ -567,7 +567,7 @@ function PricingContent() {
             ))}
           </div>
 
-          {/* Software Personalizado */}
+          {/* Sistema AI Personalizado */}
           <CustomSoftwareCard />
         </div>
       </section>

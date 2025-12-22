@@ -180,20 +180,39 @@ export function useTenant(): TenantContextValue {
           }
         }
 
-        // Load vertical config (optional - table may not exist)
-        try {
-          const { data: verticalData, error: verticalError } = await supabase
-            .from('vertical_configs')
-            .select('*')
-            .eq('vertical_key', tenantData.vertical)
-            .single();
+        // Load vertical config from local config instead of database
+        // The vertical_configs table doesn't exist - use the local verticals.ts config
+        // This prevents 400 errors in the console
+        const { getVerticalConfig } = await import('@/src/shared/config/verticals');
+        const localVerticalConfig = getVerticalConfig(tenantData.vertical);
+        if (localVerticalConfig) {
+          // Convert VerticalTerminology to Record<string, string>
+          const terminologyRecord: Record<string, string> = {
+            patient: localVerticalConfig.terminology.patient,
+            patients: localVerticalConfig.terminology.patients,
+            appointment: localVerticalConfig.terminology.appointment,
+            appointments: localVerticalConfig.terminology.appointments,
+            quote: localVerticalConfig.terminology.quote,
+            quotes: localVerticalConfig.terminology.quotes,
+            newPatient: localVerticalConfig.terminology.newPatient,
+            newAppointment: localVerticalConfig.terminology.newAppointment,
+            newQuote: localVerticalConfig.terminology.newQuote,
+            patientList: localVerticalConfig.terminology.patientList,
+            appointmentCalendar: localVerticalConfig.terminology.appointmentCalendar,
+            todayAppointments: localVerticalConfig.terminology.todayAppointments,
+            patientActive: localVerticalConfig.terminology.patientActive,
+            patientInactive: localVerticalConfig.terminology.patientInactive,
+          };
 
-          if (verticalData && !verticalError) {
-            setVerticalConfig(verticalData);
-          }
-        } catch {
-          // vertical_configs table may not exist - use defaults
-          console.log('🟡 vertical_configs not available, using defaults');
+          setVerticalConfig({
+            vertical_key: localVerticalConfig.id,
+            display_name: localVerticalConfig.name,
+            description: localVerticalConfig.description,
+            icon: localVerticalConfig.icon,
+            default_modules: localVerticalConfig.modules,
+            terminology: terminologyRecord,
+            settings_schema: {},
+          });
         }
       }
 

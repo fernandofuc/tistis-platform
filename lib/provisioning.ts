@@ -25,7 +25,7 @@ export interface ProvisionTenantParams {
   customer_name: string;
   customer_phone?: string;
   vertical: 'dental' | 'restaurant' | 'pharmacy' | 'retail' | 'medical' | 'services' | 'other';
-  plan: 'starter' | 'essentials' | 'growth' | 'scale';
+  plan: 'starter' | 'essentials' | 'growth';
   branches_count?: number;
   subscription_id?: string;
   metadata?: Record<string, unknown>;

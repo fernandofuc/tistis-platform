@@ -51,7 +51,6 @@ export async function GET(req: NextRequest) {
       starter: 'Starter',
       essentials: 'Essentials',
       growth: 'Growth',
-      scale: 'Scale'
     };
 
     // Check if payment was successful

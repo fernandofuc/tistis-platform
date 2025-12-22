@@ -82,8 +82,8 @@ export const PLAN_CONFIG: Record<string, PlanConfig> = {
     monthlyPriceCentavos: 749000,
     monthlyPricePesos: 7490,
 
-    branchLimit: 5,
-    includedBranches: 1, // Incluye 1, puede agregar hasta 5 total
+    branchLimit: 8,
+    includedBranches: 1, // Incluye 1, puede agregar hasta 8 total
 
     branchExtraPriceCentavos: 199000,
     branchExtraPricePesos: 1990,
@@ -92,6 +92,9 @@ export const PLAN_CONFIG: Record<string, PlanConfig> = {
       { branchNumber: 3, priceCentavos: 179000, pricePesos: 1790 },
       { branchNumber: 4, priceCentavos: 159000, pricePesos: 1590 },
       { branchNumber: 5, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 6, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 7, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 8, priceCentavos: 149000, pricePesos: 1490 },
     ],
 
     conversationsPerMonth: 2000,
@@ -101,7 +104,7 @@ export const PLAN_CONFIG: Record<string, PlanConfig> = {
       'Integración con sistemas existentes',
       'Soporte prioritario',
       'Call de configuración en 30 min',
-      'Hasta 5 sucursales',
+      'Hasta 8 sucursales',
     ],
 
     isPopular: true,
@@ -116,7 +119,7 @@ export const PLAN_CONFIG: Record<string, PlanConfig> = {
     monthlyPriceCentavos: 1249000,
     monthlyPricePesos: 12490,
 
-    branchLimit: 8,
+    branchLimit: 20,
     includedBranches: 1,
 
     branchExtraPriceCentavos: 289000,
@@ -129,6 +132,18 @@ export const PLAN_CONFIG: Record<string, PlanConfig> = {
       { branchNumber: 6, priceCentavos: 159000, pricePesos: 1590 },
       { branchNumber: 7, priceCentavos: 159000, pricePesos: 1590 },
       { branchNumber: 8, priceCentavos: 159000, pricePesos: 1590 },
+      { branchNumber: 9, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 10, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 11, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 12, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 13, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 14, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 15, priceCentavos: 149000, pricePesos: 1490 },
+      { branchNumber: 16, priceCentavos: 139000, pricePesos: 1390 },
+      { branchNumber: 17, priceCentavos: 139000, pricePesos: 1390 },
+      { branchNumber: 18, priceCentavos: 139000, pricePesos: 1390 },
+      { branchNumber: 19, priceCentavos: 139000, pricePesos: 1390 },
+      { branchNumber: 20, priceCentavos: 139000, pricePesos: 1390 },
     ],
 
     conversationsPerMonth: 'unlimited',
@@ -138,55 +153,12 @@ export const PLAN_CONFIG: Record<string, PlanConfig> = {
       'Multi-canal (WhatsApp, Web, Email)',
       'Soporte 24/7',
       'Call de configuración en 30 min',
-      'Hasta 8 sucursales',
+      'Hasta 20 sucursales',
     ],
 
     order: 3,
   },
 
-  scale: {
-    id: 'scale',
-    name: 'Scale',
-    displayName: 'TIS TIS Scale',
-
-    monthlyPriceCentavos: 1999000,
-    monthlyPricePesos: 19990,
-
-    branchLimit: 15,
-    includedBranches: 1,
-
-    branchExtraPriceCentavos: 359000,
-    branchExtraPricePesos: 3590,
-    branchProgressivePricing: [
-      { branchNumber: 2, priceCentavos: 359000, pricePesos: 3590 },
-      { branchNumber: 3, priceCentavos: 289000, pricePesos: 2890 },
-      { branchNumber: 4, priceCentavos: 249000, pricePesos: 2490 },
-      { branchNumber: 5, priceCentavos: 199000, pricePesos: 1990 },
-      // Branches 6+ use the same price as branch 5
-      { branchNumber: 6, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 7, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 8, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 9, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 10, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 11, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 12, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 13, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 14, priceCentavos: 199000, pricePesos: 1990 },
-      { branchNumber: 15, priceCentavos: 199000, pricePesos: 1990 },
-    ],
-
-    conversationsPerMonth: 'unlimited',
-    features: [
-      'Todo lo de Growth',
-      'IA entrenada con tus datos',
-      'Equipo dedicado',
-      'SLA garantizado',
-      'Call de configuración en 30 min',
-      'Hasta 15 sucursales',
-    ],
-
-    order: 4,
-  },
 };
 
 // ======================
@@ -304,8 +276,8 @@ export function getRecommendedPlan(branchCount: number): PlanConfig {
     }
   }
 
-  // Si ninguno alcanza, retornar Scale
-  return PLAN_CONFIG.scale;
+  // Si ninguno alcanza, retornar Growth (el plan más alto)
+  return PLAN_CONFIG.growth;
 }
 
 // ======================

@@ -140,18 +140,7 @@ export async function POST(request: NextRequest) {
           'Reportes avanzados',
           'Multi-sucursal',
         ],
-        scale: [
-          'Dashboard personalizado',
-          'CRM completo',
-          'Calendario inteligente',
-          'WhatsApp Bot 24/7',
-          'Automatizaciones avanzadas',
-          'Reportes en tiempo real',
-          'Multi-sucursal',
-          'API Access',
-          'Soporte prioritario',
-        ],
-      };
+              };
       featuresEnabled.push(...(defaultFeatures[plan] || defaultFeatures.essentials));
     }
 
@@ -237,7 +226,6 @@ function getPlanDisplayName(plan: string): string {
     starter: 'Starter',
     essentials: 'Essentials',
     growth: 'Growth',
-    scale: 'Scale',
   };
   return planNames[plan] || plan;
 }

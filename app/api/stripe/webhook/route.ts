@@ -10,7 +10,7 @@ import { getPlanConfig, PLAN_CONFIG } from '@/src/shared/config/plans';
 // ============================================
 // VALID PLANS - Source of truth
 // ============================================
-const VALID_PLANS = ['starter', 'essentials', 'growth', 'scale'] as const;
+const VALID_PLANS = ['starter', 'essentials', 'growth'] as const;
 type ValidPlan = typeof VALID_PLANS[number];
 
 function isValidPlan(plan: string | undefined): plan is ValidPlan {
@@ -651,7 +651,7 @@ interface AssemblyTriggerParams {
   subscription_id?: string;
   tenant_id?: string; // ID del tenant recién creado
   vertical: string;
-  plan: 'starter' | 'essentials' | 'growth' | 'scale';
+  plan: 'starter' | 'essentials' | 'growth';
   addons: string[];
   branches: number;
   proposal_id?: string;

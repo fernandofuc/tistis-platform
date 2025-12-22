@@ -1,9 +1,10 @@
-# 🎯 PLAN MAESTRO - TIS TIS Platform para ESVA Dental
-## Documento de Análisis Completo y Hoja de Ruta
+# PLAN MAESTRO - TIS TIS Platform para ESVA Dental
+## Documento de Analisis Completo y Hoja de Ruta
 
-**Fecha:** 2025-01-08
+**Fecha:** 2024-12-21 (Actualizado)
 **Cliente:** ESVA Dental Clinic (Piloto)
-**Objetivo:** Sistema completo estilo Barti.com mejorado, listo para producción
+**Objetivo:** Sistema completo estilo Barti.com mejorado, listo para produccion
+**Estado:** En produccion con arquitectura LangGraph multi-agente
 
 ---
 
@@ -624,44 +625,59 @@ tistis-platform/
 - [ ] Performance optimization
 - [ ] Mobile responsive polish
 
-#### FASE 3: INTEGRACIONES IA (2-3 días)
-**Objetivo:** Automatización con WhatsApp y voz
+#### FASE 3: INTEGRACIONES IA (COMPLETADA)
+**Objetivo:** Automatizacion con WhatsApp y voz
 
-**Día 6: Setup Base**
-- [ ] n8n workflows infrastructure
-- [ ] Claude AI prompts optimizados
-- [ ] Lead scoring automatizado
-- [ ] Testing con datos mock
+**Completado:**
+- [x] Sistema nativo de IA (sin n8n)
+- [x] Claude AI prompts optimizados
+- [x] Lead scoring automatizado
+- [x] Webhook handling completo multi-canal
+- [x] Testing de flujos IA
+- [x] Edge cases handling
 
-**Día 7: WhatsApp Mock**
-- [ ] Webhook handling completo
-- [ ] Simulador de conversaciones
-- [ ] Testing de flujos IA
-- [ ] Edge cases handling
+#### FASE 4: LANGGRAPH MULTI-AGENTE (COMPLETADA - 21 Dic 2024)
+**Objetivo:** Sistema de agentes especializados
 
-**Día 8: VAPI Voice**
-- [ ] Integración VAPI
-- [ ] Flujos de voz para agendar
-- [ ] Testing con número virtual
-- [ ] Fallbacks y error handling
+**Completado:**
+- [x] Arquitectura LangGraph con 11 agentes
+- [x] Supervisor Agent (orquestador)
+- [x] Vertical Router (dental, restaurant, medical, etc.)
+- [x] Agentes especialistas (greeting, pricing, location, hours, faq, booking, general, escalation, urgent-care)
+- [x] Variantes de booking por vertical
+- [x] Feature flag en base de datos
+- [x] Servicio de integracion
 
-#### FASE 4: PILOTO CON ESVA (1 semana)
-**Objetivo:** Testing real con tu supervisión
+**Archivos creados:**
+```
+src/features/ai/
+├── state/agent-state.ts
+├── agents/supervisor/supervisor.agent.ts
+├── agents/routing/vertical-router.agent.ts
+├── agents/specialists/*.agent.ts
+├── graph/tistis-graph.ts
+└── services/langgraph-ai.service.ts
+```
+
+**Migracion:** `064_LANGGRAPH_FEATURE_FLAG.sql`
+
+#### FASE 5: PILOTO CON ESVA (1 semana)
+**Objetivo:** Testing real con tu supervision
 
 **Semana 1:**
-- [ ] Deploy a producción
+- [ ] Deploy a produccion
 - [ ] Onboarding de 1-2 usuarios ESVA
 - [ ] Testing con conversaciones reales (simuladas)
-- [ ] Ajustes según feedback
-- [ ] Iteraciones rápidas
+- [ ] Ajustes segun feedback
+- [ ] Iteraciones rapidas
 
-#### FASE 5: GO LIVE (Después de aprobación)
-**Objetivo:** Conexión real a Meta API
+#### FASE 6: GO LIVE (Despues de aprobacion)
+**Objetivo:** Conexion real a Meta API
 
-**Post-aprobación:**
+**Post-aprobacion:**
 - [ ] Obtener credenciales Meta Business
 - [ ] Configurar WhatsApp real
-- [ ] Migrar workflows de mock a real
+- [ ] Activar LangGraph para tenant ESVA
 - [ ] Monitoreo 24/7 primera semana
 - [ ] Ajustes finales
 
@@ -893,40 +909,55 @@ tistis-platform/
 
 ---
 
-## 🎯 RESUMEN EJECUTIVO
+## RESUMEN EJECUTIVO
 
-### Lo que tenemos:
-✅ Base sólida implementada (Dashboard, APIs, DB)
-✅ Arquitectura clara (todo-en-uno tipo Barti)
-✅ Decisiones técnicas tomadas (Supabase, Next.js)
+### Lo que tenemos (Actualizado 21 Dic 2024):
+- Base solida implementada (Dashboard, APIs, DB)
+- Arquitectura clara (todo-en-uno tipo Barti)
+- Decisiones tecnicas tomadas (Supabase, Next.js)
+- **Sistema de IA multi-agente con LangGraph (11 agentes)**
+- **Feature flag para activar/desactivar LangGraph por tenant**
+- Webhooks multi-canal funcionando (WhatsApp, Instagram, Facebook, TikTok)
+- Lead scoring automatico
+- Recordatorios de citas automaticos
+- Validacion de comprobantes con AI Vision
 
 ### Lo que falta:
-🔨 Módulos adicionales (Pacientes, Cotizaciones, Archivos)
-🔨 Permisos y RLS completo
-🔨 Polish UX (Dark mode, drag & drop, etc.)
-🎨 Branding TIS TIS aplicado
-🤖 Integraciones IA (n8n, VAPI, WhatsApp)
+- Prueba piloto con ESVA (testing real)
+- Conexion a Meta Business API (produccion)
+- Ajustes basados en feedback
 
-### Timeline:
-- **Fase 2 (Core):** 3-5 días
-- **Fase 3 (IA):** 2-3 días
-- **Fase 4 (Piloto):** 1 semana
-- **Total:** ~2-3 semanas para PERFECTO
+### Timeline Actualizado:
+- **Fase 1-3 (Core + IA):** COMPLETADO
+- **Fase 4 (LangGraph):** COMPLETADO (21 Dic 2024)
+- **Fase 5 (Piloto):** 1 semana
+- **Fase 6 (Go Live):** Despues de aprobacion
 
-### Próximos pasos:
-1. ✅ Responder preguntas de roles
-2. ✅ Enviar logo TIS TIS
-3. ✅ Enviar imágenes (FAQs, precios)
-4. 🚀 Comenzar implementación Fase 2
+### Proximos pasos:
+1. Deploy a produccion
+2. Activar LangGraph para tenant ESVA
+3. Testing con conversaciones reales
+4. Go Live con Meta Business API
 
 ---
 
-**¿Listo para comenzar?** 🚀
+## Activar LangGraph para un Tenant
 
-Dime:
-1. ¿Apruebas este plan?
-2. ¿Alguna corrección o ajuste?
-3. ¿Respuestas a las preguntas de roles (sección 9)?
-4. ¿Cuándo quieres el piloto listo?
+```sql
+-- Ver estado actual
+SELECT tenant_id, tenant_name, use_langgraph
+FROM ai_tenant_config
+JOIN tenants USING (tenant_id);
 
-¡Vamos a hacer esto perfecto! 💪
+-- Activar para ESVA
+UPDATE ai_tenant_config
+SET use_langgraph = true
+WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001';
+
+-- Verificar
+SELECT * FROM ai_tenant_config WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001';
+```
+
+---
+
+**Sistema listo para produccion con arquitectura LangGraph multi-agente.**

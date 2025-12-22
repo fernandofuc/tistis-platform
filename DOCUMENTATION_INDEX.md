@@ -1,9 +1,9 @@
-# Índice de Documentación - TIS TIS Platform
+# Indice de Documentacion - TIS TIS Platform
 
-**Última actualización:** 10 de Diciembre, 2024
-**Versión:** 2.2.0
+**Ultima actualizacion:** 21 de Diciembre, 2024
+**Version:** 4.0.0
 
-Este documento centraliza toda la documentación del proyecto para facilitar su navegación.
+Este documento centraliza toda la documentacion del proyecto para facilitar su navegacion.
 
 ---
 
@@ -149,9 +149,15 @@ tistis-platform/
 | `/api/branches` | GET | Listado de sucursales | ✅ |
 | `/api/staff` | GET | Listado de personal | ✅ |
 | `/api/services` | GET | Catálogo de servicios | ✅ |
-| `/api/webhook` | POST | Webhook WhatsApp + n8n | ⚠️ Public |
+| `/api/webhook/whatsapp/[tenantSlug]` | POST | Webhook WhatsApp multi-tenant | ⚠️ Public |
+| `/api/webhook/instagram/[tenantSlug]` | POST | Webhook Instagram multi-tenant | ⚠️ Public |
+| `/api/webhook/facebook/[tenantSlug]` | POST | Webhook Facebook multi-tenant | ⚠️ Public |
+| `/api/webhook/tiktok/[tenantSlug]` | POST | Webhook TikTok multi-tenant | ⚠️ Public |
+| `/api/jobs/process` | GET/POST | Procesador de cola de trabajos | ⚠️ Cron |
+| `/api/cron/appointment-reminders` | GET/POST | Recordatorios automáticos de citas | ⚠️ Cron |
+| `/api/loyalty/memberships/validate-payment` | POST | Validación de comprobantes con AI | ✅ |
 
-**Total:** 19 endpoints activos
+**Total:** 26+ endpoints activos
 
 ### Componentes Principales
 
@@ -186,21 +192,57 @@ tistis-platform/
   - `WHATSAPP_PHONE_NUMBER_ID`
   - `WHATSAPP_ACCESS_TOKEN`
 
-### n8n Workflows
+### Sistema de AI Multi-Agente (LangGraph)
 
-**Ubicación:** `/n8n-workflows/`
+**Arquitectura actual:** Sistema multi-agente con LangGraph que reemplaza el enfoque de "cerebro unico".
 
-| Archivo | Descripción |
-|---------|-------------|
-| `ESVA_WhatsApp_Handler.json` | Handler principal de mensajes WhatsApp |
-| `ESVA_Tool_Agendar_Cita.json` | Tool para agendar citas via IA |
-| `ESVA_Tool_Consultar_Disponibilidad.json` | Consulta disponibilidad de horarios |
-| `ESVA_Tool_Obtener_Ubicacion.json` | Envía ubicación de sucursales |
-| `ESVA_Tool_Resolver_Duda.json` | Resuelve FAQs con IA |
-| `ESVA_Appointment_Reminders.json` | Recordatorios automáticos de citas |
-| `ESVA_Weekly_Report.json` | Reporte semanal automatizado |
+| Componente | Descripcion |
+|------------|-------------|
+| `src/features/ai/graph/tistis-graph.ts` | Grafo principal LangGraph |
+| `src/features/ai/state/agent-state.ts` | Estado compartido entre agentes |
+| `src/features/ai/agents/supervisor/` | Agente supervisor (orquestador) |
+| `src/features/ai/agents/routing/` | Router por vertical (dental, restaurant, etc.) |
+| `src/features/ai/agents/specialists/` | Agentes especializados (9 agentes) |
+| `src/features/ai/services/langgraph-ai.service.ts` | Servicio de integracion |
+| `/api/jobs/process` | Procesador de cola de trabajos asincrono |
+| `/api/cron/appointment-reminders` | Recordatorios automaticos (1 semana, 24h, 4h) |
+| `/api/loyalty/memberships/validate-payment` | Validacion de comprobantes con OpenAI Vision |
 
-**Nota:** Estos workflows son templates del vertical "dental" basados en ESVA. Se pueden clonar y adaptar para otros clientes.
+**Agentes Especializados:**
+
+| Agente | Responsabilidad |
+|--------|-----------------|
+| Supervisor | Detecta intencion, enruta al agente correcto |
+| Vertical Router | Enruta segun tipo de negocio (dental, restaurant, medical) |
+| Greeting Agent | Saludos y bienvenidas |
+| Pricing Agent | Precios y cotizaciones |
+| Location Agent | Ubicaciones y direcciones |
+| Hours Agent | Horarios de atencion |
+| FAQ Agent | Preguntas frecuentes |
+| Booking Agent | Agenda citas (con variantes por vertical) |
+| General Agent | Fallback para consultas generales |
+| Escalation Agent | Escala a humano |
+| Urgent Care Agent | Emergencias y dolor |
+
+**Features de AI:**
+- Respuestas especializadas por tipo de consulta
+- Handoffs inteligentes entre agentes
+- Trazabilidad completa de que agente proceso cada mensaje
+- Respuestas automaticas en WhatsApp, Instagram, Facebook, TikTok
+- Lead scoring automatico basado en senales del AI
+- Configuracion de AI personalizable por canal
+- Validacion de comprobantes de pago por transferencia
+- Recordatorios automaticos de citas via WhatsApp
+- Deteccion de urgencias y escalacion automatica
+
+**Feature Flag:**
+```sql
+-- Activar LangGraph para un tenant
+UPDATE ai_tenant_config SET use_langgraph = true WHERE tenant_id = 'xxx';
+
+-- Desactivar (volver al sistema legacy)
+UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
+```
 
 ### Supabase
 
@@ -219,10 +261,9 @@ tistis-platform/
 **Configuración:**
 - Checkout integration en `/app/checkout/page.tsx`
 - Productos configurados:
-  - Starter: $3,490/mes
-  - Essentials: $7,490/mes
-  - Growth: $12,490/mes
-  - Scale: $19,990/mes
+  - Starter: $3,490/mes (1 sucursal)
+  - Essentials: $7,490/mes (hasta 8 sucursales)
+  - Growth: $12,490/mes (hasta 20 sucursales)
 
 ---
 
@@ -300,11 +341,13 @@ vercel
 **Variables de entorno requeridas:**
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `WHATSAPP_PHONE_NUMBER_ID`
-- `WHATSAPP_ACCESS_TOKEN`
-- `N8N_WEBHOOK_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ANTHROPIC_API_KEY` - Claude AI
+- `OPENAI_API_KEY` - Validación de comprobantes (Vision)
 - `STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `CRON_SECRET` - Seguridad para cron jobs
 
 ### Database Migrations
 
@@ -430,14 +473,16 @@ npm run test             # Tests (cuando estén disponibles)
 
 ---
 
-## Changelog de esta Documentación
+## Changelog de esta Documentacion
 
-| Versión | Fecha | Cambios |
+| Version | Fecha | Cambios |
 |---------|-------|---------|
-| 1.0 | 10 Dic 2024 | Creación inicial del índice |
+| 1.0 | 10 Dic 2024 | Creacion inicial del indice |
+| 2.0 | 21 Dic 2024 | Actualizacion: Remover n8n, documentar sistema nativo de AI, anadir nuevos endpoints |
+| 3.0 | 21 Dic 2024 | Actualizacion: Documentar sistema LangGraph multi-agente, nuevos agentes especializados |
 
 ---
 
-**Última actualización:** 10 de Diciembre, 2024
+**Ultima actualizacion:** 21 de Diciembre, 2024
 **Mantenido por:** Claude Code
-**Versión del proyecto:** 2.2.0
+**Version del proyecto:** 4.0.0

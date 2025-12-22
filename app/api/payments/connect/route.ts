@@ -8,6 +8,9 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import crypto from 'crypto';
 
+// Force dynamic rendering - this API uses request headers
+export const dynamic = 'force-dynamic';
+
 // Create Stripe client lazily (consistent with other Stripe endpoints)
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);

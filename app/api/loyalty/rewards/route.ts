@@ -6,6 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Force dynamic rendering - this API uses request headers
+export const dynamic = 'force-dynamic';
+
 function createAuthenticatedClient(accessToken: string) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

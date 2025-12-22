@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ClientConfig, Component } from './types';
 
-const PLAN_HIERARCHY = ['starter', 'essentials', 'growth', 'scale'];
+const PLAN_HIERARCHY = ['starter', 'essentials', 'growth'];
 
 /**
  * Verifies if the client's plan is sufficient for the component

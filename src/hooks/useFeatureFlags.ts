@@ -93,24 +93,7 @@ const PLAN_DEFAULT_FLAGS: Record<string, string[]> = {
     'analytics_advanced_enabled',
     'loyalty_enabled',
   ],
-  scale: [
-    'auth_enabled',
-    'dashboard_enabled',
-    'notifications_enabled',
-    'leads_enabled',
-    'appointments_enabled',
-    'conversations_enabled',
-    'whatsapp_enabled',
-    'email_enabled',
-    'patients_enabled',
-    'quotes_enabled',
-    'clinical_history_enabled',
-    'ai_chat_enabled',
-    'analytics_advanced_enabled',
-    'treatment_plans_enabled',
-    'loyalty_enabled',
-  ],
-};
+  };
 
 // Vertical-specific flags
 const VERTICAL_FLAGS: Record<string, string[]> = {
@@ -211,7 +194,7 @@ export function useFeatureFlags(clientId?: string): UseFeatureFlagsReturn {
 
           // Enable vertical flags if plan supports
           verticalFlags.forEach(flag => {
-            if (planFlags.includes(flag) || ['growth', 'scale'].includes(plan)) {
+            if (planFlags.includes(flag) || plan === 'growth') {
               flagsRecord[flag] = true;
             }
           });

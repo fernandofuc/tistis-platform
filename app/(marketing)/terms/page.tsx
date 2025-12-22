@@ -112,10 +112,10 @@ const sections = [
     content: `
       <h4>6.1 Planes y Precios</h4>
       <ul>
-        <li><strong>Starter:</strong> $3,490 MXN/mes</li>
-        <li><strong>Essentials:</strong> $7,490 MXN/mes</li>
-        <li><strong>Growth:</strong> $12,490 MXN/mes</li>
-        <li><strong>Scale:</strong> $19,990 MXN/mes</li>
+        <li><strong>Starter:</strong> $3,490 MXN/mes (1 sucursal)</li>
+        <li><strong>Essentials:</strong> $7,490 MXN/mes (hasta 8 sucursales)</li>
+        <li><strong>Growth:</strong> $12,490 MXN/mes (hasta 20 sucursales)</li>
+        <li><strong>Enterprise:</strong> Contactar para cotización personalizada</li>
       </ul>
       <p>Los precios están sujetos a cambios con notificación previa de 30 días.</p>
 

@@ -9,6 +9,9 @@ import {
   processInactivePatients,
 } from '@/src/features/loyalty/services/loyalty-messaging.service';
 
+// Force dynamic rendering - this API uses request headers
+export const dynamic = 'force-dynamic';
+
 // Verify cron secret for security
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');

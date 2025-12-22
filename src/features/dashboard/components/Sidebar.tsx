@@ -251,8 +251,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
         <div className="px-4 py-2 border-b border-gray-100">
           <span className={cn(
             'text-xs font-medium px-2 py-1 rounded-full',
-            tenant.plan === 'scale' && 'bg-purple-100 text-purple-700',
-            tenant.plan === 'growth' && 'bg-blue-100 text-blue-700',
+            tenant.plan === 'growth' && 'bg-purple-100 text-purple-700',
             tenant.plan === 'essentials' && 'bg-green-100 text-green-700',
             tenant.plan === 'starter' && 'bg-gray-100 text-gray-700',
           )}>

@@ -41,7 +41,7 @@ export interface AIAnalysis {
   financial_impact: number;
   time_impact: number;
   urgency_score: number;
-  recommended_plan: 'starter' | 'essentials' | 'growth' | 'scale';
+  recommended_plan: 'starter' | 'essentials' | 'growth';
   recommended_addons: string[];
   recommended_especialidad: string | null;
   reasoning: string;

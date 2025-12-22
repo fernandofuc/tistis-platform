@@ -40,14 +40,6 @@ const PLAN_BRANCH_PRICING: Record<string, { base: number; progressive: { qty: nu
       { qty: 4, price: 239000 },
     ],
   },
-  scale: {
-    base: 399000,
-    progressive: [
-      { qty: 2, price: 399000 },
-      { qty: 3, price: 359000 },
-      { qty: 4, price: 329000 },
-    ],
-  },
 };
 
 // Get price for additional branch based on plan and quantity

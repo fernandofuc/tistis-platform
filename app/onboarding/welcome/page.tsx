@@ -71,14 +71,8 @@ const PLAN_FEATURES: Record<string, string[]> = {
     'Multi-canal (WhatsApp, Web, Email)',
     'Dashboard avanzado con analytics',
     'Automatizaciones personalizadas',
-    'Soporte 24/7'
-  ],
-  scale: [
-    'Todo ilimitado',
-    'IA entrenada con tus datos',
-    'Integraciones enterprise',
-    'Equipo dedicado',
-    'SLA garantizado'
+    'Soporte 24/7',
+    'Hasta 20 sucursales'
   ]
 };
 

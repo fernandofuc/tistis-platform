@@ -34,7 +34,7 @@ export interface DashboardWidget {
 export interface ClientConfig {
   client_id: string;
   vertical: string;
-  plan: 'starter' | 'essentials' | 'growth' | 'scale';
+  plan: 'starter' | 'essentials' | 'growth';
   addons: string[];
   legacy_system: string | null;
   custom_requirements: string[];
@@ -136,7 +136,7 @@ export interface AssembleRequest {
   client_id: string;
   subscription_id?: string;
   vertical: string;
-  plan: 'starter' | 'essentials' | 'growth' | 'scale';
+  plan: 'starter' | 'essentials' | 'growth';
   addons?: string[];
   branches?: number;
   legacy_system?: string;

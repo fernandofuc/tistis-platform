@@ -14,6 +14,13 @@ import { cn } from '@/src/shared/utils';
 import { KnowledgeBase } from './KnowledgeBase';
 import { ServicePriorityConfig } from './ServicePriorityConfig';
 import { ServiceCatalogConfig } from './ServiceCatalogConfig';
+import { ChannelAISettings } from './ChannelAISettings';
+import {
+  CHANNEL_METADATA,
+  PERSONALITY_METADATA,
+  type ChannelConnection,
+  type ChannelType,
+} from '../types/channels.types';
 
 // ======================
 // TYPES
@@ -94,7 +101,7 @@ interface StaffBranch {
 
 interface SubscriptionInfo {
   plan: string;
-  max_branches: number;        // Límite máximo del PLAN (ej: 5 para Essentials)
+  max_branches: number;        // Sucursales contratadas (Essentials=8, Growth=20)
   current_branches: number;    // Sucursales CONTRATADAS inicialmente
   plan_limit: number;          // Límite absoluto del plan
   can_add_branch: boolean;
@@ -168,6 +175,11 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
     </svg>
   ),
+  channels: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  ),
 };
 
 const responseStyles = [
@@ -216,7 +228,12 @@ export function AIConfiguration() {
   const { tenant, isAdmin } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring' | 'catalog'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'channels' | 'clinic' | 'knowledge' | 'scoring' | 'catalog'>('general');
+
+  // Channel AI configuration state
+  const [channels, setChannels] = useState<ChannelConnection[]>([]);
+  const [showChannelAIModal, setShowChannelAIModal] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<ChannelConnection | null>(null);
 
   // AI Config State - must match database schema exactly
   const [config, setConfig] = useState<AIConfig>({
@@ -291,6 +308,17 @@ export function AIConfiguration() {
 
       if (branchesData) {
         setBranches(branchesData);
+      }
+
+      // Load channel connections for AI configuration
+      const { data: channelsData } = await supabase
+        .from('channel_connections')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .order('channel', { ascending: true });
+
+      if (channelsData) {
+        setChannels(channelsData);
       }
 
       // Load staff - filter out empty records at DB level
@@ -615,6 +643,7 @@ export function AIConfiguration() {
           <div className="flex border-b border-gray-100 overflow-x-auto">
             {[
               { key: 'general', label: 'General', icon: icons.ai },
+              { key: 'channels', label: 'AI por Canal', icon: icons.channels },
               { key: 'clinic', label: 'Clínica y Sucursales', icon: icons.clinic },
               { key: 'catalog', label: 'Catálogo de Servicios', icon: icons.catalog },
               { key: 'knowledge', label: 'Base de Conocimiento', icon: icons.brain },
@@ -758,6 +787,184 @@ export function AIConfiguration() {
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* AI per Channel Settings */}
+          {activeSection === 'channels' && (
+            <div className="p-6 space-y-6">
+              {/* Info Banner */}
+              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    {icons.channels}
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-green-900 mb-1">Configuración de AI por Canal</h4>
+                    <p className="text-sm text-green-700">
+                      Personaliza cómo responde el AI en cada canal conectado. Puedes ajustar la personalidad,
+                      tiempos de respuesta e instrucciones específicas para cada cuenta de WhatsApp, Instagram, Facebook o TikTok.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Connected Channels Grid */}
+              {channels.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-xl">
+                  <div className="w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    {icons.channels}
+                  </div>
+                  <h4 className="font-medium text-gray-900 mb-2">No hay canales conectados</h4>
+                  <p className="text-gray-500 text-sm mb-4">
+                    Conecta WhatsApp, Instagram, Facebook o TikTok para configurar el AI por canal.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.location.href = '/dashboard/settings?tab=channels'}
+                  >
+                    Ir a Canales
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Group channels by type */}
+                  {(['whatsapp', 'instagram', 'facebook', 'tiktok'] as ChannelType[]).map((channelType) => {
+                    const channelAccounts = channels.filter(c => c.channel === channelType);
+                    if (channelAccounts.length === 0) return null;
+
+                    const metadata = CHANNEL_METADATA[channelType];
+
+                    return (
+                      <div key={channelType} className="space-y-3">
+                        {/* Channel Type Header */}
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            'w-10 h-10 rounded-xl flex items-center justify-center',
+                            metadata.bgColor
+                          )}>
+                            <ChannelTypeIcon type={channelType} className={cn('w-5 h-5', metadata.textColor)} />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">{metadata.name}</h4>
+                            <p className="text-sm text-gray-500">{channelAccounts.length} cuenta{channelAccounts.length > 1 ? 's' : ''} conectada{channelAccounts.length > 1 ? 's' : ''}</p>
+                          </div>
+                        </div>
+
+                        {/* Channel Accounts */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-13">
+                          {channelAccounts.map((channel) => {
+                            const personality = channel.ai_personality_override
+                              ? PERSONALITY_METADATA[channel.ai_personality_override]
+                              : null;
+                            const isConnected = channel.status === 'connected';
+
+                            return (
+                              <div
+                                key={channel.id}
+                                className={cn(
+                                  'p-4 bg-white rounded-xl border transition-all',
+                                  isConnected
+                                    ? 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                                    : 'border-gray-200 opacity-60'
+                                )}
+                              >
+                                <div className="flex items-start justify-between mb-3">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h5 className="font-medium text-gray-900">{channel.account_name}</h5>
+                                      {channel.is_personal_brand && (
+                                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                          Personal
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      Cuenta #{channel.account_number}
+                                    </p>
+                                  </div>
+                                  <span className={cn(
+                                    'px-2 py-1 rounded-full text-xs font-medium',
+                                    isConnected
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-gray-100 text-gray-500'
+                                  )}>
+                                    {isConnected ? 'Conectado' : channel.status}
+                                  </span>
+                                </div>
+
+                                {/* AI Settings Summary */}
+                                {isConnected && (
+                                  <div className="space-y-2 mb-4">
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <span className="text-gray-500">Personalidad:</span>
+                                      <span className="font-medium text-gray-900">
+                                        {personality ? `${personality.emoji} ${personality.name}` : 'Global (heredada)'}
+                                      </span>
+                                    </div>
+                                    {channel.first_message_delay_seconds > 0 && (
+                                      <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-500">Delay 1er mensaje:</span>
+                                        <span className="font-medium text-gray-900">
+                                          {Math.floor(channel.first_message_delay_seconds / 60)}min
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <span className="text-gray-500">AI:</span>
+                                      <span className={cn(
+                                        'font-medium',
+                                        channel.ai_enabled ? 'text-green-600' : 'text-gray-400'
+                                      )}>
+                                        {channel.ai_enabled ? 'Activo' : 'Desactivado'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Configure Button */}
+                                {isConnected && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => {
+                                      setSelectedChannel(channel);
+                                      setShowChannelAIModal(true);
+                                    }}
+                                  >
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    Configurar AI
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Note about global settings */}
+                  <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-gray-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Configuración heredada</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Los canales sin configuración específica heredan la personalidad y ajustes del tab &quot;General&quot;.
+                          Puedes personalizar cada canal individualmente para tener diferentes tonos según la plataforma.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1607,8 +1814,60 @@ export function AIConfiguration() {
           </div>
         </div>
       )}
+
+      {/* Channel AI Settings Modal */}
+      {showChannelAIModal && selectedChannel && (
+        <ChannelAISettings
+          connection={selectedChannel}
+          onClose={() => {
+            setShowChannelAIModal(false);
+            setSelectedChannel(null);
+          }}
+          onSaved={(updated) => {
+            // Update the channel in local state
+            setChannels(prev => prev.map(c => c.id === updated.id ? updated : c));
+            setShowChannelAIModal(false);
+            setSelectedChannel(null);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+// ======================
+// CHANNEL TYPE ICON COMPONENT
+// ======================
+
+function ChannelTypeIcon({ type, className }: { type: ChannelType; className?: string }) {
+  switch (type) {
+    case 'whatsapp':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+        </svg>
+      );
+    case 'instagram':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+        </svg>
+      );
+    case 'facebook':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+        </svg>
+      );
+    case 'tiktok':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
+        </svg>
+      );
+    default:
+      return null;
+  }
 }
 
 // ======================

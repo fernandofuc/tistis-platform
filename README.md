@@ -1,25 +1,198 @@
-# TIS TIS Platform - ESVA Dental Clinic
+# TIS TIS Platform
 
-Sistema completo de gestión dental con IA, WhatsApp Business API y automatización de procesos.
+Sistema completo de gestion con IA conversacional multi-agente, WhatsApp Business API y automatizacion de procesos multi-canal.
 
-**Versión:** 2.2.0
-**Estado:** 98% Fase 2 Completada
-**Última actualización:** 10 de Diciembre, 2024
+**Version:** 4.1.0
+**Estado:** Produccion - Sistema Completo con LangGraph + AI Learning
+**Ultima actualizacion:** 21 de Diciembre, 2024
 
 ---
 
-## 🎯 Descripción
+## 🎯 Descripcion
 
-TIS TIS Platform es una solución SaaS multi-tenant para gestión de clínicas dentales que integra:
+TIS TIS Platform es una solucion SaaS multi-tenant para gestion de negocios que integra:
 
-- Gestión de leads con scoring automático basado en IA
-- Sistema de mensajería multi-canal (WhatsApp, Instagram, Facebook, TikTok)
-- IA conversacional con Claude 3.5 Sonnet para respuestas automáticas
-- Sistema de citas y calendario
-- Historiales clínicos con odontograma
-- Cotizaciones y planes de pago
+- **Sistema de IA Multi-Agente con LangGraph** - Agentes especializados que colaboran para respuestas inteligentes
+- Gestion de leads con scoring automatico basado en IA
+- Sistema de mensajeria multi-canal (WhatsApp, Instagram, Facebook, TikTok)
+- **Configuracion de AI por canal** - Personaliza el comportamiento del AI para cada canal
+- Sistema de citas y calendario con **recordatorios automaticos** (1 semana, 24h, 4h)
+- Sistema de **membresias con validacion de pagos por transferencia** (AI Vision)
+- Historiales clinicos con odontograma
+- Cotizaciones y planes de pago con Stripe
 - Notificaciones en tiempo real
-- Cola de trabajos asíncronos para procesamiento de mensajes
+- Cola de trabajos asincronos para procesamiento de mensajes
+
+## 🤖 Nueva Arquitectura de IA Multi-Agente (LangGraph)
+
+### Que es LangGraph?
+
+LangGraph es un framework para construir sistemas de IA multi-agente. En lugar de un solo "cerebro" de IA que responde todo, TIS TIS ahora tiene un **equipo de agentes especializados** que trabajan juntos:
+
+```
+                     +------------------+
+                     |   SUPERVISOR     |
+                     | (Detecta intent) |
+                     +--------+---------+
+                              |
+                    +---------+---------+
+                    |                   |
+            +-------v-------+   +-------v-------+
+            | VERTICAL      |   | ESCALATION    |
+            | ROUTER        |   | (Humano)      |
+            +-------+-------+   +---------------+
+                    |
+    +---------------+---------------+
+    |       |       |       |       |
++---v---+ +-v---+ +-v---+ +-v---+ +-v---+
+|GREETING| |PRICING| |BOOKING| |FAQ| |GENERAL|
++---+---+ +--+--+ +--+--+ +-+-+ +--+--+
+    |        |       |       |      |
+    +--------+-------+-------+------+
+                     |
+              +------v------+
+              |  FINALIZE   |
+              +-------------+
+```
+
+### Agentes Implementados
+
+| Agente | Responsabilidad | Especialidad |
+|--------|-----------------|--------------|
+| **Supervisor** | Detecta intencion del mensaje y enruta | Orquestacion |
+| **Vertical Router** | Enruta segun el tipo de negocio | Dental, Restaurant, Medical, etc. |
+| **Greeting Agent** | Maneja saludos y bienvenidas | Primer contacto |
+| **Pricing Agent** | Responde sobre precios y cotizaciones | Consultas economicas |
+| **Location Agent** | Informacion de ubicaciones | Direcciones y sucursales |
+| **Hours Agent** | Horarios de atencion | Disponibilidad |
+| **FAQ Agent** | Preguntas frecuentes | Base de conocimiento |
+| **Booking Agent** | Agenda citas (con variantes por vertical) | Dental, Medical, Restaurant |
+| **General Agent** | Fallback para consultas generales | Todo lo demas |
+| **Escalation Agent** | Escala a humano | Casos complejos |
+| **Urgent Care Agent** | Emergencias y urgencias | Dolor, accidentes |
+
+### Integracion con Configuraciones del Cliente
+
+Todos los agentes tienen acceso completo al contexto del negocio:
+
+- **Instrucciones personalizadas** - Identidad, tono, casos especiales
+- **Politicas del negocio** - Cancelaciones, pagos, garantias
+- **Servicios y precios** - Con promociones activas
+- **FAQs personalizadas** - Respuestas pre-configuradas
+- **Knowledge Base completo** - Documentos y conocimiento del negocio
+- **Sucursales** - Horarios y personal por ubicacion
+- **Manejo de competencia** - Respuestas ante menciones de competidores
+- **Plantillas de respuesta** - Templates configurados
+- **Estilo de comunicacion** - Configurado por tenant
+
+### Beneficios del Sistema Multi-Agente
+
+1. **Respuestas mas especializadas** - Cada agente es experto en su area
+2. **Mejor manejo de verticales** - Una clinica dental responde diferente a un restaurante
+3. **Sistema de handoffs** - Los agentes pueden pasarse el control entre si
+4. **Trazabilidad completa** - Se sabe exactamente que agente proceso cada mensaje
+5. **Escalacion inteligente** - Detecta cuando escalar a humano automaticamente
+6. **Deteccion de urgencias** - Prioriza emergencias medicas/dentales
+
+### Arquitectura de Archivos LangGraph
+
+```
+src/features/ai/
+├── state/
+│   └── agent-state.ts          # Estado compartido del grafo (BusinessContext extendido)
+├── agents/
+│   ├── supervisor/
+│   │   └── supervisor.agent.ts # Orquestador principal
+│   ├── routing/
+│   │   └── vertical-router.agent.ts # Enrutador por vertical
+│   └── specialists/
+│       ├── base.agent.ts       # Clase base con buildFullBusinessContext()
+│       ├── greeting.agent.ts   # Saludos
+│       ├── pricing.agent.ts    # Precios
+│       ├── location.agent.ts   # Ubicaciones
+│       ├── hours.agent.ts      # Horarios
+│       ├── faq.agent.ts        # FAQs
+│       ├── booking.agent.ts    # Citas (+ variantes)
+│       ├── general.agent.ts    # General
+│       ├── escalation.agent.ts # Escalacion
+│       └── urgent-care.agent.ts # Urgencias
+├── graph/
+│   └── tistis-graph.ts         # Grafo principal compilado
+└── services/
+    ├── langgraph-ai.service.ts # Servicio de integracion (usa get_tenant_ai_context RPC)
+    └── message-learning.service.ts # Sistema de aprendizaje automatico
+```
+
+## 🧠 Sistema de Aprendizaje Automatico de IA (Nuevo)
+
+### Que es?
+
+El sistema de aprendizaje automatico analiza mensajes entrantes para extraer patrones y mejorar las respuestas de la IA con el tiempo.
+
+### Caracteristicas
+
+- **Analisis de patrones** - Extrae patrones de mensajes entrantes
+- **Vocabulario especifico** - Aprende terminos y jerga del negocio
+- **Preferencias de horarios** - Detecta horarios preferidos por clientes
+- **Objeciones comunes** - Identifica objeciones frecuentes
+- **Insights automaticos** - Genera insights basados en datos
+- **Especifico por vertical** - Dental, restaurant, medical tienen diferentes patrones
+
+### Disponibilidad
+
+Solo disponible para planes **Essentials** y superiores.
+
+### Tablas de Base de Datos
+
+```sql
+-- Patrones extraidos de mensajes
+ai_message_patterns
+
+-- Vocabulario especifico del negocio
+ai_learned_vocabulary
+
+-- Insights automaticos generados
+ai_business_insights
+
+-- Configuracion por tenant
+ai_learning_config
+
+-- Cola de procesamiento
+ai_learning_queue
+```
+
+### Endpoint CRON
+
+```
+POST /api/cron/process-learning
+```
+
+Procesa la cola de mensajes pendientes para extraccion de patrones.
+
+### Configuracion del Feature Flag
+
+LangGraph esta controlado por un feature flag por tenant:
+
+```sql
+-- Ver estado actual
+SELECT tenant_id, use_langgraph FROM ai_tenant_config;
+
+-- Activar LangGraph para un tenant
+UPDATE ai_tenant_config
+SET use_langgraph = true
+WHERE tenant_id = 'tu-tenant-id';
+
+-- Desactivar (volver al sistema legacy)
+UPDATE ai_tenant_config
+SET use_langgraph = false
+WHERE tenant_id = 'tu-tenant-id';
+```
+
+La migracion `064_LANGGRAPH_FEATURE_FLAG.sql` agrega:
+- Columna `use_langgraph` (boolean, default: false)
+- Columna `langgraph_config` (JSONB para configuracion avanzada)
+- Indice optimizado para busqueda rapida
+- Funcion helper `tenant_uses_langgraph(tenant_id)`
 
 ## 🚀 Quick Start
 
@@ -82,7 +255,7 @@ tistis-platform/
 
 ### Schema v2.2
 
-- **20 tablas** principales (tenants, leads, patients, quotes, user_roles, vertical_configs, etc.)
+- **25+ tablas** principales (tenants, leads, patients, quotes, user_roles, vertical_configs, ai_learning_*, etc.)
 - **11 funciones** PostgreSQL optimizadas con advisory locks
 - **4 views** para queries complejas (incluye staff_members)
 - **3 buckets** de Storage (patient-files, quotes-pdf, temp-uploads)
@@ -92,26 +265,28 @@ tistis-platform/
 ### Migraciones Aplicadas
 
 1. `001_initial_schema.sql` - Schema base + discovery sessions
-2. `002_add_session_token.sql` - Token de sesión para onboarding
+2. `002_add_session_token.sql` - Token de sesion para onboarding
 3. `003_esva_schema_v2.sql` - Schema multi-tenant completo
 4. `004_esva_seed_data.sql` - Datos de ESVA (tenant inicial)
-5. `005_patients_module.sql` - Módulo de pacientes
-6. `006_quotes_module.sql` - Módulo de cotizaciones
+5. `005_patients_module.sql` - Modulo de pacientes
+6. `006_quotes_module.sql` - Modulo de cotizaciones
 7. `007_files_storage_setup.sql` - Storage buckets
 8. `008_notifications_module.sql` - Sistema de notificaciones
-9. `009_critical_fixes.sql` - 14 fixes críticos (seguridad + performance)
+9. `009_critical_fixes.sql` - 14 fixes criticos (seguridad + performance)
 10. `010_assembly_engine.sql` - Motor de ensamblaje de propuestas
-11. `011_master_correction.sql` - **NUEVO** - Corrección master crítica
+11. `011_master_correction.sql` - Correccion master critica
+12. ... (migraciones 012-063) - Mejoras incrementales
+13. `064_LANGGRAPH_FEATURE_FLAG.sql` - Feature flag para LangGraph multi-agente
+14. `065_AI_MESSAGE_LEARNING_SYSTEM.sql` - **NUEVO** - Sistema de aprendizaje automatico de mensajes
 
 ### Migración 011: Corrección Master (10 Dic 2024)
 
 **CRÍTICO - Cambios de negocio y seguridad:**
 
 **Precios actualizados:**
-- Starter: $799 → **$3,490/mes** (sin cuota de activación)
-- Essentials: $1,499 → **$7,490/mes** (sin cuota de activación)
-- Growth: $2,999 → **$12,490/mes** (sin cuota de activación)
-- Scale: $5,999 → **$19,990/mes** (sin cuota de activación)
+- Starter: **$3,490/mes** (1 sucursal)
+- Essentials: **$7,490/mes** (hasta 8 sucursales)
+- Growth: **$12,490/mes** (hasta 20 sucursales)
 
 **Seguridad multi-tenant:**
 - ✅ Tabla `user_roles` creada (era referenciada pero no existía)
@@ -216,22 +391,33 @@ Cada webhook verifica firmas criptográficas y procesa mensajes de forma asíncr
 ## 📚 Documentación
 
 - `STATUS_PROYECTO.md` - Estado completo del proyecto
-- `docs/INTEGRATION_GUIDE.md` - Guía de integraciones (WhatsApp, n8n)
-- `docs/MULTI_CHANNEL_AI_SYSTEM.md` - **NUEVO** - Sistema de AI multi-canal completo
-- `supabase/migrations/MIGRATION_NOTES.md` - Guía completa de migración 011
+- `docs/INTEGRATION_GUIDE.md` - Guía de integraciones (WhatsApp, Stripe, AI)
+- `docs/MULTI_CHANNEL_AI_SYSTEM.md` - Sistema de AI multi-canal completo
+- `supabase/migrations/MIGRATION_NOTES.md` - Guía completa de migraciones
 - `.claude/docs/` - Documentación técnica adicional
 
-### Documentación Técnica AI Multi-Canal
+### Documentacion Tecnica AI Multi-Canal
 
 El archivo `docs/MULTI_CHANNEL_AI_SYSTEM.md` contiene:
-- Arquitectura completa del sistema de mensajería
-- Especificación de webhooks para cada plataforma
-- Sistema de cola de trabajos (jobs queue)
-- Integración con Claude AI para respuestas automáticas
-- Lead scoring automático basado en señales del AI
-- Configuración de AI por tenant
+- **Arquitectura LangGraph Multi-Agente** - Sistema de agentes especializados
+- Arquitectura completa del sistema de mensajeria
+- Especificacion de webhooks para cada plataforma (WhatsApp, Instagram, Facebook, TikTok)
+- Sistema de cola de trabajos (jobs queue) con procesamiento asincrono
+- Integracion con sistema de agentes para respuestas especializadas
+- Lead scoring automatico basado en senales del AI
+- **Configuracion de AI por canal** - Personalizacion por canal conectado
+- Sistema de **recordatorios automaticos de citas**
+- **Validacion de pagos por transferencia** con OpenAI Vision
 - Variables de entorno requeridas
 - Flujo completo de procesamiento de mensajes
+
+### Documentacion Sistema Multi-Agente
+
+La arquitectura LangGraph se documenta en:
+- `src/features/ai/state/agent-state.ts` - Definicion del estado compartido
+- `src/features/ai/graph/tistis-graph.ts` - Grafo principal con todos los nodos
+- `src/features/ai/agents/` - Implementacion de cada agente especializado
+- `supabase/migrations/064_LANGGRAPH_FEATURE_FLAG.sql` - Feature flag y configuracion
 
 ## 🧪 Testing
 
@@ -277,9 +463,13 @@ vercel
 Configurar en Vercel Dashboard:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `WHATSAPP_PHONE_NUMBER_ID`
-- `WHATSAPP_ACCESS_TOKEN`
-- `N8N_WEBHOOK_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ANTHROPIC_API_KEY` - Para Claude AI
+- `OPENAI_API_KEY` - Para validación de comprobantes (Vision)
+- `STRIPE_SECRET_KEY`
+- `STRIPE_PUBLISHABLE_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `CRON_SECRET` - Para cron jobs seguros
 
 ## 🤝 Contribuir
 

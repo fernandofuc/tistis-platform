@@ -3,7 +3,9 @@
 // AI-powered customer service and lead scoring
 // =====================================================
 
-// Services
+// ======================
+// LEGACY SERVICES (Original AI System)
+// ======================
 export { JobProcessor } from './services/job-processor.service';
 export {
   getNextPendingJob,
@@ -25,7 +27,37 @@ export {
   escalateConversation,
 } from './services/ai.service';
 
-// Types
+// ======================
+// LANGGRAPH SYSTEM (New Multi-Agent Architecture)
+// ======================
+export { LangGraphAIService } from './services/langgraph-ai.service';
+export {
+  generateAIResponseWithGraph,
+  generateAIResponseSmart,
+  shouldUseLangGraph,
+} from './services/langgraph-ai.service';
+
+// Graph exports
+export { TISTISGraph, executeGraph } from './graph';
+export type { GraphExecutionInput, GraphExecutionResult } from './graph';
+
+// State exports
+export { TISTISAgentState, createInitialState } from './state';
+export type {
+  TISTISAgentStateType,
+  TenantInfo,
+  LeadInfo,
+  ConversationInfo,
+  ExtractedData,
+  BookingResult,
+  BusinessContext,
+  AgentTrace,
+  ControlFlags,
+} from './state';
+
+// ======================
+// LEGACY TYPES
+// ======================
 export type {
   Job,
   ProcessResult,

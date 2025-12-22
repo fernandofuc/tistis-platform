@@ -34,7 +34,7 @@ interface DashboardPlanDisplay {
   popular?: boolean;
 }
 
-// Plans for dashboard display (excludes Scale - replaced by Enterprise card)
+// Plans for dashboard display (Growth is now the top tier, Enterprise is custom)
 const DASHBOARD_PLANS: DashboardPlanDisplay[] = [
   {
     id: 'starter',
@@ -62,7 +62,7 @@ const DASHBOARD_PLANS: DashboardPlanDisplay[] = [
       'Historial completo de clientes',
       'Tokens de lealtad',
       'Soporte prioritario + Call 30 min',
-      'Hasta 5 sucursales',
+      'Hasta 8 sucursales',
     ],
     maxBranches: PLAN_CONFIG.essentials.branchLimit,
     popular: true,
@@ -78,7 +78,7 @@ const DASHBOARD_PLANS: DashboardPlanDisplay[] = [
       'Multi-canal: WhatsApp, Web, Email',
       'Analiticas avanzadas y reportes',
       'Soporte 24/7 dedicado',
-      'Hasta 8 sucursales',
+      'Hasta 20 sucursales',
     ],
     maxBranches: PLAN_CONFIG.growth.branchLimit,
   },
@@ -333,7 +333,7 @@ export default function SubscriptionPage() {
               );
             })}
 
-            {/* Software Personalizado Card - Enterprise */}
+            {/* Sistema AI Personalizado Card - Enterprise */}
             <Card
               variant="bordered"
               className="relative bg-gradient-to-br from-slate-800 to-slate-900 text-white"
@@ -343,7 +343,7 @@ export default function SubscriptionPage() {
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center mx-auto mb-3">
                     <Shield className="w-5 h-5" />
                   </div>
-                  <h4 className="text-xl font-bold">Software Personalizado</h4>
+                  <h4 className="text-xl font-bold">Sistema AI Personalizado</h4>
                   <p className="text-sm text-slate-300">Enterprise - A tu medida</p>
                 </div>
 

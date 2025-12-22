@@ -13,12 +13,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { JobProcessor } from '@/src/features/ai/services/job-processor.service';
 import {
-  generateAIResponse,
   saveAIResponse,
   logAIUsage,
   updateLeadScore,
   escalateConversation,
 } from '@/src/features/ai/services/ai.service';
+import { generateAIResponseSmart } from '@/src/features/ai/services/langgraph-ai.service';
 import { WhatsAppService } from '@/src/features/messaging/services/whatsapp.service';
 import { MetaService } from '@/src/features/messaging/services/meta.service';
 import { TikTokService } from '@/src/features/messaging/services/tiktok.service';
@@ -243,8 +243,8 @@ async function processAIResponseJob(
     throw new Error(`Message ${message_id} not found`);
   }
 
-  // 2. Generar respuesta AI
-  const aiResult = await generateAIResponse(tenant_id, conversation_id, message.content);
+  // 2. Generar respuesta AI (usa LangGraph o legacy según configuración del tenant)
+  const aiResult = await generateAIResponseSmart(tenant_id, conversation_id, message.content, lead_id);
 
   console.log(
     `[Jobs API] AI response generated: intent=${aiResult.intent}, ` +

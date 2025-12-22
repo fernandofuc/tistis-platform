@@ -1,0 +1,20 @@
+// =====================================================
+// TIS TIS PLATFORM - Agent State Exports
+// =====================================================
+
+export {
+  TISTISAgentState,
+  type TISTISAgentStateType,
+  type TenantInfo,
+  type LeadInfo,
+  type ConversationInfo,
+  type ExtractedData,
+  type BookingResult,
+  type BusinessContext,
+  type AgentTrace,
+  type ControlFlags,
+  createInitialState,
+  addAgentTrace,
+  shouldEscalate,
+  getProcessingTimeMs,
+} from './agent-state';
