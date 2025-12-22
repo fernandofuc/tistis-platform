@@ -270,79 +270,145 @@ function BlockedState() {
       title="AI Agent Voz"
       subtitle="Asistente telefónico con inteligencia artificial"
     >
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="max-w-lg w-full text-center"
-        >
-          {/* Icon with lock */}
-          <div className="relative w-24 h-24 mx-auto mb-6">
-            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 rounded-3xl flex items-center justify-center shadow-lg">
-              <PhoneIcon className="w-12 h-12 text-gray-400" />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="space-y-6"
+      >
+        {/* Hero Card */}
+        <Card variant="bordered">
+          <CardContent className="p-8">
+            <div className="flex flex-col lg:flex-row items-center gap-8">
+              {/* Icon */}
+              <div className="relative flex-shrink-0">
+                <div className="w-24 h-24 bg-gradient-to-br from-tis-coral-100 to-tis-pink-100 rounded-3xl flex items-center justify-center">
+                  <PhoneCallIcon className="w-12 h-12 text-tis-coral" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100">
+                  <LockIcon className="w-5 h-5 text-slate-400" />
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 text-center lg:text-left">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                  Asistente Telefónico con IA
+                </h2>
+                <p className="text-slate-600 leading-relaxed max-w-xl">
+                  Tu asistente virtual que responde llamadas, agenda citas y atiende a tus clientes 24/7
+                  con voz natural en español mexicano.
+                </p>
+
+                {/* Plan badge */}
+                <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl">
+                  <span className="text-sm text-slate-500">Disponible en</span>
+                  <span className="px-3 py-1 bg-gradient-coral text-white text-sm font-semibold rounded-lg">
+                    Plan Growth
+                  </span>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div className="flex-shrink-0">
+                <Link
+                  href="/dashboard/settings/subscription"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-coral text-white font-semibold rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                >
+                  Actualizar Plan
+                  <ArrowRightIcon className="w-5 h-5" />
+                </Link>
+              </div>
             </div>
-            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg flex items-center justify-center border border-gray-100 dark:border-gray-700">
-              <LockIcon className="w-5 h-5 text-gray-500" />
+          </CardContent>
+        </Card>
+
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            {
+              icon: <PhoneCallIcon className="w-6 h-6" />,
+              title: 'Respuesta 24/7',
+              description: 'Atiende llamadas automáticamente a cualquier hora del día',
+              color: 'tis-coral',
+              bgColor: 'bg-tis-coral-100',
+            },
+            {
+              icon: <ClockIcon className="w-6 h-6" />,
+              title: 'Agenda Citas',
+              description: 'Programa citas directamente en tu calendario integrado',
+              color: 'tis-green',
+              bgColor: 'bg-tis-green-100',
+            },
+            {
+              icon: <MessageIcon className="w-6 h-6" />,
+              title: 'FAQ Automático',
+              description: 'Responde preguntas frecuentes sobre tu negocio',
+              color: 'tis-purple',
+              bgColor: 'bg-tis-purple/10',
+            },
+            {
+              icon: <ArrowRightIcon className="w-6 h-6" />,
+              title: 'Escalamiento',
+              description: 'Transfiere llamadas a tu equipo cuando sea necesario',
+              color: 'tis-pink',
+              bgColor: 'bg-tis-pink-100',
+            },
+            {
+              icon: <MicIcon className="w-6 h-6" />,
+              title: 'Transcripciones',
+              description: 'Obtén texto y análisis de cada conversación',
+              color: 'amber-600',
+              bgColor: 'bg-amber-100',
+            },
+            {
+              icon: <PhoneIcon className="w-6 h-6" />,
+              title: 'LADA Mexicana',
+              description: 'Número telefónico local de tu ciudad',
+              color: 'tis-green',
+              bgColor: 'bg-tis-green-100',
+            },
+          ].map((feature, idx) => (
+            <Card key={idx} variant="bordered" className="hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 ${feature.bgColor} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                    <span className={`text-${feature.color}`}>{feature.icon}</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900 mb-1">{feature.title}</h3>
+                    <p className="text-sm text-slate-500">{feature.description}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Bottom CTA */}
+        <Card variant="bordered" className="bg-gradient-to-r from-tis-coral-100/50 to-tis-pink-100/50 border-tis-coral/20">
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                  <PhoneCallIcon className="w-6 h-6 text-tis-coral" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">¿Listo para automatizar tus llamadas?</h3>
+                  <p className="text-sm text-slate-600">Actualiza a Plan Growth y activa tu asistente de voz hoy</p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/settings/subscription"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-coral text-white font-semibold rounded-xl hover:shadow-lg transition-all whitespace-nowrap"
+              >
+                Ver Planes
+                <ArrowRightIcon className="w-4 h-4" />
+              </Link>
             </div>
-          </div>
-
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-            AI Agent Voz
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
-            Asistente telefónico con inteligencia artificial que responde llamadas,
-            agenda citas y atiende a tus clientes 24/7.
-          </p>
-
-          {/* Features List */}
-          <Card className="mb-8 text-left">
-            <CardContent className="p-6">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <span className="w-8 h-8 rounded-lg bg-tis-coral-100 flex items-center justify-center">
-                  <PhoneCallIcon className="w-4 h-4 text-tis-coral" />
-                </span>
-                Con AI Agent Voz podrás:
-              </h3>
-              <ul className="space-y-3">
-                {[
-                  'Responder llamadas automáticamente 24/7',
-                  'Agendar citas directamente en tu calendario',
-                  'Responder preguntas frecuentes sobre tu negocio',
-                  'Escalar llamadas a tu equipo cuando sea necesario',
-                  'Obtener transcripciones y análisis de cada llamada',
-                  'Número telefónico local con LADA mexicana',
-                ].map((feature, idx) => (
-                  <li key={idx} className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
-                    <span className="w-5 h-5 rounded-full bg-tis-green-100 flex items-center justify-center flex-shrink-0">
-                      <CheckIcon className="w-3 h-3 text-tis-green" />
-                    </span>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-
-          {/* Plan badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl mb-6">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Disponible en</span>
-            <span className="px-3 py-1 bg-gradient-coral text-white text-sm font-semibold rounded-lg shadow-coral">
-              Plan Growth
-            </span>
-          </div>
-
-          <div className="block">
-            <Link
-              href="/dashboard/settings/subscription"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-coral text-white font-semibold rounded-2xl hover:shadow-xl transition-all duration-300 transform hover:scale-105 shadow-coral"
-            >
-              Actualizar a Growth
-              <ArrowRightIcon className="w-5 h-5" />
-            </Link>
-          </div>
-        </motion.div>
-      </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </PageWrapper>
   );
 }
