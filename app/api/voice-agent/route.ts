@@ -79,11 +79,14 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantId = context.userRole.tenant_id;
+    console.log('[Voice Agent API] GET - tenantId:', tenantId);
 
     // Verificar acceso a Voice Agent (solo Growth)
     const accessCheck = await VoiceAgentService.canAccessVoiceAgent(tenantId);
+    console.log('[Voice Agent API] Access check result:', JSON.stringify(accessCheck));
 
     if (!accessCheck.canAccess) {
+      console.log('[Voice Agent API] Access BLOCKED - reason:', accessCheck.reason, 'plan:', accessCheck.plan);
       return NextResponse.json({
         success: true,
         status: 'blocked',
@@ -92,6 +95,8 @@ export async function GET(request: NextRequest) {
         data: null,
       });
     }
+
+    console.log('[Voice Agent API] Access GRANTED - plan:', accessCheck.plan);
 
     // Obtener o crear configuración
     const config = await VoiceAgentService.getOrCreateVoiceConfig(tenantId);

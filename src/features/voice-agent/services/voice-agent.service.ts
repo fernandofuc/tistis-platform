@@ -497,15 +497,21 @@ export async function canAccessVoiceAgent(tenantId: string): Promise<{
 }> {
   const supabase = createServerClient();
 
-  const { data: tenant } = await supabase
+  console.log('[VoiceAgentService] canAccessVoiceAgent - tenantId:', tenantId);
+
+  const { data: tenant, error } = await supabase
     .from('tenants')
     .select('plan, status')
     .eq('id', tenantId)
     .single();
 
+  console.log('[VoiceAgentService] Tenant query result:', JSON.stringify({ tenant, error }));
+
   if (!tenant) {
     return { canAccess: false, reason: 'Tenant no encontrado', plan: 'unknown' };
   }
+
+  console.log('[VoiceAgentService] Tenant plan:', tenant.plan, 'status:', tenant.status);
 
   if (tenant.status !== 'active') {
     return { canAccess: false, reason: 'Cuenta no activa', plan: tenant.plan };
@@ -513,6 +519,7 @@ export async function canAccessVoiceAgent(tenantId: string): Promise<{
 
   // Solo Growth tiene acceso
   if (tenant.plan !== 'growth') {
+    console.log('[VoiceAgentService] Plan is NOT growth, blocking access');
     return {
       canAccess: false,
       reason: 'Voice Agent solo está disponible en el plan Growth',
@@ -520,6 +527,7 @@ export async function canAccessVoiceAgent(tenantId: string): Promise<{
     };
   }
 
+  console.log('[VoiceAgentService] Access granted - plan is growth');
   return { canAccess: true, plan: tenant.plan };
 }
 
