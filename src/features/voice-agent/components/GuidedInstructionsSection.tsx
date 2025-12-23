@@ -201,7 +201,8 @@ const VERTICAL_TEMPLATES: Record<string, Partial<GuidedInstructions>> = {
 // ======================
 
 const parseInstructionsFromText = (text: string): GuidedInstructions => {
-  // Default values
+  // Default values - NO ponemos el texto completo en additionalNotes
+  // El texto guardado es solo el output, no lo usamos para inicializar campos
   const defaults: GuidedInstructions = {
     fillerPhrases: [],
     communicationTone: 'friendly',
@@ -214,8 +215,19 @@ const parseInstructionsFromText = (text: string): GuidedInstructions => {
     unknownQuestions: '',
     promotions: [],
     paymentInfo: '',
-    additionalNotes: text || '',
+    additionalNotes: '', // Siempre vacío - evita duplicación
   };
+
+  // Si hay texto, intentamos extraer el tono de comunicación
+  if (text) {
+    if (text.includes('Profesional')) {
+      defaults.communicationTone = 'professional';
+    } else if (text.includes('Empático')) {
+      defaults.communicationTone = 'empathetic';
+    }
+    // Podríamos parsear más campos en el futuro, pero por ahora
+    // es mejor que el usuario vuelva a configurar que duplicar contenido
+  }
 
   return defaults;
 };
