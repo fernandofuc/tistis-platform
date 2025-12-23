@@ -204,6 +204,24 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
       console.log('✅ [Checkout] Subscription updated to plan:', validatedPlan);
 
+      // CRITICAL: Also update tenant.plan - this is what the dashboard reads
+      if (tenant_id) {
+        const { error: tenantUpdateError } = await supabase
+          .from('tenants')
+          .update({
+            plan: validatedPlan,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', tenant_id);
+
+        if (tenantUpdateError) {
+          console.error('🚨 [Checkout] Error updating tenant plan:', tenantUpdateError);
+          // Don't throw - subscription is already updated
+        } else {
+          console.log('✅ [Checkout] Tenant plan updated to:', validatedPlan);
+        }
+      }
+
       // Log the plan change
       await supabase.from('subscription_changes').insert({
         subscription_id: previous_subscription_id,

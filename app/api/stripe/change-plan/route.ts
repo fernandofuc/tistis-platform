@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     // Get tenant info for creating Stripe customer if needed
     const { data: tenant } = await supabaseAdmin
       .from('tenants')
-      .select('id, name, slug')
+      .select('id, name, slug, plan')
       .eq('id', userRole.tenant_id)
       .single();
 
@@ -250,8 +250,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check if already on this plan
-    if (subscription.plan === newPlan) {
+    // Check if already on this plan - compare with TENANT plan (what user sees in dashboard)
+    // Note: subscription.plan might be out of sync if a previous checkout failed after webhook
+    if (tenant.plan?.toLowerCase() === newPlan.toLowerCase()) {
       return NextResponse.json(
         { error: 'Ya estás en este plan' },
         { status: 400 }
