@@ -890,6 +890,28 @@ function ConfigSection({
     goodbye_message: config.goodbye_message || '',
   });
 
+  // Sync formData with config when config changes (after save/reload)
+  useEffect(() => {
+    setFormData({
+      assistant_name: config.assistant_name,
+      assistant_personality: config.assistant_personality,
+      first_message: config.first_message,
+      voice_id: config.voice_id,
+      use_filler_phrases: config.use_filler_phrases,
+      recording_enabled: config.recording_enabled,
+      custom_instructions: config.custom_instructions || '',
+      ai_model: 'gpt-4o' as const,
+      wait_seconds: config.wait_seconds || 0.6,
+      on_punctuation_seconds: config.on_punctuation_seconds || 0.2,
+      on_no_punctuation_seconds: config.on_no_punctuation_seconds || 1.2,
+      voice_stability: config.voice_stability || 0.5,
+      voice_similarity_boost: config.voice_similarity_boost || 0.75,
+      escalation_enabled: config.escalation_enabled || false,
+      escalation_phone: config.escalation_phone || '',
+      goodbye_message: config.goodbye_message || '',
+    });
+  }, [config]);
+
   // Derived presets from config values
   const [responseSpeedPreset, setResponseSpeedPreset] = useState<ResponseSpeedPreset>(
     getResponseSpeedPresetFromConfig(config.wait_seconds || 0.6)
