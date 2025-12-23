@@ -220,8 +220,10 @@ export async function POST(request: NextRequest) {
         priceId = price.id;
       }
 
-      // Create checkout session
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      // Create checkout session - detect URL automatically
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+        || 'https://tistis-platform-5fc5.vercel.app';
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
         mode: 'subscription',
@@ -306,8 +308,10 @@ export async function POST(request: NextRequest) {
         priceId = price.id;
       }
 
-      // Create checkout session
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      // Create checkout session - detect URL automatically
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+        || 'https://tistis-platform-5fc5.vercel.app';
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
         mode: 'subscription',
