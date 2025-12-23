@@ -311,11 +311,19 @@ export async function POST(request: NextRequest) {
     const stripe = getStripeClient();
 
     // Check if upgrading or downgrading using centralized plan order
+    // IMPORTANT: Use tenant.plan (what user sees) NOT subscription.plan (might be out of sync)
     const newPlanOrder = getPlanConfig(newPlan)?.order || 0;
-    const currentPlanOrder = getPlanConfig(subscription.plan)?.order || 0;
+    const currentPlanOrder = getPlanConfig(tenant.plan)?.order || 0;
+
+    console.log('[Change Plan] Plan comparison:');
+    console.log('  tenant.plan:', tenant.plan, '-> order:', currentPlanOrder);
+    console.log('  newPlan:', newPlan, '-> order:', newPlanOrder);
+    console.log('  subscription.plan:', subscription.plan, '(might be out of sync)');
 
     const isUpgrade = newPlanOrder > currentPlanOrder;
     const isDowngrade = newPlanOrder < currentPlanOrder;
+
+    console.log('[Change Plan] isUpgrade:', isUpgrade, 'isDowngrade:', isDowngrade);
 
     // Check if this is a real Stripe subscription (starts with 'sub_')
     const isRealStripeSubscription = subscription.stripe_subscription_id?.startsWith('sub_');
@@ -427,7 +435,7 @@ export async function POST(request: NextRequest) {
 
     // Get plan configs for branch limits
     const newPlanCfg = getPlanConfig(newPlan);
-    const oldPlanCfg = getPlanConfig(subscription.plan);
+    const oldPlanCfg = getPlanConfig(tenant.plan); // Use tenant.plan, not subscription.plan
 
     // Update local subscription record
     await supabaseAdmin
@@ -440,6 +448,21 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', subscription.id);
 
+    // CRITICAL: Also update tenant.plan - this is what the dashboard reads
+    const { error: tenantUpdateError } = await supabaseAdmin
+      .from('tenants')
+      .update({
+        plan: newPlan,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userRole.tenant_id);
+
+    if (tenantUpdateError) {
+      console.error('[Change Plan] Error updating tenant plan:', tenantUpdateError);
+    } else {
+      console.log('[Change Plan] Tenant plan updated to:', newPlan);
+    }
+
     // Log the plan change
     const priceImpact = ((newPlanCfg?.monthlyPriceCentavos || 0) - (oldPlanCfg?.monthlyPriceCentavos || 0)) / 100;
     await supabaseAdmin.from('subscription_changes').insert({
@@ -447,7 +470,7 @@ export async function POST(request: NextRequest) {
       tenant_id: userRole.tenant_id,
       client_id: client.id,
       change_type: isUpgrade ? 'plan_upgraded' : 'plan_downgraded',
-      previous_value: { plan: subscription.plan },
+      previous_value: { plan: tenant.plan }, // Use tenant.plan
       new_value: { plan: newPlan },
       price_impact: priceImpact,
       created_by: user.id,
@@ -457,7 +480,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`✅ Plan changed: ${subscription.plan} → ${newPlan} for tenant ${userRole.tenant_id}`);
+    console.log(`✅ Plan changed: ${tenant.plan} → ${newPlan} for tenant ${userRole.tenant_id}`);
 
     return NextResponse.json({
       success: true,

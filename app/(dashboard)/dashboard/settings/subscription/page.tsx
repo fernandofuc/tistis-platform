@@ -225,10 +225,8 @@ export default function SubscriptionPage() {
 
   // Handle plan change confirmation
   const handleConfirmChange = async () => {
-    alert('handleConfirmChange CALLED! Plan: ' + selectedPlan);
-    console.log('🚀 [handleConfirmChange] CALLED - selectedPlan:', selectedPlan);
+    console.log('[Subscription] handleConfirmChange called - selectedPlan:', selectedPlan);
     if (!selectedPlan) {
-      alert('No selectedPlan!');
       return;
     }
 
@@ -237,21 +235,16 @@ export default function SubscriptionPage() {
 
     try {
       console.log('[Subscription] Starting plan change to:', selectedPlan);
-      alert('Getting session...');
 
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
-        alert('Session error: ' + sessionError.message);
         throw new Error('Error al obtener sesión: ' + sessionError.message);
       }
 
       if (!session?.access_token) {
-        alert('No access token!');
         throw new Error('No hay sesión activa. Por favor, inicia sesión de nuevo.');
       }
-
-      alert('Session OK, calling API...');
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -267,11 +260,9 @@ export default function SubscriptionPage() {
       });
 
       console.log('[Subscription] API response status:', response.status);
-      alert('API response status: ' + response.status);
 
       const data = await response.json();
       console.log('[Subscription] API response data:', data);
-      alert('API response: ' + JSON.stringify(data).substring(0, 200));
 
       if (!response.ok) {
         throw new Error(data.error || 'Error al cambiar el plan');
@@ -280,7 +271,6 @@ export default function SubscriptionPage() {
       // If Stripe returns a checkout URL, redirect to it
       if (data.checkoutUrl) {
         console.log('[Subscription] Redirecting to checkout:', data.checkoutUrl);
-        alert('REDIRECTING TO: ' + data.checkoutUrl);
         window.location.href = data.checkoutUrl;
         return;
       }
@@ -648,12 +638,7 @@ export default function SubscriptionPage() {
               <Button
                 type="button"
                 className="flex-1"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  console.log('🔴 BUTTON CLICKED - calling handleConfirmChange');
-                  handleConfirmChange();
-                }}
+                onClick={handleConfirmChange}
                 isLoading={changingPlan}
               >
                 Confirmar
