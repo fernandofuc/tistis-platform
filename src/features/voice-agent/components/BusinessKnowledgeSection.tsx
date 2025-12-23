@@ -268,21 +268,6 @@ export function BusinessKnowledgeSection({
 
         {/* Content */}
         <div className="p-6">
-          {/* Business Name */}
-          {context && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100/50 rounded-xl border border-slate-100">
-              <p className="text-sm text-slate-500 mb-1">Tu asistente se presentará como:</p>
-              <p className="text-lg font-semibold text-slate-900">
-                Asistente de <span className="text-tis-coral">{context.tenant_name}</span>
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                Vertical: {context.vertical === 'dental' ? 'Consultorio Dental' :
-                          context.vertical === 'restaurant' ? 'Restaurante' :
-                          context.vertical === 'medical' ? 'Consultorio Médico' : 'Servicios'}
-              </p>
-            </div>
-          )}
-
           {/* Warnings */}
           {warnings.length > 0 && (
             <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl">
