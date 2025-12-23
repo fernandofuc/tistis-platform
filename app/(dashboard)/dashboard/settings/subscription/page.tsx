@@ -267,9 +267,11 @@ export default function SubscriptionPage() {
       });
 
       console.log('[Subscription] API response status:', response.status);
+      alert('API response status: ' + response.status);
 
       const data = await response.json();
       console.log('[Subscription] API response data:', data);
+      alert('API response: ' + JSON.stringify(data).substring(0, 200));
 
       if (!response.ok) {
         throw new Error(data.error || 'Error al cambiar el plan');
@@ -278,6 +280,7 @@ export default function SubscriptionPage() {
       // If Stripe returns a checkout URL, redirect to it
       if (data.checkoutUrl) {
         console.log('[Subscription] Redirecting to checkout:', data.checkoutUrl);
+        alert('REDIRECTING TO: ' + data.checkoutUrl);
         window.location.href = data.checkoutUrl;
         return;
       }
