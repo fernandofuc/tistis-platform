@@ -927,6 +927,7 @@ function ConfigSection({
 
   const handleSaveCustomInstructions = (text: string) => {
     // Update local state and save directly with the provided text
+    console.log('[ConfigSection] handleSaveCustomInstructions called with:', text);
     setFormData(prev => ({ ...prev, custom_instructions: text }));
     onSave({ custom_instructions: text });
   };
@@ -1329,6 +1330,8 @@ export default function AIAgentVozPage() {
 
     try {
       setSaving(true);
+      console.log('[Voice Agent] Saving config updates:', updates);
+
       const response = await fetch('/api/voice-agent', {
         method: 'POST',
         headers: {
@@ -1338,11 +1341,25 @@ export default function AIAgentVozPage() {
         body: JSON.stringify(updates),
       });
 
-      if (response.ok) {
-        fetchVoiceAgent();
+      const result = await response.json();
+      console.log('[Voice Agent] Save response:', result);
+
+      if (response.ok && result.success) {
+        // Update local state with the updated config from server
+        if (result.config && data) {
+          setData({
+            ...data,
+            data: {
+              ...data.data!,
+              config: result.config,
+            },
+          });
+        }
+      } else {
+        console.error('[Voice Agent] Save failed:', result.error);
       }
     } catch (err) {
-      console.error('Error saving config:', err);
+      console.error('[Voice Agent] Error saving config:', err);
     } finally {
       setSaving(false);
     }

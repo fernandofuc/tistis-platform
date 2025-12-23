@@ -223,16 +223,12 @@ const parseInstructionsFromText = (text: string): GuidedInstructions => {
 const generateInstructionsText = (instructions: GuidedInstructions): string => {
   const sections: string[] = [];
 
-  // Estilo de comunicación
-  if (instructions.fillerPhrases.length > 0 || instructions.avoidSilences) {
-    sections.push('ESTILO DE COMUNICACIÓN:');
-    if (instructions.avoidSilences && instructions.fillerPhrases.length > 0) {
-      sections.push(`- Usa muletillas naturales para evitar silencios incómodos: ${instructions.fillerPhrases.map(p => `"${p}"`).join(', ')}`);
-    }
-    const toneLabel = TONE_OPTIONS.find(t => t.value === instructions.communicationTone)?.label || 'Amigable';
-    sections.push(`- Tono de comunicación: ${toneLabel}`);
-    sections.push('');
-  }
+  // Estilo de comunicación - muletillas fijas
+  sections.push('ESTILO DE COMUNICACIÓN:');
+  sections.push('- Sé informal pero profesional, con frases como: "Mmm...", "Bueno...", "Claro..." y "Quiero decir..."');
+  const toneLabel = TONE_OPTIONS.find(t => t.value === instructions.communicationTone)?.label || 'Amigable';
+  sections.push(`- Tono de comunicación: ${toneLabel}`);
+  sections.push('');
 
   // Manejo de citas
   if (instructions.appointmentFlow || instructions.availabilityCheck || instructions.confirmationMessage) {
@@ -334,12 +330,6 @@ export function GuidedInstructionsSection({
     }));
   };
 
-  const toggleFillerPhrase = (phrase: string) => {
-    const newPhrases = instructions.fillerPhrases.includes(phrase)
-      ? instructions.fillerPhrases.filter(p => p !== phrase)
-      : [...instructions.fillerPhrases, phrase];
-    updateInstructions({ fillerPhrases: newPhrases });
-  };
 
   const addPromotion = () => {
     if (newPromotion.trim()) {
@@ -359,6 +349,7 @@ export function GuidedInstructionsSection({
   const handleSave = () => {
     // Generate fresh text from current instructions state
     const text = generateInstructionsText(instructions);
+    console.log('[GuidedInstructionsSection] Saving instructions:', text);
     onSave(text);
     setHasChanges(false);
   };
@@ -468,40 +459,11 @@ export function GuidedInstructionsSection({
                     </div>
                   </div>
 
-                  {/* Muletillas */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-slate-700">
-                        Muletillas naturales
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={instructions.avoidSilences}
-                          onChange={(e) => updateInstructions({ avoidSilences: e.target.checked })}
-                          className="w-4 h-4 text-tis-coral rounded border-slate-300 focus:ring-tis-coral"
-                        />
-                        Evitar silencios incómodos
-                      </label>
-                    </div>
-                    <p className="text-xs text-slate-500 mb-3">
-                      Selecciona frases que el asistente usará para sonar más natural mientras procesa
+                  {/* Info about filler phrases - ya están fijas internamente */}
+                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <p className="text-sm text-blue-700">
+                      <strong>Muletillas naturales:</strong> Tu asistente usará frases como &quot;Mmm...&quot;, &quot;Bueno...&quot;, &quot;Claro...&quot; y &quot;Quiero decir...&quot; para sonar más natural.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {(FILLER_PHRASES_OPTIONS[vertical] || FILLER_PHRASES_OPTIONS.general).map(phrase => (
-                        <button
-                          key={phrase}
-                          onClick={() => toggleFillerPhrase(phrase)}
-                          className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                            instructions.fillerPhrases.includes(phrase)
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                        >
-                          {phrase}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 </div>
               </motion.div>
