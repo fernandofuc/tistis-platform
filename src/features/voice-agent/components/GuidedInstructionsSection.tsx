@@ -112,7 +112,7 @@ interface GuidedInstructionsSectionProps {
   value: string;
   vertical: 'dental' | 'restaurant' | 'medical' | 'general';
   onChange: (value: string) => void;
-  onSave: () => void;
+  onSave: (value: string) => void;
   saving?: boolean;
 }
 
@@ -357,7 +357,9 @@ export function GuidedInstructionsSection({
   };
 
   const handleSave = () => {
-    onSave();
+    // Generate fresh text from current instructions state
+    const text = generateInstructionsText(instructions);
+    onSave(text);
     setHasChanges(false);
   };
 

@@ -925,8 +925,10 @@ function ConfigSection({
     setIsEditing(false);
   };
 
-  const handleSaveCustomInstructions = () => {
-    onSave({ custom_instructions: formData.custom_instructions });
+  const handleSaveCustomInstructions = (text: string) => {
+    // Update local state and save directly with the provided text
+    setFormData(prev => ({ ...prev, custom_instructions: text }));
+    onSave({ custom_instructions: text });
   };
 
   const handleResponseSpeedChange = (
