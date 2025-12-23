@@ -921,7 +921,16 @@ function ConfigSection({
   );
 
   const handleSave = async () => {
-    const success = await onSave(formData);
+    // Solo enviar los campos relevantes para identity
+    const identityData = {
+      assistant_name: formData.assistant_name,
+      first_message: formData.first_message,
+      voice_id: formData.voice_id,
+      voice_stability: formData.voice_stability,
+      voice_similarity_boost: formData.voice_similarity_boost,
+    };
+    console.log('[ConfigSection] handleSave - identity data:', identityData);
+    const success = await onSave(identityData);
     if (success) {
       setIsEditing(false);
     }
