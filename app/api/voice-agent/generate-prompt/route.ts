@@ -167,41 +167,81 @@ export async function GET(request: NextRequest) {
     const tenantId = context.userRole.tenant_id;
     const serviceSupabase = createServiceClient();
 
-    // Obtener configuración actual
+    // Obtener configuración actual de voice_agent_config
     const { data: config } = await serviceSupabase
       .from('voice_agent_config')
       .select('system_prompt, system_prompt_generated_at, custom_instructions')
       .eq('tenant_id', tenantId)
       .single();
 
-    // Generar preview del prompt (sin guardar)
-    const { data: previewPrompt, error: previewError } = await serviceSupabase
-      .rpc('generate_voice_agent_prompt', { p_tenant_id: tenantId });
+    // Obtener tenant info
+    const { data: tenant } = await serviceSupabase
+      .from('tenants')
+      .select('id, name, vertical')
+      .eq('id', tenantId)
+      .single();
 
-    if (previewError) {
-      console.error('[Voice Agent Generate] Error generating preview:', previewError);
+    // Obtener branches directamente (misma query que AI Agent Settings)
+    const { data: branches } = await serviceSupabase
+      .from('branches')
+      .select('id, name, address, city, phone, operating_hours, is_headquarters')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .order('is_headquarters', { ascending: false });
+
+    // Obtener services directamente (misma query que AI Agent Settings)
+    const { data: services } = await serviceSupabase
+      .from('services')
+      .select('id, name, short_description, price_min, price_max, duration_minutes, category')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
+
+    // Obtener staff directamente (misma query que AI Agent Settings)
+    const { data: staff } = await serviceSupabase
+      .from('staff')
+      .select('id, first_name, last_name, display_name, role, specialty')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .in('role', ['dentist', 'specialist', 'owner', 'manager']);
+
+    // Filtrar staff vacío (como hace AI Agent Settings)
+    const validStaff = (staff || []).filter(s =>
+      (s.first_name && s.first_name.trim() !== '') ||
+      (s.last_name && s.last_name.trim() !== '') ||
+      (s.display_name && s.display_name.trim() !== '')
+    );
+
+    // Generar preview del prompt (sin guardar) - intentar RPC, fallback a null
+    let previewPrompt = null;
+    try {
+      const { data: promptData } = await serviceSupabase
+        .rpc('generate_voice_agent_prompt', { p_tenant_id: tenantId });
+      previewPrompt = promptData;
+    } catch {
+      console.log('[Voice Agent Generate] RPC not available, skipping prompt preview');
     }
 
-    // Obtener contexto del tenant para mostrar qué datos se usaron
-    const { data: tenantContext } = await serviceSupabase
-      .rpc('get_voice_agent_context', { p_tenant_id: tenantId });
+    const branchesCount = branches?.length || 0;
+    const servicesCount = services?.length || 0;
+    const staffCount = validStaff.length;
 
     return NextResponse.json({
       success: true,
       current_prompt: config?.system_prompt || null,
       current_prompt_generated_at: config?.system_prompt_generated_at || null,
       custom_instructions: config?.custom_instructions || null,
-      preview_prompt: previewPrompt || null,
-      context_summary: tenantContext ? {
-        has_branches: (tenantContext.branches?.length || 0) > 0,
-        branches_count: tenantContext.branches?.length || 0,
-        has_services: (tenantContext.services?.length || 0) > 0,
-        services_count: tenantContext.services?.length || 0,
-        has_staff: (tenantContext.staff?.length || 0) > 0,
-        staff_count: tenantContext.staff?.length || 0,
-        vertical: tenantContext.tenant?.vertical || 'general',
-        tenant_name: tenantContext.tenant?.name || 'Sin nombre',
-      } : null,
+      preview_prompt: previewPrompt,
+      context_summary: {
+        has_branches: branchesCount > 0,
+        branches_count: branchesCount,
+        has_services: servicesCount > 0,
+        services_count: servicesCount,
+        has_staff: staffCount > 0,
+        staff_count: staffCount,
+        vertical: tenant?.vertical || 'general',
+        tenant_name: tenant?.name || 'Sin nombre',
+      },
     });
   } catch (error) {
     console.error('[Voice Agent Generate] GET Error:', error);
