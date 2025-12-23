@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
     console.log('[Sync] Stripe subscription status:', stripeSubscription.status);
     console.log('[Sync] Stripe subscription object keys:', Object.keys(stripeSubscription));
 
-    const periodEnd = stripeSubscription.current_period_end;
-    const periodStart = stripeSubscription.current_period_start;
+    const periodEnd = (stripeSubscription as any).current_period_end;
+    const periodStart = (stripeSubscription as any).current_period_start;
 
     // If no period end, return debug info about the subscription
     if (!periodEnd) {
@@ -52,10 +52,10 @@ export async function POST(request: NextRequest) {
         {
           error: 'No current_period_end found in Stripe subscription',
           debug: {
-            status: stripeSubscription.status,
-            cancel_at_period_end: stripeSubscription.cancel_at_period_end,
-            canceled_at: stripeSubscription.canceled_at,
-            ended_at: stripeSubscription.ended_at,
+            status: (stripeSubscription as any).status,
+            cancel_at_period_end: (stripeSubscription as any).cancel_at_period_end,
+            canceled_at: (stripeSubscription as any).canceled_at,
+            ended_at: (stripeSubscription as any).ended_at,
             current_period_start: periodStart,
             current_period_end: periodEnd,
           },
