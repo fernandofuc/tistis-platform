@@ -1169,39 +1169,6 @@ function ConfigSection({
 
             {/* Content */}
             <div className="p-6 space-y-4">
-              {/* Frases de relleno */}
-              <div className="flex items-center justify-between p-5 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-coral/20 to-tis-pink/20 flex items-center justify-center">
-                    <MessageIcon className="w-6 h-6 text-tis-coral" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      Frases de Relleno Naturales
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      &quot;Mmm...&quot;, &quot;Bueno...&quot;, &quot;Claro...&quot; para sonar más humano
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const newValue = !formData.use_filler_phrases;
-                    setFormData({ ...formData, use_filler_phrases: newValue });
-                    onSave({ use_filler_phrases: newValue });
-                  }}
-                  className={`relative w-14 h-8 rounded-full transition-colors ${
-                    formData.use_filler_phrases ? 'bg-tis-coral' : 'bg-slate-300'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${
-                      formData.use_filler_phrases ? 'translate-x-6' : ''
-                    }`}
-                  />
-                </button>
-              </div>
-
               {/* Grabación */}
               <div className="flex items-center justify-between p-5 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors">
                 <div className="flex items-center gap-4">
