@@ -21,12 +21,23 @@ import type {
   VoiceUsageSummary,
   AvailableVoice,
   VoicePersonality,
+  AIModel,
+  ResponseSpeedPreset,
+  VoiceQualityPreset,
 } from '@/src/features/voice-agent/types';
 import {
   AVAILABLE_VOICES,
   MEXICO_AREA_CODES,
+  RESPONSE_SPEED_PRESETS,
+  VOICE_QUALITY_PRESETS,
 } from '@/src/features/voice-agent/types';
-import { TalkToAssistant } from '@/src/features/voice-agent/components';
+import {
+  TalkToAssistant,
+  BusinessKnowledgeSection,
+  CustomInstructionsSection,
+  AdvancedSettingsSection,
+  EscalationSection,
+} from '@/src/features/voice-agent/components';
 
 // ======================
 // ICONS (SVG TIS TIS Style - Refined)
@@ -853,16 +864,33 @@ function CallHistoryTable({ calls }: { calls: VoiceCall[] }) {
 // CONFIG SECTION COMPONENT
 // ======================
 
+// Helper to get response speed preset from config values
+function getResponseSpeedPresetFromConfig(waitSeconds: number): ResponseSpeedPreset {
+  if (waitSeconds <= 0.5) return 'fast';
+  if (waitSeconds <= 0.8) return 'balanced';
+  return 'patient';
+}
+
+// Helper to get voice quality preset from config values
+function getVoiceQualityPresetFromConfig(stability: number): VoiceQualityPreset {
+  if (stability >= 0.65) return 'consistent';
+  if (stability >= 0.4) return 'natural';
+  return 'expressive';
+}
+
 function ConfigSection({
   config,
   onSave,
   saving,
+  accessToken,
 }: {
   config: VoiceAgentConfig;
   onSave: (updates: Partial<VoiceAgentConfig>) => void;
   saving: boolean;
+  accessToken: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingCustom, setIsEditingCustom] = useState(false);
   const [formData, setFormData] = useState({
     assistant_name: config.assistant_name,
     assistant_personality: config.assistant_personality,
@@ -870,11 +898,82 @@ function ConfigSection({
     voice_id: config.voice_id,
     use_filler_phrases: config.use_filler_phrases,
     recording_enabled: config.recording_enabled,
+    custom_instructions: config.custom_instructions || '',
+    ai_model: config.ai_model || 'gpt-4o-mini' as AIModel,
+    wait_seconds: config.wait_seconds || 0.6,
+    on_punctuation_seconds: config.on_punctuation_seconds || 0.2,
+    on_no_punctuation_seconds: config.on_no_punctuation_seconds || 1.2,
+    voice_stability: config.voice_stability || 0.5,
+    voice_similarity_boost: config.voice_similarity_boost || 0.75,
+    // Escalation and goodbye
+    escalation_enabled: config.escalation_enabled || false,
+    escalation_phone: config.escalation_phone || '',
+    goodbye_message: config.goodbye_message || '',
   });
+
+  // Derived presets from config values
+  const [responseSpeedPreset, setResponseSpeedPreset] = useState<ResponseSpeedPreset>(
+    getResponseSpeedPresetFromConfig(config.wait_seconds || 0.6)
+  );
+  const [voiceQualityPreset, setVoiceQualityPreset] = useState<VoiceQualityPreset>(
+    getVoiceQualityPresetFromConfig(config.voice_stability || 0.5)
+  );
 
   const handleSave = () => {
     onSave(formData);
     setIsEditing(false);
+  };
+
+  const handleSaveCustomInstructions = () => {
+    onSave({ custom_instructions: formData.custom_instructions });
+    setIsEditingCustom(false);
+  };
+
+  const handleAIModelChange = (model: AIModel) => {
+    setFormData(prev => ({ ...prev, ai_model: model }));
+    onSave({ ai_model: model });
+  };
+
+  const handleResponseSpeedChange = (
+    preset: ResponseSpeedPreset,
+    values: { wait_seconds: number; on_punctuation_seconds: number; on_no_punctuation_seconds: number }
+  ) => {
+    setResponseSpeedPreset(preset);
+    setFormData(prev => ({
+      ...prev,
+      wait_seconds: values.wait_seconds,
+      on_punctuation_seconds: values.on_punctuation_seconds,
+      on_no_punctuation_seconds: values.on_no_punctuation_seconds,
+    }));
+    onSave({
+      wait_seconds: values.wait_seconds,
+      on_punctuation_seconds: values.on_punctuation_seconds,
+      on_no_punctuation_seconds: values.on_no_punctuation_seconds,
+    });
+  };
+
+  const handleVoiceQualityChange = (
+    preset: VoiceQualityPreset,
+    values: { stability: number; similarity_boost: number }
+  ) => {
+    setVoiceQualityPreset(preset);
+    setFormData(prev => ({
+      ...prev,
+      voice_stability: values.stability,
+      voice_similarity_boost: values.similarity_boost,
+    }));
+    onSave({
+      voice_stability: values.stability,
+      voice_similarity_boost: values.similarity_boost,
+    });
+  };
+
+  const handleSaveEscalation = () => {
+    onSave({
+      escalation_enabled: formData.escalation_enabled,
+      escalation_phone: formData.escalation_phone,
+      goodbye_message: formData.goodbye_message,
+    });
   };
 
   const selectedVoice = AVAILABLE_VOICES.find((v) => v.id === config.voice_id);
@@ -1182,6 +1281,47 @@ function ConfigSection({
           </div>
         </div>
       </PremiumCard>
+
+      {/* Conocimiento del Negocio - NEW */}
+      <BusinessKnowledgeSection
+        accessToken={accessToken}
+        onRegeneratePrompt={() => {
+          // Optionally refresh the page or config
+        }}
+      />
+
+      {/* Instrucciones Personalizadas - NEW */}
+      <CustomInstructionsSection
+        value={formData.custom_instructions}
+        onChange={(value) => setFormData(prev => ({ ...prev, custom_instructions: value }))}
+        onSave={handleSaveCustomInstructions}
+        saving={saving}
+        isEditing={isEditingCustom}
+        onToggleEdit={() => setIsEditingCustom(!isEditingCustom)}
+      />
+
+      {/* Configuración Avanzada - NEW */}
+      <AdvancedSettingsSection
+        aiModel={formData.ai_model}
+        responseSpeed={responseSpeedPreset}
+        voiceQuality={voiceQualityPreset}
+        onAIModelChange={handleAIModelChange}
+        onResponseSpeedChange={handleResponseSpeedChange}
+        onVoiceQualityChange={handleVoiceQualityChange}
+        saving={saving}
+      />
+
+      {/* Escalación y Despedida - NEW */}
+      <EscalationSection
+        escalationEnabled={formData.escalation_enabled}
+        escalationPhone={formData.escalation_phone}
+        goodbyeMessage={formData.goodbye_message}
+        onEscalationEnabledChange={(enabled) => setFormData(prev => ({ ...prev, escalation_enabled: enabled }))}
+        onEscalationPhoneChange={(phone) => setFormData(prev => ({ ...prev, escalation_phone: phone }))}
+        onGoodbyeMessageChange={(message) => setFormData(prev => ({ ...prev, goodbye_message: message }))}
+        onSave={handleSaveEscalation}
+        saving={saving}
+      />
     </div>
   );
 }
@@ -1641,11 +1781,14 @@ export default function AIAgentVozPage() {
               />
 
               {/* Config Sections */}
-              <ConfigSection
-                config={config}
-                onSave={handleSaveConfig}
-                saving={saving}
-              />
+              {accessToken && (
+                <ConfigSection
+                  config={config}
+                  onSave={handleSaveConfig}
+                  saving={saving}
+                  accessToken={accessToken}
+                />
+              )}
             </motion.div>
           )}
 

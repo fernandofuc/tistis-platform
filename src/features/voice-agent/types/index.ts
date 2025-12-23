@@ -72,6 +72,11 @@ export interface VoiceAgentConfig {
   filler_phrases: string[];
   use_filler_phrases: boolean;
   end_call_phrases: string[];
+  goodbye_message: string | null;
+
+  // Escalación
+  escalation_enabled: boolean;
+  escalation_phone: string | null;
 
   // Prompt
   system_prompt: string | null;
@@ -103,7 +108,115 @@ export interface VoiceAgentConfigInput {
   recording_enabled?: boolean;
   use_filler_phrases?: boolean;
   custom_instructions?: string;
+  // Start Speaking Plan (timing)
+  wait_seconds?: number;
+  on_punctuation_seconds?: number;
+  on_no_punctuation_seconds?: number;
+  // Escalación y despedida
+  escalation_enabled?: boolean;
+  escalation_phone?: string;
+  goodbye_message?: string;
 }
+
+// =====================================================
+// RESPONSE SPEED PRESETS
+// =====================================================
+
+export type ResponseSpeedPreset = 'fast' | 'balanced' | 'patient';
+
+export const RESPONSE_SPEED_PRESETS: Record<ResponseSpeedPreset, {
+  label: string;
+  description: string;
+  wait_seconds: number;
+  on_punctuation_seconds: number;
+  on_no_punctuation_seconds: number;
+}> = {
+  fast: {
+    label: 'Rápido',
+    description: 'Responde inmediatamente, ideal para consultas simples',
+    wait_seconds: 0.4,
+    on_punctuation_seconds: 0.1,
+    on_no_punctuation_seconds: 0.8,
+  },
+  balanced: {
+    label: 'Balanceado',
+    description: 'Espera una pausa natural antes de responder',
+    wait_seconds: 0.6,
+    on_punctuation_seconds: 0.2,
+    on_no_punctuation_seconds: 1.2,
+  },
+  patient: {
+    label: 'Paciente',
+    description: 'Espera más tiempo, evita interrumpir al cliente',
+    wait_seconds: 1.0,
+    on_punctuation_seconds: 0.4,
+    on_no_punctuation_seconds: 1.8,
+  },
+};
+
+// =====================================================
+// VOICE QUALITY PRESETS
+// =====================================================
+
+export type VoiceQualityPreset = 'consistent' | 'natural' | 'expressive';
+
+export const VOICE_QUALITY_PRESETS: Record<VoiceQualityPreset, {
+  label: string;
+  description: string;
+  stability: number;
+  similarity_boost: number;
+}> = {
+  consistent: {
+    label: 'Consistente',
+    description: 'Voz estable y predecible, menos variación emocional',
+    stability: 0.75,
+    similarity_boost: 0.5,
+  },
+  natural: {
+    label: 'Natural',
+    description: 'Balance entre estabilidad y expresividad',
+    stability: 0.5,
+    similarity_boost: 0.75,
+  },
+  expressive: {
+    label: 'Expresiva',
+    description: 'Más variación tonal, más emocional',
+    stability: 0.3,
+    similarity_boost: 0.9,
+  },
+};
+
+// =====================================================
+// AI MODEL OPTIONS
+// =====================================================
+
+export const AI_MODEL_OPTIONS: Array<{
+  id: AIModel;
+  label: string;
+  description: string;
+  costIndicator: '$' | '$$' | '$$$';
+  recommended?: boolean;
+}> = [
+  {
+    id: 'gpt-4o-mini',
+    label: 'GPT-4o Mini',
+    description: 'Económico y rápido, ideal para la mayoría de casos',
+    costIndicator: '$',
+    recommended: true,
+  },
+  {
+    id: 'gpt-4o',
+    label: 'GPT-4o',
+    description: 'Más inteligente, mejor para conversaciones complejas',
+    costIndicator: '$$$',
+  },
+  {
+    id: 'claude-3-5-sonnet-20241022',
+    label: 'Claude 3.5 Sonnet',
+    description: 'Excelente comprensión y respuestas naturales',
+    costIndicator: '$$',
+  },
+];
 
 // =====================================================
 // VOICE PHONE NUMBERS
@@ -368,6 +481,28 @@ export interface VoiceAgentContextResponse {
     avg_duration_seconds: number;
     escalation_rate: number;
   };
+}
+
+// =====================================================
+// PROMPT PREVIEW RESPONSE
+// =====================================================
+
+export interface PromptPreviewResponse {
+  success: boolean;
+  current_prompt: string | null;
+  current_prompt_generated_at: string | null;
+  custom_instructions: string | null;
+  preview_prompt: string | null;
+  context_summary: {
+    has_branches: boolean;
+    branches_count: number;
+    has_services: boolean;
+    services_count: number;
+    has_staff: boolean;
+    staff_count: number;
+    vertical: string;
+    tenant_name: string;
+  } | null;
 }
 
 // =====================================================
