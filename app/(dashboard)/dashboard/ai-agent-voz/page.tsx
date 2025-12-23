@@ -33,11 +33,12 @@ import {
 import {
   TalkToAssistant,
   BusinessKnowledgeSection,
-  CustomInstructionsSection,
+  GuidedInstructionsSection,
   AdvancedSettingsSection,
   EscalationSection,
   SectionGroup,
 } from '@/src/features/voice-agent/components';
+import { useTenant } from '@/src/hooks/useTenant';
 
 // ======================
 // ICONS (SVG TIS TIS Style - Refined)
@@ -885,16 +886,17 @@ function ConfigSection({
   onSave,
   saving,
   accessToken,
+  vertical,
   section = 'all',
 }: {
   config: VoiceAgentConfig;
   onSave: (updates: Partial<VoiceAgentConfig>) => void;
   saving: boolean;
   accessToken: string;
+  vertical: 'dental' | 'restaurant' | 'medical' | 'general';
   section?: ConfigSectionType;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [isEditingCustom, setIsEditingCustom] = useState(false);
   const [formData, setFormData] = useState({
     assistant_name: config.assistant_name,
     assistant_personality: config.assistant_personality,
@@ -930,7 +932,6 @@ function ConfigSection({
 
   const handleSaveCustomInstructions = () => {
     onSave({ custom_instructions: formData.custom_instructions });
-    setIsEditingCustom(false);
   };
 
   const handleResponseSpeedChange = (
@@ -1206,14 +1207,13 @@ function ConfigSection({
             }}
           />
 
-          {/* Instrucciones Personalizadas */}
-          <CustomInstructionsSection
+          {/* Instrucciones del Asistente (Guiado) */}
+          <GuidedInstructionsSection
             value={formData.custom_instructions}
+            vertical={vertical}
             onChange={(value) => setFormData(prev => ({ ...prev, custom_instructions: value }))}
             onSave={handleSaveCustomInstructions}
             saving={saving}
-            isEditing={isEditingCustom}
-            onToggleEdit={() => setIsEditingCustom(!isEditingCustom)}
           />
         </>
       )}
@@ -1370,6 +1370,7 @@ function StatCardPremium({
 
 export default function AIAgentVozPage() {
   const { session } = useAuth();
+  const { tenant } = useTenant();
   const [data, setData] = useState<VoiceAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1378,6 +1379,7 @@ export default function AIAgentVozPage() {
   const [showTalkToAssistant, setShowTalkToAssistant] = useState(false);
 
   const accessToken = session?.access_token;
+  const vertical = (tenant?.vertical || 'dental') as 'dental' | 'restaurant' | 'medical' | 'general';
 
   const fetchVoiceAgent = useCallback(async () => {
     if (!accessToken) return;
@@ -1835,6 +1837,7 @@ export default function AIAgentVozPage() {
                   onSave={handleSaveConfig}
                   saving={saving}
                   accessToken={accessToken}
+                  vertical={vertical}
                   section="identity"
                 />
               </SectionGroup>
@@ -1851,6 +1854,7 @@ export default function AIAgentVozPage() {
                   onSave={handleSaveConfig}
                   saving={saving}
                   accessToken={accessToken}
+                  vertical={vertical}
                   section="knowledge"
                 />
               </SectionGroup>
@@ -1867,6 +1871,7 @@ export default function AIAgentVozPage() {
                   onSave={handleSaveConfig}
                   saving={saving}
                   accessToken={accessToken}
+                  vertical={vertical}
                   section="behavior"
                 />
               </SectionGroup>
@@ -1883,6 +1888,7 @@ export default function AIAgentVozPage() {
                   onSave={handleSaveConfig}
                   saving={saving}
                   accessToken={accessToken}
+                  vertical={vertical}
                   section="closing"
                 />
               </SectionGroup>
