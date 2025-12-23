@@ -21,7 +21,6 @@ import type {
   VoiceUsageSummary,
   AvailableVoice,
   VoicePersonality,
-  AIModel,
   ResponseSpeedPreset,
   VoiceQualityPreset,
 } from '@/src/features/voice-agent/types';
@@ -904,7 +903,7 @@ function ConfigSection({
     use_filler_phrases: config.use_filler_phrases,
     recording_enabled: config.recording_enabled,
     custom_instructions: config.custom_instructions || '',
-    ai_model: config.ai_model || 'gpt-4o-mini' as AIModel,
+    ai_model: 'gpt-4o' as const, // Modelo interno fijo
     wait_seconds: config.wait_seconds || 0.6,
     on_punctuation_seconds: config.on_punctuation_seconds || 0.2,
     on_no_punctuation_seconds: config.on_no_punctuation_seconds || 1.2,
@@ -932,11 +931,6 @@ function ConfigSection({
   const handleSaveCustomInstructions = () => {
     onSave({ custom_instructions: formData.custom_instructions });
     setIsEditingCustom(false);
-  };
-
-  const handleAIModelChange = (model: AIModel) => {
-    setFormData(prev => ({ ...prev, ai_model: model }));
-    onSave({ ai_model: model });
   };
 
   const handleResponseSpeedChange = (
@@ -1229,10 +1223,8 @@ function ConfigSection({
         <>
           {/* Configuración Avanzada de IA */}
           <AdvancedSettingsSection
-            aiModel={formData.ai_model}
             responseSpeed={responseSpeedPreset}
             voiceQuality={voiceQualityPreset}
-            onAIModelChange={handleAIModelChange}
             onResponseSpeedChange={handleResponseSpeedChange}
             onVoiceQualityChange={handleVoiceQualityChange}
             saving={saving}
