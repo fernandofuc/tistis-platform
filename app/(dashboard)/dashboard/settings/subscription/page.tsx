@@ -191,6 +191,13 @@ export default function SubscriptionPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debug: Log when modal state changes
+  useEffect(() => {
+    if (showConfirmModal) {
+      console.log('🔵 MODAL OPENED - selectedPlan:', selectedPlan, 'changingPlan:', changingPlan);
+    }
+  }, [showConfirmModal, selectedPlan, changingPlan]);
+
   // Check if user is owner
   const isOwner = staff?.role === 'owner';
 
@@ -206,7 +213,12 @@ export default function SubscriptionPage() {
 
   // Handle plan selection
   const handleSelectPlan = (planId: string) => {
-    if (planId === currentPlan) return;
+    console.log('🟢 handleSelectPlan called with:', planId, 'currentPlan:', currentPlan);
+    if (planId === currentPlan) {
+      console.log('🟡 Same plan, ignoring');
+      return;
+    }
+    console.log('🟢 Setting selectedPlan to:', planId);
     setSelectedPlan(planId);
     setShowConfirmModal(true);
   };
