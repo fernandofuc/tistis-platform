@@ -190,7 +190,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
       try {
         const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-        const periodEnd = (stripeSubscription as any).current_period_end;
+        // Try root level first, then items (some Stripe API versions put it in items)
+        let periodEnd = (stripeSubscription as any).current_period_end;
+        if (!periodEnd) {
+          const items = (stripeSubscription as any).items?.data;
+          periodEnd = items?.[0]?.current_period_end;
+        }
         if (periodEnd) {
           currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
           console.log('✅ [Checkout] Got current_period_end from Stripe:', currentPeriodEnd);

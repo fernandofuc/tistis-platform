@@ -437,8 +437,12 @@ export async function POST(request: NextRequest) {
     const newPlanCfg = getPlanConfig(newPlan);
     const oldPlanCfg = getPlanConfig(tenant.plan); // Use tenant.plan, not subscription.plan
 
-    // Get current_period_end from the updated subscription
-    const periodEnd = (updatedSubscription as any).current_period_end;
+    // Get current_period_end from the updated subscription (try root level first, then items)
+    let periodEnd = (updatedSubscription as any).current_period_end;
+    if (!periodEnd) {
+      const items = (updatedSubscription as any).items?.data;
+      periodEnd = items?.[0]?.current_period_end;
+    }
     const currentPeriodEnd = periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
     console.log('[Change Plan] current_period_end:', currentPeriodEnd);
 
