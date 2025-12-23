@@ -437,6 +437,11 @@ export async function POST(request: NextRequest) {
     const newPlanCfg = getPlanConfig(newPlan);
     const oldPlanCfg = getPlanConfig(tenant.plan); // Use tenant.plan, not subscription.plan
 
+    // Get current_period_end from the updated subscription
+    const periodEnd = (updatedSubscription as any).current_period_end;
+    const currentPeriodEnd = periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
+    console.log('[Change Plan] current_period_end:', currentPeriodEnd);
+
     // Update local subscription record
     await supabaseAdmin
       .from('subscriptions')
@@ -445,6 +450,8 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
         // Update max_branches based on centralized plan config
         max_branches: newPlanCfg?.branchLimit || 1,
+        // IMPORTANT: Update billing date from Stripe
+        current_period_end: currentPeriodEnd,
       })
       .eq('id', subscription.id);
 

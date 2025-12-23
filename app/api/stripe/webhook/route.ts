@@ -184,6 +184,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const stripeSubscriptionId = session.subscription as string;
 
     if (stripeSubscriptionId) {
+      // Fetch the Stripe subscription to get current_period_end
+      const stripe = getStripeClient();
+      let currentPeriodEnd: string | null = null;
+
+      try {
+        const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+        const periodEnd = (stripeSubscription as any).current_period_end;
+        if (periodEnd) {
+          currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
+          console.log('✅ [Checkout] Got current_period_end from Stripe:', currentPeriodEnd);
+        }
+      } catch (err) {
+        console.error('⚠️ [Checkout] Could not fetch Stripe subscription for period_end:', err);
+      }
+
       // Update the existing subscription record with the new Stripe subscription
       const { error: updateError } = await supabase
         .from('subscriptions')
@@ -194,6 +209,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           updated_at: new Date().toISOString(),
           // Update max_branches based on new plan
           max_branches: getPlanConfig(validatedPlan)?.branchLimit || 5,
+          // IMPORTANT: Update billing date
+          current_period_end: currentPeriodEnd,
         })
         .eq('id', previous_subscription_id);
 
