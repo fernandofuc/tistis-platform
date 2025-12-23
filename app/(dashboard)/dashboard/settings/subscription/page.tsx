@@ -107,15 +107,29 @@ export default function SubscriptionPage() {
   const [newPlanFromUrl, setNewPlanFromUrl] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch subscription billing date
+  // Fetch subscription billing date via client linked to tenant
   useEffect(() => {
     const fetchBillingDate = async () => {
       if (!tenant?.id) return;
 
       try {
+        // First get the client associated with this tenant
+        const { data: client } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('tenant_id', tenant.id)
+          .single();
+
+        if (!client?.id) {
+          console.log('[Subscription] No client found for tenant:', tenant.id);
+          return;
+        }
+
+        // Then get the active subscription for this client
         const { data: subscription } = await supabase
           .from('subscriptions')
           .select('current_period_end')
+          .eq('client_id', client.id)
           .eq('status', 'active')
           .order('created_at', { ascending: false })
           .limit(1)
@@ -124,7 +138,8 @@ export default function SubscriptionPage() {
         if (subscription?.current_period_end) {
           setNextBillingDate(subscription.current_period_end);
         }
-      } catch {
+      } catch (err) {
+        console.log('[Subscription] Error fetching billing date:', err);
         // No active subscription found, that's fine
       }
     };
@@ -204,14 +219,20 @@ export default function SubscriptionPage() {
     setError(null);
 
     try {
+      console.log('[Subscription] Starting plan change to:', selectedPlan);
+
       const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('No hay sesión activa. Por favor, inicia sesión de nuevo.');
+      }
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       };
 
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
+      console.log('[Subscription] Calling change-plan API...');
 
       const response = await fetch('/api/stripe/change-plan', {
         method: 'POST',
@@ -219,7 +240,10 @@ export default function SubscriptionPage() {
         body: JSON.stringify({ newPlan: selectedPlan }),
       });
 
+      console.log('[Subscription] API response status:', response.status);
+
       const data = await response.json();
+      console.log('[Subscription] API response data:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Error al cambiar el plan');
@@ -227,17 +251,25 @@ export default function SubscriptionPage() {
 
       // If Stripe returns a checkout URL, redirect to it
       if (data.checkoutUrl) {
+        console.log('[Subscription] Redirecting to checkout:', data.checkoutUrl);
         window.location.href = data.checkoutUrl;
         return;
       }
 
-      // Otherwise, refresh and show success
-      window.location.reload();
+      // If success but no checkout needed (direct update)
+      if (data.success) {
+        console.log('[Subscription] Plan changed successfully, reloading...');
+        window.location.reload();
+        return;
+      }
+
+      // Unexpected response
+      throw new Error('Respuesta inesperada del servidor');
 
     } catch (err: unknown) {
+      console.error('[Subscription] Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
       setError(errorMessage);
-    } finally {
       setChangingPlan(false);
       setShowConfirmModal(false);
     }
