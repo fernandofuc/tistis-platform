@@ -201,9 +201,7 @@ const VERTICAL_TEMPLATES: Record<string, Partial<GuidedInstructions>> = {
 // ======================
 
 const parseInstructionsFromText = (text: string): GuidedInstructions => {
-  // Default values - NO ponemos el texto completo en additionalNotes
-  // El texto guardado es solo el output, no lo usamos para inicializar campos
-  const defaults: GuidedInstructions = {
+  const result: GuidedInstructions = {
     fillerPhrases: [],
     communicationTone: 'friendly',
     avoidSilences: true,
@@ -215,21 +213,48 @@ const parseInstructionsFromText = (text: string): GuidedInstructions => {
     unknownQuestions: '',
     promotions: [],
     paymentInfo: '',
-    additionalNotes: '', // Siempre vacío - evita duplicación
+    additionalNotes: '',
   };
 
-  // Si hay texto, intentamos extraer el tono de comunicación
-  if (text) {
-    if (text.includes('Profesional')) {
-      defaults.communicationTone = 'professional';
-    } else if (text.includes('Empático')) {
-      defaults.communicationTone = 'empathetic';
-    }
-    // Podríamos parsear más campos en el futuro, pero por ahora
-    // es mejor que el usuario vuelva a configurar que duplicar contenido
+  if (!text) return result;
+
+  // Helper para extraer valor después de un prefijo
+  const extractValue = (prefix: string): string => {
+    const regex = new RegExp(`- ${prefix}:\\s*(.+?)(?=\\n-|\\n\\n|$)`, 's');
+    const match = text.match(regex);
+    return match ? match[1].trim() : '';
+  };
+
+  // Tono de comunicación
+  if (text.includes('Tono de comunicación: Profesional')) {
+    result.communicationTone = 'professional';
+  } else if (text.includes('Tono de comunicación: Empático')) {
+    result.communicationTone = 'empathetic';
+  } else if (text.includes('Tono de comunicación: Amigable')) {
+    result.communicationTone = 'friendly';
   }
 
-  return defaults;
+  // Manejo de citas
+  result.appointmentFlow = extractValue('Flujo de reserva');
+  result.availabilityCheck = extractValue('Al verificar disponibilidad');
+  result.confirmationMessage = extractValue('Al confirmar');
+
+  // Situaciones especiales
+  result.emergencyInstructions = extractValue('Emergencias/Urgencias');
+  result.complaintHandling = extractValue('Quejas o insatisfacción');
+  result.unknownQuestions = extractValue('Preguntas que no puedes responder');
+
+  // Información adicional
+  result.paymentInfo = extractValue('Información de pago');
+  result.additionalNotes = extractValue('Notas adicionales');
+
+  // Promociones (formato: "Promociones a mencionar: promo1, promo2, promo3")
+  const promosMatch = text.match(/- Promociones a mencionar:\s*(.+?)(?=\n-|\n\n|$)/s);
+  if (promosMatch && promosMatch[1]) {
+    result.promotions = promosMatch[1].split(',').map(p => p.trim()).filter(p => p);
+  }
+
+  return result;
 };
 
 const generateInstructionsText = (instructions: GuidedInstructions): string => {
