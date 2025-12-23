@@ -43,32 +43,23 @@ export async function POST(request: NextRequest) {
     console.log('[Sync] Stripe subscription status:', stripeSubscription.status);
     console.log('[Sync] Stripe subscription object keys:', Object.keys(stripeSubscription));
 
-    const periodEnd = (stripeSubscription as any).current_period_end;
-    const periodStart = (stripeSubscription as any).current_period_start;
+    // Try to get period_end from root level first, then from items
+    let periodEnd = (stripeSubscription as any).current_period_end;
 
-    // If no period end, return debug info about the subscription
+    // If not at root level, try to get from items (some Stripe API versions do this)
     if (!periodEnd) {
-      // Get all keys to see what Stripe returned
-      const allKeys = Object.keys(stripeSubscription);
-
-      // Try to get period from items if available
       const items = (stripeSubscription as any).items?.data;
-      const firstItemPeriod = items?.[0]?.current_period_end;
+      periodEnd = items?.[0]?.current_period_end;
+      console.log('[Sync] Got current_period_end from items:', periodEnd);
+    }
 
+    if (!periodEnd) {
       return NextResponse.json(
         {
           error: 'No current_period_end found in Stripe subscription',
           debug: {
             status: (stripeSubscription as any).status,
-            cancel_at_period_end: (stripeSubscription as any).cancel_at_period_end,
-            canceled_at: (stripeSubscription as any).canceled_at,
-            ended_at: (stripeSubscription as any).ended_at,
-            current_period_start: periodStart,
-            current_period_end: periodEnd,
-            all_keys: allKeys,
-            items_count: items?.length || 0,
-            first_item_period_end: firstItemPeriod,
-            raw_subscription: JSON.stringify(stripeSubscription).substring(0, 2000),
+            all_keys: Object.keys(stripeSubscription),
           },
         },
         { status: 404 }
