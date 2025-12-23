@@ -37,6 +37,7 @@ import {
   CustomInstructionsSection,
   AdvancedSettingsSection,
   EscalationSection,
+  SectionGroup,
 } from '@/src/features/voice-agent/components';
 
 // ======================
@@ -878,16 +879,20 @@ function getVoiceQualityPresetFromConfig(stability: number): VoiceQualityPreset 
   return 'expressive';
 }
 
+type ConfigSectionType = 'identity' | 'knowledge' | 'behavior' | 'closing' | 'all';
+
 function ConfigSection({
   config,
   onSave,
   saving,
   accessToken,
+  section = 'all',
 }: {
   config: VoiceAgentConfig;
   onSave: (updates: Partial<VoiceAgentConfig>) => void;
   saving: boolean;
   accessToken: string;
+  section?: ConfigSectionType;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingCustom, setIsEditingCustom] = useState(false);
@@ -979,349 +984,360 @@ function ConfigSection({
   const selectedVoice = AVAILABLE_VOICES.find((v) => v.id === config.voice_id);
   const selectedPersonality = PERSONALITY_CONFIG[config.assistant_personality];
 
+  // Render sections based on prop
+  const showIdentity = section === 'all' || section === 'identity';
+  const showKnowledge = section === 'all' || section === 'knowledge';
+  const showBehavior = section === 'all' || section === 'behavior';
+  const showClosing = section === 'all' || section === 'closing';
+
   return (
-    <div className="space-y-6">
-      {/* Configuración del Asistente */}
-      <PremiumCard className="overflow-hidden">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-coral to-tis-pink flex items-center justify-center shadow-lg shadow-tis-coral/20">
-                <BotIcon className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Configuración del Asistente</h3>
-                <p className="text-sm text-slate-500">Personaliza cómo se presenta tu asistente</p>
-              </div>
-            </div>
-            {!isEditing ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsEditing(true)}
-                className="gap-2"
-              >
-                <EditIcon className="w-4 h-4" />
-                Editar
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsEditing(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="gap-2"
-                >
-                  <SaveIcon className="w-4 h-4" />
-                  {saving ? 'Guardando...' : 'Guardar'}
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-8">
-          {/* Nombre del asistente */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-3">
-              Nombre del Asistente
-            </label>
-            {isEditing ? (
-              <input
-                type="text"
-                value={formData.assistant_name}
-                onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
-                className="w-full px-5 py-4 border border-slate-200 rounded-xl bg-white text-slate-900 text-lg font-medium focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-all placeholder:text-slate-400"
-                placeholder="Ej: Ana, Carlos, Asistente"
-              />
-            ) : (
-              <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="w-12 h-12 bg-gradient-to-br from-tis-coral/20 to-tis-pink/20 rounded-xl flex items-center justify-center">
-                  <span className="text-2xl font-bold text-tis-coral">
-                    {config.assistant_name?.charAt(0) || 'A'}
-                  </span>
+    <div className="space-y-4">
+      {/* ==================== SECCIÓN: IDENTIDAD ==================== */}
+      {showIdentity && (
+        <>
+          {/* Configuración del Asistente */}
+          <PremiumCard className="overflow-hidden">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-coral to-tis-pink flex items-center justify-center shadow-lg shadow-tis-coral/20">
+                    <BotIcon className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Configuración del Asistente</h3>
+                    <p className="text-sm text-slate-500">Personaliza cómo se presenta tu asistente</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xl font-bold text-slate-900">{config.assistant_name || 'Sin nombre'}</p>
-                  <p className="text-sm text-slate-500">Este nombre se usará en el saludo inicial</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Personalidad */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-3">
-              Personalidad
-            </label>
-            {isEditing ? (
-              <div className="grid grid-cols-2 gap-4">
-                {Object.entries(PERSONALITY_CONFIG).map(([key, val]) => (
-                  <button
-                    key={key}
-                    onClick={() => setFormData({ ...formData, assistant_personality: key as VoicePersonality })}
-                    className={`relative p-5 rounded-xl border-2 text-left transition-all ${
-                      formData.assistant_personality === key
-                        ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-tis-pink/5 shadow-lg shadow-tis-coral/10'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
+                {!isEditing ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                    className="gap-2"
                   >
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${val.gradient} flex items-center justify-center mb-4 shadow-lg`}>
-                      <BotIcon className="w-6 h-6 text-white" />
-                    </div>
-                    <p className="font-bold text-slate-900 mb-1">{val.label}</p>
-                    <p className="text-sm text-slate-500">{val.description}</p>
-
-                    {formData.assistant_personality === key && (
-                      <div className="absolute top-3 right-3">
-                        <div className="w-6 h-6 bg-tis-coral rounded-full flex items-center justify-center">
-                          <CheckIcon className="w-4 h-4 text-white" />
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                ))}
+                    <EditIcon className="w-4 h-4" />
+                    Editar
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setIsEditing(false)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="gap-2"
+                    >
+                      <SaveIcon className="w-4 h-4" />
+                      {saving ? 'Guardando...' : 'Guardar'}
+                    </Button>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100">
-                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${selectedPersonality?.gradient || 'from-slate-500 to-slate-700'} flex items-center justify-center shadow-lg`}>
-                  <BotIcon className="w-7 h-7 text-white" />
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-8">
+              {/* Nombre del asistente */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-3">
+                  Nombre del Asistente
+                </label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={formData.assistant_name}
+                    onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
+                    className="w-full px-5 py-4 border border-slate-200 rounded-xl bg-white text-slate-900 text-lg font-medium focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-all placeholder:text-slate-400"
+                    placeholder="Ej: Ana, Carlos, Asistente"
+                  />
+                ) : (
+                  <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="w-12 h-12 bg-gradient-to-br from-tis-coral/20 to-tis-pink/20 rounded-xl flex items-center justify-center">
+                      <span className="text-2xl font-bold text-tis-coral">
+                        {config.assistant_name?.charAt(0) || 'A'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-slate-900">{config.assistant_name || 'Sin nombre'}</p>
+                      <p className="text-sm text-slate-500">Este nombre se usará en el saludo inicial</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Personalidad */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-3">
+                  Personalidad
+                </label>
+                {isEditing ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    {Object.entries(PERSONALITY_CONFIG).map(([key, val]) => (
+                      <button
+                        key={key}
+                        onClick={() => setFormData({ ...formData, assistant_personality: key as VoicePersonality })}
+                        className={`relative p-5 rounded-xl border-2 text-left transition-all ${
+                          formData.assistant_personality === key
+                            ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-tis-pink/5 shadow-lg shadow-tis-coral/10'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${val.gradient} flex items-center justify-center mb-4 shadow-lg`}>
+                          <BotIcon className="w-6 h-6 text-white" />
+                        </div>
+                        <p className="font-bold text-slate-900 mb-1">{val.label}</p>
+                        <p className="text-sm text-slate-500">{val.description}</p>
+
+                        {formData.assistant_personality === key && (
+                          <div className="absolute top-3 right-3">
+                            <div className="w-6 h-6 bg-tis-coral rounded-full flex items-center justify-center">
+                              <CheckIcon className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${selectedPersonality?.gradient || 'from-slate-500 to-slate-700'} flex items-center justify-center shadow-lg`}>
+                      <BotIcon className="w-7 h-7 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-slate-900">
+                        {selectedPersonality?.label || 'Profesional'}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {selectedPersonality?.description || 'Tono profesional'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Mensaje de bienvenida */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-3">
+                  Mensaje de Bienvenida
+                </label>
+                {isEditing ? (
+                  <textarea
+                    value={formData.first_message}
+                    onChange={(e) => setFormData({ ...formData, first_message: e.target.value })}
+                    rows={3}
+                    className="w-full px-5 py-4 border border-slate-200 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-all resize-none placeholder:text-slate-400"
+                    placeholder="Ej: Hola, soy Ana de Clínica Dental Sonrisa. ¿En qué puedo ayudarte?"
+                  />
+                ) : (
+                  <div className="relative p-5 bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl border border-slate-100">
+                    <div className="absolute top-4 left-4 text-4xl text-tis-coral/20 font-serif">&ldquo;</div>
+                    <p className="text-slate-700 text-lg leading-relaxed pl-8 pr-4 italic">
+                      {config.first_message || 'Sin mensaje configurado'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-3 pl-8">Lo primero que dirá tu asistente al contestar</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </PremiumCard>
+
+          {/* Voz del Asistente */}
+          <PremiumCard className="overflow-hidden">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-purple to-indigo-500 flex items-center justify-center shadow-lg shadow-tis-purple/20">
+                  <VolumeIcon className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-slate-900">
-                    {selectedPersonality?.label || 'Profesional'}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {selectedPersonality?.description || 'Tono profesional'}
-                  </p>
+                  <h3 className="text-lg font-bold text-slate-900">Voz del Asistente</h3>
+                  <p className="text-sm text-slate-500">Selecciona cómo sonará tu asistente</p>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Mensaje de bienvenida */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-3">
-              Mensaje de Bienvenida
-            </label>
-            {isEditing ? (
-              <textarea
-                value={formData.first_message}
-                onChange={(e) => setFormData({ ...formData, first_message: e.target.value })}
-                rows={3}
-                className="w-full px-5 py-4 border border-slate-200 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-all resize-none placeholder:text-slate-400"
-                placeholder="Ej: Hola, soy Ana de Clínica Dental Sonrisa. ¿En qué puedo ayudarte?"
-              />
-            ) : (
-              <div className="relative p-5 bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl border border-slate-100">
-                <div className="absolute top-4 left-4 text-4xl text-tis-coral/20 font-serif">&ldquo;</div>
-                <p className="text-slate-700 text-lg leading-relaxed pl-8 pr-4 italic">
-                  {config.first_message || 'Sin mensaje configurado'}
-                </p>
-                <p className="text-xs text-slate-400 mt-3 pl-8">Lo primero que dirá tu asistente al contestar</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </PremiumCard>
-
-      {/* Voz del Asistente */}
-      <PremiumCard className="overflow-hidden">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-purple to-indigo-500 flex items-center justify-center shadow-lg shadow-tis-purple/20">
-              <VolumeIcon className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Voz del Asistente</h3>
-              <p className="text-sm text-slate-500">Selecciona cómo sonará tu asistente</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Content */}
-        <div className="p-6">
-          {isEditing ? (
-            <VoiceSelector
-              selectedVoiceId={formData.voice_id}
-              onSelect={(voiceId) => setFormData({ ...formData, voice_id: voiceId })}
-            />
-          ) : (
-            <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100">
-              {selectedVoice ? (
-                <>
-                  <div className={`w-16 h-16 rounded-xl flex items-center justify-center shadow-lg ${
-                    selectedVoice.gender === 'male'
-                      ? 'bg-gradient-to-br from-tis-purple to-indigo-500'
-                      : 'bg-gradient-to-br from-tis-pink to-rose-500'
-                  }`}>
-                    <VolumeIcon className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-lg font-bold text-slate-900">{selectedVoice.name}</p>
-                    <p className="text-sm text-slate-500">
-                      Acento {selectedVoice.accent} • {selectedVoice.gender === 'male' ? 'Masculino' : 'Femenino'}
-                    </p>
-                  </div>
-                  <button className="w-12 h-12 bg-slate-200 hover:bg-slate-300 rounded-xl flex items-center justify-center transition-colors">
-                    <PlayIcon className="w-5 h-5 text-slate-600" />
-                  </button>
-                </>
+            {/* Content */}
+            <div className="p-6">
+              {isEditing ? (
+                <VoiceSelector
+                  selectedVoiceId={formData.voice_id}
+                  onSelect={(voiceId) => setFormData({ ...formData, voice_id: voiceId })}
+                />
               ) : (
-                <p className="text-slate-500">Voz no seleccionada</p>
+                <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100">
+                  {selectedVoice ? (
+                    <>
+                      <div className={`w-16 h-16 rounded-xl flex items-center justify-center shadow-lg ${
+                        selectedVoice.gender === 'male'
+                          ? 'bg-gradient-to-br from-tis-purple to-indigo-500'
+                          : 'bg-gradient-to-br from-tis-pink to-rose-500'
+                      }`}>
+                        <VolumeIcon className="w-8 h-8 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-lg font-bold text-slate-900">{selectedVoice.name}</p>
+                        <p className="text-sm text-slate-500">
+                          Acento {selectedVoice.accent} • {selectedVoice.gender === 'male' ? 'Masculino' : 'Femenino'}
+                        </p>
+                      </div>
+                      <button className="w-12 h-12 bg-slate-200 hover:bg-slate-300 rounded-xl flex items-center justify-center transition-colors">
+                        <PlayIcon className="w-5 h-5 text-slate-600" />
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-slate-500">Voz no seleccionada</p>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-      </PremiumCard>
+          </PremiumCard>
+        </>
+      )}
 
-      {/* Opciones Avanzadas */}
-      <PremiumCard className="overflow-hidden">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <SettingsIcon className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Opciones Avanzadas</h3>
-              <p className="text-sm text-slate-500">Configuración adicional del comportamiento</p>
-            </div>
-          </div>
-        </div>
+      {/* ==================== SECCIÓN: CONOCIMIENTO ==================== */}
+      {showKnowledge && (
+        <>
+          {/* Conocimiento del Negocio */}
+          <BusinessKnowledgeSection
+            accessToken={accessToken}
+            onRegeneratePrompt={() => {
+              // Optionally refresh the page or config
+            }}
+          />
 
-        {/* Content */}
-        <div className="p-6 space-y-4">
-          {/* Frases de relleno */}
-          <div className="flex items-center justify-between p-5 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-coral/20 to-tis-pink/20 flex items-center justify-center">
-                <MessageIcon className="w-6 h-6 text-tis-coral" />
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">
-                  Frases de Relleno Naturales
-                </p>
-                <p className="text-sm text-slate-500">
-                  &quot;Mmm...&quot;, &quot;Bueno...&quot;, &quot;Claro...&quot; para sonar más humano
-                </p>
+          {/* Instrucciones Personalizadas */}
+          <CustomInstructionsSection
+            value={formData.custom_instructions}
+            onChange={(value) => setFormData(prev => ({ ...prev, custom_instructions: value }))}
+            onSave={handleSaveCustomInstructions}
+            saving={saving}
+            isEditing={isEditingCustom}
+            onToggleEdit={() => setIsEditingCustom(!isEditingCustom)}
+          />
+        </>
+      )}
+
+      {/* ==================== SECCIÓN: COMPORTAMIENTO ==================== */}
+      {showBehavior && (
+        <>
+          {/* Configuración Avanzada de IA */}
+          <AdvancedSettingsSection
+            aiModel={formData.ai_model}
+            responseSpeed={responseSpeedPreset}
+            voiceQuality={voiceQualityPreset}
+            onAIModelChange={handleAIModelChange}
+            onResponseSpeedChange={handleResponseSpeedChange}
+            onVoiceQualityChange={handleVoiceQualityChange}
+            saving={saving}
+          />
+
+          {/* Opciones de Comportamiento */}
+          <PremiumCard className="overflow-hidden">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <SettingsIcon className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Opciones de Comportamiento</h3>
+                  <p className="text-sm text-slate-500">Configuración adicional del asistente</p>
+                </div>
               </div>
             </div>
-            {isEditing ? (
-              <button
-                onClick={() => setFormData({ ...formData, use_filler_phrases: !formData.use_filler_phrases })}
-                className={`relative w-14 h-8 rounded-full transition-colors ${
-                  formData.use_filler_phrases ? 'bg-tis-coral' : 'bg-slate-300'
-                }`}
-              >
-                <span
-                  className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${
-                    formData.use_filler_phrases ? 'translate-x-6' : ''
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Frases de relleno */}
+              <div className="flex items-center justify-between p-5 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-coral/20 to-tis-pink/20 flex items-center justify-center">
+                    <MessageIcon className="w-6 h-6 text-tis-coral" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      Frases de Relleno Naturales
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      &quot;Mmm...&quot;, &quot;Bueno...&quot;, &quot;Claro...&quot; para sonar más humano
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const newValue = !formData.use_filler_phrases;
+                    setFormData({ ...formData, use_filler_phrases: newValue });
+                    onSave({ use_filler_phrases: newValue });
+                  }}
+                  className={`relative w-14 h-8 rounded-full transition-colors ${
+                    formData.use_filler_phrases ? 'bg-tis-coral' : 'bg-slate-300'
                   }`}
-                />
-              </button>
-            ) : (
-              <span className={`px-4 py-2 rounded-xl text-sm font-semibold ${
-                config.use_filler_phrases
-                  ? 'bg-tis-green/10 text-tis-green'
-                  : 'bg-slate-200 text-slate-600'
-              }`}>
-                {config.use_filler_phrases ? 'Activado' : 'Desactivado'}
-              </span>
-            )}
-          </div>
-
-          {/* Grabación */}
-          <div className="flex items-center justify-between p-5 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-purple/20 to-indigo-500/20 flex items-center justify-center">
-                <MicIcon className="w-6 h-6 text-tis-purple" />
+                >
+                  <span
+                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${
+                      formData.use_filler_phrases ? 'translate-x-6' : ''
+                    }`}
+                  />
+                </button>
               </div>
-              <div>
-                <p className="font-semibold text-slate-900">
-                  Grabación de Llamadas
-                </p>
-                <p className="text-sm text-slate-500">
-                  Guarda audio de las llamadas para revisión
-                </p>
+
+              {/* Grabación */}
+              <div className="flex items-center justify-between p-5 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-purple/20 to-indigo-500/20 flex items-center justify-center">
+                    <MicIcon className="w-6 h-6 text-tis-purple" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      Grabación de Llamadas
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Guarda audio de las llamadas para revisión
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const newValue = !formData.recording_enabled;
+                    setFormData({ ...formData, recording_enabled: newValue });
+                    onSave({ recording_enabled: newValue });
+                  }}
+                  className={`relative w-14 h-8 rounded-full transition-colors ${
+                    formData.recording_enabled ? 'bg-tis-coral' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${
+                      formData.recording_enabled ? 'translate-x-6' : ''
+                    }`}
+                  />
+                </button>
               </div>
             </div>
-            {isEditing ? (
-              <button
-                onClick={() => setFormData({ ...formData, recording_enabled: !formData.recording_enabled })}
-                className={`relative w-14 h-8 rounded-full transition-colors ${
-                  formData.recording_enabled ? 'bg-tis-coral' : 'bg-slate-300'
-                }`}
-              >
-                <span
-                  className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${
-                    formData.recording_enabled ? 'translate-x-6' : ''
-                  }`}
-                />
-              </button>
-            ) : (
-              <span className={`px-4 py-2 rounded-xl text-sm font-semibold ${
-                config.recording_enabled
-                  ? 'bg-tis-green/10 text-tis-green'
-                  : 'bg-slate-200 text-slate-600'
-              }`}>
-                {config.recording_enabled ? 'Activado' : 'Desactivado'}
-              </span>
-            )}
-          </div>
-        </div>
-      </PremiumCard>
+          </PremiumCard>
+        </>
+      )}
 
-      {/* Conocimiento del Negocio - NEW */}
-      <BusinessKnowledgeSection
-        accessToken={accessToken}
-        onRegeneratePrompt={() => {
-          // Optionally refresh the page or config
-        }}
-      />
-
-      {/* Instrucciones Personalizadas - NEW */}
-      <CustomInstructionsSection
-        value={formData.custom_instructions}
-        onChange={(value) => setFormData(prev => ({ ...prev, custom_instructions: value }))}
-        onSave={handleSaveCustomInstructions}
-        saving={saving}
-        isEditing={isEditingCustom}
-        onToggleEdit={() => setIsEditingCustom(!isEditingCustom)}
-      />
-
-      {/* Configuración Avanzada - NEW */}
-      <AdvancedSettingsSection
-        aiModel={formData.ai_model}
-        responseSpeed={responseSpeedPreset}
-        voiceQuality={voiceQualityPreset}
-        onAIModelChange={handleAIModelChange}
-        onResponseSpeedChange={handleResponseSpeedChange}
-        onVoiceQualityChange={handleVoiceQualityChange}
-        saving={saving}
-      />
-
-      {/* Escalación y Despedida - NEW */}
-      <EscalationSection
-        escalationEnabled={formData.escalation_enabled}
-        escalationPhone={formData.escalation_phone}
-        goodbyeMessage={formData.goodbye_message}
-        onEscalationEnabledChange={(enabled) => setFormData(prev => ({ ...prev, escalation_enabled: enabled }))}
-        onEscalationPhoneChange={(phone) => setFormData(prev => ({ ...prev, escalation_phone: phone }))}
-        onGoodbyeMessageChange={(message) => setFormData(prev => ({ ...prev, goodbye_message: message }))}
-        onSave={handleSaveEscalation}
-        saving={saving}
-      />
+      {/* ==================== SECCIÓN: CIERRE ==================== */}
+      {showClosing && (
+        <EscalationSection
+          escalationEnabled={formData.escalation_enabled}
+          escalationPhone={formData.escalation_phone}
+          goodbyeMessage={formData.goodbye_message}
+          onEscalationEnabledChange={(enabled) => setFormData(prev => ({ ...prev, escalation_enabled: enabled }))}
+          onEscalationPhoneChange={(phone) => setFormData(prev => ({ ...prev, escalation_phone: phone }))}
+          onGoodbyeMessageChange={(message) => setFormData(prev => ({ ...prev, goodbye_message: message }))}
+          onSave={handleSaveEscalation}
+          saving={saving}
+        />
+      )}
     </div>
   );
 }
@@ -1366,7 +1382,7 @@ export default function AIAgentVozPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'config' | 'calls'>('config');
+  const [activeTab, setActiveTab] = useState<'phones' | 'assistant' | 'history'>('assistant');
   const [showTalkToAssistant, setShowTalkToAssistant] = useState(false);
 
   const accessToken = session?.access_token;
@@ -1731,31 +1747,55 @@ export default function AIAgentVozPage() {
           </button>
         </PremiumCard>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl w-fit">
+        {/* Tabs - 3 secciones principales */}
+        <div className="flex items-center gap-1 p-1.5 bg-slate-100/80 backdrop-blur-sm rounded-2xl w-fit border border-slate-200/50">
           <button
-            onClick={() => setActiveTab('config')}
-            className={`px-6 py-3 font-semibold rounded-xl transition-all flex items-center gap-2 ${
-              activeTab === 'config'
+            onClick={() => setActiveTab('phones')}
+            className={`px-5 py-2.5 font-semibold rounded-xl transition-all flex items-center gap-2 ${
+              activeTab === 'phones'
                 ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
             }`}
           >
-            <SettingsIcon className="w-5 h-5" />
-            Configuración
+            <PhoneIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Teléfonos</span>
+            {phoneNumbers.length > 0 && (
+              <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
+                activeTab === 'phones'
+                  ? 'bg-tis-green/10 text-tis-green'
+                  : 'bg-slate-200 text-slate-600'
+              }`}>
+                {phoneNumbers.length}
+              </span>
+            )}
           </button>
           <button
-            onClick={() => setActiveTab('calls')}
-            className={`px-6 py-3 font-semibold rounded-xl transition-all flex items-center gap-2 ${
-              activeTab === 'calls'
+            onClick={() => setActiveTab('assistant')}
+            className={`px-5 py-2.5 font-semibold rounded-xl transition-all flex items-center gap-2 ${
+              activeTab === 'assistant'
                 ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
             }`}
           >
-            <HistoryIcon className="w-5 h-5" />
-            Historial
+            <BotIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Asistente</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-5 py-2.5 font-semibold rounded-xl transition-all flex items-center gap-2 ${
+              activeTab === 'history'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+            }`}
+          >
+            <HistoryIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Historial</span>
             {recentCalls.length > 0 && (
-              <span className="px-2 py-0.5 bg-tis-coral/10 text-tis-coral text-xs font-bold rounded-full">
+              <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
+                activeTab === 'history'
+                  ? 'bg-tis-coral/10 text-tis-coral'
+                  : 'bg-slate-200 text-slate-600'
+              }`}>
                 {recentCalls.length}
               </span>
             )}
@@ -1764,37 +1804,103 @@ export default function AIAgentVozPage() {
 
         {/* Tab Content */}
         <AnimatePresence mode="wait">
-          {activeTab === 'config' && config && (
+          {/* TAB: Teléfonos */}
+          {activeTab === 'phones' && (
             <motion.div
-              key="config"
+              key="phones"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               className="space-y-6"
             >
-              {/* Phone Numbers */}
               <PhoneNumberManager
                 phoneNumbers={phoneNumbers}
                 onRequestNumber={handleRequestPhoneNumber}
                 onReleaseNumber={handleReleasePhoneNumber}
                 loading={saving}
               />
+            </motion.div>
+          )}
 
-              {/* Config Sections */}
-              {accessToken && (
+          {/* TAB: Asistente - Reorganizado en grupos lógicos */}
+          {activeTab === 'assistant' && config && accessToken && (
+            <motion.div
+              key="assistant"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-10"
+            >
+              {/* GRUPO 1: Identidad del Asistente */}
+              <SectionGroup
+                title="Identidad del Asistente"
+                subtitle="Cómo se presenta y suena tu asistente"
+                icon={<BotIcon className="w-4 h-4" />}
+                iconGradient="from-tis-coral to-tis-pink"
+              >
                 <ConfigSection
                   config={config}
                   onSave={handleSaveConfig}
                   saving={saving}
                   accessToken={accessToken}
+                  section="identity"
                 />
-              )}
+              </SectionGroup>
+
+              {/* GRUPO 2: Conocimiento del Negocio */}
+              <SectionGroup
+                title="Conocimiento del Negocio"
+                subtitle="La información que usa tu asistente para responder"
+                icon={<SparklesIcon className="w-4 h-4" />}
+                iconGradient="from-blue-500 to-indigo-600"
+              >
+                <ConfigSection
+                  config={config}
+                  onSave={handleSaveConfig}
+                  saving={saving}
+                  accessToken={accessToken}
+                  section="knowledge"
+                />
+              </SectionGroup>
+
+              {/* GRUPO 3: Comportamiento Avanzado */}
+              <SectionGroup
+                title="Comportamiento Avanzado"
+                subtitle="Ajustes técnicos para usuarios avanzados"
+                icon={<SettingsIcon className="w-4 h-4" />}
+                iconGradient="from-purple-500 to-indigo-600"
+              >
+                <ConfigSection
+                  config={config}
+                  onSave={handleSaveConfig}
+                  saving={saving}
+                  accessToken={accessToken}
+                  section="behavior"
+                />
+              </SectionGroup>
+
+              {/* GRUPO 4: Cierre de Conversación */}
+              <SectionGroup
+                title="Cierre de Conversación"
+                subtitle="Qué hace el asistente al terminar la llamada"
+                icon={<MessageIcon className="w-4 h-4" />}
+                iconGradient="from-rose-500 to-pink-500"
+              >
+                <ConfigSection
+                  config={config}
+                  onSave={handleSaveConfig}
+                  saving={saving}
+                  accessToken={accessToken}
+                  section="closing"
+                />
+              </SectionGroup>
             </motion.div>
           )}
 
-          {activeTab === 'calls' && (
+          {/* TAB: Historial */}
+          {activeTab === 'history' && (
             <motion.div
-              key="calls"
+              key="history"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
