@@ -220,9 +220,17 @@ const parseInstructionsFromText = (text: string): GuidedInstructions => {
 
   // Helper para extraer valor después de un prefijo
   const extractValue = (prefix: string): string => {
-    const regex = new RegExp(`- ${prefix}:\\s*(.+?)(?=\\n-|\\n\\n|$)`, 's');
-    const match = text.match(regex);
-    return match ? match[1].trim() : '';
+    // Buscar la línea que empieza con el prefijo
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes(`- ${prefix}:`)) {
+        // Extraer todo después del prefijo
+        const value = line.replace(`- ${prefix}:`, '').trim();
+        return value;
+      }
+    }
+    return '';
   };
 
   // Tono de comunicación
@@ -249,9 +257,9 @@ const parseInstructionsFromText = (text: string): GuidedInstructions => {
   result.additionalNotes = extractValue('Notas adicionales');
 
   // Promociones (formato: "Promociones a mencionar: promo1, promo2, promo3")
-  const promosMatch = text.match(/- Promociones a mencionar:\s*(.+?)(?=\n-|\n\n|$)/s);
-  if (promosMatch && promosMatch[1]) {
-    result.promotions = promosMatch[1].split(',').map(p => p.trim()).filter(p => p);
+  const promosValue = extractValue('Promociones a mencionar');
+  if (promosValue) {
+    result.promotions = promosValue.split(',').map(p => p.trim()).filter(p => p);
   }
 
   return result;
