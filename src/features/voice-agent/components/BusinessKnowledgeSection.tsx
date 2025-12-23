@@ -219,12 +219,16 @@ export function BusinessKnowledgeSection({
   const context = data?.context_summary;
   const hasPrompt = !!data?.current_prompt;
 
-  // Calculate warnings
+  // Calculate warnings - show when context is null OR when data is missing
   const warnings: string[] = [];
-  if (context) {
+  if (!context) {
+    warnings.push('No hay sucursales configuradas');
+    warnings.push('No hay servicios configurados');
+    warnings.push('No hay personal registrado');
+  } else {
+    if (!context.has_branches) warnings.push('No hay sucursales configuradas');
     if (!context.has_services) warnings.push('No hay servicios configurados');
     if (!context.has_staff) warnings.push('No hay personal registrado');
-    if (!context.has_branches) warnings.push('No hay sucursales configuradas');
   }
 
   return (
