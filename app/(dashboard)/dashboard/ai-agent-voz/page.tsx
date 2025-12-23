@@ -250,33 +250,6 @@ interface VoiceAgentResponse {
 }
 
 // ======================
-// PERSONALITY CONFIG
-// ======================
-
-const PERSONALITY_CONFIG: Record<VoicePersonality, { label: string; description: string; gradient: string }> = {
-  professional: {
-    label: 'Profesional',
-    description: 'Tono serio y formal, ideal para consultorios',
-    gradient: 'from-slate-500 to-slate-700',
-  },
-  professional_friendly: {
-    label: 'Profesional Amigable',
-    description: 'Balance entre profesionalismo y calidez',
-    gradient: 'from-tis-coral to-tis-pink',
-  },
-  casual: {
-    label: 'Casual',
-    description: 'Tono relajado y conversacional',
-    gradient: 'from-tis-green to-emerald-500',
-  },
-  formal: {
-    label: 'Formal',
-    description: 'Máxima formalidad y respeto',
-    gradient: 'from-tis-purple to-indigo-600',
-  },
-};
-
-// ======================
 // PREMIUM CARD COMPONENT
 // ======================
 
@@ -977,7 +950,6 @@ function ConfigSection({
   };
 
   const selectedVoice = AVAILABLE_VOICES.find((v) => v.id === config.voice_id);
-  const selectedPersonality = PERSONALITY_CONFIG[config.assistant_personality];
 
   // Render sections based on prop
   const showIdentity = section === 'all' || section === 'identity';
@@ -1062,56 +1034,6 @@ function ConfigSection({
                     <div>
                       <p className="text-xl font-bold text-slate-900">{config.assistant_name || 'Sin nombre'}</p>
                       <p className="text-sm text-slate-500">Este nombre se usará en el saludo inicial</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Personalidad */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-3">
-                  Personalidad
-                </label>
-                {isEditing ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    {Object.entries(PERSONALITY_CONFIG).map(([key, val]) => (
-                      <button
-                        key={key}
-                        onClick={() => setFormData({ ...formData, assistant_personality: key as VoicePersonality })}
-                        className={`relative p-5 rounded-xl border-2 text-left transition-all ${
-                          formData.assistant_personality === key
-                            ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-tis-pink/5 shadow-lg shadow-tis-coral/10'
-                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${val.gradient} flex items-center justify-center mb-4 shadow-lg`}>
-                          <BotIcon className="w-6 h-6 text-white" />
-                        </div>
-                        <p className="font-bold text-slate-900 mb-1">{val.label}</p>
-                        <p className="text-sm text-slate-500">{val.description}</p>
-
-                        {formData.assistant_personality === key && (
-                          <div className="absolute top-3 right-3">
-                            <div className="w-6 h-6 bg-tis-coral rounded-full flex items-center justify-center">
-                              <CheckIcon className="w-4 h-4 text-white" />
-                            </div>
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${selectedPersonality?.gradient || 'from-slate-500 to-slate-700'} flex items-center justify-center shadow-lg`}>
-                      <BotIcon className="w-7 h-7 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-slate-900">
-                        {selectedPersonality?.label || 'Profesional'}
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        {selectedPersonality?.description || 'Tono profesional'}
-                      </p>
                     </div>
                   </div>
                 )}
