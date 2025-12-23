@@ -265,10 +265,75 @@ export async function POST(request: NextRequest) {
     const isUpgrade = newPlanOrder > currentPlanOrder;
     const isDowngrade = newPlanOrder < currentPlanOrder;
 
-    // Get current Stripe subscription
-    const stripeSubscription = await stripe.subscriptions.retrieve(
-      subscription.stripe_subscription_id
-    );
+    // Check if this is a real Stripe subscription (starts with 'sub_')
+    const isRealStripeSubscription = subscription.stripe_subscription_id?.startsWith('sub_');
+
+    // Try to get the Stripe subscription
+    let stripeSubscription: Stripe.Subscription | null = null;
+
+    if (isRealStripeSubscription) {
+      try {
+        stripeSubscription = await stripe.subscriptions.retrieve(
+          subscription.stripe_subscription_id
+        );
+      } catch (stripeError: any) {
+        console.log('[Change Plan] Stripe subscription not found:', stripeError.message);
+        stripeSubscription = null;
+      }
+    }
+
+    // If no valid Stripe subscription, redirect to checkout
+    if (!stripeSubscription) {
+      console.log('[Change Plan] No valid Stripe subscription found, creating checkout session');
+
+      // Get or create the price for the new plan
+      let priceId = PLAN_PRICE_IDS[newPlan];
+
+      if (priceId.startsWith('price_')) {
+        const product = await stripe.products.create({
+          name: `TIS TIS - Plan ${newPlan.charAt(0).toUpperCase() + newPlan.slice(1)}`,
+          description: `Suscripción mensual al plan ${newPlan}`,
+        });
+
+        const newPlanConfig = getPlanConfig(newPlan);
+        const price = await stripe.prices.create({
+          product: product.id,
+          currency: 'mxn',
+          unit_amount: newPlanConfig?.monthlyPriceCentavos || 749000,
+          recurring: { interval: 'month' },
+        });
+
+        priceId = price.id;
+      }
+
+      // Create checkout session
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const checkoutSession = await stripe.checkout.sessions.create({
+        customer: client.stripe_customer_id,
+        mode: 'subscription',
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        success_url: `${baseUrl}/dashboard/settings?tab=billing&success=true`,
+        cancel_url: `${baseUrl}/dashboard/settings?tab=billing&cancelled=true`,
+        metadata: {
+          tenant_id: userRole.tenant_id,
+          client_id: client.id,
+          plan: newPlan,
+          previous_subscription_id: subscription.id,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        requiresCheckout: true,
+        checkoutUrl: checkoutSession.url,
+        message: 'Tu suscripción actual necesita ser vinculada a Stripe. Serás redirigido al proceso de pago.',
+      });
+    }
 
     // Find the main plan item (not branch add-ons)
     const mainPlanItem = stripeSubscription.items.data.find((item) => {
