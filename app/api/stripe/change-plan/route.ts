@@ -45,12 +45,69 @@ function getAccessToken(request: NextRequest): string | null {
   return null;
 }
 
-// Plan price IDs from Stripe (you need to set these in your .env or Stripe dashboard)
+// Plan price IDs from Stripe (set these in your .env or Stripe dashboard)
 const PLAN_PRICE_IDS: Record<string, string> = {
-  starter: process.env.STRIPE_PRICE_STARTER || 'price_starter',
-  essentials: process.env.STRIPE_PRICE_ESSENTIALS || 'price_essentials',
-  growth: process.env.STRIPE_PRICE_GROWTH || 'price_growth',
+  starter: process.env.STRIPE_PRICE_STARTER || '',
+  essentials: process.env.STRIPE_PRICE_ESSENTIALS || '',
+  growth: process.env.STRIPE_PRICE_GROWTH || '',
 };
+
+// Helper to get or create a price for a plan
+async function getOrCreatePriceForPlan(stripe: Stripe, planName: string): Promise<string> {
+  // First check if we have a configured price ID
+  const configuredPriceId = PLAN_PRICE_IDS[planName];
+  if (configuredPriceId && configuredPriceId.startsWith('price_')) {
+    return configuredPriceId;
+  }
+
+  // Search for existing product with this plan name
+  const productName = `TIS TIS - Plan ${planName.charAt(0).toUpperCase() + planName.slice(1)}`;
+  console.log('[Change Plan] Searching for existing product:', productName);
+
+  const existingProducts = await stripe.products.search({
+    query: `name:"${productName}"`,
+  });
+
+  let productId: string;
+
+  if (existingProducts.data.length > 0) {
+    productId = existingProducts.data[0].id;
+    console.log('[Change Plan] Found existing product:', productId);
+
+    // Check if there's already an active price for this product
+    const existingPrices = await stripe.prices.list({
+      product: productId,
+      active: true,
+      limit: 1,
+    });
+
+    if (existingPrices.data.length > 0) {
+      console.log('[Change Plan] Found existing price:', existingPrices.data[0].id);
+      return existingPrices.data[0].id;
+    }
+  } else {
+    // Create new product
+    console.log('[Change Plan] Creating new product:', productName);
+    const product = await stripe.products.create({
+      name: productName,
+      description: `Suscripción mensual al plan ${planName}`,
+    });
+    productId = product.id;
+  }
+
+  // Create price for the product
+  const planConfig = getPlanConfig(planName);
+  console.log('[Change Plan] Creating price for product:', productId);
+  const price = await stripe.prices.create({
+    product: productId,
+    currency: 'mxn',
+    unit_amount: planConfig?.monthlyPriceCentavos || 749000,
+    recurring: { interval: 'month' },
+  });
+
+  console.log('[Change Plan] Created price:', price.id);
+  return price.id;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -199,26 +256,8 @@ export async function POST(request: NextRequest) {
 
       const stripe = getStripeClient();
 
-      // Get or create the price for the new plan
-      let priceId = PLAN_PRICE_IDS[newPlan];
-
-      // If price doesn't exist in env, create it dynamically
-      if (priceId.startsWith('price_')) {
-        const product = await stripe.products.create({
-          name: `TIS TIS - Plan ${newPlan.charAt(0).toUpperCase() + newPlan.slice(1)}`,
-          description: `Suscripción mensual al plan ${newPlan}`,
-        });
-
-        const newPlanConfig = getPlanConfig(newPlan);
-        const price = await stripe.prices.create({
-          product: product.id,
-          currency: 'mxn',
-          unit_amount: newPlanConfig?.monthlyPriceCentavos || 749000,
-          recurring: { interval: 'month' },
-        });
-
-        priceId = price.id;
-      }
+      // Get or create the price for the new plan (reuses existing if found)
+      const priceId = await getOrCreatePriceForPlan(stripe, newPlan);
 
       // Create checkout session - detect URL automatically
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL
@@ -229,6 +268,7 @@ export async function POST(request: NextRequest) {
       console.log('  tenant_id:', userRole.tenant_id);
       console.log('  client_id:', client.id);
       console.log('  newPlan:', newPlan);
+      console.log('  priceId:', priceId);
 
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
@@ -298,25 +338,8 @@ export async function POST(request: NextRequest) {
     if (!stripeSubscription) {
       console.log('[Change Plan] No valid Stripe subscription found, creating checkout session');
 
-      // Get or create the price for the new plan
-      let priceId = PLAN_PRICE_IDS[newPlan];
-
-      if (priceId.startsWith('price_')) {
-        const product = await stripe.products.create({
-          name: `TIS TIS - Plan ${newPlan.charAt(0).toUpperCase() + newPlan.slice(1)}`,
-          description: `Suscripción mensual al plan ${newPlan}`,
-        });
-
-        const newPlanConfig = getPlanConfig(newPlan);
-        const price = await stripe.prices.create({
-          product: product.id,
-          currency: 'mxn',
-          unit_amount: newPlanConfig?.monthlyPriceCentavos || 749000,
-          recurring: { interval: 'month' },
-        });
-
-        priceId = price.id;
-      }
+      // Get or create the price for the new plan (reuses existing if found)
+      const priceId = await getOrCreatePriceForPlan(stripe, newPlan);
 
       // Create checkout session - detect URL automatically
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL
@@ -328,6 +351,7 @@ export async function POST(request: NextRequest) {
       console.log('  client_id:', client.id);
       console.log('  previous_subscription_id:', subscription.id);
       console.log('  newPlan:', newPlan);
+      console.log('  priceId:', priceId);
 
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
@@ -376,27 +400,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create or get the price for the new plan
-    let newPriceId = PLAN_PRICE_IDS[newPlan];
-
-    // If price doesn't exist, create it dynamically
-    if (newPriceId.startsWith('price_')) {
-      // Create a product and price for this plan
-      const product = await stripe.products.create({
-        name: `TIS TIS - Plan ${newPlan.charAt(0).toUpperCase() + newPlan.slice(1)}`,
-        description: `Suscripción mensual al plan ${newPlan}`,
-      });
-
-      const newPlanConfig = getPlanConfig(newPlan);
-      const price = await stripe.prices.create({
-        product: product.id,
-        currency: 'mxn',
-        unit_amount: newPlanConfig?.monthlyPriceCentavos || 749000,
-        recurring: { interval: 'month' },
-      });
-
-      newPriceId = price.id;
-    }
+    // Get or create the price for the new plan (reuses existing if found)
+    const newPriceId = await getOrCreatePriceForPlan(stripe, newPlan);
+    console.log('[Change Plan] Using price for subscription update:', newPriceId);
 
     // Update the subscription in Stripe
     const updatedSubscription = await stripe.subscriptions.update(
