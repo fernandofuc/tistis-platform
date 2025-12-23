@@ -213,20 +213,33 @@ export default function SubscriptionPage() {
 
   // Handle plan change confirmation
   const handleConfirmChange = async () => {
+    alert('handleConfirmChange CALLED! Plan: ' + selectedPlan);
     console.log('🚀 [handleConfirmChange] CALLED - selectedPlan:', selectedPlan);
-    if (!selectedPlan) return;
+    if (!selectedPlan) {
+      alert('No selectedPlan!');
+      return;
+    }
 
     setChangingPlan(true);
     setError(null);
 
     try {
       console.log('[Subscription] Starting plan change to:', selectedPlan);
+      alert('Getting session...');
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        alert('Session error: ' + sessionError.message);
+        throw new Error('Error al obtener sesión: ' + sessionError.message);
+      }
 
       if (!session?.access_token) {
+        alert('No access token!');
         throw new Error('No hay sesión activa. Por favor, inicia sesión de nuevo.');
       }
+
+      alert('Session OK, calling API...');
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -609,6 +622,7 @@ export default function SubscriptionPage() {
 
             <div className="flex gap-3">
               <Button
+                type="button"
                 variant="outline"
                 className="flex-1"
                 onClick={() => setShowConfirmModal(false)}
@@ -617,8 +631,14 @@ export default function SubscriptionPage() {
                 Cancelar
               </Button>
               <Button
+                type="button"
                 className="flex-1"
-                onClick={handleConfirmChange}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('🔴 BUTTON CLICKED - calling handleConfirmChange');
+                  handleConfirmChange();
+                }}
                 isLoading={changingPlan}
               >
                 Confirmar
