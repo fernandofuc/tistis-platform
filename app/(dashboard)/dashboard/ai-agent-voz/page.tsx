@@ -863,7 +863,7 @@ function ConfigSection({
   section = 'all',
 }: {
   config: VoiceAgentConfig;
-  onSave: (updates: Partial<VoiceAgentConfig>) => void;
+  onSave: (updates: Partial<VoiceAgentConfig>) => Promise<boolean>;
   saving: boolean;
   accessToken: string;
   vertical: 'dental' | 'restaurant' | 'medical' | 'general';
@@ -920,16 +920,19 @@ function ConfigSection({
     getVoiceQualityPresetFromConfig(config.voice_stability || 0.5)
   );
 
-  const handleSave = () => {
-    onSave(formData);
-    setIsEditing(false);
+  const handleSave = async () => {
+    const success = await onSave(formData);
+    if (success) {
+      setIsEditing(false);
+    }
   };
 
-  const handleSaveCustomInstructions = (text: string) => {
+  const handleSaveCustomInstructions = async (text: string): Promise<boolean> => {
     // Update local state and save directly with the provided text
     console.log('[ConfigSection] handleSaveCustomInstructions called with:', text);
     setFormData(prev => ({ ...prev, custom_instructions: text }));
-    onSave({ custom_instructions: text });
+    const success = await onSave({ custom_instructions: text });
+    return success;
   };
 
   const handleResponseSpeedChange = (
@@ -1325,8 +1328,8 @@ export default function AIAgentVozPage() {
     fetchVoiceAgent();
   }, [fetchVoiceAgent]);
 
-  const handleSaveConfig = async (updates: Partial<VoiceAgentConfig>) => {
-    if (!accessToken) return;
+  const handleSaveConfig = async (updates: Partial<VoiceAgentConfig>): Promise<boolean> => {
+    if (!accessToken) return false;
 
     try {
       setSaving(true);
@@ -1355,11 +1358,14 @@ export default function AIAgentVozPage() {
             },
           });
         }
+        return true;
       } else {
         console.error('[Voice Agent] Save failed:', result.error);
+        return false;
       }
     } catch (err) {
       console.error('[Voice Agent] Error saving config:', err);
+      return false;
     } finally {
       setSaving(false);
     }

@@ -112,7 +112,7 @@ interface GuidedInstructionsSectionProps {
   value: string;
   vertical: 'dental' | 'restaurant' | 'medical' | 'general';
   onChange: (value: string) => void;
-  onSave: (value: string) => void;
+  onSave: (value: string) => Promise<boolean>;
   saving?: boolean;
 }
 
@@ -346,12 +346,20 @@ export function GuidedInstructionsSection({
     });
   };
 
-  const handleSave = () => {
+  const [saveSuccess, setSaveSuccess] = useState<boolean | null>(null);
+
+  const handleSave = async () => {
     // Generate fresh text from current instructions state
     const text = generateInstructionsText(instructions);
     console.log('[GuidedInstructionsSection] Saving instructions:', text);
-    onSave(text);
-    setHasChanges(false);
+    setSaveSuccess(null);
+    const success = await onSave(text);
+    setSaveSuccess(success);
+    if (success) {
+      setHasChanges(false);
+      // Clear success message after 3 seconds
+      setTimeout(() => setSaveSuccess(null), 3000);
+    }
   };
 
   const applyTemplate = () => {
@@ -716,29 +724,42 @@ export function GuidedInstructionsSection({
       </div>
 
       {/* Footer with Save */}
-      {hasChanges && (
+      {(hasChanges || saveSuccess !== null) && (
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">
-              Tienes cambios sin guardar
-            </p>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-tis-coral to-tis-pink rounded-xl hover:shadow-lg hover:shadow-tis-coral/20 transition-all disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <CheckIcon className="w-4 h-4" />
-                  Guardar instrucciones
-                </>
-              )}
-            </button>
+            {saveSuccess === true ? (
+              <p className="text-sm text-tis-green font-medium flex items-center gap-2">
+                <CheckIcon className="w-4 h-4" />
+                Instrucciones guardadas correctamente
+              </p>
+            ) : saveSuccess === false ? (
+              <p className="text-sm text-red-500 font-medium">
+                Error al guardar. Intenta de nuevo.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">
+                Tienes cambios sin guardar
+              </p>
+            )}
+            {hasChanges && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-tis-coral to-tis-pink rounded-xl hover:shadow-lg hover:shadow-tis-coral/20 transition-all disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <CheckIcon className="w-4 h-4" />
+                    Guardar instrucciones
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}
