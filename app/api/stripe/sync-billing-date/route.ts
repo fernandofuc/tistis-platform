@@ -48,6 +48,13 @@ export async function POST(request: NextRequest) {
 
     // If no period end, return debug info about the subscription
     if (!periodEnd) {
+      // Get all keys to see what Stripe returned
+      const allKeys = Object.keys(stripeSubscription);
+
+      // Try to get period from items if available
+      const items = (stripeSubscription as any).items?.data;
+      const firstItemPeriod = items?.[0]?.current_period_end;
+
       return NextResponse.json(
         {
           error: 'No current_period_end found in Stripe subscription',
@@ -58,6 +65,10 @@ export async function POST(request: NextRequest) {
             ended_at: (stripeSubscription as any).ended_at,
             current_period_start: periodStart,
             current_period_end: periodEnd,
+            all_keys: allKeys,
+            items_count: items?.length || 0,
+            first_item_period_end: firstItemPeriod,
+            raw_subscription: JSON.stringify(stripeSubscription).substring(0, 2000),
           },
         },
         { status: 404 }
