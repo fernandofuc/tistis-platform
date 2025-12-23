@@ -213,6 +213,7 @@ export default function SubscriptionPage() {
 
   // Handle plan change confirmation
   const handleConfirmChange = async () => {
+    console.log('🚀 [handleConfirmChange] CALLED - selectedPlan:', selectedPlan);
     if (!selectedPlan) return;
 
     setChangingPlan(true);
