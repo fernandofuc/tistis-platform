@@ -205,14 +205,31 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       console.log('✅ [Checkout] Subscription updated to plan:', validatedPlan);
 
       // CRITICAL: Also update tenant.plan - this is what the dashboard reads
-      if (tenant_id) {
+      // First, try to get tenant_id from metadata, then from client
+      let tenantIdToUpdate = tenant_id;
+
+      if (!tenantIdToUpdate && client_id) {
+        console.log('🔍 [Checkout] tenant_id not in metadata, fetching from client:', client_id);
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('tenant_id')
+          .eq('id', client_id)
+          .single();
+
+        if (clientData?.tenant_id) {
+          tenantIdToUpdate = clientData.tenant_id;
+          console.log('✅ [Checkout] Found tenant_id from client:', tenantIdToUpdate);
+        }
+      }
+
+      if (tenantIdToUpdate) {
         const { error: tenantUpdateError } = await supabase
           .from('tenants')
           .update({
             plan: validatedPlan,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', tenant_id);
+          .eq('id', tenantIdToUpdate);
 
         if (tenantUpdateError) {
           console.error('🚨 [Checkout] Error updating tenant plan:', tenantUpdateError);
@@ -220,12 +237,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         } else {
           console.log('✅ [Checkout] Tenant plan updated to:', validatedPlan);
         }
+      } else {
+        console.warn('⚠️ [Checkout] Could not find tenant_id to update plan');
       }
 
       // Log the plan change
       await supabase.from('subscription_changes').insert({
         subscription_id: previous_subscription_id,
-        tenant_id: tenant_id || null,
+        tenant_id: tenantIdToUpdate || null,
         client_id: client_id,
         change_type: 'plan_changed_via_checkout',
         new_value: { plan: validatedPlan, stripe_subscription_id: stripeSubscriptionId },

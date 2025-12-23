@@ -99,12 +99,38 @@ export default function SubscriptionPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [nextBillingDate, setNextBillingDate] = useState<string | null>(null);
 
   // Success/Cancel states from URL params
   const [showSuccess, setShowSuccess] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
   const [newPlanFromUrl, setNewPlanFromUrl] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fetch subscription billing date
+  useEffect(() => {
+    const fetchBillingDate = async () => {
+      if (!tenant?.id) return;
+
+      try {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('current_period_end')
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (subscription?.current_period_end) {
+          setNextBillingDate(subscription.current_period_end);
+        }
+      } catch {
+        // No active subscription found, that's fine
+      }
+    };
+
+    fetchBillingDate();
+  }, [tenant?.id]);
 
   // Handle URL params on mount
   useEffect(() => {
@@ -297,7 +323,13 @@ export default function SubscriptionPage() {
                 <div className="text-right">
                   <p className="text-sm text-gray-600 mb-1">Proximo cobro</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    N/A
+                    {nextBillingDate
+                      ? new Date(nextBillingDate).toLocaleDateString('es-MX', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })
+                      : 'Sin fecha'}
                   </p>
                 </div>
               </div>

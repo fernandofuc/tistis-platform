@@ -224,6 +224,12 @@ export async function POST(request: NextRequest) {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL
         || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
         || 'https://tistis-platform-5fc5.vercel.app';
+
+      console.log('[Change Plan] Creating checkout session (no subscription)');
+      console.log('  tenant_id:', userRole.tenant_id);
+      console.log('  client_id:', client.id);
+      console.log('  newPlan:', newPlan);
+
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
         mode: 'subscription',
@@ -241,6 +247,9 @@ export async function POST(request: NextRequest) {
           plan: newPlan,
         },
       });
+
+      console.log('[Change Plan] Checkout session created:', checkoutSession.id);
+      console.log('[Change Plan] Checkout URL:', checkoutSession.url);
 
       return NextResponse.json({
         success: true,
@@ -313,6 +322,13 @@ export async function POST(request: NextRequest) {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL
         || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
         || 'https://tistis-platform-5fc5.vercel.app';
+
+      console.log('[Change Plan] Creating checkout session for plan change');
+      console.log('  tenant_id:', userRole.tenant_id);
+      console.log('  client_id:', client.id);
+      console.log('  previous_subscription_id:', subscription.id);
+      console.log('  newPlan:', newPlan);
+
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
         mode: 'subscription',
@@ -331,6 +347,9 @@ export async function POST(request: NextRequest) {
           previous_subscription_id: subscription.id,
         },
       });
+
+      console.log('[Change Plan] Checkout session created:', checkoutSession.id);
+      console.log('[Change Plan] Checkout URL:', checkoutSession.url);
 
       return NextResponse.json({
         success: true,
