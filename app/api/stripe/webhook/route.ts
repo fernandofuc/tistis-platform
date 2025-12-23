@@ -166,8 +166,60 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('✅ Checkout completed:', session.id);
   const supabase = getSupabaseClient();
 
-  const { plan, customerName, proposalId, branches, addons } = session.metadata || {};
+  const { plan, customerName, proposalId, branches, addons, client_id, tenant_id, previous_subscription_id } = session.metadata || {};
   const customerEmail = session.customer_email || session.customer_details?.email;
+
+  // ============================================
+  // PLAN CHANGE FLOW: Handle upgrade/downgrade from existing subscription
+  // ============================================
+  if (previous_subscription_id && client_id) {
+    console.log('🔄 [Checkout] Plan change detected - updating existing subscription');
+    console.log('   Previous subscription ID:', previous_subscription_id);
+    console.log('   New plan:', plan);
+    console.log('   Client ID:', client_id);
+
+    const validatedPlan = isValidPlan(plan) ? plan : 'essentials';
+
+    // Get the new Stripe subscription ID from the checkout session
+    const stripeSubscriptionId = session.subscription as string;
+
+    if (stripeSubscriptionId) {
+      // Update the existing subscription record with the new Stripe subscription
+      const { error: updateError } = await supabase
+        .from('subscriptions')
+        .update({
+          plan: validatedPlan,
+          stripe_subscription_id: stripeSubscriptionId,
+          status: 'active',
+          updated_at: new Date().toISOString(),
+          // Update max_branches based on new plan
+          max_branches: getPlanConfig(validatedPlan)?.branchLimit || 5,
+        })
+        .eq('id', previous_subscription_id);
+
+      if (updateError) {
+        console.error('🚨 [Checkout] Error updating subscription:', updateError);
+        throw new Error(`Failed to update subscription: ${updateError.message}`);
+      }
+
+      console.log('✅ [Checkout] Subscription updated to plan:', validatedPlan);
+
+      // Log the plan change
+      await supabase.from('subscription_changes').insert({
+        subscription_id: previous_subscription_id,
+        tenant_id: tenant_id || null,
+        client_id: client_id,
+        change_type: 'plan_changed_via_checkout',
+        new_value: { plan: validatedPlan, stripe_subscription_id: stripeSubscriptionId },
+        metadata: {
+          checkout_session_id: session.id,
+        },
+      });
+
+      console.log('✅ [Checkout] Plan change completed successfully');
+      return; // Exit early - no need to create new client/subscription
+    }
+  }
 
   // ============================================
   // FIX 1: Email obligatorio - BLOQUEAR si falta (Stripe reintentará)
