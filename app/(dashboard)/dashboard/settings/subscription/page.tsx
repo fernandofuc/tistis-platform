@@ -6,18 +6,18 @@
 
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, Button, Badge } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
-import { ArrowRight, Shield, Users, Phone, Check } from 'lucide-react';
+import { ArrowRight, Shield, Check, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 // Import centralized plan config - SINGLE SOURCE OF TRUTH
-import { PLAN_CONFIG, getPlanConfig, type PlanConfig } from '@/src/shared/config/plans';
+import { PLAN_CONFIG } from '@/src/shared/config/plans';
 
 // ==============================================
 // PLAN DISPLAY CONFIG - Features for dashboard
@@ -90,14 +90,65 @@ const DASHBOARD_PLANS: DashboardPlanDisplay[] = [
 
 export default function SubscriptionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Use ONLY useAuthContext - it has everything we need (staff, tenant, branches)
-  const { staff, tenant, branches, loading, initialized } = useAuthContext();
+  const { staff, tenant, branches, loading, initialized, refetchStaff } = useAuthContext();
 
   const [changingPlan, setChangingPlan] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Success/Cancel states from URL params
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
+  const [newPlanFromUrl, setNewPlanFromUrl] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Handle URL params on mount
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const cancelled = searchParams.get('cancelled');
+    const planParam = searchParams.get('plan');
+
+    if (success === 'true') {
+      setShowSuccess(true);
+      setNewPlanFromUrl(planParam);
+      setIsRefreshing(true);
+
+      // Give webhook time to process, then refresh data
+      const refreshData = async () => {
+        // Wait for webhook to complete processing
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Refetch staff which also refreshes tenant data
+        await refetchStaff();
+
+        setIsRefreshing(false);
+
+        // Clean URL params after processing
+        const url = new URL(window.location.href);
+        url.searchParams.delete('success');
+        url.searchParams.delete('plan');
+        window.history.replaceState({}, '', url.pathname);
+      };
+
+      refreshData();
+    }
+
+    if (cancelled === 'true') {
+      setShowCancelled(true);
+
+      // Clean URL params
+      setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('cancelled');
+        window.history.replaceState({}, '', url.pathname);
+      }, 100);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Check if user is owner
   const isOwner = staff?.role === 'owner';
@@ -254,13 +305,83 @@ export default function SubscriptionPage() {
           </Card>
         )}
 
+        {/* Success Message - Plan Changed */}
+        {showSuccess && (
+          <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                {isRefreshing ? (
+                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-900 text-lg">
+                  {isRefreshing ? 'Procesando tu pago...' : '¡Pago completado exitosamente!'}
+                </h3>
+                <p className="text-green-700 mt-1">
+                  {isRefreshing
+                    ? 'Estamos actualizando tu plan, esto tomará solo unos segundos...'
+                    : newPlanFromUrl
+                      ? `Tu plan ha sido actualizado a ${newPlanFromUrl.charAt(0).toUpperCase() + newPlanFromUrl.slice(1)}. Ya puedes disfrutar de todas las nuevas funciones.`
+                      : 'Tu suscripción ha sido actualizada correctamente.'}
+                </p>
+                {!isRefreshing && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 text-green-700 border-green-300 hover:bg-green-100"
+                    onClick={() => setShowSuccess(false)}
+                  >
+                    Entendido
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cancelled Message */}
+        {showCancelled && (
+          <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <XCircle className="w-6 h-6 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-amber-900 text-lg">Pago cancelado</h3>
+                <p className="text-amber-700 mt-1">
+                  El proceso de pago fue cancelado. Tu plan actual no ha sido modificado.
+                  Puedes intentarlo nuevamente cuando lo desees.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 text-amber-700 border-amber-300 hover:bg-amber-100"
+                  onClick={() => setShowCancelled(false)}
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Error Message */}
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
+            <XCircle className="w-5 h-5 flex-shrink-0" />
             <span>{error}</span>
+            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         )}
 

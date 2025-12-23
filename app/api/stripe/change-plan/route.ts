@@ -233,8 +233,8 @@ export async function POST(request: NextRequest) {
             quantity: 1,
           },
         ],
-        success_url: `${baseUrl}/dashboard/settings?tab=billing&success=true`,
-        cancel_url: `${baseUrl}/dashboard/settings?tab=billing&cancelled=true`,
+        success_url: `${baseUrl}/dashboard/settings/subscription?success=true&plan=${newPlan}`,
+        cancel_url: `${baseUrl}/dashboard/settings/subscription?cancelled=true`,
         metadata: {
           tenant_id: userRole.tenant_id,
           client_id: client.id,
@@ -321,8 +321,8 @@ export async function POST(request: NextRequest) {
             quantity: 1,
           },
         ],
-        success_url: `${baseUrl}/dashboard/settings?tab=billing&success=true`,
-        cancel_url: `${baseUrl}/dashboard/settings?tab=billing&cancelled=true`,
+        success_url: `${baseUrl}/dashboard/settings/subscription?success=true&plan=${newPlan}`,
+        cancel_url: `${baseUrl}/dashboard/settings/subscription?cancelled=true`,
         metadata: {
           tenant_id: userRole.tenant_id,
           client_id: client.id,
