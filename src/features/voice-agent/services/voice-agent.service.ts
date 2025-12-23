@@ -79,31 +79,47 @@ export async function updateVoiceConfig(
 ): Promise<VoiceAgentConfig | null> {
   const supabase = createServerClient();
 
+  console.log('[Voice Agent Service] updateVoiceConfig called with:', {
+    tenantId,
+    updates,
+    staffId,
+  });
+
   // Primero obtenemos la versión actual para incrementarla
-  const { data: currentConfig } = await supabase
+  const { data: currentConfig, error: versionError } = await supabase
     .from('voice_agent_config')
     .select('configuration_version')
     .eq('tenant_id', tenantId)
     .single();
 
+  if (versionError) {
+    console.error('[Voice Agent Service] Error getting version:', versionError);
+  }
+
   const nextVersion = (currentConfig?.configuration_version || 0) + 1;
+
+  const updatePayload = {
+    ...updates,
+    last_configured_at: new Date().toISOString(),
+    last_configured_by: staffId || null,
+    configuration_version: nextVersion,
+  };
+
+  console.log('[Voice Agent Service] Update payload:', updatePayload);
 
   const { data, error } = await supabase
     .from('voice_agent_config')
-    .update({
-      ...updates,
-      last_configured_at: new Date().toISOString(),
-      last_configured_by: staffId || null,
-      configuration_version: nextVersion,
-    })
+    .update(updatePayload)
     .eq('tenant_id', tenantId)
     .select()
     .single();
 
   if (error) {
-    console.error('[Voice Agent] Error updating config:', error);
+    console.error('[Voice Agent Service] Error updating config:', error);
     return null;
   }
+
+  console.log('[Voice Agent Service] Update successful, custom_instructions:', data?.custom_instructions?.substring(0, 100));
 
   return data as VoiceAgentConfig;
 }

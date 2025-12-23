@@ -184,13 +184,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('[Voice Agent API] POST body:', JSON.stringify(body));
+    console.log('[Voice Agent API] tenantId:', tenantId);
+
     // Obtener staff_id del usuario
-    const { data: staff } = await supabase
+    const { data: staff, error: staffError } = await supabase
       .from('staff')
       .select('id')
       .eq('user_id', context.user.id)
       .eq('tenant_id', tenantId)
       .single();
+
+    console.log('[Voice Agent API] staff lookup:', { staff, staffError: staffError?.message });
 
     // Actualizar configuración
     const updatedConfig = await VoiceAgentService.updateVoiceConfig(
@@ -198,6 +203,8 @@ export async function POST(request: NextRequest) {
       body,
       staff?.id
     );
+
+    console.log('[Voice Agent API] updatedConfig:', updatedConfig ? 'success' : 'null');
 
     if (!updatedConfig) {
       return NextResponse.json(
