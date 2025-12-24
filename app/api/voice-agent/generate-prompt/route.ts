@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       console.error('[Voice Agent Generate] Error calling RPC:', promptError);
       console.log('[Voice Agent Generate] Using fallback prompt generation');
 
-      // Generar un prompt básico manualmente cuando RPC falla
+      // Generar un prompt profesional manualmente cuando RPC falla
       const { data: tenantData } = await serviceSupabase
         .from('tenants')
         .select('name, vertical')
@@ -114,52 +114,200 @@ export async function POST(request: NextRequest) {
 
       const { data: branches } = await serviceSupabase
         .from('branches')
-        .select('name, address, phone')
+        .select('name, address, city, phone, operating_hours')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .limit(5);
 
       const { data: services } = await serviceSupabase
         .from('services')
-        .select('name, short_description, price_min, duration_minutes')
+        .select('name, short_description, price_min, price_max, duration_minutes, category')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
-        .limit(20);
+        .limit(30);
 
-      // Generar prompt básico
-      const verticalName = tenantData?.vertical === 'dental' ? 'consultorio dental' :
-                          tenantData?.vertical === 'restaurant' ? 'restaurante' :
-                          tenantData?.vertical === 'medical' ? 'consultorio médico' : 'negocio';
+      const { data: staff } = await serviceSupabase
+        .from('staff')
+        .select('first_name, last_name, display_name, specialty, role')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .in('role', ['dentist', 'specialist', 'owner', 'manager', 'doctor'])
+        .limit(10);
 
-      let basicPrompt = `Eres el asistente virtual de ${tenantData?.name || 'nuestro negocio'}, un ${verticalName}.\n\n`;
-      basicPrompt += `Tu objetivo principal es ayudar a los clientes a agendar citas y responder preguntas sobre nuestros servicios.\n\n`;
+      // Obtener configuración del voice agent para nombre del asistente
+      const { data: voiceConfig } = await serviceSupabase
+        .from('voice_agent_config')
+        .select('assistant_name, custom_instructions, escalation_enabled, escalation_phone, goodbye_message')
+        .eq('tenant_id', tenantId)
+        .single();
 
+      const assistantName = voiceConfig?.assistant_name || 'el asistente';
+      const businessName = tenantData?.name || 'nuestro negocio';
+      const vertical = tenantData?.vertical || 'general';
+
+      // Configuración por vertical
+      const verticalConfig: Record<string, { type: string; roleDesc: string; mainTask: string }> = {
+        dental: {
+          type: 'consultorio dental',
+          roleDesc: 'asistente de voz IA especializado en atención dental',
+          mainTask: 'ayudar a los pacientes a agendar citas dentales y responder preguntas sobre tratamientos',
+        },
+        restaurant: {
+          type: 'restaurante',
+          roleDesc: 'asistente de voz IA especializado en reservaciones',
+          mainTask: 'ayudar a los clientes a hacer reservaciones y responder preguntas sobre el menú',
+        },
+        medical: {
+          type: 'consultorio médico',
+          roleDesc: 'asistente de voz IA especializado en atención médica',
+          mainTask: 'ayudar a los pacientes a agendar consultas médicas',
+        },
+        general: {
+          type: 'negocio',
+          roleDesc: 'asistente de voz IA',
+          mainTask: 'ayudar a los clientes a agendar citas y responder preguntas',
+        },
+      };
+
+      const config = verticalConfig[vertical] || verticalConfig.general;
+      const currentDate = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      // Construir prompt profesional
+      let prompt = `## PERSONALIDAD
+
+Eres ${assistantName}, un ${config.roleDesc} de ${businessName}. Tienes un acento mexicano amigable y profesional. Te caracterizan tu profesionalismo, actitud positiva y amplia experiencia brindando experiencias de cliente de alta calidad.
+
+No proporciones información de la que no dispongas. Si no sabes algo, admítelo honestamente.
+
+## TAREA
+
+Tu tarea principal es mantener una conversación profesional, positiva y natural con los clientes, responder a sus preguntas y ${config.mainTask}.
+
+## INFORMACIÓN DEL NEGOCIO
+
+**Nombre:** ${businessName}
+**Tipo:** ${config.type}
+`;
+
+      // Agregar sucursales
       if (branches && branches.length > 0) {
-        basicPrompt += `SUCURSALES:\n`;
+        prompt += `\n**Sucursales:**\n`;
         branches.forEach(b => {
-          basicPrompt += `- ${b.name}: ${b.address || 'Sin dirección'}, Tel: ${b.phone || 'Sin teléfono'}\n`;
+          if (b.name && b.name.trim()) {
+            prompt += `- ${b.name}`;
+            if (b.address) prompt += `: ${b.address}`;
+            if (b.city) prompt += `, ${b.city}`;
+            if (b.phone) prompt += ` | Tel: ${b.phone}`;
+            prompt += `\n`;
+          }
         });
-        basicPrompt += `\n`;
       }
 
+      // Agregar servicios agrupados por categoría
       if (services && services.length > 0) {
-        basicPrompt += `SERVICIOS DISPONIBLES:\n`;
+        prompt += `\n**Servicios disponibles:**\n`;
+        const servicesByCategory: Record<string, typeof services> = {};
         services.forEach(s => {
-          basicPrompt += `- ${s.name}${s.price_min ? ` ($${s.price_min})` : ''}${s.duration_minutes ? ` - ${s.duration_minutes} min` : ''}\n`;
+          const cat = s.category || 'General';
+          if (!servicesByCategory[cat]) servicesByCategory[cat] = [];
+          servicesByCategory[cat].push(s);
         });
-        basicPrompt += `\n`;
+
+        Object.entries(servicesByCategory).forEach(([category, categoryServices]) => {
+          prompt += `\n*${category}:*\n`;
+          categoryServices.forEach(s => {
+            prompt += `- ${s.name}`;
+            if (s.price_min) {
+              prompt += s.price_max && s.price_max !== s.price_min
+                ? ` ($${s.price_min} - $${s.price_max})`
+                : ` ($${s.price_min})`;
+            }
+            if (s.duration_minutes) prompt += ` - ${s.duration_minutes} min`;
+            prompt += `\n`;
+          });
+        });
       }
 
-      basicPrompt += `INSTRUCCIONES:\n`;
-      basicPrompt += `- Sé amable y profesional\n`;
-      basicPrompt += `- Ayuda a agendar citas preguntando día, hora y servicio deseado\n`;
-      basicPrompt += `- Si no sabes algo, sugiere hablar con un humano\n`;
+      // Agregar personal/especialistas
+      if (staff && staff.length > 0) {
+        const validStaff = staff.filter(s => s.display_name || s.first_name || s.last_name);
+        if (validStaff.length > 0) {
+          prompt += `\n**Equipo:**\n`;
+          validStaff.forEach(s => {
+            const name = s.display_name || `${s.first_name || ''} ${s.last_name || ''}`.trim();
+            prompt += `- ${name}`;
+            if (s.specialty) prompt += ` (${s.specialty})`;
+            prompt += `\n`;
+          });
+        }
+      }
 
-      // Guardar el prompt básico
+      // Instrucciones para citas/reservaciones
+      prompt += `\n## RESERVACIONES / CITAS
+
+**Fecha actual:** ${currentDate}
+
+**Instrucciones para agendar:**
+
+Si el cliente quiere agendar una cita:
+
+1. Primero necesitas saber: el día, la hora${vertical === 'restaurant' ? ', y para cuántas personas' : ', y el servicio o motivo'}.
+   Por ejemplo: "Claro, dime por favor el día, la hora${vertical === 'restaurant' ? ' y cuántas personas serían' : ' y qué servicio necesitas'}."
+
+2. Mientras consultas disponibilidad, sé natural: "Un segundo, reviso si tenemos disponibilidad para ese momento..."
+
+3. Si hay disponibilidad, confirma los datos.
+   Si no hay disponibilidad, ofrece alternativas cercanas.
+
+4. Pregunta el nombre del cliente si no lo tienes.
+
+5. Confirma la cita: "Perfecto, queda agendado para el [día] a las [hora]. Recibirás un WhatsApp de confirmación."
+
+Al terminar puedes añadir: "Y recuerda, si necesitas cancelar o reagendar, puedes hacerlo también por aquí sin problema."
+`;
+
+      // Escalación
+      if (voiceConfig?.escalation_enabled) {
+        prompt += `\n## ESCALACIÓN
+
+Puedes transferir la llamada a un humano si:
+- El cliente lo pide directamente
+- El cliente no está satisfecho con tu servicio
+- Hay una emergencia o situación que requiere atención humana
+
+Dile: "Voy a intentar conectarte con alguien que pueda ayudarte mejor" y transfiere la llamada.
+`;
+      }
+
+      // Estilo de comunicación
+      prompt += `\n## ESTILO DE COMUNICACIÓN
+
+- Sé informal pero profesional, con frases naturales como: "Mmm...", "Bueno...", "Claro...", "Quiero decir..."
+- Mantén las respuestas concisas y naturales (es una llamada telefónica, no un email)
+- Usa un tono cálido y empático
+- Evita respuestas largas o listas extensas - resume la información
+- Si el cliente pregunta por precios, da rangos generales y sugiere confirmar en la cita
+`;
+
+      // Agregar instrucciones personalizadas si existen
+      if (voiceConfig?.custom_instructions) {
+        prompt += `\n## INSTRUCCIONES ADICIONALES
+
+${voiceConfig.custom_instructions}
+`;
+      }
+
+      // Finalización
+      prompt += `\n## FINALIZACIÓN
+
+Cuando la conversación termine naturalmente, despídete amablemente${voiceConfig?.goodbye_message ? `: "${voiceConfig.goodbye_message}"` : ' y finaliza la llamada.'}.
+`;
+
+      // Guardar el prompt
       await serviceSupabase
         .from('voice_agent_config')
         .update({
-          system_prompt: basicPrompt,
+          system_prompt: prompt,
           system_prompt_generated_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -167,7 +315,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        prompt: basicPrompt,
+        prompt: prompt,
         generated_at: new Date().toISOString(),
         fallback: true,
       });
