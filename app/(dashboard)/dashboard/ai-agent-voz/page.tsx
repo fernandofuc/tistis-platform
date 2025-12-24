@@ -523,14 +523,37 @@ function PhoneNumberManager({
   onRequestNumber,
   onReleaseNumber,
   loading,
+  message,
+  onClearMessage,
 }: {
   phoneNumbers: VoicePhoneNumber[];
   onRequestNumber: (areaCode: string) => void;
   onReleaseNumber: (numberId: string) => void;
   loading: boolean;
+  message?: { type: 'success' | 'error'; text: string } | null;
+  onClearMessage?: () => void;
 }) {
   const [showAreaCodes, setShowAreaCodes] = useState(false);
   const [selectedAreaCode, setSelectedAreaCode] = useState<string | null>(null);
+
+  // Auto-clear message after 5 seconds
+  useEffect(() => {
+    if (message && onClearMessage) {
+      const timer = setTimeout(() => {
+        onClearMessage();
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message, onClearMessage]);
+
+  const handleRequestClick = () => {
+    if (selectedAreaCode) {
+      console.log('[PhoneNumberManager] Solicitando número con LADA:', selectedAreaCode);
+      onRequestNumber(selectedAreaCode);
+      setShowAreaCodes(false);
+      setSelectedAreaCode(null);
+    }
+  };
 
   return (
     <PremiumCard className="overflow-hidden">
@@ -556,6 +579,44 @@ function PhoneNumberManager({
           </Button>
         </div>
       </div>
+
+      {/* Feedback Message */}
+      {message && (
+        <div className={`mx-6 mt-4 p-4 rounded-xl flex items-center gap-3 ${
+          message.type === 'success'
+            ? 'bg-tis-green/10 border border-tis-green/20'
+            : 'bg-red-50 border border-red-200'
+        }`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+            message.type === 'success' ? 'bg-tis-green' : 'bg-red-500'
+          }`}>
+            {message.type === 'success' ? (
+              <CheckIcon className="w-4 h-4 text-white" />
+            ) : (
+              <AlertIcon className="w-4 h-4 text-white" />
+            )}
+          </div>
+          <p className={`flex-1 text-sm font-medium ${
+            message.type === 'success' ? 'text-tis-green' : 'text-red-700'
+          }`}>
+            {message.text}
+          </p>
+          {onClearMessage && (
+            <button
+              onClick={onClearMessage}
+              className={`p-1 rounded-lg transition-colors ${
+                message.type === 'success'
+                  ? 'hover:bg-tis-green/20 text-tis-green'
+                  : 'hover:bg-red-100 text-red-500'
+              }`}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Content */}
       <div className="p-6">
@@ -676,11 +737,7 @@ function PhoneNumberManager({
                       Cancelar
                     </Button>
                     <Button
-                      onClick={() => {
-                        onRequestNumber(selectedAreaCode);
-                        setShowAreaCodes(false);
-                        setSelectedAreaCode(null);
-                      }}
+                      onClick={handleRequestClick}
                       disabled={loading}
                     >
                       {loading ? 'Solicitando...' : `Solicitar número (${selectedAreaCode})`}
@@ -1303,6 +1360,7 @@ export default function AIAgentVozPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'phones' | 'assistant' | 'history'>('assistant');
   const [showTalkToAssistant, setShowTalkToAssistant] = useState(false);
+  const [phoneRequestMessage, setPhoneRequestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const accessToken = session?.access_token;
   const vertical = (tenant?.vertical || 'dental') as 'dental' | 'restaurant' | 'medical' | 'general';
@@ -1409,10 +1467,19 @@ export default function AIAgentVozPage() {
   };
 
   const handleRequestPhoneNumber = async (areaCode: string) => {
-    if (!accessToken) return;
+    console.log('[Phone Request] Iniciando solicitud para LADA:', areaCode);
+
+    if (!accessToken) {
+      console.error('[Phone Request] No hay access token');
+      setPhoneRequestMessage({ type: 'error', text: 'Sesión no válida. Recarga la página.' });
+      return;
+    }
 
     try {
       setSaving(true);
+      setPhoneRequestMessage(null);
+
+      console.log('[Phone Request] Enviando solicitud a API...');
       const response = await fetch('/api/voice-agent/phone-numbers', {
         method: 'POST',
         headers: {
@@ -1422,11 +1489,26 @@ export default function AIAgentVozPage() {
         body: JSON.stringify({ area_code: areaCode }),
       });
 
-      if (response.ok) {
+      const result = await response.json();
+      console.log('[Phone Request] Respuesta del servidor:', response.status, result);
+
+      if (response.ok && result.success) {
+        setPhoneRequestMessage({
+          type: 'success',
+          text: `¡Solicitud enviada! Tu número con LADA ${areaCode} será provisionado pronto.`
+        });
         fetchVoiceAgent();
+      } else {
+        const errorMsg = result.error || 'Error al solicitar el número';
+        console.error('[Phone Request] Error del servidor:', errorMsg);
+        setPhoneRequestMessage({ type: 'error', text: errorMsg });
       }
     } catch (err) {
-      console.error('Error requesting phone number:', err);
+      console.error('[Phone Request] Error de red:', err);
+      setPhoneRequestMessage({
+        type: 'error',
+        text: 'Error de conexión. Verifica tu internet e intenta de nuevo.'
+      });
     } finally {
       setSaving(false);
     }
@@ -1757,6 +1839,8 @@ export default function AIAgentVozPage() {
                 onRequestNumber={handleRequestPhoneNumber}
                 onReleaseNumber={handleReleasePhoneNumber}
                 loading={saving}
+                message={phoneRequestMessage}
+                onClearMessage={() => setPhoneRequestMessage(null)}
               />
             </motion.div>
           )}
