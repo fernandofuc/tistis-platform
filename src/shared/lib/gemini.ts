@@ -14,13 +14,14 @@ import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
  *
  * | Modelo                  | Uso Recomendado                       |
  * |-------------------------|---------------------------------------|
- * | gemini-3-pro-preview    | Razonamiento complejo, agentes        |
- * | gemini-3-flash-preview  | Velocidad + calidad, prompts          |
+ * | gemini-2.0-flash-exp    | Modelo más reciente y estable         |
+ * | gemini-1.5-pro          | Fallback estable si 2.0 no funciona   |
  */
 export const GEMINI_MODELS = {
-  // Gemini 3 - Modelos de razonamiento avanzado (Diciembre 2025)
-  GEMINI_3_PRO: 'gemini-3-pro-preview',
-  GEMINI_3_FLASH: 'gemini-3-flash-preview',
+  // Gemini 2.0 - Modelo experimental más reciente (Diciembre 2025)
+  GEMINI_2_FLASH: 'gemini-2.0-flash-exp',
+  // Gemini 1.5 - Modelo estable como fallback
+  GEMINI_1_5_PRO: 'gemini-1.5-pro',
 } as const;
 
 export type GeminiModelId = typeof GEMINI_MODELS[keyof typeof GEMINI_MODELS];
@@ -30,13 +31,13 @@ export type GeminiModelId = typeof GEMINI_MODELS[keyof typeof GEMINI_MODELS];
  */
 export const DEFAULT_GEMINI_MODELS = {
   /** Generación de prompts profesionales */
-  PROMPT_GENERATION: GEMINI_MODELS.GEMINI_3_PRO,
+  PROMPT_GENERATION: GEMINI_MODELS.GEMINI_2_FLASH,
 
   /** Análisis de negocios y generación de insights */
-  BUSINESS_INSIGHTS: GEMINI_MODELS.GEMINI_3_PRO,
+  BUSINESS_INSIGHTS: GEMINI_MODELS.GEMINI_2_FLASH,
 
   /** Tareas generales */
-  GENERAL: GEMINI_MODELS.GEMINI_3_PRO,
+  GENERAL: GEMINI_MODELS.GEMINI_2_FLASH,
 } as const;
 
 // ======================
@@ -68,7 +69,7 @@ export function getGeminiClient(): GoogleGenerativeAI | null {
 /**
  * Obtiene un modelo específico de Gemini
  */
-export function getGeminiModel(modelId: GeminiModelId = GEMINI_MODELS.GEMINI_3_PRO): GenerativeModel | null {
+export function getGeminiModel(modelId: GeminiModelId = GEMINI_MODELS.GEMINI_2_FLASH): GenerativeModel | null {
   const client = getGeminiClient();
 
   if (!client) {
@@ -115,10 +116,14 @@ export async function generateWithGemini(
   const startTime = Date.now();
   const modelId = options.model || DEFAULT_GEMINI_MODELS.PROMPT_GENERATION;
 
+  console.log('[Gemini] Iniciando generación con modelo:', modelId);
+  console.log('[Gemini] API Key configurada:', !!process.env.GOOGLE_GEMINI_API_KEY);
+
   try {
     const model = getGeminiModel(modelId);
 
     if (!model) {
+      console.error('[Gemini] No se pudo obtener el modelo. API Key presente:', !!process.env.GOOGLE_GEMINI_API_KEY);
       return {
         success: false,
         content: '',
@@ -134,6 +139,7 @@ export async function generateWithGemini(
       maxOutputTokens: options.maxOutputTokens ?? 8192,
     };
 
+    console.log('[Gemini] Llamando a generateContent...');
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig,
@@ -144,6 +150,7 @@ export async function generateWithGemini(
 
     // Validar respuesta
     if (!text || text.trim().length === 0) {
+      console.error('[Gemini] Respuesta vacía recibida');
       return {
         success: false,
         content: '',
@@ -153,6 +160,7 @@ export async function generateWithGemini(
       };
     }
 
+    console.log('[Gemini] Generación exitosa. Longitud:', text.length, 'caracteres');
     return {
       success: true,
       content: text,
@@ -162,12 +170,13 @@ export async function generateWithGemini(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    console.error('[Gemini] Error en generateContent:', error);
+    console.error('[Gemini] Error en generateContent:', errorMessage);
+    console.error('[Gemini] Error completo:', error);
 
     return {
       success: false,
       content: '',
-      error: errorMessage,
+      error: `Error de Gemini: ${errorMessage}`,
       model: modelId,
       processingTimeMs: Date.now() - startTime,
     };
