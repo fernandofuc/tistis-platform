@@ -11,7 +11,7 @@ import { cn } from '@/shared/utils';
 import { Avatar, Badge } from '@/shared/components/ui';
 import { useAuthContext } from '@/features/auth';
 import { useBranch } from '@/shared/stores';
-import { useNotifications } from '@/shared/hooks';
+import { useNotifications, useGlobalSearch, type SearchResult } from '@/shared/hooks';
 import type { HeaderProps } from '../types';
 
 // ======================
@@ -83,7 +83,44 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
     </svg>
   ),
+  userPlus: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+    </svg>
+  ),
+  close: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  ),
 };
+
+// Search result icon component
+function getSearchIcon(type: SearchResult['type']) {
+  switch (type) {
+    case 'lead':
+      return icons.userPlus;
+    case 'patient':
+      return icons.user;
+    case 'appointment':
+      return icons.calendar;
+    default:
+      return icons.search;
+  }
+}
+
+function getSearchTypeLabel(type: SearchResult['type']) {
+  switch (type) {
+    case 'lead':
+      return 'Lead';
+    case 'patient':
+      return 'Paciente';
+    case 'appointment':
+      return 'Cita';
+    default:
+      return 'Resultado';
+  }
+}
 
 // ======================
 // NOTIFICATION HELPERS
@@ -150,9 +187,21 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const branchMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Global search hook
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    results: searchResults,
+    isLoading: searchLoading,
+    clearResults: clearSearchResults,
+  } = useGlobalSearch({ debounceMs: 300, minChars: 2 });
 
   // Notifications hook
   const {
@@ -164,6 +213,32 @@ export function Header({ onMenuClick }: HeaderProps) {
   } = useNotifications({
     limit: 20,
   });
+
+  // Show search results when there are results or loading
+  useEffect(() => {
+    if (searchQuery.length >= 2) {
+      setShowSearchResults(true);
+    } else {
+      setShowSearchResults(false);
+    }
+  }, [searchQuery, searchResults, searchLoading]);
+
+  // Keyboard shortcut for search (Cmd+K)
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (event.key === 'Escape') {
+        setShowSearchResults(false);
+        searchInputRef.current?.blur();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Close menus on outside click
   useEffect(() => {
@@ -177,6 +252,9 @@ export function Header({ onMenuClick }: HeaderProps) {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -189,28 +267,115 @@ export function Header({ onMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white border-b border-gray-200">
-      <div className="h-full px-4 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-200/60">
+      <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
         {/* Left: Mobile Menu + Search */}
         <div className="flex items-center gap-4">
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+            className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
           >
             {icons.menu}
           </button>
 
           {/* Search */}
-          <div className="hidden md:flex items-center">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                {icons.search}
+          <div className="hidden md:flex items-center" ref={searchRef}>
+            <div className="relative group">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-600 transition-colors z-10">
+                {searchLoading ? (
+                  <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  icons.search
+                )}
               </span>
               <input
-                type="search"
-                placeholder="Buscar leads, citas..."
-                className="w-80 pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
+                placeholder="Buscar leads, citas, clientes..."
+                className="w-80 lg:w-96 pl-11 pr-12 py-2.5 bg-slate-100/70 border-0 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:bg-white transition-all"
               />
+              {searchQuery ? (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    clearSearchResults();
+                    setShowSearchResults(false);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
+                >
+                  {icons.close}
+                </button>
+              ) : (
+                <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:inline-flex items-center gap-1 px-2 py-0.5 bg-white/80 text-[10px] font-medium text-slate-400 rounded-md border border-slate-200/80">
+                  ⌘K
+                </kbd>
+              )}
+
+              {/* Search Results Dropdown */}
+              {showSearchResults && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden z-50">
+                  {searchLoading ? (
+                    <div className="p-6 text-center">
+                      <div className="inline-block w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-sm text-slate-500 mt-2">Buscando...</p>
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="p-6 text-center">
+                      <div className="w-10 h-10 mx-auto mb-2 text-slate-300">
+                        {icons.search}
+                      </div>
+                      <p className="text-sm text-slate-500">
+                        No se encontraron resultados para "{searchQuery}"
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto">
+                      <div className="p-2">
+                        <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                          {searchResults.length} resultado{searchResults.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {searchResults.map((result) => (
+                          <button
+                            key={`${result.type}-${result.id}`}
+                            onClick={() => {
+                              router.push(result.url);
+                              setShowSearchResults(false);
+                              setSearchQuery('');
+                              clearSearchResults();
+                            }}
+                            className="w-full p-3 text-left hover:bg-slate-50 transition-colors flex items-center gap-3"
+                          >
+                            <div className={cn(
+                              'flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
+                              result.type === 'lead' && 'bg-blue-100 text-blue-600',
+                              result.type === 'patient' && 'bg-emerald-100 text-emerald-600',
+                              result.type === 'appointment' && 'bg-amber-100 text-amber-600'
+                            )}>
+                              {getSearchIcon(result.type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-900 truncate">
+                                {result.title}
+                              </p>
+                              <p className="text-xs text-slate-500 truncate">
+                                {result.subtitle}
+                              </p>
+                            </div>
+                            <span className="flex-shrink-0 text-[10px] px-2 py-1 bg-slate-100 text-slate-500 rounded-lg font-medium">
+                              {getSearchTypeLabel(result.type)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -222,17 +387,22 @@ export function Header({ onMenuClick }: HeaderProps) {
             <div className="relative" ref={branchMenuRef}>
               <button
                 onClick={() => setShowBranchMenu(!showBranchMenu)}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
               >
-                <span className="text-gray-400">{icons.building}</span>
-                <span className="hidden sm:inline max-w-32 truncate">
+                <span className="text-slate-400">{icons.building}</span>
+                <span className="hidden sm:inline max-w-32 truncate font-medium">
                   {selectedBranch?.name || 'Seleccionar'}
                 </span>
-                {icons.chevronDown}
+                <span className={cn('text-slate-400 transition-transform', showBranchMenu && 'rotate-180')}>
+                  {icons.chevronDown}
+                </span>
               </button>
 
               {showBranchMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 py-2 overflow-hidden">
+                  <div className="px-3 py-2 border-b border-slate-100">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Sucursales</p>
+                  </div>
                   {branches.map((branch) => (
                     <button
                       key={branch.id}
@@ -241,19 +411,19 @@ export function Header({ onMenuClick }: HeaderProps) {
                         setShowBranchMenu(false);
                       }}
                       className={cn(
-                        'w-full px-4 py-2 text-left text-sm hover:bg-gray-50',
+                        'w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 transition-colors',
                         selectedBranch?.id === branch.id
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'text-gray-700'
+                          ? 'bg-slate-100'
+                          : 'text-slate-700'
                       )}
                     >
                       <div className="flex items-center justify-between">
-                        <span>{branch.name}</span>
+                        <span className="font-medium">{branch.name}</span>
                         {branch.is_headquarters && (
-                          <Badge size="sm" variant="info">HQ</Badge>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-slate-900 text-white rounded-md">HQ</span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-500">{branch.city}</span>
+                      <span className="text-xs text-slate-500">{branch.city}</span>
                     </button>
                   ))}
                 </div>
@@ -265,32 +435,32 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative" ref={notificationsRef}>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+              className="relative p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
             >
               {icons.bell}
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-xs font-medium rounded-full">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-tis-coral text-white text-[10px] font-bold rounded-full ring-2 ring-white">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-96 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
                 {/* Header */}
-                <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <div>
-                    <h3 className="font-semibold text-gray-900">Notificaciones</h3>
+                    <h3 className="font-semibold text-slate-900">Notificaciones</h3>
                     {unreadCount > 0 && (
-                      <p className="text-xs text-gray-500">{unreadCount} sin leer</p>
+                      <p className="text-xs text-slate-500">{unreadCount} sin leer</p>
                     )}
                   </div>
                   {unreadCount > 0 && (
                     <button
                       onClick={markAllAsRead}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
                     >
-                      Marcar todas leídas
+                      Marcar leídas
                     </button>
                   )}
                 </div>
@@ -299,17 +469,17 @@ export function Header({ onMenuClick }: HeaderProps) {
                 <div className="max-h-[400px] overflow-y-auto">
                   {notificationsLoading ? (
                     <div className="p-8 text-center">
-                      <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      <div className="inline-block w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : notifications.length === 0 ? (
                     <div className="p-8 text-center">
-                      <div className="w-12 h-12 mx-auto mb-3 text-gray-300">
+                      <div className="w-12 h-12 mx-auto mb-3 text-slate-300">
                         {icons.bell}
                       </div>
-                      <p className="text-gray-500 text-sm">No hay notificaciones</p>
+                      <p className="text-slate-500 text-sm">No hay notificaciones</p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-slate-100">
                       {notifications.map((notification) => (
                         <button
                           key={notification.id}
@@ -323,13 +493,13 @@ export function Header({ onMenuClick }: HeaderProps) {
                             }
                           }}
                           className={cn(
-                            'w-full p-4 text-left hover:bg-gray-50 transition-colors flex gap-3',
-                            !notification.read && 'bg-blue-50/50'
+                            'w-full p-4 text-left hover:bg-slate-50 transition-colors flex gap-3',
+                            !notification.read && 'bg-slate-50/80'
                           )}
                         >
                           {/* Icon */}
                           <div className={cn(
-                            'flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center',
+                            'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center',
                             getNotificationIconBg(notification.priority)
                           )}>
                             {getNotificationIcon(notification.type)}
@@ -340,19 +510,19 @@ export function Header({ onMenuClick }: HeaderProps) {
                             <div className="flex items-start justify-between gap-2">
                               <p className={cn(
                                 'text-sm',
-                                notification.read ? 'text-gray-600' : 'text-gray-900 font-medium'
+                                notification.read ? 'text-slate-600' : 'text-slate-900 font-medium'
                               )}>
                                 {notification.title}
                               </p>
-                              <span className="text-xs text-gray-400 flex-shrink-0">
+                              <span className="text-xs text-slate-400 flex-shrink-0">
                                 {formatTimeAgo(notification.created_at)}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">
+                            <p className="text-sm text-slate-500 line-clamp-2 mt-0.5">
                               {notification.message}
                             </p>
                             {notification.action_label && (
-                              <span className="inline-flex items-center text-xs text-blue-600 font-medium mt-1">
+                              <span className="inline-flex items-center text-xs text-slate-700 font-medium mt-1">
                                 {notification.action_label}
                                 <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -363,7 +533,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
                           {/* Unread indicator */}
                           {!notification.read && (
-                            <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-blue-500" />
+                            <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-tis-coral" />
                           )}
                         </button>
                       ))}
@@ -373,11 +543,11 @@ export function Header({ onMenuClick }: HeaderProps) {
 
                 {/* Footer */}
                 {notifications.length > 0 && (
-                  <div className="p-3 border-t border-gray-100 bg-gray-50">
+                  <div className="p-3 border-t border-slate-100 bg-slate-50/50">
                     <Link
                       href="/dashboard/settings/notifications"
                       onClick={() => setShowNotifications(false)}
-                      className="block text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      className="block text-center text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
                     >
                       Ver todas las notificaciones
                     </Link>
@@ -391,22 +561,24 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-lg"
+              className="flex items-center gap-2.5 p-1.5 hover:bg-slate-100 rounded-xl transition-colors"
             >
               <Avatar
                 name={staff?.display_name || 'Usuario'}
                 size="sm"
               />
-              <span className="hidden sm:inline text-sm font-medium text-gray-700 max-w-32 truncate">
+              <span className="hidden sm:inline text-sm font-medium text-slate-700 max-w-32 truncate">
                 {staff?.display_name || 'Usuario'}
               </span>
-              {icons.chevronDown}
+              <span className={cn('text-slate-400 transition-transform', showUserMenu && 'rotate-180')}>
+                {icons.chevronDown}
+              </span>
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
                 {/* User Info Header */}
-                <div className="px-4 py-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-gray-100">
+                <div className="px-4 py-4 bg-slate-50/80 border-b border-slate-100">
                   <div className="flex items-center gap-3">
                     <Avatar
                       name={staff?.display_name || 'Usuario'}
@@ -414,46 +586,46 @@ export function Header({ onMenuClick }: HeaderProps) {
                       size="md"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
                         {staff?.display_name || 'Sin nombre'}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">{staff?.email}</p>
+                      <p className="text-xs text-slate-500 truncate">{staff?.email}</p>
                     </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
-                    <Badge size="sm" variant="info">
+                    <span className="text-[10px] px-2 py-1 bg-slate-900 text-white rounded-lg font-medium">
                       {staff?.role_title || staff?.role}
-                    </Badge>
+                    </span>
                     {staff?.is_active !== false && (
-                      <Badge size="sm" variant="success">Activo</Badge>
+                      <span className="text-[10px] px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg font-medium">Activo</span>
                     )}
                   </div>
                 </div>
 
                 {/* Menu Items */}
-                <div className="py-1">
+                <div className="py-2">
                   <Link
                     href="/dashboard"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                     onClick={() => setShowUserMenu(false)}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
                     <span>Inicio</span>
                   </Link>
                   <Link
                     href="/dashboard/settings"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                     onClick={() => setShowUserMenu(false)}
                   >
-                    {icons.user}
+                    <span className="text-slate-400">{icons.user}</span>
                     <span>Mi Perfil</span>
                   </Link>
                 </div>
 
                 {/* Logout */}
-                <div className="border-t border-gray-100 py-1">
+                <div className="border-t border-slate-100 py-2">
                   <button
                     onClick={handleSignOut}
                     className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"

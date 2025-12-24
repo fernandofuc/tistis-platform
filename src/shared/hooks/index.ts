@@ -29,3 +29,11 @@ export {
   createNotification,
   broadcastNotification,
 } from './useNotifications';
+
+// Global Search
+export {
+  useGlobalSearch,
+  getSearchResultIcon,
+  getSearchResultLabel,
+  type SearchResult,
+} from './useGlobalSearch';
