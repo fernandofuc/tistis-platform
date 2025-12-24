@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
@@ -273,14 +274,6 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
     return item.name;
   };
 
-  // Get tenant initial for logo
-  const getTenantInitial = () => {
-    if (tenant?.name) {
-      return tenant.name.charAt(0).toUpperCase();
-    }
-    return 'T';
-  };
-
   return (
     <aside
       className={cn(
@@ -288,23 +281,31 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
         collapsed ? 'w-20' : 'w-64'
       )}
     >
-      {/* Logo - Shows tenant name with TIS TIS branding */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100/80">
-        {!collapsed && (
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-tis-coral to-tis-pink rounded-xl flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
-            </div>
-            <span className="font-semibold text-slate-800 truncate max-w-[140px]">
-              {tenant?.name || 'TIS TIS'}
+      {/* Logo TIS TIS - Links to landing page */}
+      <div className={cn(
+        "h-16 flex items-center border-b border-slate-100/80 transition-all duration-300",
+        collapsed ? "justify-center px-2" : "px-4"
+      )}>
+        <Link
+          href="https://tistis.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+        >
+          <Image
+            src="/logos/tis-brain-logo.png"
+            alt="TIS TIS"
+            width={collapsed ? 40 : 36}
+            height={collapsed ? 40 : 36}
+            className="object-contain"
+            priority
+          />
+          {!collapsed && (
+            <span className="font-bold text-slate-800 text-lg tracking-tight">
+              TIS TIS
             </span>
-          </Link>
-        )}
-        {collapsed && (
-          <div className="w-9 h-9 bg-gradient-to-br from-tis-coral to-tis-pink rounded-xl flex items-center justify-center mx-auto shadow-sm">
-            <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
-          </div>
-        )}
+          )}
+        </Link>
       </div>
 
       {/* Plan badge - Premium styled */}
