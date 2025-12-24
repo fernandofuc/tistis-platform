@@ -312,7 +312,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       </div>
 
       {/* Navigation - Organized by sections with Apple-like spacing */}
-      <nav className="px-3 py-4 space-y-6 overflow-y-auto flex-1" style={{ maxHeight: 'calc(100vh - 240px)' }}>
+      <nav className="px-3 py-4 pb-32 space-y-6 overflow-y-auto flex-1">
         {/* Group items by section */}
         {Object.values(NAV_SECTIONS).map((sectionKey) => {
           const sectionItems = visibleNavItems.filter(item => item.section === sectionKey);
