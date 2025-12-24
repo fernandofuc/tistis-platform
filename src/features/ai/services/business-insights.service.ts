@@ -10,7 +10,11 @@
 // =====================================================
 
 import { createServerClient } from '@/src/shared/lib/supabase';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  generateWithGemini,
+  DEFAULT_GEMINI_MODELS,
+  isGeminiConfigured,
+} from '@/src/shared/lib/gemini';
 
 // ======================
 // TYPES
@@ -84,7 +88,6 @@ export interface InsightGenerationResult {
 // CONFIGURATION
 // ======================
 
-const GEMINI_MODEL = 'gemini-2.0-flash'; // Gemini 3.0 cuando esté disponible
 const MIN_CONVERSATIONS_FOR_INSIGHTS = 50;
 const INSIGHTS_EXPIRY_DAYS = 7;
 const MAX_INSIGHTS_PER_PLAN: Record<string, number> = {
@@ -92,19 +95,6 @@ const MAX_INSIGHTS_PER_PLAN: Record<string, number> = {
   essentials: 5,   // 3-5 insights
   growth: 10,      // 8-10 insights
 };
-
-// ======================
-// GEMINI CLIENT
-// ======================
-
-function getGeminiClient(): GoogleGenerativeAI | null {
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error('[Business Insights] GOOGLE_GEMINI_API_KEY not configured');
-    return null;
-  }
-  return new GoogleGenerativeAI(apiKey);
-}
 
 // ======================
 // DATA COLLECTION
@@ -315,13 +305,11 @@ async function generateInsightsWithGemini(
   data: TenantAnalyticsData,
   maxInsights: number
 ): Promise<BusinessInsight[]> {
-  const gemini = getGeminiClient();
-  if (!gemini) {
-    console.error('[Business Insights] Gemini client not available');
+  // Verificar que Gemini está configurado
+  if (!isGeminiConfigured()) {
+    console.error('[Business Insights] Gemini not configured');
     return [];
   }
-
-  const model = gemini.getGenerativeModel({ model: GEMINI_MODEL });
 
   const prompt = `Eres un analista de negocios experto para empresas de servicios en México.
 Analiza los siguientes datos de un negocio tipo "${data.vertical}" llamado "${data.tenantName}" y genera EXACTAMENTE ${maxInsights} insights accionables.
@@ -386,74 +374,80 @@ RESPONDE EN FORMATO JSON (array de objetos):
 
 Genera SOLO el JSON, sin texto adicional.`;
 
-  try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
+  // Usar el cliente centralizado de Gemini 3.0
+  const result = await generateWithGemini(prompt, {
+    model: DEFAULT_GEMINI_MODELS.BUSINESS_INSIGHTS,
+    temperature: 0.7,
+    maxOutputTokens: 4096,
+  });
 
-    // Extraer JSON de la respuesta
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.error('[Business Insights] No JSON found in Gemini response');
-      console.error('[Business Insights] Raw response:', text.substring(0, 500));
-      return [];
-    }
-
-    let parsedInsights: unknown[];
-    try {
-      parsedInsights = JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      console.error('[Business Insights] JSON parse error:', parseError);
-      console.error('[Business Insights] Invalid JSON:', jsonMatch[0].substring(0, 500));
-      return [];
-    }
-
-    // Validar que es un array
-    if (!Array.isArray(parsedInsights)) {
-      console.error('[Business Insights] Parsed result is not an array');
-      return [];
-    }
-
-    // Validar y enriquecer cada insight con type guard
-    const validInsights: BusinessInsight[] = [];
-    for (const item of parsedInsights) {
-      if (
-        item &&
-        typeof item === 'object' &&
-        'insight_type' in item &&
-        'title' in item &&
-        'description' in item &&
-        'recommendation' in item
-      ) {
-        validInsights.push({
-          insight_type: String(item.insight_type) as InsightType,
-          title: String(item.title).substring(0, 100), // Limitar longitud
-          description: String(item.description),
-          evidence: Array.isArray((item as Record<string, unknown>).evidence)
-            ? ((item as Record<string, unknown>).evidence as string[]).map(String)
-            : [],
-          recommendation: String(item.recommendation),
-          confidence_score: Math.min(1, Math.max(0, Number((item as Record<string, unknown>).confidence_score) || 0.5)),
-          impact_score: Math.min(1, Math.max(0, Number((item as Record<string, unknown>).impact_score) || 0.5)),
-          data_points: data.totalConversations,
-          metadata: {
-            generated_at: new Date().toISOString(),
-            model: GEMINI_MODEL,
-            tenant_vertical: data.vertical,
-          },
-        });
-      }
-    }
-
-    if (validInsights.length === 0) {
-      console.warn('[Business Insights] No valid insights after validation');
-    }
-
-    return validInsights;
-  } catch (error) {
-    console.error('[Business Insights] Error generating with Gemini:', error);
+  if (!result.success) {
+    console.error('[Business Insights] Gemini generation failed:', result.error);
     return [];
   }
+
+  const text = result.content;
+
+  // Extraer JSON de la respuesta
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    console.error('[Business Insights] No JSON found in Gemini response');
+    console.error('[Business Insights] Raw response:', text.substring(0, 500));
+    return [];
+  }
+
+  let parsedInsights: unknown[];
+  try {
+    parsedInsights = JSON.parse(jsonMatch[0]);
+  } catch (parseError) {
+    console.error('[Business Insights] JSON parse error:', parseError);
+    console.error('[Business Insights] Invalid JSON:', jsonMatch[0].substring(0, 500));
+    return [];
+  }
+
+  // Validar que es un array
+  if (!Array.isArray(parsedInsights)) {
+    console.error('[Business Insights] Parsed result is not an array');
+    return [];
+  }
+
+  // Validar y enriquecer cada insight con type guard
+  const validInsights: BusinessInsight[] = [];
+  for (const item of parsedInsights) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      'insight_type' in item &&
+      'title' in item &&
+      'description' in item &&
+      'recommendation' in item
+    ) {
+      validInsights.push({
+        insight_type: String(item.insight_type) as InsightType,
+        title: String(item.title).substring(0, 100), // Limitar longitud
+        description: String(item.description),
+        evidence: Array.isArray((item as Record<string, unknown>).evidence)
+          ? ((item as Record<string, unknown>).evidence as string[]).map(String)
+          : [],
+        recommendation: String(item.recommendation),
+        confidence_score: Math.min(1, Math.max(0, Number((item as Record<string, unknown>).confidence_score) || 0.5)),
+        impact_score: Math.min(1, Math.max(0, Number((item as Record<string, unknown>).impact_score) || 0.5)),
+        data_points: data.totalConversations,
+        metadata: {
+          generated_at: new Date().toISOString(),
+          model: result.model,
+          tenant_vertical: data.vertical,
+          processing_time_ms: result.processingTimeMs,
+        },
+      });
+    }
+  }
+
+  if (validInsights.length === 0) {
+    console.warn('[Business Insights] No valid insights after validation');
+  }
+
+  return validInsights;
 }
 
 // ======================

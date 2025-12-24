@@ -1,6 +1,6 @@
 // =====================================================
-// TIS TIS PLATFORM - Voice Agent Prompt Generation API
-// Genera prompts profesionales usando Gemini 3.0
+// TIS TIS PLATFORM - AI Config Prompt Generation API
+// Genera prompts profesionales para mensajería usando Gemini 3.0
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,14 +22,6 @@ function createAuthenticatedClient(accessToken: string) {
         },
       },
     }
-  );
-}
-
-// Create service client
-function createServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
 
@@ -59,7 +51,7 @@ async function getUserContext(supabase: ReturnType<typeof createAuthenticatedCli
 }
 
 // ======================
-// POST - Generate voice agent prompt
+// POST - Generate messaging agent prompt with Gemini 3.0
 // ======================
 export async function POST(request: NextRequest) {
   try {
@@ -81,36 +73,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tenantId = context.userRole.tenant_id;
-
-    // Verificar que el tenant tiene plan Growth
-    const serviceSupabase = createServiceClient();
-    const { data: tenant } = await serviceSupabase
-      .from('tenants')
-      .select('plan, vertical')
-      .eq('id', tenantId)
-      .single();
-
-    if (!tenant || tenant.plan !== 'growth') {
+    // Verificar permisos (solo owner y admin pueden generar prompts)
+    if (!['owner', 'admin'].includes(context.userRole.role)) {
       return NextResponse.json(
-        { error: 'Voice Agent solo está disponible en el plan Growth' },
+        { error: 'Sin permisos para generar prompts' },
         { status: 403 }
       );
     }
 
+    const tenantId = context.userRole.tenant_id;
+
     // Generar prompt profesional usando Gemini 3.0
-    console.log('[Voice Agent Generate] Generating prompt with Gemini 3.0...');
-    const result = await PromptGeneratorService.generateVoiceAgentPrompt(tenantId);
+    console.log('[AI Config Generate] Generating messaging prompt with Gemini 3.0...');
+    const result = await PromptGeneratorService.generateMessagingAgentPrompt(tenantId);
 
     if (!result.success) {
-      console.error('[Voice Agent Generate] Error generating prompt:', result.error);
+      console.error('[AI Config Generate] Error generating prompt:', result.error);
       return NextResponse.json(
         { error: result.error || 'Error al generar prompt con IA' },
         { status: 500 }
       );
     }
 
-    console.log(`[Voice Agent Generate] Prompt generated in ${result.processingTimeMs}ms using ${result.model}`);
+    console.log(`[AI Config Generate] Prompt generated in ${result.processingTimeMs}ms using ${result.model}`);
 
     return NextResponse.json({
       success: true,
@@ -120,7 +105,7 @@ export async function POST(request: NextRequest) {
       processing_time_ms: result.processingTimeMs,
     });
   } catch (error) {
-    console.error('[Voice Agent Generate] Error:', error);
+    console.error('[AI Config Generate] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json(
       { error: 'Error al generar prompt: ' + errorMessage },
@@ -130,7 +115,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ======================
-// GET - Get current prompt and preview of what would be generated
+// GET - Get context summary for prompt generation
 // ======================
 export async function GET(request: NextRequest) {
   try {
@@ -153,24 +138,23 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantId = context.userRole.tenant_id;
-    const serviceSupabase = createServiceClient();
 
-    // Obtener configuración actual de voice_agent_config
-    const { data: config } = await serviceSupabase
-      .from('voice_agent_config')
-      .select('system_prompt, system_prompt_generated_at, custom_instructions')
+    // Obtener configuración actual
+    const { data: config } = await supabase
+      .from('ai_tenant_config')
+      .select('custom_instructions, ai_personality, updated_at')
       .eq('tenant_id', tenantId)
       .single();
 
-    // Obtener tenant info
-    const { data: tenant } = await serviceSupabase
+    // Obtener info del tenant
+    const { data: tenant } = await supabase
       .from('tenants')
       .select('id, name, vertical')
       .eq('id', tenantId)
       .single();
 
-    // Recopilar contexto del negocio usando el servicio centralizado
-    const businessContext = await PromptGeneratorService.collectBusinessContext(tenantId, 'voice');
+    // Recopilar contexto del negocio
+    const businessContext = await PromptGeneratorService.collectBusinessContext(tenantId, 'messaging');
 
     // Contadores de datos de cada pestaña
     const branchesCount = businessContext?.branches?.length || 0;
@@ -179,29 +163,29 @@ export async function GET(request: NextRequest) {
     const faqsCount = businessContext?.faqs?.length || 0;
     const instructionsCount = businessContext?.customInstructionsList?.length || 0;
     const policiesCount = businessContext?.businessPolicies?.length || 0;
-    // Knowledge Base completo
+    // NUEVOS: Knowledge Base completo
     const knowledgeArticlesCount = businessContext?.knowledgeArticles?.length || 0;
     const responseTemplatesCount = businessContext?.responseTemplates?.length || 0;
     const competitorHandlingCount = businessContext?.competitorHandling?.length || 0;
 
     return NextResponse.json({
       success: true,
-      current_prompt: config?.system_prompt || null,
-      current_prompt_generated_at: config?.system_prompt_generated_at || null,
-      custom_instructions: config?.custom_instructions || null,
+      current_instructions: config?.custom_instructions || null,
+      current_personality: config?.ai_personality || 'professional_friendly',
+      last_updated: config?.updated_at || null,
       context_summary: {
-        // Info del tenant
+        // Pestaña: General
         vertical: tenant?.vertical || 'general',
         tenant_name: tenant?.name || 'Sin nombre',
-        // Sucursales y Staff
+        // Pestaña: Clínica y Sucursales
         has_branches: branchesCount > 0,
         branches_count: branchesCount,
         has_staff: staffCount > 0,
         staff_count: staffCount,
-        // Servicios
+        // Pestaña: Catálogo de Servicios
         has_services: servicesCount > 0,
         services_count: servicesCount,
-        // Base de Conocimiento (TODAS las tablas)
+        // Pestaña: Base de Conocimiento (TODAS las tablas)
         has_faqs: faqsCount > 0,
         faqs_count: faqsCount,
         has_custom_instructions: instructionsCount > 0,
@@ -217,9 +201,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[Voice Agent Generate] GET Error:', error);
+    console.error('[AI Config Generate] GET Error:', error);
     return NextResponse.json(
-      { error: 'Error al obtener prompt' },
+      { error: 'Error al obtener contexto' },
       { status: 500 }
     );
   }
