@@ -790,63 +790,6 @@ export function AIConfiguration() {
                 </div>
               </div>
 
-              {/* Generate Prompt with AI Section */}
-              <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-purple-900 mb-1">Generar Instrucciones con IA</h4>
-                    <p className="text-sm text-purple-700 mb-3">
-                      Usa Gemini 3.0 para generar automáticamente instrucciones personalizadas basadas en la información
-                      de tu negocio (sucursales, servicios, equipo, políticas y FAQs).
-                    </p>
-                    <Button
-                      onClick={async () => {
-                        setGeneratingPrompt(true);
-                        try {
-                          const { data: { session } } = await supabase.auth.getSession();
-                          if (!session?.access_token) {
-                            alert('No autenticado. Por favor, vuelve a iniciar sesión.');
-                            return;
-                          }
-                          const response = await fetch('/api/ai-config/generate-prompt', {
-                            method: 'POST',
-                            headers: {
-                              'Authorization': `Bearer ${session.access_token}`,
-                              'Content-Type': 'application/json',
-                            },
-                          });
-                          const result = await response.json();
-                          if (result.success && result.prompt) {
-                            setConfig(prev => ({ ...prev, custom_instructions: result.prompt }));
-                            alert(`Instrucciones generadas exitosamente en ${(result.processing_time_ms / 1000).toFixed(1)}s usando ${result.model}`);
-                          } else {
-                            alert('Error: ' + (result.error || 'No se pudo generar el prompt'));
-                          }
-                        } catch (error) {
-                          console.error('Error generating prompt:', error);
-                          alert('Error al generar instrucciones');
-                        } finally {
-                          setGeneratingPrompt(false);
-                        }
-                      }}
-                      isLoading={generatingPrompt}
-                      variant="secondary"
-                      className="bg-purple-600 hover:bg-purple-700 text-white border-0"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      Generar con Gemini 3.0
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
             </div>
           )}
 
@@ -1419,7 +1362,64 @@ export function AIConfiguration() {
 
           {/* Knowledge Base */}
           {activeSection === 'knowledge' && (
-            <div className="p-6">
+            <div className="p-6 space-y-6">
+              {/* Generate Prompt with AI Section */}
+              <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-purple-900 mb-1">Generar Instrucciones con IA</h4>
+                    <p className="text-sm text-purple-700 mb-3">
+                      Usa Gemini 3.0 para generar automáticamente instrucciones personalizadas basadas en la información
+                      de tu negocio (sucursales, servicios, equipo, políticas y FAQs).
+                    </p>
+                    <Button
+                      onClick={async () => {
+                        setGeneratingPrompt(true);
+                        try {
+                          const { data: { session } } = await supabase.auth.getSession();
+                          if (!session?.access_token) {
+                            alert('No autenticado. Por favor, vuelve a iniciar sesión.');
+                            return;
+                          }
+                          const response = await fetch('/api/ai-config/generate-prompt', {
+                            method: 'POST',
+                            headers: {
+                              'Authorization': `Bearer ${session.access_token}`,
+                              'Content-Type': 'application/json',
+                            },
+                          });
+                          const result = await response.json();
+                          if (result.success && result.prompt) {
+                            setConfig(prev => ({ ...prev, custom_instructions: result.prompt }));
+                            alert(`Instrucciones generadas exitosamente en ${(result.processing_time_ms / 1000).toFixed(1)}s usando ${result.model}`);
+                          } else {
+                            alert('Error: ' + (result.error || 'No se pudo generar el prompt'));
+                          }
+                        } catch (error) {
+                          console.error('Error generating prompt:', error);
+                          alert('Error al generar instrucciones');
+                        } finally {
+                          setGeneratingPrompt(false);
+                        }
+                      }}
+                      isLoading={generatingPrompt}
+                      variant="secondary"
+                      className="bg-purple-600 hover:bg-purple-700 text-white border-0"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Generar con Gemini 3.0
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               <KnowledgeBase />
             </div>
           )}
