@@ -328,7 +328,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                         {icons.search}
                       </div>
                       <p className="text-sm text-slate-500">
-                        No se encontraron resultados para "{searchQuery}"
+                        No se encontraron resultados para &ldquo;{searchQuery}&rdquo;
                       </p>
                     </div>
                   ) : (
