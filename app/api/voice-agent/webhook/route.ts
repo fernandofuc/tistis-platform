@@ -1,12 +1,13 @@
 // =====================================================
 // TIS TIS PLATFORM - Voice Agent VAPI Webhook
-// Recibe eventos de VAPI y procesa con LangGraph
+// Server-Side Response Mode: TIS TIS genera TODAS las respuestas
+// VAPI solo hace STT (transcripción) y TTS (síntesis de voz)
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { VoiceLangGraphService } from '@/src/features/voice-agent/services/voice-langgraph.service';
-import type { VoiceAgentConfig, VoiceCallMessage, CallAnalysis } from '@/src/features/voice-agent/types';
+import type { VoiceAgentConfig, VoiceCallMessage } from '@/src/features/voice-agent/types';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,18 @@ interface VAPITranscript {
   };
 }
 
+// NUEVO: Conversation Update - VAPI nos envía el turno del usuario y espera nuestra respuesta
+interface VAPIConversationUpdate {
+  type: 'conversation-update';
+  call: {
+    id: string;
+  };
+  messages: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+  }>;
+}
+
 interface VAPIFunctionCall {
   type: 'function-call';
   functionCall: {
@@ -83,6 +96,7 @@ interface VAPIStatusUpdate {
 type VAPIWebhookEvent =
   | VAPIAssistantRequest
   | VAPITranscript
+  | VAPIConversationUpdate
   | VAPIFunctionCall
   | VAPIEndOfCallReport
   | VAPIStatusUpdate;
@@ -220,12 +234,18 @@ async function getMessageCount(callId: string): Promise<number> {
 
 /**
  * Maneja assistant-request: VAPI pide el asistente a usar
+ *
+ * SERVER-SIDE RESPONSE MODE:
+ * - NO enviamos "model" a VAPI (VAPI no genera respuestas)
+ * - Configuramos serverUrl para que VAPI envíe cada turno a nuestro backend
+ * - TIS TIS LangGraph genera TODAS las respuestas de IA
  */
 async function handleAssistantRequest(event: VAPIAssistantRequest) {
   const calledNumber = event.call.phoneNumber.number;
   const callerNumber = event.call.customer.number;
 
   console.log(`[Voice Webhook] Assistant request for ${calledNumber} from ${callerNumber}`);
+  console.log(`[Voice Webhook] MODE: Server-Side Response (TIS TIS LangGraph genera respuestas)`);
 
   // Obtener tenant del número llamado
   const tenantId = await getTenantFromPhoneNumber(calledNumber);
@@ -248,48 +268,55 @@ async function handleAssistantRequest(event: VAPIAssistantRequest) {
   }
 
   // Crear registro de llamada
-  await createOrUpdateCall(event.call.id, tenantId, callerNumber, calledNumber);
+  const callId = await createOrUpdateCall(event.call.id, tenantId, callerNumber, calledNumber);
+  console.log(`[Voice Webhook] Call created/found: ${callId}`);
 
-  // Generar instrucciones de voz específicas
-  const voiceInstructions = VoiceLangGraphService.generateVoiceInstructions(voiceConfig);
+  // SERVER-SIDE RESPONSE MODE:
+  // NO enviamos "model" - VAPI no generará respuestas
+  // En su lugar, configuramos serverUrl para recibir cada turno de conversación
+  // y responder con el texto generado por LangGraph
 
-  // Retornar configuración del asistente para VAPI
+  const serverUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/voice-agent/webhook`;
+
   return {
     assistant: {
       name: voiceConfig.assistant_name,
+
+      // Primer mensaje del asistente
       firstMessage: voiceConfig.first_message,
       firstMessageMode: voiceConfig.first_message_mode === 'assistant_speaks_first'
         ? 'assistant-speaks-first'
         : 'assistant-waits-for-user',
-      model: {
-        model: voiceConfig.ai_model,
-        provider: voiceConfig.ai_model.startsWith('gpt') ? 'openai' : 'anthropic',
-        temperature: Number(voiceConfig.ai_temperature),
-        maxTokens: voiceConfig.ai_max_tokens,
-        messages: [
-          {
-            role: 'system',
-            content: `${voiceConfig.system_prompt || ''}\n\n${voiceInstructions}`,
-          },
-        ],
-      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // SERVER-SIDE RESPONSE: NO enviamos "model" a VAPI
+      // VAPI enviará cada turno a serverUrl y esperará nuestra respuesta
+      // ═══════════════════════════════════════════════════════════════
+
+      // Configuración de voz (ElevenLabs) - VAPI maneja STT/TTS
       voice: {
-        voiceId: voiceConfig.voice_id,
-        provider: voiceConfig.voice_provider,
-        model: voiceConfig.voice_model,
-        stability: Number(voiceConfig.voice_stability),
-        similarityBoost: Number(voiceConfig.voice_similarity_boost),
+        voiceId: voiceConfig.voice_id || 'LegCbmbXKbT5PUp3QFWv', // Javier (default)
+        provider: voiceConfig.voice_provider || 'elevenlabs',
+        model: voiceConfig.voice_model || 'eleven_multilingual_v2',
+        stability: Number(voiceConfig.voice_stability) || 0.5,
+        similarityBoost: Number(voiceConfig.voice_similarity_boost) || 0.75,
       },
+
+      // Configuración de transcripción
       transcriber: {
-        model: voiceConfig.transcription_model,
-        language: voiceConfig.transcription_language,
-        provider: voiceConfig.transcription_provider,
+        model: voiceConfig.transcription_model || 'nova-2',
+        language: voiceConfig.transcription_language || 'es',
+        provider: voiceConfig.transcription_provider || 'deepgram',
       },
+
+      // Timing de respuesta
       startSpeakingPlan: {
-        waitSeconds: Number(voiceConfig.wait_seconds),
-        onPunctuationSeconds: Number(voiceConfig.on_punctuation_seconds),
-        onNoPunctuationSeconds: Number(voiceConfig.on_no_punctuation_seconds),
+        waitSeconds: Number(voiceConfig.wait_seconds) || 0.6,
+        onPunctuationSeconds: Number(voiceConfig.on_punctuation_seconds) || 0.2,
+        onNoPunctuationSeconds: Number(voiceConfig.on_no_punctuation_seconds) || 1.2,
       },
+
+      // Frases de fin de llamada
       endCallPhrases: voiceConfig.end_call_phrases || [
         'adiós',
         'hasta luego',
@@ -298,21 +325,34 @@ async function handleAssistantRequest(event: VAPIAssistantRequest) {
         'eso es todo',
         'gracias, eso es todo',
       ],
-      recordingEnabled: voiceConfig.recording_enabled,
-      hipaaEnabled: voiceConfig.hipaa_enabled,
-      serverUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/voice-agent/webhook`,
+
+      // Grabación y privacidad
+      recordingEnabled: voiceConfig.recording_enabled ?? true,
+      hipaaEnabled: voiceConfig.hipaa_enabled ?? false,
+
+      // ═══════════════════════════════════════════════════════════════
+      // SERVER URL: Aquí VAPI enviará cada turno de conversación
+      // Nuestro backend procesará con LangGraph y retornará la respuesta
+      // ═══════════════════════════════════════════════════════════════
+      serverUrl: serverUrl,
       serverUrlSecret: process.env.VAPI_WEBHOOK_SECRET,
     },
-    // Metadatos para rastreo
+
+    // Metadatos para rastreo (se envían en cada webhook)
     metadata: {
       tenant_id: tenantId,
       voice_config_id: voiceConfig.id,
+      call_id: callId,
+      mode: 'server-side-response',
     },
   };
 }
 
 /**
  * Maneja transcript: Cada mensaje transcrito
+ *
+ * NOTA: En Server-Side Response Mode, los mensajes se guardan en handleConversationUpdate
+ * Este handler solo hace logging para debugging. NO guardamos aquí para evitar duplicados.
  */
 async function handleTranscript(event: VAPITranscript) {
   if (!event.transcript.isFinal) {
@@ -320,85 +360,163 @@ async function handleTranscript(event: VAPITranscript) {
     return { status: 'ok' };
   }
 
+  // Solo logging - el guardado se hace en handleConversationUpdate
+  const textPreview = event.transcript.text.length > 50
+    ? `${event.transcript.text.substring(0, 50)}...`
+    : event.transcript.text;
+
+  console.log(`[Voice Webhook] Transcript (${event.transcript.role}): "${textPreview}"`);
+
+  return { status: 'ok' };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NUEVO: Maneja conversation-update - EL CORAZÓN DEL SERVER-SIDE RESPONSE MODE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * VAPI nos envía el mensaje del usuario y ESPERA nuestra respuesta.
+ * Aquí procesamos con LangGraph y retornamos el texto que VAPI convertirá a audio.
+ */
+async function handleConversationUpdate(event: VAPIConversationUpdate) {
+  const startTime = Date.now();
   const supabase = createServiceClient();
+
+  console.log(`[Voice Webhook] Conversation update for call: ${event.call.id}`);
+  console.log(`[Voice Webhook] Messages count: ${event.messages.length}`);
+
+  // Obtener el último mensaje del usuario
+  const lastUserMessage = [...event.messages]
+    .reverse()
+    .find(m => m.role === 'user');
+
+  if (!lastUserMessage) {
+    console.log('[Voice Webhook] No user message found, skipping');
+    return { status: 'ok' };
+  }
+
+  console.log(`[Voice Webhook] User message: "${lastUserMessage.content.substring(0, 100)}..."`);
 
   // Obtener la llamada
   const { data: call } = await supabase
     .from('voice_calls')
-    .select('id, tenant_id, voice_agent_config_id')
+    .select('id, tenant_id, voice_agent_config_id, caller_phone')
     .eq('vapi_call_id', event.call.id)
     .single();
 
   if (!call) {
-    console.warn('[Voice Webhook] Call not found for VAPI call:', event.call.id);
-    return { status: 'ok' };
+    console.error('[Voice Webhook] Call not found for conversation update:', event.call.id);
+    return {
+      assistantResponse: 'Disculpa, hubo un problema técnico. ¿Podrías repetir?',
+    };
   }
 
-  // Contar mensajes existentes para sequence_number
-  const messageCount = await getMessageCount(call.id);
+  // Obtener configuración de voz
+  const voiceConfig = await getVoiceConfig(call.tenant_id);
 
-  // Guardar mensaje
-  await VoiceLangGraphService.saveVoiceMessage(
-    call.id,
-    event.transcript.role,
-    event.transcript.text,
-    {
-      sequence_number: messageCount + 1,
-    }
-  );
+  if (!voiceConfig) {
+    console.error('[Voice Webhook] Voice config not found for tenant:', call.tenant_id);
+    return {
+      assistantResponse: 'En este momento no puedo atenderte. Por favor llama más tarde.',
+    };
+  }
 
-  // Si es mensaje del usuario, procesar con LangGraph para respuesta
-  if (event.transcript.role === 'user' && call.voice_agent_config_id) {
-    const voiceConfig = await getVoiceConfig(call.tenant_id);
+  // Obtener historial de mensajes previos de BD
+  const previousMessages = await getCallMessages(call.id);
 
-    if (voiceConfig) {
-      const previousMessages = await getCallMessages(call.id);
+  try {
+    // ═══════════════════════════════════════════════════════════════
+    // PROCESAR CON LANGGRAPH - GENERA LA RESPUESTA DE IA
+    // ═══════════════════════════════════════════════════════════════
+    const result = await VoiceLangGraphService.processVoiceMessage(
+      {
+        tenant_id: call.tenant_id,
+        voice_config: voiceConfig,
+        call_id: call.id,
+        caller_phone: call.caller_phone || '',
+        conversation_history: previousMessages,
+      },
+      lastUserMessage.content
+    );
 
-      try {
-        const result = await VoiceLangGraphService.processVoiceMessage(
-          {
-            tenant_id: call.tenant_id,
-            voice_config: voiceConfig,
-            call_id: call.id,
-            caller_phone: '', // Se podría obtener del call
-            conversation_history: previousMessages,
-          },
-          event.transcript.text
-        );
+    const processingTime = Date.now() - startTime;
+    console.log(`[Voice Webhook] LangGraph response generated in ${processingTime}ms`);
+    console.log(`[Voice Webhook] Intent: ${result.intent}, Escalate: ${result.should_escalate}`);
+    console.log(`[Voice Webhook] Response: "${result.response.substring(0, 100)}..."`);
 
-        // La respuesta se genera y se envía por VAPI automáticamente
-        // pero podemos guardar metadata
-        console.log(`[Voice Webhook] Processed: intent=${result.intent}, escalate=${result.should_escalate}`);
-
-        // Actualizar estado si debe escalar
-        if (result.should_escalate) {
-          await supabase
-            .from('voice_calls')
-            .update({
-              escalated: true,
-              escalated_at: new Date().toISOString(),
-              escalated_reason: result.escalation_reason,
-            })
-            .eq('id', call.id);
-        }
-
-        // Actualizar si hay booking
-        if (result.booking_result?.success) {
-          await supabase
-            .from('voice_calls')
-            .update({
-              outcome: 'appointment_booked',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', call.id);
-        }
-      } catch (error) {
-        console.error('[Voice Webhook] Error processing message:', error);
+    // Guardar mensaje del usuario en BD
+    const userMsgCount = await getMessageCount(call.id);
+    await VoiceLangGraphService.saveVoiceMessage(
+      call.id,
+      'user',
+      lastUserMessage.content,
+      {
+        sequence_number: userMsgCount + 1,
+        detected_intent: result.intent,
       }
-    }
-  }
+    );
 
-  return { status: 'ok' };
+    // Guardar respuesta del asistente en BD
+    const assistantMsgCount = await getMessageCount(call.id);
+    await VoiceLangGraphService.saveVoiceMessage(
+      call.id,
+      'assistant',
+      result.response,
+      {
+        sequence_number: assistantMsgCount + 1,
+        response_latency_ms: processingTime,
+      }
+    );
+
+    // Actualizar estado de la llamada si hay eventos especiales
+    if (result.should_escalate) {
+      await supabase
+        .from('voice_calls')
+        .update({
+          escalated: true,
+          escalated_at: new Date().toISOString(),
+          escalated_reason: result.escalation_reason,
+          primary_intent: result.intent,
+        })
+        .eq('id', call.id);
+    }
+
+    if (result.booking_result?.success) {
+      await supabase
+        .from('voice_calls')
+        .update({
+          outcome: 'appointment_booked',
+          primary_intent: 'BOOK_APPOINTMENT',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', call.id);
+    }
+
+    // Actualizar latencia promedio
+    await supabase
+      .from('voice_calls')
+      .update({
+        latency_avg_ms: processingTime,
+        turns_count: userMsgCount + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', call.id);
+
+    // ═══════════════════════════════════════════════════════════════
+    // RETORNAR RESPUESTA A VAPI - VAPI convertirá esto a audio
+    // ═══════════════════════════════════════════════════════════════
+    return {
+      assistantResponse: result.response,
+    };
+
+  } catch (error) {
+    console.error('[Voice Webhook] Error processing with LangGraph:', error);
+
+    // Respuesta de fallback en caso de error
+    return {
+      assistantResponse: 'Disculpa, tuve un problema técnico. ¿Podrías repetir lo que dijiste?',
+    };
+  }
 }
 
 /**
@@ -530,6 +648,14 @@ export async function POST(request: NextRequest) {
 
       case 'transcript':
         response = await handleTranscript(body);
+        break;
+
+      // ═══════════════════════════════════════════════════════════════
+      // CONVERSATION-UPDATE: El evento más importante en Server-Side Mode
+      // VAPI envía el mensaje del usuario y ESPERA nuestra respuesta
+      // ═══════════════════════════════════════════════════════════════
+      case 'conversation-update':
+        response = await handleConversationUpdate(body);
         break;
 
       case 'end-of-call-report':

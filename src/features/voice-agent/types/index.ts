@@ -237,8 +237,9 @@ export interface VoicePhoneNumber {
   country_code: string;
 
   // Proveedor
-  telephony_provider: TelephonyProvider;
+  telephony_provider: TelephonyProvider | 'vapi';
   provider_phone_sid: string | null;
+  vapi_assistant_id: string | null; // ID del asistente en VAPI
 
   // Estado
   status: PhoneNumberStatus;
@@ -551,10 +552,74 @@ export interface TwilioStatusCallback extends TwilioVoiceWebhook {
 }
 
 // =====================================================
-// VAPI TYPES (si usamos VAPI)
+// VAPI TYPES - Server-Side Response Mode
 // =====================================================
 
+/**
+ * Configuración del asistente VAPI en Server-Side Response Mode
+ *
+ * IMPORTANTE: En este modo NO enviamos "model" a VAPI
+ * VAPI solo hace STT (transcripción) y TTS (síntesis de voz)
+ * TIS TIS LangGraph genera TODAS las respuestas de IA
+ */
 export interface VAPIAssistantConfig {
+  name: string;
+  firstMessage: string;
+  firstMessageMode: 'assistant-speaks-first' | 'assistant-waits-for-user';
+
+  // ═══════════════════════════════════════════════════════════════
+  // SERVER-SIDE RESPONSE MODE: NO incluimos "model"
+  // En su lugar, VAPI envía cada turno a serverUrl
+  // y esperamos retornar { assistantResponse: "..." }
+  // ═══════════════════════════════════════════════════════════════
+
+  // Configuración de voz (ElevenLabs / otros)
+  voice: {
+    voiceId: string;
+    provider: string;
+    model: string;
+    stability: number;
+    similarityBoost: number;
+  };
+
+  // Configuración de transcripción (Deepgram / Whisper)
+  transcriber: {
+    model: string;
+    language: string;
+    provider: string;
+  };
+
+  // Timing de respuesta
+  startSpeakingPlan: {
+    waitSeconds: number;
+    onPunctuationSeconds: number;
+    onNoPunctuationSeconds: number;
+  };
+
+  // Frases de fin de llamada
+  endCallPhrases: string[];
+
+  // Privacidad
+  recordingEnabled: boolean;
+  hipaaEnabled: boolean;
+
+  // Server URL para Server-Side Response Mode
+  serverUrl: string;
+  serverUrlSecret?: string;
+}
+
+/**
+ * Respuesta que enviamos a VAPI en conversation-update
+ */
+export interface VAPIConversationResponse {
+  assistantResponse: string;
+}
+
+/**
+ * Configuración legacy con model (para referencia)
+ * @deprecated Usar VAPIAssistantConfig sin model para Server-Side Response Mode
+ */
+export interface VAPIAssistantConfigLegacy {
   name: string;
   firstMessage: string;
   firstMessageMode: 'assistant-speaks-first' | 'assistant-waits-for-user';

@@ -13,6 +13,7 @@ import type {
   VoiceUsageSummary,
   VAPIAssistantConfig,
 } from '../types';
+import { VAPIApiService } from './vapi-api.service';
 
 // =====================================================
 // SUPABASE CLIENT
@@ -244,6 +245,15 @@ export async function getPhoneNumbers(tenantId: string): Promise<VoicePhoneNumbe
 
 /**
  * Solicitar nuevo número de teléfono
+ *
+ * FLUJO COMPLETO (VAPI Oculto):
+ * 1. Verifica plan del tenant
+ * 2. Obtiene configuración de voz y datos del tenant
+ * 3. Llama a VAPI API para crear asistente + comprar número
+ * 4. Guarda los IDs de VAPI en Supabase
+ * 5. Retorna el número listo para usar
+ *
+ * El cliente solo ve: "Click → Número listo"
  */
 export async function requestPhoneNumber(
   tenantId: string,
@@ -252,10 +262,12 @@ export async function requestPhoneNumber(
 ): Promise<{ success: boolean; phoneNumber?: VoicePhoneNumber; error?: string }> {
   const supabase = createServerClient();
 
-  // Verificar plan del tenant (solo Growth+)
+  console.log('[Voice Agent] Requesting phone number for tenant:', tenantId, 'area code:', areaCode);
+
+  // 1. Verificar plan del tenant (solo Growth+)
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('plan')
+    .select('id, name, plan, slug')
     .eq('id', tenantId)
     .single();
 
@@ -266,41 +278,180 @@ export async function requestPhoneNumber(
     };
   }
 
-  // Obtener voice_agent_config_id
-  const { data: config } = await supabase
+  // 2. Obtener configuración de voz del tenant
+  const { data: voiceConfig } = await supabase
     .from('voice_agent_config')
-    .select('id')
+    .select('*')
     .eq('tenant_id', tenantId)
     .single();
 
-  // Crear registro pendiente
-  // Usamos base36 para generar un ID temporal más corto (max 8 chars)
-  // que cabe en varchar(20) como "pend_xxxxxxxx"
-  const tempId = Date.now().toString(36).slice(-8);
-  const { data: phoneNumber, error } = await supabase
+  if (!voiceConfig) {
+    return {
+      success: false,
+      error: 'Primero debes configurar tu asistente de voz',
+    };
+  }
+
+  // 3. Construir webhook URL
+  const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/voice-agent/webhook`
+    : '';
+
+  if (!webhookUrl) {
+    console.error('[Voice Agent] NEXT_PUBLIC_APP_URL not configured');
+    return {
+      success: false,
+      error: 'Error de configuración del servidor. Contacta soporte.',
+    };
+  }
+
+  // 4. Provisionar con VAPI API (asistente + número)
+  console.log('[Voice Agent] Provisioning via VAPI API...');
+
+  const provisionResult = await VAPIApiService.provisionPhoneNumberForTenant({
+    tenantId,
+    tenantName: tenant.name || tenant.slug || 'Negocio',
+    areaCode,
+    firstMessage: voiceConfig.first_message || '¡Hola! Gracias por llamar. ¿En qué puedo ayudarte?',
+    voiceId: voiceConfig.voice_id || undefined,
+    webhookUrl,
+    webhookSecret: process.env.VAPI_WEBHOOK_SECRET,
+  });
+
+  if (!provisionResult.success || !provisionResult.phoneNumber) {
+    console.error('[Voice Agent] VAPI provisioning failed:', provisionResult.error);
+    return {
+      success: false,
+      error: provisionResult.error || 'Error al provisionar número. Intenta de nuevo.',
+    };
+  }
+
+  console.log('[Voice Agent] VAPI provisioning successful:', {
+    vapiAssistantId: provisionResult.assistant?.id,
+    vapiPhoneNumber: provisionResult.phoneNumber.number,
+  });
+
+  // 5. Guardar en Supabase con IDs de VAPI
+  const { data: phoneNumber, error: dbError } = await supabase
     .from('voice_phone_numbers')
     .insert({
       tenant_id: tenantId,
-      voice_agent_config_id: config?.id,
+      voice_agent_config_id: voiceConfig.id,
       branch_id: branchId || null,
-      phone_number: `pend_${tempId}`, // Temporal hasta provisioning (max 13 chars)
+      phone_number: provisionResult.phoneNumber.number,
+      phone_number_display: formatPhoneNumber(provisionResult.phoneNumber.number),
       area_code: areaCode,
       country_code: '+52',
-      telephony_provider: 'twilio',
-      status: 'pending',
+      telephony_provider: 'vapi', // Usamos VAPI como provider
+      provider_phone_sid: provisionResult.phoneNumber.id, // VAPI phone number ID
+      vapi_assistant_id: provisionResult.assistant?.id, // VAPI assistant ID
+      status: 'active', // ¡Ya está activo!
+      provisioned_at: new Date().toISOString(),
     })
     .select()
     .single();
 
-  if (error) {
-    console.error('[Voice Agent] Error creating phone number request:', error);
-    return { success: false, error: error.message };
+  if (dbError) {
+    console.error('[Voice Agent] Error saving to database:', dbError);
+
+    // Rollback: liberar recursos en VAPI
+    if (provisionResult.assistant && provisionResult.phoneNumber) {
+      console.log('[Voice Agent] Rolling back VAPI resources...');
+      await VAPIApiService.releasePhoneNumberForTenant(
+        provisionResult.assistant.id,
+        provisionResult.phoneNumber.id
+      );
+    }
+
+    return {
+      success: false,
+      error: 'Error al guardar el número. Intenta de nuevo.',
+    };
   }
 
-  // TODO: Disparar job para provisionar número con Twilio
-  // await queuePhoneNumberProvisioning(phoneNumber.id, areaCode);
+  console.log('[Voice Agent] Phone number provisioned successfully:', phoneNumber.phone_number);
 
   return { success: true, phoneNumber: phoneNumber as VoicePhoneNumber };
+}
+
+/**
+ * Formatea un número de teléfono para mostrar
+ */
+function formatPhoneNumber(number: string): string {
+  // Ejemplo: +5255123456789 → +52 55 1234 5678
+  const cleaned = number.replace(/\D/g, '');
+
+  if (cleaned.startsWith('52') && cleaned.length >= 12) {
+    const country = cleaned.slice(0, 2);
+    const area = cleaned.slice(2, 4);
+    const part1 = cleaned.slice(4, 8);
+    const part2 = cleaned.slice(8, 12);
+    return `+${country} ${area} ${part1} ${part2}`;
+  }
+
+  return number;
+}
+
+/**
+ * Liberar un número de teléfono
+ *
+ * Elimina el número de VAPI y actualiza el registro en Supabase
+ */
+export async function releasePhoneNumber(
+  phoneNumberId: string,
+  tenantId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createServerClient();
+
+  console.log('[Voice Agent] Releasing phone number:', phoneNumberId);
+
+  // 1. Obtener el registro del número
+  const { data: phoneRecord } = await supabase
+    .from('voice_phone_numbers')
+    .select('id, provider_phone_sid, vapi_assistant_id, status')
+    .eq('id', phoneNumberId)
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (!phoneRecord) {
+    return { success: false, error: 'Número no encontrado' };
+  }
+
+  if (phoneRecord.status === 'released') {
+    return { success: false, error: 'Este número ya fue liberado' };
+  }
+
+  // 2. Liberar en VAPI si tiene IDs
+  if (phoneRecord.vapi_assistant_id && phoneRecord.provider_phone_sid) {
+    console.log('[Voice Agent] Releasing from VAPI...');
+
+    const releaseResult = await VAPIApiService.releasePhoneNumberForTenant(
+      phoneRecord.vapi_assistant_id,
+      phoneRecord.provider_phone_sid
+    );
+
+    if (!releaseResult.success) {
+      console.error('[Voice Agent] VAPI release failed:', releaseResult.error);
+      // Continuamos para marcar como liberado en BD de todas formas
+    }
+  }
+
+  // 3. Marcar como liberado en Supabase
+  const { error: updateError } = await supabase
+    .from('voice_phone_numbers')
+    .update({
+      status: 'released',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', phoneNumberId);
+
+  if (updateError) {
+    console.error('[Voice Agent] Error updating database:', updateError);
+    return { success: false, error: 'Error al liberar número' };
+  }
+
+  console.log('[Voice Agent] Phone number released successfully');
+  return { success: true };
 }
 
 // =====================================================
@@ -453,13 +604,20 @@ export async function getUsageSummary(
 }
 
 // =====================================================
-// VAPI INTEGRATION
+// VAPI INTEGRATION - Server-Side Response Mode
 // =====================================================
 
 /**
- * Generar configuración para VAPI
+ * Generar configuración para VAPI en Server-Side Response Mode
+ *
+ * IMPORTANTE: NO incluimos "model" - TIS TIS LangGraph genera las respuestas
+ * VAPI solo hace STT (transcripción) y TTS (síntesis de voz)
  */
 export function generateVAPIConfig(config: VoiceAgentConfig): VAPIAssistantConfig {
+  const serverUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/voice-agent/webhook`
+    : '/api/voice-agent/webhook';
+
   return {
     name: config.assistant_name,
     firstMessage: config.first_message,
@@ -467,38 +625,42 @@ export function generateVAPIConfig(config: VoiceAgentConfig): VAPIAssistantConfi
       config.first_message_mode === 'assistant_speaks_first'
         ? 'assistant-speaks-first'
         : 'assistant-waits-for-user',
-    model: {
-      model: config.ai_model,
-      provider: config.ai_model.startsWith('gpt') ? 'openai' : 'anthropic',
-      temperature: config.ai_temperature,
-      maxTokens: config.ai_max_tokens,
-      messages: [
-        {
-          role: 'system',
-          content: config.system_prompt || '',
-        },
-      ],
-    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // SERVER-SIDE RESPONSE MODE: NO incluimos "model"
+    // VAPI envía cada turno a serverUrl y retornamos assistantResponse
+    // ═══════════════════════════════════════════════════════════════
+
     voice: {
-      voiceId: config.voice_id,
-      provider: '11labs',
-      model: config.voice_model,
-      stability: config.voice_stability,
-      similarityBoost: config.voice_similarity_boost,
+      voiceId: config.voice_id || 'LegCbmbXKbT5PUp3QFWv',
+      provider: config.voice_provider || 'elevenlabs',
+      model: config.voice_model || 'eleven_multilingual_v2',
+      stability: config.voice_stability ?? 0.5,
+      similarityBoost: config.voice_similarity_boost ?? 0.75,
     },
     transcriber: {
-      model: config.transcription_model,
-      language: config.transcription_language,
-      provider: config.transcription_provider,
+      model: config.transcription_model || 'nova-2',
+      language: config.transcription_language || 'es',
+      provider: config.transcription_provider || 'deepgram',
     },
     startSpeakingPlan: {
-      waitSeconds: config.wait_seconds,
-      onPunctuationSeconds: config.on_punctuation_seconds,
-      onNoPunctuationSeconds: config.on_no_punctuation_seconds,
+      waitSeconds: config.wait_seconds ?? 0.6,
+      onPunctuationSeconds: config.on_punctuation_seconds ?? 0.2,
+      onNoPunctuationSeconds: config.on_no_punctuation_seconds ?? 1.2,
     },
-    endCallPhrases: config.end_call_phrases,
-    recordingEnabled: config.recording_enabled,
-    hipaaEnabled: config.hipaa_enabled,
+    endCallPhrases: config.end_call_phrases || [
+      'adiós',
+      'hasta luego',
+      'bye',
+      'chao',
+      'eso es todo',
+    ],
+    recordingEnabled: config.recording_enabled ?? true,
+    hipaaEnabled: config.hipaa_enabled ?? false,
+
+    // Server URL para recibir conversation-update
+    serverUrl,
+    serverUrlSecret: process.env.VAPI_WEBHOOK_SECRET,
   };
 }
 
@@ -567,6 +729,7 @@ export const VoiceAgentService = {
   // Phone Numbers
   getPhoneNumbers,
   requestPhoneNumber,
+  releasePhoneNumber,
 
   // Calls
   getRecentCalls,

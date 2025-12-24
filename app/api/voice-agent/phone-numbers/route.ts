@@ -279,53 +279,15 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Usar service role para operaciones administrativas
-    const serviceSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // Usar el servicio para liberar el número (incluye VAPI)
+    const result = await VoiceAgentService.releasePhoneNumber(phone_number_id, tenantId);
 
-    // Verificar que el número pertenece al tenant
-    const { data: phoneNumber } = await serviceSupabase
-      .from('voice_phone_numbers')
-      .select('id, status')
-      .eq('id', phone_number_id)
-      .eq('tenant_id', tenantId)
-      .single();
-
-    if (!phoneNumber) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: 'Número de teléfono no encontrado' },
-        { status: 404 }
-      );
-    }
-
-    if (phoneNumber.status === 'released') {
-      return NextResponse.json(
-        { error: 'Este número ya fue liberado' },
+        { error: result.error || 'Error al liberar número' },
         { status: 400 }
       );
     }
-
-    // Marcar como liberado
-    const { error: updateError } = await serviceSupabase
-      .from('voice_phone_numbers')
-      .update({
-        status: 'released',
-        released_at: new Date().toISOString(),
-      })
-      .eq('id', phone_number_id);
-
-    if (updateError) {
-      console.error('[Voice Agent Phone Numbers API] DELETE error:', updateError);
-      return NextResponse.json(
-        { error: 'Error al liberar número' },
-        { status: 500 }
-      );
-    }
-
-    // TODO: Liberar número con Twilio API
-    // await releaseTwilioNumber(phoneNumber.provider_phone_sid);
 
     return NextResponse.json({
       success: true,
