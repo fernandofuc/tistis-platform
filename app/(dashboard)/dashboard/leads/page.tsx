@@ -1,20 +1,22 @@
 // =====================================================
 // TIS TIS PLATFORM - Leads Page
+// Prospectos que aún no se convierten en pacientes
+// Design System: TIS TIS Premium (Apple-like aesthetics)
 // =====================================================
 
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardContent, Button, Badge, Avatar, SearchInput } from '@/src/shared/components/ui';
+import { Card, CardContent, Button, Badge, Avatar, SearchInput } from '@/src/shared/components/ui';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, formatPhone, cn } from '@/src/shared/utils';
-import { LEAD_STATUSES, LEAD_CLASSIFICATIONS, LEAD_SOURCES } from '@/src/shared/constants';
-import type { Lead, LeadClassification, LeadStatus, Appointment, Staff, Service } from '@/src/shared/types';
+import { LEAD_STATUSES, LEAD_SOURCES } from '@/src/shared/constants';
+import type { Lead, LeadClassification, Appointment, Staff, Service } from '@/src/shared/types';
 
 // Type for appointment with relations
 interface AppointmentWithRelations extends Appointment {
@@ -23,7 +25,7 @@ interface AppointmentWithRelations extends Appointment {
 }
 
 // ======================
-// ICONS
+// ICONS - TIS TIS Premium Style
 // ======================
 const icons = {
   plus: (
@@ -81,9 +83,26 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
-  whatsapp: (
-    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+  target: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" strokeWidth={1.5} />
+      <circle cx="12" cy="12" r="6" strokeWidth={1.5} />
+      <circle cx="12" cy="12" r="2" strokeWidth={1.5} />
+    </svg>
+  ),
+  trendingUp: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+    </svg>
+  ),
+  users: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  ),
+  arrowRight: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
     </svg>
   ),
 };
@@ -120,14 +139,16 @@ const itemVariants = {
   }),
 };
 
+const cardHoverVariants = {
+  rest: { scale: 1 },
+  hover: { scale: 1.01, transition: { duration: 0.2 } },
+};
+
 // ======================
 // FILTERS
 // ======================
 type FilterTab = 'all' | LeadClassification;
 
-// ======================
-// COMPONENT
-// ======================
 // ======================
 // NEW LEAD FORM TYPE
 // ======================
@@ -144,11 +165,14 @@ const initialNewLeadForm: NewLeadForm = {
   full_name: '',
   phone: '',
   email: '',
-  source: 'other', // 'manual' is not a valid source in DB constraint
+  source: 'other',
   status: 'new',
   notes: '',
 };
 
+// ======================
+// COMPONENT
+// ======================
 export default function LeadsPage() {
   const { tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
@@ -174,34 +198,27 @@ export default function LeadsPage() {
   // ACTION HANDLERS
   // ======================
 
-  // Handle call button - show confirmation alert
   const handleCallClick = useCallback((e: React.MouseEvent, lead: Lead) => {
-    e.stopPropagation(); // Prevent row click
+    e.stopPropagation();
     const leadName = lead.full_name || lead.phone;
     const confirmed = window.confirm(
       `¿Estás seguro de que quieres llamar a ${leadName}?\n\nTeléfono: ${formatPhone(lead.phone)}`
     );
     if (confirmed) {
-      // Open phone dialer
       window.location.href = `tel:${lead.phone}`;
     }
   }, []);
 
-  // Handle message button - navigate to inbox with lead context
   const handleMessageClick = useCallback((e: React.MouseEvent, lead: Lead) => {
-    e.stopPropagation(); // Prevent row click
-    // Navigate to inbox with lead_id as query param to open conversation
+    e.stopPropagation();
     router.push(`/dashboard/inbox?lead_id=${lead.id}`);
   }, [router]);
 
-  // Handle calendar button - navigate to calendar with lead context
   const handleCalendarClick = useCallback((e: React.MouseEvent, lead: Lead) => {
-    e.stopPropagation(); // Prevent row click
-    // Navigate to calendar with lead_id to create/view appointment
+    e.stopPropagation();
     router.push(`/dashboard/calendario?lead_id=${lead.id}`);
   }, [router]);
 
-  // Fetch appointments for a lead
   const fetchLeadAppointments = useCallback(async (leadId: string) => {
     setLoadingAppointments(true);
     try {
@@ -225,22 +242,19 @@ export default function LeadsPage() {
     }
   }, []);
 
-  // Handle lead row click - open detail panel
   const handleLeadClick = useCallback((lead: Lead) => {
     setSelectedLead(lead);
     setShowDetailPanel(true);
-    setLeadAppointments([]); // Reset appointments
-    fetchLeadAppointments(lead.id); // Fetch appointments for this lead
+    setLeadAppointments([]);
+    fetchLeadAppointments(lead.id);
   }, [fetchLeadAppointments]);
 
-  // Handle create new lead
   const handleCreateLead = useCallback(async () => {
     if (!tenant?.id) {
       setCreateError('No se encontró el tenant');
       return;
     }
 
-    // Validate required fields
     if (!newLeadForm.phone.trim()) {
       setCreateError('El teléfono es obligatorio');
       return;
@@ -250,7 +264,6 @@ export default function LeadsPage() {
     setCreateError(null);
 
     try {
-      // Parse full_name into first_name and last_name
       const fullNameTrimmed = newLeadForm.full_name.trim();
       const nameParts = fullNameTrimmed.split(' ').filter(Boolean);
       const firstName = nameParts[0] || null;
@@ -279,23 +292,17 @@ export default function LeadsPage() {
 
       if (error) throw error;
 
-      console.log('🟢 Lead created:', data);
-
-      // Add to list
       setLeads((prev) => [data as Lead, ...prev]);
-
-      // Reset form and close panel
       setNewLeadForm(initialNewLeadForm);
       setShowCreatePanel(false);
-    } catch (error: any) {
-      console.error('🔴 Error creating lead:', error);
-      setCreateError(error.message || 'Error al crear el lead');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error al crear el lead';
+      setCreateError(errorMessage);
     } finally {
       setCreating(false);
     }
   }, [tenant?.id, selectedBranchId, newLeadForm]);
 
-  // Handle open create panel
   const handleOpenCreatePanel = useCallback(() => {
     setNewLeadForm(initialNewLeadForm);
     setCreateError(null);
@@ -305,13 +312,7 @@ export default function LeadsPage() {
   // Fetch leads
   useEffect(() => {
     async function fetchLeads() {
-      // Wait for tenant to be loaded
-      if (!tenant?.id) {
-        console.log('🟡 Leads: No tenant yet, waiting...');
-        return;
-      }
-
-      console.log('🟢 Leads: Fetching leads for tenant:', tenant.id, 'branch:', selectedBranchId || 'all');
+      if (!tenant?.id) return;
 
       try {
         let query = supabase
@@ -319,7 +320,6 @@ export default function LeadsPage() {
           .select('*')
           .eq('tenant_id', tenant.id);
 
-        // Apply branch filter if selected
         if (selectedBranchId) {
           query = query.eq('branch_id', selectedBranchId);
         }
@@ -329,7 +329,6 @@ export default function LeadsPage() {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        console.log('🟢 Leads: Fetched', data?.length, 'leads');
         setLeads(data as Lead[]);
       } catch (error) {
         console.error('Error fetching leads:', error);
@@ -344,12 +343,10 @@ export default function LeadsPage() {
   // Filter leads
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      // Classification filter
       if (activeTab !== 'all' && lead.classification !== activeTab) {
         return false;
       }
 
-      // Search filter
       if (search) {
         const searchLower = search.toLowerCase();
         const leadName = lead.full_name || '';
@@ -372,20 +369,21 @@ export default function LeadsPage() {
     cold: leads.filter((l) => l.classification === 'cold').length,
   }), [leads]);
 
-  const tabs: { key: FilterTab; label: string; emoji?: string }[] = [
-    { key: 'all', label: 'Todos' },
-    { key: 'hot', label: 'Calientes', emoji: '🔥' },
-    { key: 'warm', label: 'Tibios', emoji: '🌡️' },
-    { key: 'cold', label: 'Fríos', emoji: '❄️' },
+  // Tab configuration with icons
+  const tabs: { key: FilterTab; label: string; emoji: string; color: string; bgColor: string }[] = [
+    { key: 'all', label: 'Todos', emoji: '📋', color: 'text-slate-700', bgColor: 'bg-slate-100' },
+    { key: 'hot', label: 'Calientes', emoji: '🔥', color: 'text-orange-700', bgColor: 'bg-orange-100' },
+    { key: 'warm', label: 'Tibios', emoji: '🌡️', color: 'text-amber-700', bgColor: 'bg-amber-100' },
+    { key: 'cold', label: 'Fríos', emoji: '❄️', color: 'text-blue-700', bgColor: 'bg-blue-100' },
   ];
 
   return (
     <PageWrapper
       title="Leads"
-      subtitle={selectedBranch ? `${leads.length} leads en ${selectedBranch.name}` : `${leads.length} leads en total`}
+      subtitle={selectedBranch ? `Prospectos en ${selectedBranch.name}` : 'Gestión de prospectos'}
       actions={
         <div className="flex items-center gap-3">
-          <Button variant="outline" leftIcon={icons.filter}>
+          <Button variant="outline" leftIcon={icons.filter} className="hidden sm:flex">
             Filtros
           </Button>
           <Button leftIcon={icons.plus} onClick={handleOpenCreatePanel}>
@@ -394,22 +392,117 @@ export default function LeadsPage() {
         </div>
       }
     >
-      {/* Tabs */}
+      {/* Hero Section - Explica qué son los Leads */}
+      <div className="mb-8 p-6 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 rounded-2xl border border-slate-200/60">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20">
+            <span className="text-white">{icons.target}</span>
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold text-slate-800 mb-1">
+              ¿Qué son los Leads?
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed max-w-2xl">
+              Los leads son <span className="font-medium text-slate-700">prospectos interesados</span> que aún no se han convertido en pacientes.
+              Aquí puedes dar seguimiento a personas que te contactaron por WhatsApp, teléfono o redes sociales.
+              Cuando un lead agenda y asiste a su primera cita, se convierte automáticamente en <span className="font-medium text-blue-600">paciente</span>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Total Leads */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-slate-100 rounded-lg">
+              <span className="text-slate-600">{icons.users}</span>
+            </div>
+            <Badge variant="default" size="sm">Total</Badge>
+          </div>
+          <div className="text-2xl font-bold text-slate-800">{counts.all}</div>
+          <p className="text-xs text-slate-500 mt-1">Leads registrados</p>
+        </motion.div>
+
+        {/* Hot Leads */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border border-orange-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <span className="text-lg">🔥</span>
+            </div>
+            <Badge variant="hot" size="sm">Prioridad</Badge>
+          </div>
+          <div className="text-2xl font-bold text-orange-700">{counts.hot}</div>
+          <p className="text-xs text-orange-600 mt-1">Muy interesados</p>
+        </motion.div>
+
+        {/* Warm Leads */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl border border-amber-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-amber-100 rounded-lg">
+              <span className="text-lg">🌡️</span>
+            </div>
+            <Badge variant="warm" size="sm">Potencial</Badge>
+          </div>
+          <div className="text-2xl font-bold text-amber-700">{counts.warm}</div>
+          <p className="text-xs text-amber-600 mt-1">Con interés moderado</p>
+        </motion.div>
+
+        {/* Cold Leads */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <span className="text-lg">❄️</span>
+            </div>
+            <Badge variant="cold" size="sm">Nuevos</Badge>
+          </div>
+          <div className="text-2xl font-bold text-blue-700">{counts.cold}</div>
+          <p className="text-xs text-blue-600 mt-1">Por contactar</p>
+        </motion.div>
+      </div>
+
+      {/* Tabs - Premium Design */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              'px-4 py-2 rounded-lg font-medium text-sm transition-colors',
+              'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200',
               activeTab === tab.key
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? `${tab.bgColor} ${tab.color} shadow-sm ring-1 ring-slate-200/50`
+                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
             )}
           >
-            {tab.emoji && <span className="mr-1">{tab.emoji}</span>}
-            {tab.label}
-            <span className="ml-2 px-1.5 py-0.5 rounded-full text-xs bg-gray-100">
+            <span className="text-base">{tab.emoji}</span>
+            <span>{tab.label}</span>
+            <span className={cn(
+              'ml-1 px-2 py-0.5 rounded-full text-xs font-semibold',
+              activeTab === tab.key
+                ? 'bg-white/80 text-slate-700'
+                : 'bg-slate-100 text-slate-500'
+            )}>
               {counts[tab.key]}
             </span>
           </button>
@@ -427,47 +520,59 @@ export default function LeadsPage() {
       </div>
 
       {/* Leads List */}
-      <Card variant="bordered">
+      <Card variant="bordered" className="overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
             <div className="p-8 space-y-4">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="animate-pulse flex items-center gap-4 p-4">
-                  <div className="w-12 h-12 bg-gray-200 rounded-full" />
+                  <div className="w-12 h-12 bg-slate-200 rounded-full" />
                   <div className="flex-1">
-                    <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
-                    <div className="h-3 bg-gray-200 rounded w-1/4" />
+                    <div className="h-4 bg-slate-200 rounded w-1/3 mb-2" />
+                    <div className="h-3 bg-slate-200 rounded w-1/4" />
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredLeads.length === 0 ? (
-            <div className="p-12 text-center text-gray-500">
-              <p className="text-lg font-medium mb-2">No hay leads</p>
-              <p className="text-sm">
+            <div className="p-12 text-center">
+              <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
+                <span className="text-4xl">🎯</span>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                {search ? 'Sin resultados' : 'No hay leads aún'}
+              </h3>
+              <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
                 {search
-                  ? 'No se encontraron resultados para tu búsqueda'
+                  ? 'No se encontraron leads con esos criterios de búsqueda'
                   : selectedBranch
-                    ? `No hay leads asignados a ${selectedBranch.name}. Prueba seleccionando "Todas las sucursales".`
-                    : 'Los leads aparecerán aquí cuando lleguen mensajes por WhatsApp'
+                    ? `No hay leads asignados a ${selectedBranch.name}. Los leads aparecen cuando alguien te contacta por WhatsApp o los agregas manualmente.`
+                    : 'Los leads aparecerán aquí cuando recibas mensajes por WhatsApp o los registres manualmente.'
                 }
               </p>
+              {!search && (
+                <Button leftIcon={icons.plus} onClick={handleOpenCreatePanel}>
+                  Agregar Primer Lead
+                </Button>
+              )}
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-slate-100">
               {filteredLeads.map((lead) => (
-                <div
+                <motion.div
                   key={lead.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   onClick={() => handleLeadClick(lead)}
-                  className="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-4 p-4 hover:bg-slate-50/80 cursor-pointer transition-all duration-200 group"
                 >
                   {/* Avatar */}
                   <Avatar name={lead.full_name || lead.phone} size="lg" />
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-gray-900 truncate">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-medium text-slate-900 truncate">
                         {lead.full_name || 'Sin nombre'}
                       </h3>
                       <Badge variant={lead.classification as 'hot' | 'warm' | 'cold'} size="sm">
@@ -477,16 +582,16 @@ export default function LeadsPage() {
                         {' '}{lead.score}
                       </Badge>
                     </div>
-                    <p className="text-sm text-gray-500">{formatPhone(lead.phone)}</p>
+                    <p className="text-sm text-slate-500">{formatPhone(lead.phone)}</p>
                     {lead.interested_services && lead.interested_services.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
+                      <div className="flex flex-wrap gap-1 mt-1.5">
                         {lead.interested_services.slice(0, 2).map((service) => (
-                          <span key={service} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          <span key={service} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
                             {service}
                           </span>
                         ))}
                         {lead.interested_services.length > 2 && (
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-slate-400">
                             +{lead.interested_services.length - 2}
                           </span>
                         )}
@@ -502,40 +607,45 @@ export default function LeadsPage() {
                   </div>
 
                   {/* Source */}
-                  <div className="hidden md:block text-sm text-gray-500">
+                  <div className="hidden md:block text-sm text-slate-500">
                     {LEAD_SOURCES.find((s) => s.value === lead.source)?.label || lead.source}
                   </div>
 
                   {/* Time */}
-                  <div className="text-xs text-gray-400 whitespace-nowrap">
+                  <div className="text-xs text-slate-400 whitespace-nowrap">
                     {formatRelativeTime(lead.created_at)}
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => handleCallClick(e, lead)}
-                      className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                       title="Llamar"
                     >
                       {icons.phone}
                     </button>
                     <button
                       onClick={(e) => handleMessageClick(e, lead)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Enviar mensaje"
                     >
                       {icons.message}
                     </button>
                     <button
                       onClick={(e) => handleCalendarClick(e, lead)}
-                      className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                      className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                       title="Ver/Agendar cita"
                     >
                       {icons.calendar}
                     </button>
                   </div>
-                </div>
+
+                  {/* Arrow indicator */}
+                  <span className="text-slate-300 group-hover:text-slate-400 transition-colors">
+                    {icons.arrowRight}
+                  </span>
+                </motion.div>
               ))}
             </div>
           )}
@@ -568,15 +678,15 @@ export default function LeadsPage() {
               className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto"
             >
               {/* Header */}
-              <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 z-10">
+              <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 z-10">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Detalle del Lead</h2>
+                  <h2 className="text-lg font-semibold text-slate-900">Detalle del Lead</h2>
                   <button
                     onClick={() => {
                       setShowDetailPanel(false);
                       setSelectedLead(null);
                     }}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                   >
                     {icons.close}
                   </button>
@@ -595,17 +705,17 @@ export default function LeadsPage() {
                 >
                   <Avatar name={selectedLead.full_name || selectedLead.phone} size="xl" />
                   <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-gray-900">
+                    <h3 className="text-xl font-semibold text-slate-900">
                       {selectedLead.full_name || 'Sin nombre'}
                     </h3>
-                    <p className="text-gray-500">{formatPhone(selectedLead.phone)}</p>
+                    <p className="text-slate-500">{formatPhone(selectedLead.phone)}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <Badge variant={selectedLead.classification as 'hot' | 'warm' | 'cold'} size="sm">
                         {selectedLead.classification === 'hot' && '🔥 Caliente'}
                         {selectedLead.classification === 'warm' && '🌡️ Tibio'}
                         {selectedLead.classification === 'cold' && '❄️ Frío'}
                       </Badge>
-                      <span className="text-sm font-medium text-gray-600">
+                      <span className="text-sm font-medium text-slate-600">
                         Score: {selectedLead.score}
                       </span>
                     </div>
@@ -649,38 +759,38 @@ export default function LeadsPage() {
                   variants={itemVariants}
                   initial="hidden"
                   animate="visible"
-                  className="bg-gray-50 rounded-xl p-4 space-y-3"
+                  className="bg-slate-50 rounded-xl p-4 space-y-3"
                 >
-                  <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                     {icons.user}
                     Información de Contacto
                   </h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Teléfono</span>
-                      <span className="font-medium text-gray-900">{formatPhone(selectedLead.phone)}</span>
+                      <span className="text-slate-500">Teléfono</span>
+                      <span className="font-medium text-slate-900">{formatPhone(selectedLead.phone)}</span>
                     </div>
                     {selectedLead.email && (
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-500">Email</span>
-                        <span className="font-medium text-gray-900">{selectedLead.email}</span>
+                        <span className="text-slate-500">Email</span>
+                        <span className="font-medium text-slate-900">{selectedLead.email}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Fuente</span>
-                      <span className="font-medium text-gray-900">
+                      <span className="text-slate-500">Fuente</span>
+                      <span className="font-medium text-slate-900">
                         {LEAD_SOURCES.find((s) => s.value === selectedLead.source)?.label || selectedLead.source}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Estado</span>
+                      <span className="text-slate-500">Estado</span>
                       <Badge variant="default" size="sm">
                         {LEAD_STATUSES.find((s) => s.value === selectedLead.status)?.label || selectedLead.status}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Creado</span>
-                      <span className="font-medium text-gray-900">{formatRelativeTime(selectedLead.created_at)}</span>
+                      <span className="text-slate-500">Creado</span>
+                      <span className="font-medium text-slate-900">{formatRelativeTime(selectedLead.created_at)}</span>
                     </div>
                   </div>
                 </motion.div>
@@ -692,9 +802,9 @@ export default function LeadsPage() {
                     variants={itemVariants}
                     initial="hidden"
                     animate="visible"
-                    className="bg-gray-50 rounded-xl p-4 space-y-3"
+                    className="bg-slate-50 rounded-xl p-4 space-y-3"
                   >
-                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                       {icons.tag}
                       Servicios de Interés
                     </h4>
@@ -702,7 +812,7 @@ export default function LeadsPage() {
                       {selectedLead.interested_services.map((service) => (
                         <span
                           key={service}
-                          className="px-3 py-1 bg-white rounded-full text-sm text-gray-700 border border-gray-200"
+                          className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-slate-200"
                         >
                           {service}
                         </span>
@@ -728,7 +838,7 @@ export default function LeadsPage() {
                       {Object.entries(selectedLead.source_details).map(([key, value]) => (
                         <div key={key} className="flex items-start justify-between gap-2">
                           <span className="text-indigo-600 capitalize">{key.replace(/_/g, ' ')}</span>
-                          <span className="font-medium text-gray-900 text-right">
+                          <span className="font-medium text-slate-900 text-right">
                             {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                           </span>
                         </div>
@@ -744,10 +854,10 @@ export default function LeadsPage() {
                     variants={itemVariants}
                     initial="hidden"
                     animate="visible"
-                    className="bg-gray-50 rounded-xl p-4 space-y-3"
+                    className="bg-slate-50 rounded-xl p-4 space-y-3"
                   >
-                    <h4 className="text-sm font-semibold text-gray-700">Notas</h4>
-                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedLead.notes}</p>
+                    <h4 className="text-sm font-semibold text-slate-700">Notas</h4>
+                    <p className="text-sm text-slate-600 whitespace-pre-wrap">{selectedLead.notes}</p>
                   </motion.div>
                 )}
 
@@ -769,7 +879,7 @@ export default function LeadsPage() {
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     </div>
                   ) : leadAppointments.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic py-2">No hay citas programadas para este lead</p>
+                    <p className="text-sm text-slate-500 italic py-2">No hay citas programadas para este lead</p>
                   ) : (
                     <div className="space-y-3">
                       {leadAppointments.map((appointment) => (
@@ -777,29 +887,24 @@ export default function LeadsPage() {
                           key={appointment.id}
                           className="bg-white rounded-lg p-3 border border-blue-100 space-y-2"
                         >
-                          {/* Motivo de consulta */}
                           <div className="flex items-start gap-2">
                             <span className="text-blue-600 text-xs font-medium">Motivo:</span>
-                            <span className="text-sm text-gray-800 font-medium">
+                            <span className="text-sm text-slate-800 font-medium">
                               {appointment.services?.name || appointment.reason || 'No especificado'}
                             </span>
                           </div>
-
-                          {/* Doctor asignado */}
                           <div className="flex items-center gap-2">
                             <span className="text-blue-600 text-xs font-medium">Doctor:</span>
-                            <span className="text-sm text-gray-800">
+                            <span className="text-sm text-slate-800">
                               {appointment.staff
                                 ? `${appointment.staff.first_name || ''} ${appointment.staff.last_name || ''}`.trim() || 'Sin nombre'
-                                : <span className="text-gray-400 italic">Sin asignar</span>
+                                : <span className="text-slate-400 italic">Sin asignar</span>
                               }
                             </span>
                           </div>
-
-                          {/* Fecha y hora */}
                           <div className="flex items-center gap-2">
                             <span className="text-blue-600 text-xs font-medium">Fecha:</span>
-                            <span className="text-sm text-gray-700">
+                            <span className="text-sm text-slate-700">
                               {appointment.scheduled_at
                                 ? new Date(appointment.scheduled_at).toLocaleDateString('es-MX', {
                                     weekday: 'short',
@@ -812,14 +917,12 @@ export default function LeadsPage() {
                               }
                             </span>
                           </div>
-
-                          {/* Status */}
                           <div className="flex items-center gap-2">
                             <span className={cn(
                               "px-2 py-0.5 rounded-full text-xs font-medium",
                               appointment.status === 'scheduled' && "bg-blue-100 text-blue-700",
                               appointment.status === 'confirmed' && "bg-green-100 text-green-700",
-                              appointment.status === 'completed' && "bg-gray-100 text-gray-700",
+                              appointment.status === 'completed' && "bg-slate-100 text-slate-700",
                               appointment.status === 'cancelled' && "bg-red-100 text-red-700",
                               appointment.status === 'no_show' && "bg-orange-100 text-orange-700"
                             )}>
@@ -848,7 +951,7 @@ export default function LeadsPage() {
                     {selectedLead.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600"
+                        className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600"
                       >
                         #{tag}
                       </span>
@@ -862,7 +965,7 @@ export default function LeadsPage() {
                   variants={itemVariants}
                   initial="hidden"
                   animate="visible"
-                  className="pt-4 border-t border-gray-100 space-y-2 text-xs text-gray-400"
+                  className="pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-400"
                 >
                   {selectedLead.last_contact_at && (
                     <p>Último contacto: {formatRelativeTime(selectedLead.last_contact_at)}</p>
@@ -900,15 +1003,15 @@ export default function LeadsPage() {
               className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
             >
               {/* Header with Gradient */}
-              <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100 px-6 py-4 z-10">
+              <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-slate-100 px-6 py-4 z-10">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Nuevo Lead</h2>
-                    <p className="text-sm text-gray-500">Registra un nuevo prospecto</p>
+                    <h2 className="text-lg font-semibold text-slate-900">Nuevo Lead</h2>
+                    <p className="text-sm text-slate-500">Registra un nuevo prospecto</p>
                   </div>
                   <button
                     onClick={() => setShowCreatePanel(false)}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-xl transition-colors"
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-xl transition-colors"
                   >
                     {icons.close}
                   </button>
@@ -944,32 +1047,32 @@ export default function LeadsPage() {
                   animate="visible"
                   className="space-y-4"
                 >
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <span className="text-blue-500">{icons.user}</span>
                     <span>Información del Contacto</span>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Nombre completo</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Nombre completo</label>
                     <input
                       type="text"
                       value={newLeadForm.full_name}
                       onChange={(e) => setNewLeadForm(prev => ({ ...prev, full_name: e.target.value }))}
                       placeholder="Juan Pérez"
                       className={cn(
-                        'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                        'w-full px-4 py-3 border border-slate-200 rounded-xl text-sm',
                         'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                        'transition-all duration-200 placeholder:text-gray-400'
+                        'transition-all duration-200 placeholder:text-slate-400'
                       )}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
                       Teléfono <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                         {icons.phone}
                       </span>
                       <input
@@ -978,20 +1081,20 @@ export default function LeadsPage() {
                         onChange={(e) => setNewLeadForm(prev => ({ ...prev, phone: e.target.value }))}
                         placeholder="+52 55 1234 5678"
                         className={cn(
-                          'w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl text-sm',
                           'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                          'transition-all duration-200 placeholder:text-gray-400'
+                          'transition-all duration-200 placeholder:text-slate-400'
                         )}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                      Email <span className="text-gray-400 font-normal">(opcional)</span>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                      Email <span className="text-slate-400 font-normal">(opcional)</span>
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                         {icons.mail}
                       </span>
                       <input
@@ -1000,9 +1103,9 @@ export default function LeadsPage() {
                         onChange={(e) => setNewLeadForm(prev => ({ ...prev, email: e.target.value }))}
                         placeholder="juan@ejemplo.com"
                         className={cn(
-                          'w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl text-sm',
                           'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-                          'transition-all duration-200 placeholder:text-gray-400'
+                          'transition-all duration-200 placeholder:text-slate-400'
                         )}
                       />
                     </div>
@@ -1017,7 +1120,7 @@ export default function LeadsPage() {
                   animate="visible"
                   className="space-y-4"
                 >
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <span className="text-purple-500">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -1028,12 +1131,12 @@ export default function LeadsPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Fuente</label>
+                      <label className="block text-xs font-medium text-slate-500 mb-1.5">Fuente</label>
                       <select
                         value={newLeadForm.source}
                         onChange={(e) => setNewLeadForm(prev => ({ ...prev, source: e.target.value }))}
                         className={cn(
-                          'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'w-full px-4 py-3 border border-slate-200 rounded-xl text-sm',
                           'focus:ring-2 focus:ring-purple-500 focus:border-transparent',
                           'transition-all duration-200 appearance-none bg-white',
                           'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
@@ -1048,12 +1151,12 @@ export default function LeadsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Estado</label>
+                      <label className="block text-xs font-medium text-slate-500 mb-1.5">Estado</label>
                       <select
                         value={newLeadForm.status}
                         onChange={(e) => setNewLeadForm(prev => ({ ...prev, status: e.target.value }))}
                         className={cn(
-                          'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                          'w-full px-4 py-3 border border-slate-200 rounded-xl text-sm',
                           'focus:ring-2 focus:ring-purple-500 focus:border-transparent',
                           'transition-all duration-200 appearance-none bg-white',
                           'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
@@ -1077,14 +1180,14 @@ export default function LeadsPage() {
                   animate="visible"
                   className="space-y-4"
                 >
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                    <span className="text-gray-400">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <span className="text-slate-400">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </span>
                     <span>Notas Adicionales</span>
-                    <span className="text-gray-400 font-normal">(opcional)</span>
+                    <span className="text-slate-400 font-normal">(opcional)</span>
                   </div>
 
                   <textarea
@@ -1093,9 +1196,9 @@ export default function LeadsPage() {
                     placeholder="Información adicional sobre el lead, intereses, necesidades..."
                     rows={3}
                     className={cn(
-                      'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
-                      'focus:ring-2 focus:ring-gray-400 focus:border-transparent',
-                      'transition-all duration-200 resize-none placeholder:text-gray-400'
+                      'w-full px-4 py-3 border border-slate-200 rounded-xl text-sm',
+                      'focus:ring-2 focus:ring-slate-400 focus:border-transparent',
+                      'transition-all duration-200 resize-none placeholder:text-slate-400'
                     )}
                   />
                 </motion.div>
@@ -1107,9 +1210,9 @@ export default function LeadsPage() {
                     variants={itemVariants}
                     initial="hidden"
                     animate="visible"
-                    className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-xl space-y-3"
+                    className="p-4 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-xl space-y-3"
                   >
-                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                       <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -1121,10 +1224,10 @@ export default function LeadsPage() {
                         size="lg"
                       />
                       <div className="flex-1">
-                        <p className="font-medium text-gray-900">
+                        <p className="font-medium text-slate-900">
                           {newLeadForm.full_name || 'Sin nombre'}
                         </p>
-                        <div className="flex items-center gap-3 text-sm text-gray-500">
+                        <div className="flex items-center gap-3 text-sm text-slate-500">
                           {newLeadForm.phone && <span>{newLeadForm.phone}</span>}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
@@ -1147,9 +1250,9 @@ export default function LeadsPage() {
               </div>
 
               {/* Footer with Actions */}
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-100 px-6 py-4">
+              <div className="sticky bottom-0 bg-slate-50 border-t border-slate-100 px-6 py-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500">
                     <span className="text-red-500">*</span> Campo requerido
                   </p>
                   <div className="flex gap-3">
