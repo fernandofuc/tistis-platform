@@ -697,19 +697,27 @@ function PhoneNumberManager({
               className="overflow-hidden"
             >
               <div className="mt-6 pt-6 border-t border-slate-200">
-                <div className="flex items-center gap-3 mb-5">
+                <div className="flex items-center gap-3 mb-3">
                   <div className="w-8 h-8 rounded-lg bg-tis-coral/10 flex items-center justify-center">
                     <PhoneIcon className="w-4 h-4 text-tis-coral" />
                   </div>
-                  <h4 className="font-semibold text-slate-900">
-                    Selecciona una LADA para tu número:
-                  </h4>
+                  <div>
+                    <h4 className="font-semibold text-slate-900">
+                      Selecciona una LADA para tu número
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Haz click en una LADA y luego confirma tu solicitud
+                    </p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-72 overflow-y-auto p-1">
                   {MEXICO_AREA_CODES.map((area) => (
                     <button
                       key={area.code}
-                      onClick={() => setSelectedAreaCode(area.code)}
+                      onClick={() => {
+                        console.log('[LADA Click] Seleccionando LADA:', area.code, area.city);
+                        setSelectedAreaCode(area.code);
+                      }}
                       className={`p-4 rounded-xl text-left transition-all ${
                         selectedAreaCode === area.code
                           ? 'bg-gradient-to-br from-tis-coral to-tis-pink text-white shadow-lg shadow-tis-coral/20'
