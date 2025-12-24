@@ -136,12 +136,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   // ======================
-  // DATA FETCHING
+  // DATA FETCHING - OPTIMIZED (Parallel Queries)
   // ======================
   const fetchDashboardData = useCallback(async () => {
     if (!tenant?.id) return;
 
     try {
+      // Build base query helper
       const buildQuery = (table: string, selectFields: string) => {
         let query = supabase.from(table).select(selectFields).eq('tenant_id', tenant.id);
         if (selectedBranchId) {
@@ -150,60 +151,78 @@ export default function DashboardPage() {
         return query;
       };
 
-      // Fetch leads stats
-      const { data: leads, error: leadsError } = await buildQuery('leads', 'id, classification, status')
-        .in('status', ['new', 'contacted', 'qualified', 'appointment_scheduled']);
+      // Calculate today's date range once
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
 
+      // Execute ALL queries in PARALLEL for maximum performance
+      const [leadsResult, recentLeadsResult, appointmentsResult, conversationsResult] = await Promise.all([
+        // Query 1: Leads stats (only id, classification, status)
+        buildQuery('leads', 'id, classification, status')
+          .in('status', ['new', 'contacted', 'qualified', 'appointment_scheduled']),
+
+        // Query 2: Recent leads (full data, limited to 5)
+        buildQuery('leads', 'id, full_name, phone, classification, score, status, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5),
+
+        // Query 3: Today's appointments with related data
+        buildQuery('appointments', '*, leads(full_name, phone), patients(first_name, last_name, phone)')
+          .gte('scheduled_at', startOfDay)
+          .lte('scheduled_at', endOfDay)
+          .order('scheduled_at'),
+
+        // Query 4: Conversations stats (only id, status)
+        buildQuery('conversations', 'id, status')
+          .in('status', ['active', 'waiting_response', 'escalated']),
+      ]);
+
+      // Process all results and update state in ONE batch (single re-render)
+      const { data: leads, error: leadsError } = leadsResult;
+      const { data: recentLeadsData, error: recentLeadsError } = recentLeadsResult;
+      const { data: appointmentsData, error: appointmentsError } = appointmentsResult;
+      const { data: conversations } = conversationsResult;
+
+      // Calculate all stats at once
+      const newStats: DashboardStats = {
+        totalLeads: 0,
+        hotLeads: 0,
+        warmLeads: 0,
+        coldLeads: 0,
+        todayAppointments: 0,
+        activeConversations: 0,
+        escalatedConversations: 0,
+      };
+
+      // Process leads stats
       if (!leadsError && leads) {
-        setStats((prev) => ({
-          ...prev,
-          totalLeads: leads.length,
-          hotLeads: leads.filter((l: any) => l.classification === 'hot').length,
-          warmLeads: leads.filter((l: any) => l.classification === 'warm').length,
-          coldLeads: leads.filter((l: any) => l.classification === 'cold').length,
-        }));
+        newStats.totalLeads = leads.length;
+        newStats.hotLeads = leads.filter((l: any) => l.classification === 'hot').length;
+        newStats.warmLeads = leads.filter((l: any) => l.classification === 'warm').length;
+        newStats.coldLeads = leads.filter((l: any) => l.classification === 'cold').length;
       }
 
-      // Fetch recent leads
-      const { data: recentLeadsData, error: recentLeadsError } = await buildQuery('leads', '*')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // Process appointments count
+      if (!appointmentsError && appointmentsData) {
+        newStats.todayAppointments = appointmentsData.length;
+      }
+
+      // Process conversations stats
+      if (conversations) {
+        newStats.activeConversations = conversations.filter((c: any) => c.status !== 'escalated').length;
+        newStats.escalatedConversations = conversations.filter((c: any) => c.status === 'escalated').length;
+      }
+
+      // Update ALL state in one batch (React 18 auto-batches, but being explicit)
+      setStats(newStats);
 
       if (!recentLeadsError && recentLeadsData) {
         setRecentLeads(recentLeadsData as unknown as Lead[]);
       }
 
-      // Fetch today's appointments
-      const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
-
-      const { data: appointmentsData, error: appointmentsError } = await buildQuery(
-        'appointments',
-        '*, leads(full_name, phone), patients(first_name, last_name, phone)'
-      )
-        .gte('scheduled_at', startOfDay)
-        .lte('scheduled_at', endOfDay)
-        .order('scheduled_at');
-
       if (!appointmentsError && appointmentsData) {
         setTodayAppointments(appointmentsData as unknown as Appointment[]);
-        setStats((prev) => ({
-          ...prev,
-          todayAppointments: appointmentsData.length,
-        }));
-      }
-
-      // Fetch conversations stats
-      const { data: conversations } = await buildQuery('conversations', 'id, status')
-        .in('status', ['active', 'waiting_response', 'escalated']);
-
-      if (conversations) {
-        setStats((prev) => ({
-          ...prev,
-          activeConversations: conversations.filter((c: any) => c.status !== 'escalated').length,
-          escalatedConversations: conversations.filter((c: any) => c.status === 'escalated').length,
-        }));
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
