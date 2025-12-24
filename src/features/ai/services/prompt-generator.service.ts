@@ -199,6 +199,10 @@ const VERTICAL_CONFIGS: Record<string, {
 
 /**
  * Recopila todo el contexto del negocio para generar un prompt
+ *
+ * OPTIMIZACIÓN: Usa el RPC get_tenant_ai_context que obtiene TODO en una sola llamada
+ * Esto es más eficiente que hacer 11 queries separadas y mantiene consistencia
+ * con el sistema LangGraph que usa el mismo RPC.
  */
 export async function collectBusinessContext(
   tenantId: string,
@@ -207,27 +211,26 @@ export async function collectBusinessContext(
   const supabase = createServerClient();
 
   try {
-    // 1. Obtener información del tenant
-    const { data: tenant, error: tenantError } = await supabase
-      .from('tenants')
-      .select('id, name, vertical')
-      .eq('id', tenantId)
-      .single();
+    // 1. Usar el RPC optimizado que trae TODO el contexto en una llamada
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_tenant_ai_context', {
+      p_tenant_id: tenantId,
+    });
 
-    if (tenantError || !tenant) {
-      console.error('[PromptGenerator] Tenant not found:', tenantId);
+    if (rpcError || !rpcData) {
+      console.error('[PromptGenerator] Error calling get_tenant_ai_context:', rpcError);
       return null;
     }
 
-    // 2. Obtener configuración específica según el tipo
+    // 2. Obtener configuración específica según el tipo de prompt
     let assistantName = 'Asistente';
-    let assistantPersonality = 'professional_friendly';
-    let customInstructions = '';
+    let assistantPersonality = rpcData.ai_config?.response_style || 'professional_friendly';
+    let customInstructions = rpcData.ai_config?.system_prompt || '';
     let escalationEnabled = false;
     let escalationPhone = '';
     let goodbyeMessage = '';
 
     if (promptType === 'voice') {
+      // Para voice, obtener config específica de voice_agent_config
       const { data: voiceConfig } = await supabase
         .from('voice_agent_config')
         .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message')
@@ -237,176 +240,88 @@ export async function collectBusinessContext(
       if (voiceConfig) {
         assistantName = voiceConfig.assistant_name || assistantName;
         assistantPersonality = voiceConfig.assistant_personality || assistantPersonality;
-        customInstructions = voiceConfig.custom_instructions || '';
+        customInstructions = voiceConfig.custom_instructions || customInstructions;
         escalationEnabled = voiceConfig.escalation_enabled || false;
         escalationPhone = voiceConfig.escalation_phone || '';
         goodbyeMessage = voiceConfig.goodbye_message || '';
       }
-    } else {
-      const { data: aiConfig } = await supabase
-        .from('ai_tenant_config')
-        .select('ai_personality, custom_instructions')
-        .eq('tenant_id', tenantId)
-        .single();
-
-      if (aiConfig) {
-        assistantPersonality = aiConfig.ai_personality || assistantPersonality;
-        customInstructions = aiConfig.custom_instructions || '';
-      }
     }
 
-    // 3. Obtener sucursales
-    const { data: branchesData } = await supabase
-      .from('branches')
-      .select('name, address, city, phone, operating_hours, is_headquarters')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('is_headquarters', { ascending: false })
-      .limit(10);
+    // 3. Mapear datos del RPC al formato BusinessContext
+    // El RPC ya trae: services, branches, doctors, faqs, custom_instructions,
+    // business_policies, knowledge_articles, response_templates, competitor_handling
 
-    const branches = (branchesData || []).map(b => ({
-      name: b.name,
-      address: b.address,
-      city: b.city,
-      phone: b.phone,
-      operatingHours: b.operating_hours,
-      isHeadquarters: b.is_headquarters,
+    const branches = (rpcData.branches || []).map((b: Record<string, unknown>) => ({
+      name: b.name as string,
+      address: (b.address as string) || undefined,
+      city: (b.city as string) || undefined,
+      phone: (b.phone as string) || undefined,
+      operatingHours: b.operating_hours as Record<string, { open: string; close: string }> | undefined,
+      isHeadquarters: (b.is_headquarters as boolean) || false,
     }));
 
-    // 4. Obtener servicios
-    const { data: servicesData } = await supabase
-      .from('services')
-      .select('name, description, short_description, ai_description, price_min, price_max, price_note, duration_minutes, category, special_instructions, requires_consultation, promotion_active, promotion_text')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('display_order', { ascending: true })
-      .limit(50);
-
-    const services = (servicesData || []).map(s => ({
-      name: s.name,
-      description: s.ai_description || s.short_description || s.description,
-      priceMin: s.price_min,
-      priceMax: s.price_max,
-      priceNote: s.price_note,
-      durationMinutes: s.duration_minutes,
-      category: s.category,
-      specialInstructions: s.special_instructions,
-      requiresConsultation: s.requires_consultation,
-      promotionActive: s.promotion_active,
-      promotionText: s.promotion_text,
+    const services = (rpcData.services || []).map((s: Record<string, unknown>) => ({
+      name: s.name as string,
+      description: (s.ai_description as string) || (s.description as string) || undefined,
+      priceMin: (s.price_min as number) || undefined,
+      priceMax: (s.price_max as number) || undefined,
+      priceNote: (s.price_note as string) || undefined,
+      durationMinutes: (s.duration_minutes as number) || undefined,
+      category: (s.category as string) || undefined,
+      specialInstructions: (s.special_instructions as string) || undefined,
+      requiresConsultation: (s.requires_consultation as boolean) || false,
+      promotionActive: (s.promotion_active as boolean) || false,
+      promotionText: (s.promotion_text as string) || undefined,
     }));
 
-    // 5. Obtener staff (solo roles relevantes)
-    const { data: staffData } = await supabase
-      .from('staff')
-      .select('first_name, last_name, display_name, role, specialty')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .in('role', ['dentist', 'specialist', 'owner', 'manager', 'doctor'])
-      .limit(20);
-
-    const staff = (staffData || [])
-      .filter(s => s.first_name || s.last_name || s.display_name)
-      .map(s => ({
-        name: s.display_name || `${s.first_name || ''} ${s.last_name || ''}`.trim(),
-        role: s.role,
-        specialty: s.specialty,
-      }));
-
-    // 6. Obtener FAQs
-    const { data: faqsData } = await supabase
-      .from('faqs')
-      .select('question, answer')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('display_order', { ascending: true })
-      .limit(20);
-
-    const faqs = (faqsData || []).map(f => ({
-      question: f.question,
-      answer: f.answer,
+    // RPC usa 'doctors' en lugar de 'staff'
+    const staff = (rpcData.doctors || []).map((s: Record<string, unknown>) => ({
+      name: (s.name as string) || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Staff',
+      role: (s.role_title as string) || (s.role as string) || undefined,
+      specialty: (s.specialty as string) || undefined,
     }));
 
-    // 7. Obtener Knowledge Base (instrucciones personalizadas)
-    const { data: instructionsData } = await supabase
-      .from('ai_custom_instructions')
-      .select('instruction_type, title, instruction')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('priority', { ascending: false })
-      .limit(30);
-
-    const customInstructionsList = (instructionsData || []).map(i => ({
-      type: i.instruction_type,
-      title: i.title,
-      instruction: i.instruction,
+    const faqs = (rpcData.faqs || []).map((f: Record<string, unknown>) => ({
+      question: f.question as string,
+      answer: f.answer as string,
     }));
 
-    // 8. Obtener políticas del negocio
-    const { data: policiesData } = await supabase
-      .from('ai_business_policies')
-      .select('policy_type, title, policy_text')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .limit(20);
-
-    const businessPolicies = (policiesData || []).map(p => ({
-      type: p.policy_type,
-      title: p.title,
-      policy: p.policy_text,
+    const customInstructionsList = (rpcData.custom_instructions || []).map((i: Record<string, unknown>) => ({
+      type: i.type as string,
+      title: i.title as string,
+      instruction: i.instruction as string,
     }));
 
-    // 9. Obtener artículos de conocimiento (Knowledge Base)
-    const { data: articlesData } = await supabase
-      .from('ai_knowledge_articles')
-      .select('category, title, content, tags')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('category')
-      .order('display_order', { ascending: true })
-      .limit(50);
-
-    const knowledgeArticles = (articlesData || []).map(a => ({
-      category: a.category,
-      title: a.title,
-      content: a.content,
-      tags: a.tags,
+    const businessPolicies = (rpcData.business_policies || []).map((p: Record<string, unknown>) => ({
+      type: p.type as string,
+      title: p.title as string,
+      policy: p.policy as string,
     }));
 
-    // 10. Obtener templates de respuesta
-    const { data: templatesData } = await supabase
-      .from('ai_response_templates')
-      .select('trigger_type, name, template, variables')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('trigger_type')
-      .limit(30);
-
-    const responseTemplates = (templatesData || []).map(t => ({
-      triggerType: t.trigger_type,
-      name: t.name,
-      template: t.template,
-      variables: t.variables,
+    const knowledgeArticles = (rpcData.knowledge_articles || []).map((a: Record<string, unknown>) => ({
+      category: a.category as string,
+      title: a.title as string,
+      content: a.content as string,
+      tags: undefined, // RPC no incluye tags, pero no es crítico
     }));
 
-    // 11. Obtener manejo de competidores
-    const { data: competitorsData } = await supabase
-      .from('ai_competitor_handling')
-      .select('competitor_name, response_strategy, key_differentiators')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .limit(20);
+    const responseTemplates = (rpcData.response_templates || []).map((t: Record<string, unknown>) => ({
+      triggerType: t.trigger as string,
+      name: t.name as string,
+      template: t.template as string,
+      variables: t.variables as string[] | undefined,
+    }));
 
-    const competitorHandling = (competitorsData || []).map(c => ({
-      competitorName: c.competitor_name,
-      responseStrategy: c.response_strategy,
-      keyDifferentiators: c.key_differentiators,
+    const competitorHandling = (rpcData.competitor_handling || []).map((c: Record<string, unknown>) => ({
+      competitorName: c.competitor as string,
+      responseStrategy: c.strategy as string,
+      keyDifferentiators: c.talking_points as string[] | undefined,
     }));
 
     return {
       tenantId,
-      tenantName: tenant.name,
-      vertical: tenant.vertical || 'general',
+      tenantName: rpcData.tenant_name,
+      vertical: rpcData.vertical || 'general',
       assistantName,
       assistantPersonality,
       customInstructions,
