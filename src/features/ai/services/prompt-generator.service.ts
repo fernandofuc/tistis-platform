@@ -221,6 +221,20 @@ export async function collectBusinessContext(
       return null;
     }
 
+    // Debug: Log data counts from RPC
+    console.log('[PromptGenerator] RPC Response for tenant:', tenantId, {
+      tenant_name: rpcData.tenant_name,
+      branches_count: (rpcData.branches || []).length,
+      services_count: (rpcData.services || []).length,
+      doctors_count: (rpcData.doctors || []).length,
+      faqs_count: (rpcData.faqs || []).length,
+      custom_instructions_count: (rpcData.custom_instructions || []).length,
+      business_policies_count: (rpcData.business_policies || []).length,
+      knowledge_articles_count: (rpcData.knowledge_articles || []).length,
+      response_templates_count: (rpcData.response_templates || []).length,
+      competitor_handling_count: (rpcData.competitor_handling || []).length,
+    });
+
     // 2. Obtener configuración específica según el tipo de prompt
     let assistantName = 'Asistente';
     let assistantPersonality = rpcData.ai_config?.response_style || 'professional_friendly';

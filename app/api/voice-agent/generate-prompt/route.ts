@@ -170,7 +170,13 @@ export async function GET(request: NextRequest) {
       .single();
 
     // Recopilar contexto del negocio usando el servicio centralizado
+    console.log('[Voice Agent Generate] Calling collectBusinessContext for tenant:', tenantId);
     const businessContext = await PromptGeneratorService.collectBusinessContext(tenantId, 'voice');
+    console.log('[Voice Agent Generate] BusinessContext result:', businessContext ? 'received' : 'null', {
+      branches: businessContext?.branches?.length || 0,
+      services: businessContext?.services?.length || 0,
+      staff: businessContext?.staff?.length || 0,
+    });
 
     // Contadores de datos de cada pestaña
     const branchesCount = businessContext?.branches?.length || 0;
