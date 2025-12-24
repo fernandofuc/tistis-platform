@@ -103,10 +103,74 @@ export async function POST(request: NextRequest) {
 
     if (promptError) {
       console.error('[Voice Agent Generate] Error calling RPC:', promptError);
-      return NextResponse.json(
-        { error: 'Error al generar prompt' },
-        { status: 500 }
-      );
+      console.log('[Voice Agent Generate] Using fallback prompt generation');
+
+      // Generar un prompt básico manualmente cuando RPC falla
+      const { data: tenantData } = await serviceSupabase
+        .from('tenants')
+        .select('name, vertical')
+        .eq('id', tenantId)
+        .single();
+
+      const { data: branches } = await serviceSupabase
+        .from('branches')
+        .select('name, address, phone')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .limit(5);
+
+      const { data: services } = await serviceSupabase
+        .from('services')
+        .select('name, short_description, price_min, duration_minutes')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .limit(20);
+
+      // Generar prompt básico
+      const verticalName = tenantData?.vertical === 'dental' ? 'consultorio dental' :
+                          tenantData?.vertical === 'restaurant' ? 'restaurante' :
+                          tenantData?.vertical === 'medical' ? 'consultorio médico' : 'negocio';
+
+      let basicPrompt = `Eres el asistente virtual de ${tenantData?.name || 'nuestro negocio'}, un ${verticalName}.\n\n`;
+      basicPrompt += `Tu objetivo principal es ayudar a los clientes a agendar citas y responder preguntas sobre nuestros servicios.\n\n`;
+
+      if (branches && branches.length > 0) {
+        basicPrompt += `SUCURSALES:\n`;
+        branches.forEach(b => {
+          basicPrompt += `- ${b.name}: ${b.address || 'Sin dirección'}, Tel: ${b.phone || 'Sin teléfono'}\n`;
+        });
+        basicPrompt += `\n`;
+      }
+
+      if (services && services.length > 0) {
+        basicPrompt += `SERVICIOS DISPONIBLES:\n`;
+        services.forEach(s => {
+          basicPrompt += `- ${s.name}${s.price_min ? ` ($${s.price_min})` : ''}${s.duration_minutes ? ` - ${s.duration_minutes} min` : ''}\n`;
+        });
+        basicPrompt += `\n`;
+      }
+
+      basicPrompt += `INSTRUCCIONES:\n`;
+      basicPrompt += `- Sé amable y profesional\n`;
+      basicPrompt += `- Ayuda a agendar citas preguntando día, hora y servicio deseado\n`;
+      basicPrompt += `- Si no sabes algo, sugiere hablar con un humano\n`;
+
+      // Guardar el prompt básico
+      await serviceSupabase
+        .from('voice_agent_config')
+        .update({
+          system_prompt: basicPrompt,
+          system_prompt_generated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('tenant_id', tenantId);
+
+      return NextResponse.json({
+        success: true,
+        prompt: basicPrompt,
+        generated_at: new Date().toISOString(),
+        fallback: true,
+      });
     }
 
     // Actualizar la configuración de voz con el nuevo prompt
@@ -134,8 +198,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Voice Agent Generate] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json(
-      { error: 'Error al generar prompt' },
+      { error: 'Error al generar prompt: ' + errorMessage },
       { status: 500 }
     );
   }
