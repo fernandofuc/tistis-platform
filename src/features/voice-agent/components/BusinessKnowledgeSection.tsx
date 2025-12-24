@@ -301,8 +301,8 @@ export function BusinessKnowledgeSection({
             </div>
           )}
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Stats Grid - Datos Principales */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
             {/* Sucursales */}
             <div className={`p-4 rounded-xl border transition-colors ${
               context?.has_branches
@@ -373,6 +373,51 @@ export function BusinessKnowledgeSection({
               </div>
               <p className="text-2xl font-bold text-slate-900">{context?.staff_count || 0}</p>
               <p className="text-xs text-slate-500">Personal</p>
+            </div>
+          </div>
+
+          {/* Stats Grid - Base de Conocimiento */}
+          <div className="grid grid-cols-3 gap-3">
+            {/* FAQs */}
+            <div className={`p-3 rounded-lg border transition-colors ${
+              context?.has_faqs
+                ? 'bg-blue-50/50 border-blue-100'
+                : 'bg-slate-50 border-slate-100'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <FileTextIcon className={`w-4 h-4 ${context?.has_faqs ? 'text-blue-500' : 'text-slate-400'}`} />
+                {context?.has_faqs && <CheckCircleIcon className="w-3 h-3 text-blue-500" />}
+              </div>
+              <p className="text-lg font-bold text-slate-900">{context?.faqs_count || 0}</p>
+              <p className="text-xs text-slate-500">FAQs</p>
+            </div>
+
+            {/* Artículos de Conocimiento */}
+            <div className={`p-3 rounded-lg border transition-colors ${
+              context?.has_knowledge_articles
+                ? 'bg-purple-50/50 border-purple-100'
+                : 'bg-slate-50 border-slate-100'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <FileTextIcon className={`w-4 h-4 ${context?.has_knowledge_articles ? 'text-purple-500' : 'text-slate-400'}`} />
+                {context?.has_knowledge_articles && <CheckCircleIcon className="w-3 h-3 text-purple-500" />}
+              </div>
+              <p className="text-lg font-bold text-slate-900">{context?.knowledge_articles_count || 0}</p>
+              <p className="text-xs text-slate-500">Artículos</p>
+            </div>
+
+            {/* Templates de Respuesta */}
+            <div className={`p-3 rounded-lg border transition-colors ${
+              context?.has_response_templates
+                ? 'bg-amber-50/50 border-amber-100'
+                : 'bg-slate-50 border-slate-100'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <FileTextIcon className={`w-4 h-4 ${context?.has_response_templates ? 'text-amber-500' : 'text-slate-400'}`} />
+                {context?.has_response_templates && <CheckCircleIcon className="w-3 h-3 text-amber-500" />}
+              </div>
+              <p className="text-lg font-bold text-slate-900">{context?.response_templates_count || 0}</p>
+              <p className="text-xs text-slate-500">Templates</p>
             </div>
           </div>
 

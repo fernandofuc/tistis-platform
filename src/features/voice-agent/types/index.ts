@@ -494,14 +494,30 @@ export interface PromptPreviewResponse {
   custom_instructions: string | null;
   preview_prompt: string | null;
   context_summary: {
-    has_branches: boolean;
-    branches_count: number;
-    has_services: boolean;
-    services_count: number;
-    has_staff: boolean;
-    staff_count: number;
+    // Info del tenant
     vertical: string;
     tenant_name: string;
+    // Sucursales y Staff
+    has_branches: boolean;
+    branches_count: number;
+    has_staff: boolean;
+    staff_count: number;
+    // Servicios
+    has_services: boolean;
+    services_count: number;
+    // Base de Conocimiento (TODAS las tablas)
+    has_faqs: boolean;
+    faqs_count: number;
+    has_custom_instructions: boolean;
+    custom_instructions_count: number;
+    has_policies: boolean;
+    policies_count: number;
+    has_knowledge_articles: boolean;
+    knowledge_articles_count: number;
+    has_response_templates: boolean;
+    response_templates_count: number;
+    has_competitor_handling: boolean;
+    competitor_handling_count: number;
   } | null;
 }
 
