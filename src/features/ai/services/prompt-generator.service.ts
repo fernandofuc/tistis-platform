@@ -198,6 +198,202 @@ const VERTICAL_CONFIGS: Record<string, {
 // ======================
 
 /**
+ * Fallback: Recopila contexto usando queries directas cuando el RPC falla
+ */
+async function collectBusinessContextFallback(
+  tenantId: string,
+  promptType: PromptType,
+  supabase: ReturnType<typeof createServerClient>
+): Promise<BusinessContext | null> {
+  try {
+    // 1. Obtener información del tenant
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id, name, vertical')
+      .eq('id', tenantId)
+      .single();
+
+    if (!tenant) {
+      console.error('[PromptGenerator Fallback] Tenant not found:', tenantId);
+      return null;
+    }
+
+    // 2. Configuración según tipo de prompt
+    let assistantName = 'Asistente';
+    let assistantPersonality = 'professional_friendly';
+    let customInstructions = '';
+    let escalationEnabled = false;
+    let escalationPhone = '';
+    let goodbyeMessage = '';
+
+    if (promptType === 'voice') {
+      const { data: voiceConfig } = await supabase
+        .from('voice_agent_config')
+        .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message')
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (voiceConfig) {
+        assistantName = voiceConfig.assistant_name || assistantName;
+        assistantPersonality = voiceConfig.assistant_personality || assistantPersonality;
+        customInstructions = voiceConfig.custom_instructions || '';
+        escalationEnabled = voiceConfig.escalation_enabled || false;
+        escalationPhone = voiceConfig.escalation_phone || '';
+        goodbyeMessage = voiceConfig.goodbye_message || '';
+      }
+    }
+
+    // 3. Sucursales
+    const { data: branchesData } = await supabase
+      .from('branches')
+      .select('name, address, city, phone, operating_hours, is_headquarters')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .order('is_headquarters', { ascending: false })
+      .limit(10);
+
+    // 4. Servicios
+    const { data: servicesData } = await supabase
+      .from('services')
+      .select('name, description, ai_description, price_min, price_max, price_note, duration_minutes, category, special_instructions, requires_consultation, promotion_active, promotion_text')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(50);
+
+    // 5. Staff
+    const { data: staffData } = await supabase
+      .from('staff')
+      .select('first_name, last_name, display_name, role, specialty')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .in('role', ['dentist', 'specialist', 'owner', 'manager', 'doctor'])
+      .limit(20);
+
+    // 6. FAQs
+    const { data: faqsData } = await supabase
+      .from('faqs')
+      .select('question, answer')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(20);
+
+    // 7-11. Knowledge Base tables
+    const { data: instructionsData } = await supabase
+      .from('ai_custom_instructions')
+      .select('instruction_type, title, instruction')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(30);
+
+    const { data: policiesData } = await supabase
+      .from('ai_business_policies')
+      .select('policy_type, title, policy_text')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(20);
+
+    const { data: articlesData } = await supabase
+      .from('ai_knowledge_articles')
+      .select('category, title, content')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(50);
+
+    const { data: templatesData } = await supabase
+      .from('ai_response_templates')
+      .select('trigger_type, name, template_text, variables_available')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(30);
+
+    const { data: competitorsData } = await supabase
+      .from('ai_competitor_handling')
+      .select('competitor_name, response_strategy, key_differentiators')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(20);
+
+    console.log('[PromptGenerator Fallback] Data loaded:', {
+      branches: (branchesData || []).length,
+      services: (servicesData || []).length,
+      staff: (staffData || []).length,
+      faqs: (faqsData || []).length,
+    });
+
+    return {
+      tenantId,
+      tenantName: tenant.name,
+      vertical: tenant.vertical || 'general',
+      assistantName,
+      assistantPersonality,
+      customInstructions,
+      branches: (branchesData || []).map(b => ({
+        name: b.name,
+        address: b.address,
+        city: b.city,
+        phone: b.phone,
+        operatingHours: b.operating_hours,
+        isHeadquarters: b.is_headquarters,
+      })),
+      services: (servicesData || []).map(s => ({
+        name: s.name,
+        description: s.ai_description || s.description,
+        priceMin: s.price_min,
+        priceMax: s.price_max,
+        priceNote: s.price_note,
+        durationMinutes: s.duration_minutes,
+        category: s.category,
+        specialInstructions: s.special_instructions,
+        requiresConsultation: s.requires_consultation,
+        promotionActive: s.promotion_active,
+        promotionText: s.promotion_text,
+      })),
+      staff: (staffData || []).map(s => ({
+        name: s.display_name || `${s.first_name || ''} ${s.last_name || ''}`.trim(),
+        role: s.role,
+        specialty: s.specialty,
+      })),
+      faqs: (faqsData || []).map(f => ({
+        question: f.question,
+        answer: f.answer,
+      })),
+      customInstructionsList: (instructionsData || []).map(i => ({
+        type: i.instruction_type,
+        title: i.title,
+        instruction: i.instruction,
+      })),
+      businessPolicies: (policiesData || []).map(p => ({
+        type: p.policy_type,
+        title: p.title,
+        policy: p.policy_text,
+      })),
+      knowledgeArticles: (articlesData || []).map(a => ({
+        category: a.category,
+        title: a.title,
+        content: a.content,
+      })),
+      responseTemplates: (templatesData || []).map(t => ({
+        triggerType: t.trigger_type,
+        name: t.name,
+        template: t.template_text,
+        variables: t.variables_available,
+      })),
+      competitorHandling: (competitorsData || []).map(c => ({
+        competitorName: c.competitor_name,
+        responseStrategy: c.response_strategy,
+        keyDifferentiators: c.key_differentiators,
+      })),
+      escalationEnabled,
+      escalationPhone,
+      goodbyeMessage,
+    };
+  } catch (error) {
+    console.error('[PromptGenerator Fallback] Error:', error);
+    return null;
+  }
+}
+
+/**
  * Recopila todo el contexto del negocio para generar un prompt
  *
  * OPTIMIZACIÓN: Usa el RPC get_tenant_ai_context que obtiene TODO en una sola llamada
@@ -218,7 +414,9 @@ export async function collectBusinessContext(
 
     if (rpcError || !rpcData) {
       console.error('[PromptGenerator] Error calling get_tenant_ai_context:', rpcError);
-      return null;
+      console.log('[PromptGenerator] Falling back to direct queries...');
+      // Fallback: usar queries directas si el RPC falla
+      return await collectBusinessContextFallback(tenantId, promptType, supabase);
     }
 
     // Debug: Log data counts from RPC
