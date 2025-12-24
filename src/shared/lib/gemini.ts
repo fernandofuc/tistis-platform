@@ -12,13 +12,15 @@ import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 /**
  * Modelos Gemini disponibles (Diciembre 2025)
  *
- * | Modelo              | Uso Recomendado                    |
- * |---------------------|------------------------------------|
- * | gemini-3.0-pro      | Razonamiento complejo, prompts     |
+ * | Modelo                  | Uso Recomendado                       |
+ * |-------------------------|---------------------------------------|
+ * | gemini-3-pro-preview    | Razonamiento complejo, agentes        |
+ * | gemini-3-flash-preview  | Velocidad + calidad, prompts          |
  */
 export const GEMINI_MODELS = {
-  // Gemini 3.0 - Modelo principal de razonamiento avanzado
-  GEMINI_3_PRO: 'gemini-3.0-pro',
+  // Gemini 3 - Modelos de razonamiento avanzado (Diciembre 2025)
+  GEMINI_3_PRO: 'gemini-3-pro-preview',
+  GEMINI_3_FLASH: 'gemini-3-flash-preview',
 } as const;
 
 export type GeminiModelId = typeof GEMINI_MODELS[keyof typeof GEMINI_MODELS];
