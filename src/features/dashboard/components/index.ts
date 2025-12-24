@@ -6,4 +6,5 @@ export { Sidebar } from './Sidebar';
 export { Header } from './Header';
 export { MobileBottomNav, MobileDrawer } from './MobileNav';
 export { DashboardLayout, PageWrapper, StatsGrid, ContentGrid } from './DashboardLayout';
+export { DashboardSkeleton } from './DashboardSkeleton';
 export { StatCard, LeadsStatCard, HotLeadsStatCard, AppointmentsStatCard, ConversationsStatCard } from './StatCard';

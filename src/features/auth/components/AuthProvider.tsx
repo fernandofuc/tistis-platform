@@ -77,17 +77,22 @@ interface ProtectedRouteProps {
   children: ReactNode;
   requiredRole?: 'owner' | 'admin' | 'specialist' | 'receptionist' | 'assistant';
   fallback?: ReactNode;
+  loadingSkeleton?: ReactNode;
 }
 
 export function ProtectedRoute({
   children,
   requiredRole,
   fallback,
+  loadingSkeleton,
 }: ProtectedRouteProps) {
   const { isAuthenticated, staff, initialized, loading } = useAuthContext();
 
-  // Still loading
+  // Still loading - show skeleton if provided for instant visual feedback
   if (!initialized || loading) {
+    if (loadingSkeleton) {
+      return <>{loadingSkeleton}</>;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full" />

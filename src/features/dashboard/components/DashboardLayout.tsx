@@ -12,6 +12,7 @@ import { AuthProvider, ProtectedRoute } from '@/features/auth';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { MobileBottomNav, MobileDrawer } from './MobileNav';
+import { DashboardSkeleton } from './DashboardSkeleton';
 import type { DashboardLayoutProps } from '../types';
 
 // ======================
@@ -20,12 +21,10 @@ import type { DashboardLayoutProps } from '../types';
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
-  const branches = useAppStore((state) => state.branches);
-  const setBranches = useAppStore((state) => state.setBranches);
 
   return (
     <AuthProvider>
-      <ProtectedRoute>
+      <ProtectedRoute loadingSkeleton={<DashboardSkeleton />}>
         {/* Navigation Progress Indicator */}
         <Suspense fallback={null}>
           <NavigationProgress />
