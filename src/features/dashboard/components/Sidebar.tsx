@@ -94,74 +94,113 @@ const icons = {
 interface NavItemWithFlag extends NavItem {
   featureFlag?: string; // Feature flag key required to show this item
   alwaysShow?: boolean; // Always show regardless of flags
+  section?: string; // Section grouping for visual organization
 }
 
+// ======================
+// NAVIGATION SECTIONS (Apple-like organization)
+// ======================
+const NAV_SECTIONS = {
+  MAIN: 'main',
+  OPERATIONS: 'operations',
+  COMMUNICATION: 'communication',
+  ANALYTICS: 'analytics',
+  AI_PREMIUM: 'ai_premium',
+  SYSTEM: 'system',
+} as const;
+
+const SECTION_LABELS: Record<string, string> = {
+  [NAV_SECTIONS.MAIN]: '',
+  [NAV_SECTIONS.OPERATIONS]: 'Operaciones',
+  [NAV_SECTIONS.COMMUNICATION]: 'Comunicación',
+  [NAV_SECTIONS.ANALYTICS]: 'Análisis',
+  [NAV_SECTIONS.AI_PREMIUM]: 'Inteligencia Artificial',
+  [NAV_SECTIONS.SYSTEM]: 'Sistema',
+};
+
 const navItemsConfig: NavItemWithFlag[] = [
+  // === MAIN ===
   {
     name: 'Dashboard',
     href: '/dashboard',
     icon: icons.dashboard,
-    alwaysShow: true, // Dashboard always visible
+    alwaysShow: true,
+    section: NAV_SECTIONS.MAIN,
   },
+  // === OPERATIONS ===
   {
     name: 'Calendario',
     href: '/dashboard/calendario',
     icon: icons.calendar,
     featureFlag: 'appointments_enabled',
+    section: NAV_SECTIONS.OPERATIONS,
   },
   {
     name: 'Leads',
     href: '/dashboard/leads',
     icon: icons.leads,
     featureFlag: 'leads_enabled',
+    section: NAV_SECTIONS.OPERATIONS,
   },
   {
     name: 'Pacientes',
     href: '/dashboard/patients',
     icon: icons.patients,
-    alwaysShow: true, // Always show for dental vertical
+    alwaysShow: true,
+    section: NAV_SECTIONS.OPERATIONS,
   },
   {
     name: 'Cotizaciones',
     href: '/dashboard/quotes',
     icon: icons.quotes,
     featureFlag: 'quotes_enabled',
+    section: NAV_SECTIONS.OPERATIONS,
   },
+  // === COMMUNICATION ===
   {
     name: 'Inbox',
     href: '/dashboard/inbox',
     icon: icons.inbox,
     featureFlag: 'conversations_enabled',
+    section: NAV_SECTIONS.COMMUNICATION,
   },
+  // === ANALYTICS ===
   {
     name: 'Analítica',
     href: '/dashboard/analytics',
     icon: icons.analytics,
-    alwaysShow: true, // Analytics always visible - basic feature
+    alwaysShow: true,
+    section: NAV_SECTIONS.ANALYTICS,
   },
+  // === AI PREMIUM ===
   {
     name: 'Business IA',
     href: '/dashboard/business-ia',
     icon: icons.businessIA,
-    alwaysShow: true, // Always show - but will show upgrade prompt for Starter plan
+    alwaysShow: true,
+    section: NAV_SECTIONS.AI_PREMIUM,
   },
   {
     name: 'AI Agent Voz',
     href: '/dashboard/ai-agent-voz',
     icon: icons.voiceAgent,
-    alwaysShow: true, // Always show - but will show upgrade prompt for non-Growth plans
+    alwaysShow: true,
+    section: NAV_SECTIONS.AI_PREMIUM,
   },
+  // === SYSTEM ===
   {
     name: 'Lealtad',
     href: '/dashboard/lealtad',
     icon: icons.loyalty,
-    alwaysShow: true, // Always show - but will show upgrade prompt for Starter plan
+    alwaysShow: true,
+    section: NAV_SECTIONS.SYSTEM,
   },
   {
     name: 'Configuración',
     href: '/dashboard/settings',
     icon: icons.settings,
-    alwaysShow: true, // Settings always visible
+    alwaysShow: true,
+    section: NAV_SECTIONS.SYSTEM,
   },
 ];
 
@@ -245,37 +284,37 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300',
+        'fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200/80 transition-all duration-300 flex flex-col',
         collapsed ? 'w-20' : 'w-64'
       )}
     >
       {/* Logo - Shows tenant name with TIS TIS branding */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100/80">
         {!collapsed && (
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-coral rounded-lg flex items-center justify-center">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-tis-coral to-tis-pink rounded-xl flex items-center justify-center shadow-sm">
               <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
             </div>
-            <span className="font-semibold text-gray-900 truncate max-w-[140px]">
+            <span className="font-semibold text-slate-800 truncate max-w-[140px]">
               {tenant?.name || 'TIS TIS'}
             </span>
           </Link>
         )}
         {collapsed && (
-          <div className="w-8 h-8 bg-gradient-coral rounded-lg flex items-center justify-center mx-auto">
+          <div className="w-9 h-9 bg-gradient-to-br from-tis-coral to-tis-pink rounded-xl flex items-center justify-center mx-auto shadow-sm">
             <span className="text-white font-bold text-sm">{getTenantInitial()}</span>
           </div>
         )}
       </div>
 
-      {/* Plan badge (collapsed shows nothing, expanded shows plan) */}
+      {/* Plan badge - Premium styled */}
       {!collapsed && tenant?.plan && (
-        <div className="px-4 py-2 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-slate-100/80">
           <span className={cn(
-            'text-xs font-medium px-2 py-1 rounded-full',
-            tenant.plan === 'growth' && 'bg-purple-100 text-purple-700',
-            tenant.plan === 'essentials' && 'bg-green-100 text-green-700',
-            tenant.plan === 'starter' && 'bg-gray-100 text-gray-700',
+            'inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-lg',
+            tenant.plan === 'growth' && 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-700 border border-purple-200/50',
+            tenant.plan === 'essentials' && 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 text-emerald-700 border border-emerald-200/50',
+            tenant.plan === 'starter' && 'bg-slate-100 text-slate-600 border border-slate-200/50',
           )}>
             Plan {tenant.plan.charAt(0).toUpperCase() + tenant.plan.slice(1)}
           </span>
@@ -283,66 +322,99 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       )}
 
       {/* Branch Selector - For multi-branch tenants */}
-      <div className="px-4 py-3 border-b border-gray-100">
+      <div className="px-4 py-3 border-b border-slate-100/80">
         <BranchSelector collapsed={collapsed} />
       </div>
 
-      {/* Navigation */}
-      <nav className="p-4 space-y-1">
-        {visibleNavItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const displayName = getDisplayName(item);
+      {/* Navigation - Organized by sections with Apple-like spacing */}
+      <nav className="px-3 py-4 space-y-6 overflow-y-auto flex-1" style={{ maxHeight: 'calc(100vh - 240px)' }}>
+        {/* Group items by section */}
+        {Object.values(NAV_SECTIONS).map((sectionKey) => {
+          const sectionItems = visibleNavItems.filter(item => item.section === sectionKey);
+          if (sectionItems.length === 0) return null;
+
+          const sectionLabel = SECTION_LABELS[sectionKey];
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                isActive
-                  ? 'bg-tis-coral/10 text-tis-coral'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-                collapsed && 'justify-center'
+            <div key={sectionKey} className="space-y-1">
+              {/* Section Label - Only show if not collapsed and has label */}
+              {!collapsed && sectionLabel && (
+                <div className="px-3 pb-2">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    {sectionLabel}
+                  </span>
+                </div>
               )}
-              title={collapsed ? displayName : undefined}
-            >
-              <span className={cn(isActive && 'text-tis-coral')}>{item.icon}</span>
-              {!collapsed && (
-                <span className="font-medium">{displayName}</span>
-              )}
-              {!collapsed && item.badge && (
-                <span className="ml-auto bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  {item.badge}
-                </span>
-              )}
-            </Link>
+
+              {/* Section Items */}
+              <div className="space-y-1">
+                {sectionItems.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const displayName = getDisplayName(item);
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
+                        isActive
+                          ? 'bg-tis-coral/10 text-tis-coral font-medium'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                        collapsed && 'justify-center px-2'
+                      )}
+                      title={collapsed ? displayName : undefined}
+                    >
+                      <span className={cn(
+                        'flex-shrink-0 transition-colors',
+                        isActive ? 'text-tis-coral' : 'text-slate-400'
+                      )}>
+                        {item.icon}
+                      </span>
+                      {!collapsed && (
+                        <span className="text-sm">{displayName}</span>
+                      )}
+                      {!collapsed && item.badge && (
+                        <span className="ml-auto bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </nav>
 
-      {/* Vertical indicator (dental, restaurant, etc) */}
-      {!collapsed && tenant?.vertical && (
-        <div className="absolute bottom-20 left-0 right-0 px-4">
-          <div className="text-xs text-gray-400 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-400"></span>
-            Vertical: {tenant.vertical}
+      {/* Bottom Section - Vertical indicator & Collapse */}
+      <div className="absolute bottom-0 left-0 right-0 border-t border-slate-100/80 bg-slate-50/50">
+        {/* Vertical indicator (dental, restaurant, etc) */}
+        {!collapsed && tenant?.vertical && (
+          <div className="px-4 py-3">
+            <div className="text-[11px] text-slate-400 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span className="font-medium">Vertical:</span>
+              <span className="text-slate-500 capitalize">{tenant.vertical}</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Collapse Button */}
-      <div className="absolute bottom-4 left-0 right-0 px-4">
-        <button
-          onClick={() => handleCollapse(!collapsed)}
-          className={cn(
-            'flex items-center gap-3 px-3 py-2.5 rounded-lg w-full',
-            'text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors',
-            collapsed && 'justify-center'
-          )}
-        >
-          {collapsed ? icons.expand : icons.collapse}
-          {!collapsed && <span className="font-medium">Minimizar</span>}
-        </button>
+        {/* Collapse Button */}
+        <div className={cn('px-3 pb-4', !collapsed && tenant?.vertical ? 'pt-0' : 'pt-4')}>
+          <button
+            onClick={() => handleCollapse(!collapsed)}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl w-full',
+              'text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all duration-200',
+              collapsed && 'justify-center px-2'
+            )}
+          >
+            {collapsed ? icons.expand : icons.collapse}
+            {!collapsed && <span className="text-sm font-medium">Minimizar</span>}
+          </button>
+        </div>
       </div>
     </aside>
   );
