@@ -515,6 +515,26 @@ function VoiceSelector({
 }
 
 // ======================
+// PHONE NUMBER STATUS HELPER
+// ======================
+function getPhoneStatusDisplay(status: string): { label: string; color: string; bgColor: string } {
+  switch (status) {
+    case 'active':
+      return { label: 'Activo', color: 'text-tis-green', bgColor: 'bg-tis-green/10' };
+    case 'pending':
+      return { label: 'En proceso', color: 'text-amber-600', bgColor: 'bg-amber-50' };
+    case 'provisioning':
+      return { label: 'Configurando', color: 'text-blue-600', bgColor: 'bg-blue-50' };
+    case 'released':
+      return { label: 'Liberado', color: 'text-slate-500', bgColor: 'bg-slate-100' };
+    case 'failed':
+      return { label: 'Error', color: 'text-red-600', bgColor: 'bg-red-50' };
+    default:
+      return { label: 'Pendiente', color: 'text-slate-500', bgColor: 'bg-slate-100' };
+  }
+}
+
+// ======================
 // PHONE NUMBER MANAGER COMPONENT
 // ======================
 
@@ -556,27 +576,26 @@ function PhoneNumberManager({
   };
 
   return (
-    <PremiumCard className="overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="p-6 border-b border-slate-100">
+      <div className="p-5 border-b border-slate-100 bg-slate-50/50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-tis-green to-emerald-500 flex items-center justify-center shadow-lg shadow-tis-green/20">
-              <PhoneIcon className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center">
+              <PhoneIcon className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Números Telefónicos</h3>
-              <p className="text-sm text-slate-500">Gestiona los números de tu asistente</p>
+              <h3 className="text-base font-semibold text-slate-900">Números Telefónicos</h3>
+              <p className="text-xs text-slate-500">Gestiona los números de tu asistente</p>
             </div>
           </div>
-          <Button
+          <button
             onClick={() => setShowAreaCodes(!showAreaCodes)}
-            size="sm"
-            className="gap-2"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-xl hover:bg-slate-800 transition-colors"
           >
             <PlusIcon className="w-4 h-4" />
-            Agregar Número
-          </Button>
+            <span>Agregar Número</span>
+          </button>
         </div>
       </div>
 
@@ -619,70 +638,74 @@ function PhoneNumberManager({
       )}
 
       {/* Content */}
-      <div className="p-6">
+      <div className="p-5">
         {/* Lista de números existentes */}
         {phoneNumbers.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {phoneNumbers.map((number) => (
               <div
                 key={number.id}
-                className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100/50 transition-colors"
+                className="flex items-center justify-between p-4 bg-slate-50/80 rounded-xl border border-slate-100 hover:border-slate-200 transition-all group"
               >
-                <div className="flex items-center gap-5">
-                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-sm ${
+                <div className="flex items-center gap-4">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${
                     number.status === 'active'
-                      ? 'bg-gradient-to-br from-tis-green to-emerald-500'
+                      ? 'bg-slate-900'
                       : 'bg-amber-100'
                   }`}>
-                    <PhoneIcon className={`w-7 h-7 ${
+                    <PhoneIcon className={`w-5 h-5 ${
                       number.status === 'active' ? 'text-white' : 'text-amber-600'
                     }`} />
                   </div>
                   <div>
-                    <p className="font-mono font-bold text-slate-900 text-xl tracking-tight">
+                    <p className="font-mono font-semibold text-slate-900 text-base tracking-tight">
                       {number.phone_number_display || number.phone_number}
                     </p>
-                    <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
-                      <span className="font-medium">LADA {number.area_code}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-slate-500">LADA {number.area_code}</span>
                       <span className="w-1 h-1 rounded-full bg-slate-300" />
-                      <span className={`font-semibold ${
-                        number.status === 'active' ? 'text-tis-green' : 'text-amber-600'
-                      }`}>
-                        {number.status === 'active' ? 'Activo' : number.status}
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${getPhoneStatusDisplay(number.status).bgColor} ${getPhoneStatusDisplay(number.status).color}`}>
+                        {number.status === 'pending' && (
+                          <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
+                        )}
+                        {getPhoneStatusDisplay(number.status).label}
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-slate-900">{number.total_calls}</p>
-                    <p className="text-xs text-slate-500">llamadas</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-slate-900">{number.total_minutes}</p>
-                    <p className="text-xs text-slate-500">minutos</p>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 text-center">
+                    <div className="px-3">
+                      <p className="text-sm font-bold text-slate-900">{number.total_calls}</p>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">llamadas</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-200" />
+                    <div className="px-3">
+                      <p className="text-sm font-bold text-slate-900">{number.total_minutes}</p>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">minutos</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => onReleaseNumber(number.id)}
-                    className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                     title="Liberar número"
                   >
-                    <TrashIcon className="w-5 h-5" />
+                    <TrashIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-16">
-            <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-5">
-              <PhoneIcon className="w-10 h-10 text-slate-400" />
+          <div className="text-center py-12">
+            <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <PhoneIcon className="w-7 h-7 text-slate-400" />
             </div>
-            <p className="text-slate-900 font-semibold text-lg mb-2">
+            <p className="text-slate-900 font-medium text-sm mb-1">
               No tienes números telefónicos
             </p>
-            <p className="text-slate-500 max-w-sm mx-auto">
-              Solicita un número para comenzar a recibir llamadas con tu asistente de voz
+            <p className="text-slate-500 text-xs max-w-xs mx-auto">
+              Solicita un número para comenzar a recibir llamadas
             </p>
           </div>
         )}
@@ -696,60 +719,87 @@ function PhoneNumberManager({
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-6 pt-6 border-t border-slate-200">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-tis-coral/10 flex items-center justify-center">
-                    <PhoneIcon className="w-4 h-4 text-tis-coral" />
+              <div className="mt-5 pt-5 border-t border-slate-100">
+                {/* Header del selector */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-900">
+                        Selecciona una LADA
+                      </h4>
+                      <p className="text-[10px] text-slate-500">
+                        Elige el código de área para tu número
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-900">
-                      Selecciona una LADA para tu número
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Haz click en una LADA y luego confirma tu solicitud
-                    </p>
-                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAreaCodes(false);
+                      setSelectedAreaCode(null);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-72 overflow-y-auto p-1">
+
+                {/* Grid de LADAs */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-56 overflow-y-auto pr-1">
                   {MEXICO_AREA_CODES.map((area) => (
                     <button
                       key={area.code}
                       onClick={() => {
-                        console.log('[LADA Click] Seleccionando LADA:', area.code, area.city);
                         setSelectedAreaCode(area.code);
                       }}
-                      className={`p-4 rounded-xl text-left transition-all ${
+                      className={`p-3 rounded-xl text-left transition-all ${
                         selectedAreaCode === area.code
-                          ? 'bg-gradient-to-br from-tis-coral to-tis-pink text-white shadow-lg shadow-tis-coral/20'
-                          : 'bg-slate-50 border border-slate-200 hover:border-tis-coral/30 hover:bg-slate-100'
+                          ? 'bg-slate-900 text-white ring-2 ring-slate-900 ring-offset-2'
+                          : 'bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
                       }`}
                     >
-                      <p className={`font-mono font-bold text-lg ${selectedAreaCode === area.code ? 'text-white' : 'text-slate-900'}`}>
-                        ({area.code})
+                      <p className={`font-mono font-bold text-sm ${selectedAreaCode === area.code ? 'text-white' : 'text-slate-900'}`}>
+                        {area.code}
                       </p>
-                      <p className={`text-sm truncate ${selectedAreaCode === area.code ? 'text-white/80' : 'text-slate-500'}`}>
+                      <p className={`text-[10px] truncate ${selectedAreaCode === area.code ? 'text-slate-300' : 'text-slate-500'}`}>
                         {area.city}
                       </p>
                     </button>
                   ))}
                 </div>
+
+                {/* Footer con botón de confirmar */}
                 {selectedAreaCode && (
-                  <div className="mt-6 flex justify-end gap-3">
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setShowAreaCodes(false);
-                        setSelectedAreaCode(null);
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                      LADA seleccionada: <span className="font-mono font-semibold text-slate-900">{selectedAreaCode}</span>
+                    </p>
+                    <button
                       onClick={handleRequestClick}
                       disabled={loading}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-xl hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      {loading ? 'Solicitando...' : `Solicitar número (${selectedAreaCode})`}
-                    </Button>
+                      {loading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Solicitando...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
+                          </svg>
+                          Confirmar solicitud
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
               </div>
@@ -757,7 +807,7 @@ function PhoneNumberManager({
           )}
         </AnimatePresence>
       </div>
-    </PremiumCard>
+    </div>
   );
 }
 

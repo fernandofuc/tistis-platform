@@ -94,18 +94,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const searchPattern = `%${query}%`;
+    // Use wildcard pattern for PostgREST ilike
+    const searchPattern = `*${query}*`;
     const results: SearchResult[] = [];
 
     // Search in Leads
-    const { data: leads } = await supabase
+    const { data: leads, error: leadsError } = await supabase
       .from('leads')
       .select('id, full_name, first_name, last_name, phone, email, classification, status')
       .eq('tenant_id', tenantId)
       .or(`full_name.ilike.${searchPattern},first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},phone.ilike.${searchPattern},email.ilike.${searchPattern}`)
       .limit(limit);
 
-    if (leads) {
+    if (leadsError) {
+      console.error('[Search API] Leads error:', leadsError);
+    }
+
+    if (leads && leads.length > 0) {
       for (const lead of leads) {
         const name = lead.full_name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'Sin nombre';
         results.push({
@@ -123,14 +128,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Search in Patients
-    const { data: patients } = await supabase
+    const { data: patients, error: patientsError } = await supabase
       .from('patients')
       .select('id, full_name, first_name, last_name, phone, email')
       .eq('tenant_id', tenantId)
       .or(`full_name.ilike.${searchPattern},first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},phone.ilike.${searchPattern},email.ilike.${searchPattern}`)
       .limit(limit);
 
-    if (patients) {
+    if (patientsError) {
+      console.error('[Search API] Patients error:', patientsError);
+    }
+
+    if (patients && patients.length > 0) {
       for (const patient of patients) {
         const name = patient.full_name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || 'Sin nombre';
         results.push({
@@ -143,25 +152,30 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Search in Appointments (by patient name or notes)
-    const { data: appointments } = await supabase
+    // Search in Appointments (simplified - search by notes only, get patient data separately)
+    const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
       .select(`
         id,
         start_time,
         status,
         notes,
-        patients!inner(full_name, first_name, last_name)
+        patient_id,
+        patients(full_name, first_name, last_name)
       `)
       .eq('tenant_id', tenantId)
-      .or(`notes.ilike.${searchPattern},patients.full_name.ilike.${searchPattern},patients.first_name.ilike.${searchPattern},patients.last_name.ilike.${searchPattern}`)
+      .ilike('notes', searchPattern)
       .gte('start_time', new Date().toISOString())
       .order('start_time', { ascending: true })
       .limit(limit);
 
-    if (appointments) {
+    if (appointmentsError) {
+      console.error('[Search API] Appointments error:', appointmentsError);
+    }
+
+    if (appointments && appointments.length > 0) {
       for (const apt of appointments) {
-        const patient = apt.patients as { full_name?: string; first_name?: string; last_name?: string };
+        const patient = apt.patients as { full_name?: string; first_name?: string; last_name?: string } | null;
         const patientName = patient?.full_name || `${patient?.first_name || ''} ${patient?.last_name || ''}`.trim() || 'Sin paciente';
         const date = new Date(apt.start_time);
         const formattedDate = date.toLocaleDateString('es-MX', {
