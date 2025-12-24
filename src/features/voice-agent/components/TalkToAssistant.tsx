@@ -334,7 +334,7 @@ export function TalkToAssistant({
                         Tu asistente dirá
                       </p>
                       <p className="text-sm text-slate-700 leading-relaxed">
-                        "{config.first_message}"
+                        &ldquo;{config.first_message}&rdquo;
                       </p>
                     </div>
                   </div>
