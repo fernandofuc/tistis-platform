@@ -267,15 +267,13 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
         collapsed ? 'w-20' : 'w-64'
       )}
     >
-      {/* Logo TIS TIS - Links to landing page */}
+      {/* Logo TIS TIS - Links to dashboard home */}
       <div className={cn(
         "h-16 flex items-center border-b border-slate-100/80 transition-all duration-300",
         collapsed ? "justify-center px-2" : "px-4"
       )}>
         <Link
-          href="https://tistis.com"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/dashboard"
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
           <Image
