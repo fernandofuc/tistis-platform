@@ -274,13 +274,16 @@ export async function requestPhoneNumber(
     .single();
 
   // Crear registro pendiente
+  // Usamos base36 para generar un ID temporal más corto (max 8 chars)
+  // que cabe en varchar(20) como "pend_xxxxxxxx"
+  const tempId = Date.now().toString(36).slice(-8);
   const { data: phoneNumber, error } = await supabase
     .from('voice_phone_numbers')
     .insert({
       tenant_id: tenantId,
       voice_agent_config_id: config?.id,
       branch_id: branchId || null,
-      phone_number: `pending_${Date.now()}`, // Temporal hasta provisioning
+      phone_number: `pend_${tempId}`, // Temporal hasta provisioning (max 13 chars)
       area_code: areaCode,
       country_code: '+52',
       telephony_provider: 'twilio',
