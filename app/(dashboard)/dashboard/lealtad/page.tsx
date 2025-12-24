@@ -1,6 +1,6 @@
 // =====================================================
 // TIS TIS PLATFORM - Loyalty Page
-// Main loyalty management page with plan-based access
+// Premium Design with Apple/TIS TIS Professional Style
 // =====================================================
 
 'use client';
@@ -20,7 +20,7 @@ import { RewardsManagement } from '@/src/features/loyalty/components/RewardsMana
 import { LoyaltySettings } from '@/src/features/loyalty/components/LoyaltySettings';
 
 // ======================
-// TOGGLE SWITCH COMPONENT
+// TOGGLE SWITCH COMPONENT - Professional Style
 // ======================
 interface ToggleSwitchProps {
   enabled: boolean;
@@ -35,8 +35,8 @@ function ToggleSwitch({ enabled, onToggle, loading }: ToggleSwitchProps) {
       onClick={onToggle}
       disabled={loading}
       className={cn(
-        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-tis-coral focus:ring-offset-2',
-        enabled ? 'bg-tis-coral' : 'bg-gray-200',
+        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:ring-offset-2',
+        enabled ? 'bg-tis-coral' : 'bg-slate-200',
         loading && 'opacity-50 cursor-not-allowed'
       )}
     >
@@ -51,7 +51,7 @@ function ToggleSwitch({ enabled, onToggle, loading }: ToggleSwitchProps) {
 }
 
 // ======================
-// FEATURE TOGGLE CARD
+// FEATURE TOGGLE CARD - Professional Design
 // ======================
 interface FeatureToggleCardProps {
   title: string;
@@ -76,34 +76,34 @@ function FeatureToggleCard({
 }: FeatureToggleCardProps) {
   return (
     <div className={cn(
-      'relative rounded-xl border-2 p-5 transition-all duration-200',
+      'relative rounded-2xl border p-5 transition-all duration-200',
       enabled
-        ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-orange-50'
-        : 'border-gray-200 bg-gray-50'
+        ? 'border-slate-200 bg-white shadow-sm'
+        : 'border-slate-200/80 bg-slate-50/50'
     )}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <div className={cn(
-            'flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center',
+            'flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all',
             enabled
-              ? 'bg-gradient-to-br from-tis-coral to-orange-500 text-white'
-              : 'bg-gray-200 text-gray-500'
+              ? 'bg-slate-900 text-white'
+              : 'bg-slate-200 text-slate-400'
           )}>
             {icon}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{title}</h3>
-            <p className="text-sm text-gray-500 mt-0.5">{description}</p>
-            <div className="mt-2">
+            <h3 className="font-semibold text-slate-900">{title}</h3>
+            <p className="text-sm text-slate-500 mt-0.5">{description}</p>
+            <div className="mt-2.5">
               <span className={cn(
-                'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full',
+                'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
                 enabled
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-200 text-gray-600'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                  : 'bg-slate-100 text-slate-500 border border-slate-200'
               )}>
                 <span className={cn(
                   'w-1.5 h-1.5 rounded-full',
-                  enabled ? 'bg-green-500' : 'bg-gray-400'
+                  enabled ? 'bg-emerald-500' : 'bg-slate-400'
                 )} />
                 {enabled ? activeLabel : inactiveLabel}
               </span>
@@ -136,7 +136,7 @@ const TABS: Tab[] = [
 ];
 
 // ======================
-// UPGRADE PROMPT COMPONENT
+// UPGRADE PROMPT COMPONENT - Professional Design
 // ======================
 function UpgradePrompt() {
   const router = useRouter();
@@ -147,38 +147,37 @@ function UpgradePrompt() {
         {/* Blurred Preview Background */}
         <div className="absolute inset-0 rounded-2xl overflow-hidden">
           <div className="blur-sm opacity-50 p-8 bg-white">
-            {/* Fake dashboard preview */}
             <div className="grid grid-cols-4 gap-4 mb-8">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="bg-gray-100 rounded-xl p-6 h-28" />
+                <div key={i} className="bg-slate-100 rounded-xl p-6 h-28" />
               ))}
             </div>
             <div className="grid grid-cols-2 gap-6">
-              <div className="bg-gray-100 rounded-xl p-6 h-64" />
-              <div className="bg-gray-100 rounded-xl p-6 h-64" />
+              <div className="bg-slate-100 rounded-xl p-6 h-64" />
+              <div className="bg-slate-100 rounded-xl p-6 h-64" />
             </div>
           </div>
         </div>
 
         {/* Upgrade Card */}
-        <div className="relative z-10 bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mx-auto max-w-lg mt-20">
+        <div className="relative z-10 bg-white rounded-2xl shadow-xl border border-slate-200 p-8 mx-auto max-w-lg mt-20">
           <div className="text-center">
             {/* Lock Icon */}
-            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mb-6">
+            <div className="mx-auto w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mb-6">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
               Sistema de Lealtad
             </h2>
-            <p className="text-gray-500 mb-6">
+            <p className="text-slate-500 mb-6">
               Fideliza a tus pacientes con tokens, membresías y recompensas personalizadas.
             </p>
 
             {/* Features List */}
-            <div className="text-left bg-gray-50 rounded-xl p-4 mb-6">
+            <div className="text-left bg-slate-50 rounded-xl p-4 mb-6">
               <ul className="space-y-3">
                 {[
                   'Sistema de tokens por visitas y acciones',
@@ -187,8 +186,8 @@ function UpgradePrompt() {
                   'Mensajes automáticos con IA',
                   'Reactivación de pacientes inactivos',
                 ].map((feature, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <li key={i} className="flex items-center gap-3 text-sm text-slate-600">
+                    <svg className="w-5 h-5 text-tis-coral flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     {feature}
@@ -200,12 +199,12 @@ function UpgradePrompt() {
             {/* Upgrade Button */}
             <button
               onClick={() => router.push('/dashboard/settings?tab=billing')}
-              className="w-full bg-gradient-to-r from-tis-coral to-orange-500 text-white font-semibold py-3 px-6 rounded-xl hover:from-tis-coral/90 hover:to-orange-500/90 transition-all shadow-lg hover:shadow-xl"
+              className="w-full bg-slate-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"
             >
               Actualizar a Essentials
             </button>
 
-            <p className="text-xs text-gray-400 mt-4">
+            <p className="text-xs text-slate-400 mt-4">
               Disponible desde el plan Essentials
             </p>
           </div>
@@ -343,7 +342,7 @@ export default function LealtadPage() {
   if (tenantLoading || flagsLoading || programLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tis-coral"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 border-t-tis-coral"></div>
       </div>
     );
   }
@@ -362,7 +361,6 @@ export default function LealtadPage() {
 
   // Render active tab content
   const renderTabContent = () => {
-    // If trying to view disabled tab, redirect to overview
     if (activeTab === 'tokens' && !program?.tokens_enabled) {
       return <LoyaltyOverview />;
     }
@@ -391,14 +389,14 @@ export default function LealtadPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Programa de Lealtad</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900">Programa de Lealtad</h1>
+          <p className="text-slate-500 mt-1">
             Gestiona tokens, membresías y recompensas para fidelizar a tus pacientes
           </p>
         </div>
       </div>
 
-      {/* Feature Toggles */}
+      {/* Feature Toggles - Professional Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FeatureToggleCard
           title="Sistema de Tokens"
@@ -409,7 +407,7 @@ export default function LealtadPage() {
           activeLabel="Tokens Activos"
           inactiveLabel="Tokens Desactivados"
           icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
@@ -424,7 +422,7 @@ export default function LealtadPage() {
           activeLabel="Membresías Activas"
           inactiveLabel="Membresías Desactivadas"
           icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
             </svg>
           }
@@ -433,16 +431,16 @@ export default function LealtadPage() {
 
       {/* Info banner when features are disabled */}
       {(!program?.tokens_enabled || !program?.membership_enabled) && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-slate-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
-              <p className="text-sm font-medium text-amber-800">
+              <p className="text-sm font-medium text-slate-700">
                 Funciones desactivadas
               </p>
-              <p className="text-sm text-amber-700 mt-0.5">
+              <p className="text-sm text-slate-500 mt-0.5">
                 {!program?.tokens_enabled && !program?.membership_enabled
                   ? 'El sistema de tokens y membresías están desactivados. Actívalos para gestionar la lealtad de tus pacientes.'
                   : !program?.tokens_enabled
@@ -455,18 +453,18 @@ export default function LealtadPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+      {/* Tabs - Professional Style */}
+      <div className="border-b border-slate-200">
+        <nav className="-mb-px flex space-x-6">
           {availableTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors',
+                'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200',
                 activeTab === tab.id
                   ? 'border-tis-coral text-tis-coral'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               )}
             >
               {tab.name}

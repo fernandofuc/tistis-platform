@@ -285,9 +285,13 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
             priority
           />
           {!collapsed && (
-            <span className="font-bold text-slate-800 text-lg tracking-tight">
-              TIS TIS
-            </span>
+            <Image
+              src="/logos/tis-text-logo.png"
+              alt="TIS TIS"
+              width={80}
+              height={24}
+              className="object-contain"
+            />
           )}
         </Link>
       </div>

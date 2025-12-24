@@ -28,30 +28,30 @@ const CATEGORY_CONFIG = {
   engagement: {
     name: 'Engagement',
     description: 'Mensajes para mantener a los pacientes activos',
-    color: 'bg-blue-500',
-    bgColor: 'bg-blue-50',
-    textColor: 'text-blue-700',
+    color: 'bg-slate-700',
+    bgColor: 'bg-slate-50',
+    textColor: 'text-slate-700',
   },
   retention: {
     name: 'Retención',
     description: 'Recuperar pacientes inactivos',
-    color: 'bg-amber-500',
-    bgColor: 'bg-amber-50',
-    textColor: 'text-amber-700',
+    color: 'bg-slate-600',
+    bgColor: 'bg-slate-50',
+    textColor: 'text-slate-700',
   },
   conversion: {
     name: 'Conversión',
     description: 'Impulsar canjes y ventas',
-    color: 'bg-green-500',
-    bgColor: 'bg-green-50',
-    textColor: 'text-green-700',
+    color: 'bg-slate-500',
+    bgColor: 'bg-slate-50',
+    textColor: 'text-slate-700',
   },
   celebration: {
     name: 'Celebración',
     description: 'Ocasiones especiales',
-    color: 'bg-purple-500',
-    bgColor: 'bg-purple-50',
-    textColor: 'text-purple-700',
+    color: 'bg-slate-400',
+    bgColor: 'bg-slate-50',
+    textColor: 'text-slate-700',
   },
 };
 
@@ -604,15 +604,15 @@ function MessageTemplatesSection() {
       </div>
 
       {/* Info Banner */}
-      <div className="bg-gradient-to-r from-tis-coral/10 to-purple-100/50 rounded-xl p-4 flex items-start gap-4">
-        <div className="w-10 h-10 bg-tis-coral/20 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg className="w-5 h-5 text-tis-coral" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start gap-4">
+        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+          <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
           </svg>
         </div>
         <div>
-          <h4 className="font-medium text-gray-900">Sistema de Mensajes Inteligente</h4>
-          <p className="text-sm text-gray-600 mt-1">
+          <h4 className="font-medium text-slate-900">Sistema de Mensajes Inteligente</h4>
+          <p className="text-sm text-slate-600 mt-1">
             Configura las plantillas que el AI usará para comunicarse automáticamente con tus pacientes.
             Cada mensaje se personaliza con los datos del paciente en tiempo real.
           </p>

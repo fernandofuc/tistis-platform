@@ -87,44 +87,44 @@ function StatsHeader({ rewards, tokensName }: StatsHeaderProps) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-xl p-5 border border-violet-200">
+      <div className="bg-white rounded-xl p-5 border border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center">
-            <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
             </svg>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-900">{activeRewards}</p>
-            <p className="text-sm text-gray-500">Recompensas Activas</p>
+            <p className="text-2xl font-bold text-slate-900">{activeRewards}</p>
+            <p className="text-sm text-slate-500">Recompensas Activas</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-5 border border-emerald-200">
+      <div className="bg-white rounded-xl p-5 border border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-900">{totalStock > 0 ? totalStock : '∞'}</p>
-            <p className="text-sm text-gray-500">Stock Disponible</p>
+            <p className="text-2xl font-bold text-slate-900">{totalStock > 0 ? totalStock : '∞'}</p>
+            <p className="text-sm text-slate-500">Stock Disponible</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-tis-coral/10 to-orange-50 rounded-xl p-5 border border-tis-coral/20">
+      <div className="bg-white rounded-xl p-5 border border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-tis-coral/20 flex items-center justify-center">
-            <svg className="w-5 h-5 text-tis-coral" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-900">{avgTokens}</p>
-            <p className="text-sm text-gray-500">{tokensName} Promedio</p>
+            <p className="text-2xl font-bold text-slate-900">{avgTokens}</p>
+            <p className="text-sm text-slate-500">{tokensName} Promedio</p>
           </div>
         </div>
       </div>
@@ -178,8 +178,8 @@ function RewardCard({ reward, tokensName, onEdit, onToggle, onDelete }: RewardCa
       <div className={cn(
         'p-5 text-white relative overflow-hidden',
         reward.is_active
-          ? `bg-gradient-to-r ${config.gradient}`
-          : 'bg-gradient-to-r from-gray-400 to-gray-500'
+          ? 'bg-slate-900'
+          : 'bg-slate-400'
       )}>
         {/* Decorative elements */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
@@ -532,7 +532,7 @@ function RewardForm({ reward, onSave, onClose }: RewardFormProps) {
             <button
               type="submit"
               disabled={saving || !formData.reward_name}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-tis-coral to-orange-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <span className="flex items-center justify-center gap-2">
@@ -608,8 +608,8 @@ function RedemptionsList() {
             className={cn(
               'px-4 py-2 text-sm font-medium rounded-xl transition-all',
               filter === f.value
-                ? 'bg-gradient-to-r from-tis-coral to-orange-500 text-white shadow-lg shadow-tis-coral/25'
-                : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-gray-300'
+                ? 'bg-slate-900 text-white'
+                : 'bg-white border-2 border-slate-200 text-slate-600 hover:border-slate-300'
             )}
           >
             {f.label}
@@ -703,19 +703,19 @@ interface EmptyStateProps {
 
 function EmptyState({ onCreate }: EmptyStateProps) {
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-white border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center">
-      <div className="w-20 h-20 bg-gradient-to-br from-violet-100 to-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-        <svg className="w-10 h-10 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center">
+      <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <svg className="w-10 h-10 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
         </svg>
       </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">Crea tu Catálogo de Recompensas</h3>
-      <p className="text-gray-500 max-w-md mx-auto mb-6">
+      <h3 className="text-xl font-bold text-slate-900 mb-2">Crea tu Catálogo de Recompensas</h3>
+      <p className="text-slate-500 max-w-md mx-auto mb-6">
         Define las recompensas que tus pacientes pueden canjear con sus puntos acumulados.
       </p>
       <button
         onClick={onCreate}
-        className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-tis-coral to-orange-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
+        className="inline-flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -860,7 +860,7 @@ export function RewardsManagement() {
             </div>
             <button
               onClick={() => { setEditingReward(null); setShowForm(true); }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-tis-coral to-orange-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-tis-coral/25"
+              className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

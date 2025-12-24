@@ -29,16 +29,16 @@ interface Lead {
 function InfoBanner({ type }: { type: 'plans' | 'memberships' }) {
   if (type === 'plans') {
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
         <div className="flex gap-3">
-          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div>
-            <h4 className="font-medium text-blue-900">¿Qué son los Planes de Membresía?</h4>
-            <p className="text-sm text-blue-700 mt-1">
+            <h4 className="font-medium text-slate-900">¿Qué son los Planes de Membresía?</h4>
+            <p className="text-sm text-slate-600 mt-1">
               Los planes son <strong>plantillas</strong> que defines para ofrecer a tus pacientes.
               Por ejemplo: &ldquo;Plan Premium - $299/mes con 10% descuento&rdquo;.
               Una vez creado un plan, puedes <strong>asignar pacientes</strong> a él en la pestaña &ldquo;Membresías Activas&rdquo;.
@@ -50,16 +50,16 @@ function InfoBanner({ type }: { type: 'plans' | 'memberships' }) {
   }
 
   return (
-    <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
+    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
       <div className="flex gap-3">
-        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+          <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </div>
         <div>
-          <h4 className="font-medium text-green-900">Membresías de Pacientes</h4>
-          <p className="text-sm text-green-700 mt-1">
+          <h4 className="font-medium text-slate-900">Membresías de Pacientes</h4>
+          <p className="text-sm text-slate-600 mt-1">
             Aquí verás los <strong>pacientes que están suscritos</strong> a tus planes de membresía.
             Usa el botón &ldquo;+ Nueva Membresía&rdquo; para asignar un paciente a un plan.
           </p>
@@ -583,14 +583,14 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
       <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
         {/* Header with decorative gradient */}
         <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-tis-coral/10 via-orange-50 to-amber-50" />
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-50" />
           <div className="absolute top-0 right-0 w-40 h-40 bg-tis-coral/5 rounded-full -translate-y-20 translate-x-20" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-100/30 rounded-full translate-y-16 -translate-x-16" />
 
           <div className="relative px-6 py-5 border-b border-gray-100/50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-tis-coral to-orange-500 flex items-center justify-center shadow-lg shadow-tis-coral/20">
+                <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center">
                   <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                   </svg>
@@ -875,8 +875,8 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
             className={cn(
               'flex-1 px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2',
               saving || !selectedLead
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-tis-coral to-orange-500 text-white hover:from-tis-coral-dark hover:to-orange-600 shadow-lg shadow-tis-coral/20'
+                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                : 'bg-slate-900 text-white hover:bg-slate-800'
             )}
           >
             {saving ? (
@@ -948,21 +948,21 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
 
       {/* Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Total</p>
-          <p className="text-2xl font-bold text-gray-900">{summary.total}</p>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-sm text-slate-500">Total</p>
+          <p className="text-2xl font-bold text-slate-900">{summary.total}</p>
         </div>
-        <div className="bg-white rounded-xl border border-green-200 p-4 bg-green-50">
-          <p className="text-sm text-green-600">Activas</p>
-          <p className="text-2xl font-bold text-green-700">{summary.active}</p>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-sm text-emerald-600">Activas</p>
+          <p className="text-2xl font-bold text-slate-900">{summary.active}</p>
         </div>
-        <div className="bg-white rounded-xl border border-red-200 p-4 bg-red-50">
-          <p className="text-sm text-red-600">Vencidas</p>
-          <p className="text-2xl font-bold text-red-700">{summary.expired}</p>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-sm text-slate-500">Vencidas</p>
+          <p className="text-2xl font-bold text-slate-900">{summary.expired}</p>
         </div>
-        <div className="bg-white rounded-xl border border-blue-200 p-4 bg-blue-50">
-          <p className="text-sm text-blue-600">Ingresos</p>
-          <p className="text-2xl font-bold text-blue-700">${summary.total_revenue.toLocaleString()}</p>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-sm text-slate-500">Ingresos</p>
+          <p className="text-2xl font-bold text-slate-900">${summary.total_revenue.toLocaleString()}</p>
         </div>
       </div>
 
@@ -983,14 +983,14 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
 
       {/* Empty state - No plans */}
       {activePlans.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h3 className="font-semibold text-amber-900 mb-1">Primero crea un Plan</h3>
-          <p className="text-sm text-amber-700">
+          <h3 className="font-semibold text-slate-900 mb-1">Primero crea un Plan</h3>
+          <p className="text-sm text-slate-600">
             Ve a la pestaña &ldquo;Planes de Membresía&rdquo; para crear tu primer plan antes de asignar pacientes.
           </p>
         </div>
