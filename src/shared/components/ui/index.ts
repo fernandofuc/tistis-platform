@@ -16,3 +16,4 @@ export {
 } from './FileUpload';
 export { Modal, type ModalProps } from './Modal';
 export { BranchSelector } from './BranchSelector';
+export { NavigationProgress } from './NavigationProgress';

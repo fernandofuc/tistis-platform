@@ -5,10 +5,10 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useTransition, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
 import { useFeatureFlags, MODULE_FLAGS } from '@/src/hooks/useFeatureFlags';
@@ -215,6 +215,8 @@ const navTerminology: Record<string, Record<string, string>> = {
 // ======================
 export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
 
@@ -225,6 +227,15 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   // Use props if explicitly provided, otherwise use store state
   const collapsed = isCollapsed !== undefined ? isCollapsed : sidebarCollapsed;
   const handleCollapse = onCollapse ?? setSidebarCollapsed;
+
+  // Optimized navigation handler with transition
+  const handleNavigation = useCallback((href: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    // Start transition for non-blocking UI updates
+    startTransition(() => {
+      router.push(href);
+    });
+  }, [router]);
 
   // Filter nav items based on feature flags
   const visibleNavItems = useMemo(() => {
@@ -345,12 +356,14 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={(e) => handleNavigation(item.href, e)}
                       className={cn(
                         'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
                         isActive
                           ? 'bg-tis-coral/10 text-tis-coral font-medium'
                           : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
-                        collapsed && 'justify-center px-2'
+                        collapsed && 'justify-center px-2',
+                        isPending && 'opacity-70 pointer-events-none'
                       )}
                       title={collapsed ? displayName : undefined}
                     >

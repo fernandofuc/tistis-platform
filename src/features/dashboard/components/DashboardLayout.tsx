@@ -4,9 +4,10 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, Suspense } from 'react';
 import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
+import { NavigationProgress } from '@/shared/components/ui';
 import { AuthProvider, ProtectedRoute } from '@/features/auth';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -25,6 +26,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <AuthProvider>
       <ProtectedRoute>
+        {/* Navigation Progress Indicator */}
+        <Suspense fallback={null}>
+          <NavigationProgress />
+        </Suspense>
+
         <div className="min-h-screen bg-gray-50">
           {/* Desktop Sidebar */}
           <div className="hidden lg:block">
