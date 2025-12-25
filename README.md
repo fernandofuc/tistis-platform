@@ -1,21 +1,30 @@
 # TIS TIS Platform
 
-Sistema completo de gestion con IA conversacional multi-agente, WhatsApp Business API y automatizacion de procesos multi-canal.
+Sistema completo de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API y automatizacion de procesos multi-canal.
 
-**Version:** 4.1.0
-**Estado:** Produccion - Sistema Completo con LangGraph + AI Learning
-**Ultima actualizacion:** 21 de Diciembre, 2024
+**Version:** 4.2.0
+**Estado:** Produccion - Sistema Completo con LangGraph + AI Learning + Voice Agent
+**Ultima actualizacion:** 24 de Diciembre, 2024
 
 ---
 
 ## 🎯 Descripcion
 
-TIS TIS Platform es una solucion SaaS multi-tenant para gestion de negocios que integra:
+TIS TIS Platform es una solucion SaaS multi-tenant para gestion de negocios que integra un sistema de IA multi-capa con capacidades de texto y voz:
 
-- **Sistema de IA Multi-Agente con LangGraph** - Agentes especializados que colaboran para respuestas inteligentes
+### Sistemas de IA Integrados
+
+- **LangGraph Multi-Agente** - Orquestacion de agentes especializados con flujo de grafo
+- **Business IA (Knowledge Base)** - Base de conocimiento configurable con AI Learning
+- **AI Agent Voz (VAPI)** - Agente de voz con telefonia, STT y TTS
+- **AI Learning** - Aprendizaje automatico de patrones y vocabulario
+
+### Funcionalidades Core
+
 - Gestion de leads con scoring automatico basado en IA
 - Sistema de mensajeria multi-canal (WhatsApp, Instagram, Facebook, TikTok)
-- **Configuracion de AI por canal** - Personaliza el comportamiento del AI para cada canal
+- **Agente de voz con numeros telefonicos** - Llamadas entrantes/salientes con AI
+- **Configuracion de AI por canal** - Personaliza el comportamiento por canal
 - Sistema de citas y calendario con **recordatorios automaticos** (1 semana, 24h, 4h)
 - Sistema de **membresias con validacion de pagos por transferencia** (AI Vision)
 - Historiales clinicos con odontograma
@@ -23,35 +32,115 @@ TIS TIS Platform es una solucion SaaS multi-tenant para gestion de negocios que 
 - Notificaciones en tiempo real
 - Cola de trabajos asincronos para procesamiento de mensajes
 
-## 🤖 Nueva Arquitectura de IA Multi-Agente (LangGraph)
+## 🧠 Arquitectura de IA Completa
+
+TIS TIS utiliza una arquitectura de IA de multiples capas donde cada componente tiene una responsabilidad especifica:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        TIS TIS AI ARCHITECTURE                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐         │
+│  │   CANALES DE    │    │   CANALES DE    │    │   VOICE AGENT   │         │
+│  │     TEXTO       │    │    TELEFONIA    │    │     (VAPI)      │         │
+│  │  ─────────────  │    │  ─────────────  │    │  ─────────────  │         │
+│  │  • WhatsApp     │    │  • Llamadas     │    │  • STT Deepgram │         │
+│  │  • Instagram    │    │    Entrantes    │    │  • TTS Eleven   │         │
+│  │  • Facebook     │    │  • Llamadas     │    │  • Server-Side  │         │
+│  │  • TikTok       │    │    Salientes    │    │    Response     │         │
+│  └────────┬────────┘    └────────┬────────┘    └────────┬────────┘         │
+│           │                      │                      │                   │
+│           └──────────────────────┼──────────────────────┘                   │
+│                                  ▼                                          │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    BUSINESS CONTEXT LAYER                             │  │
+│  │  ─────────────────────────────────────────────────────────────────    │  │
+│  │  get_tenant_ai_context() RPC - Carga TODA la configuracion:           │  │
+│  │  • tenant_config (identidad, tono, instrucciones)                     │  │
+│  │  • services[] (catalogo de servicios con precios)                     │  │
+│  │  • faqs[] (preguntas frecuentes configuradas)                         │  │
+│  │  • policies (cancelacion, pagos, garantias)                           │  │
+│  │  • branches[] (sucursales con horarios y personal)                    │  │
+│  │  • promotions[] (promociones activas)                                 │  │
+│  │  • knowledge_base[] (documentos y conocimiento)                       │  │
+│  │  • ai_learning (patrones, vocabulario, insights)                      │  │
+│  │  • conversation_history (ultimos 20 mensajes)                         │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                  │                                          │
+│                                  ▼                                          │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                      LANGGRAPH MULTI-AGENT                            │  │
+│  │  ─────────────────────────────────────────────────────────────────    │  │
+│  │                                                                       │  │
+│  │     ┌──────────────┐                                                  │  │
+│  │     │  SUPERVISOR  │ ◄─── Detecta intencion del mensaje               │  │
+│  │     └──────┬───────┘                                                  │  │
+│  │            │                                                          │  │
+│  │      ┌─────┴─────┐                                                    │  │
+│  │      ▼           ▼                                                    │  │
+│  │ ┌─────────┐ ┌──────────┐                                              │  │
+│  │ │VERTICAL │ │ESCALATION│ ◄─── Escala a humano si necesario            │  │
+│  │ │ ROUTER  │ └──────────┘                                              │  │
+│  │ └────┬────┘                                                           │  │
+│  │      │                                                                │  │
+│  │      ▼ Enruta segun vertical (dental, restaurant, medical...)         │  │
+│  │ ┌────┴────┬────────┬────────┬────────┬────────┐                       │  │
+│  │ ▼         ▼        ▼        ▼        ▼        ▼                       │  │
+│  │┌────┐ ┌──────┐ ┌──────┐ ┌─────┐ ┌───────┐ ┌───────┐                   │  │
+│  ││GREET│ │PRICING│ │BOOKING│ │ FAQ │ │GENERAL│ │URGENT │                   │  │
+│  │└──┬─┘ └──┬───┘ └──┬───┘ └──┬──┘ └───┬───┘ └───┬───┘                   │  │
+│  │   └──────┴────────┴────────┴────────┴─────────┘                       │  │
+│  │                            │                                          │  │
+│  │                            ▼                                          │  │
+│  │                     ┌────────────┐                                    │  │
+│  │                     │  FINALIZE  │ ◄─── Formatea respuesta final      │  │
+│  │                     └────────────┘                                    │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                  │                                          │
+│                                  ▼                                          │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                        AI LEARNING LAYER                              │  │
+│  │  ─────────────────────────────────────────────────────────────────    │  │
+│  │  • Extrae patrones de mensajes entrantes                              │  │
+│  │  • Aprende vocabulario especifico del negocio                         │  │
+│  │  • Detecta preferencias de horarios de clientes                       │  │
+│  │  • Identifica objeciones comunes                                      │  │
+│  │  • Genera insights automaticos por vertical                           │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 🤖 LangGraph Multi-Agente (Detalle Tecnico)
 
 ### Que es LangGraph?
 
-LangGraph es un framework para construir sistemas de IA multi-agente. En lugar de un solo "cerebro" de IA que responde todo, TIS TIS ahora tiene un **equipo de agentes especializados** que trabajan juntos:
+LangGraph es un framework para construir sistemas de IA multi-agente. En lugar de un solo "cerebro" de IA que responde todo, TIS TIS tiene un **equipo de agentes especializados** que trabajan juntos en un grafo dirigido:
 
 ```
                      +------------------+
                      |   SUPERVISOR     |
                      | (Detecta intent) |
                      +--------+---------+
-                              |
+                              │
                     +---------+---------+
-                    |                   |
-            +-------v-------+   +-------v-------+
-            | VERTICAL      |   | ESCALATION    |
-            | ROUTER        |   | (Humano)      |
+                    │                   │
+            +-------▼-------+   +-------▼-------+
+            │ VERTICAL      │   │ ESCALATION    │
+            │ ROUTER        │   │ (Humano)      │
             +-------+-------+   +---------------+
-                    |
+                    │
     +---------------+---------------+
-    |       |       |       |       |
-+---v---+ +-v---+ +-v---+ +-v---+ +-v---+
-|GREETING| |PRICING| |BOOKING| |FAQ| |GENERAL|
+    │       │       │       │       │
++---▼---+ +-▼---+ +-▼---+ +-▼---+ +-▼---+
+│GREETING│ │PRICING│ │BOOKING│ │FAQ│ │GENERAL│
 +---+---+ +--+--+ +--+--+ +-+-+ +--+--+
-    |        |       |       |      |
+    │        │       │       │      │
     +--------+-------+-------+------+
-                     |
-              +------v------+
-              |  FINALIZE   |
+                     │
+              +------▼------+
+              │  FINALIZE   │
               +-------------+
 ```
 
@@ -123,20 +212,213 @@ src/features/ai/
     └── message-learning.service.ts # Sistema de aprendizaje automatico
 ```
 
-## 🧠 Sistema de Aprendizaje Automatico de IA (Nuevo)
+### Flujo de Procesamiento del Grafo
+
+```
+1. Mensaje Entrante
+       │
+       ▼
+2. get_tenant_ai_context() ─────► Carga BusinessContext completo
+       │
+       ▼
+3. SUPERVISOR.invoke()
+       │
+       ├── Analiza intencion del mensaje
+       ├── Determina siguiente nodo (routing/escalation)
+       │
+       ▼
+4. VERTICAL_ROUTER (si aplica)
+       │
+       ├── Detecta vertical del tenant (dental, restaurant, medical)
+       ├── Selecciona agente especialista apropiado
+       │
+       ▼
+5. SPECIALIST_AGENT (greeting, pricing, booking, faq, general, urgent)
+       │
+       ├── Recibe BusinessContext completo
+       ├── Genera respuesta especializada
+       ├── Puede incluir tool calls (agendar cita, etc)
+       │
+       ▼
+6. FINALIZE
+       │
+       ├── Formatea respuesta final
+       ├── Aplica estilo de comunicacion del tenant
+       │
+       ▼
+7. Respuesta al Usuario
+```
+
+## 📞 AI Agent Voz (VAPI Integration)
+
+### Que es el Voice Agent?
+
+El Voice Agent permite a los negocios tener un **agente de IA que contesta llamadas telefonicas**. Utiliza VAPI como plataforma de voz con:
+
+- **STT (Speech-to-Text)**: Deepgram para transcripcion
+- **TTS (Text-to-Speech)**: ElevenLabs para voz natural
+- **Server-Side Response Mode**: TIS TIS genera las respuestas del AI
+
+### Arquitectura del Voice Agent
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     VOICE AGENT ARCHITECTURE                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   ┌─────────────┐                                                   │
+│   │  LLAMADA    │                                                   │
+│   │  ENTRANTE   │                                                   │
+│   └──────┬──────┘                                                   │
+│          │                                                          │
+│          ▼                                                          │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                    VAPI PLATFORM                            │   │
+│   │  ───────────────────────────────────────────────────────    │   │
+│   │  • Recibe llamada via numero telefonico                     │   │
+│   │  • STT: Deepgram transcribe voz → texto                     │   │
+│   │  • Envia transcript a TIS TIS webhook                       │   │
+│   └────────────────────────┬────────────────────────────────────┘   │
+│                            │                                        │
+│                            ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │            TIS TIS VOICE WEBHOOK                            │   │
+│   │            /api/voice-agent/webhook                         │   │
+│   │  ───────────────────────────────────────────────────────    │   │
+│   │  1. Extrae phone_number del caller                          │   │
+│   │  2. Busca/crea lead asociado al numero                      │   │
+│   │  3. Carga BusinessContext via get_tenant_ai_context()       │   │
+│   │  4. Invoca LangGraph con el transcript                      │   │
+│   │  5. Retorna respuesta en formato VAPI                       │   │
+│   └────────────────────────┬────────────────────────────────────┘   │
+│                            │                                        │
+│                            ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                    VAPI TTS                                 │   │
+│   │  ───────────────────────────────────────────────────────    │   │
+│   │  • ElevenLabs convierte texto → voz                         │   │
+│   │  • Reproduce respuesta al llamante                          │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Server-Side Response Mode
+
+A diferencia del modo standard donde VAPI usa su propio LLM, TIS TIS usa **Server-Side Response Mode**:
+
+1. VAPI envia el transcript al webhook de TIS TIS
+2. TIS TIS procesa con LangGraph (con todo el BusinessContext)
+3. TIS TIS retorna la respuesta que VAPI debe decir
+4. VAPI convierte a voz con ElevenLabs
+
+**Ventaja**: La IA tiene acceso completo al conocimiento del negocio (servicios, precios, horarios, etc.)
+
+### Configuracion en Dashboard
+
+En **Configuracion > AI Agent Voz** los usuarios pueden:
+
+- Comprar numeros telefonicos via VAPI
+- Configurar voz (ElevenLabs voice ID)
+- Personalizar instrucciones del agente de voz
+- Ver llamadas recientes y estadisticas
+
+### Archivos del Voice Agent
+
+```
+src/features/voice-agent/
+├── components/
+│   ├── VoiceAgentSetup.tsx      # UI de configuracion
+│   ├── PhoneNumberManager.tsx   # Gestion de numeros
+│   └── VoiceSettings.tsx        # Configuracion de voz
+├── services/
+│   ├── vapi.service.ts          # Integracion con VAPI API
+│   └── voice-webhook.service.ts # Procesamiento de webhooks
+├── types/
+│   └── voice-agent.types.ts     # Tipos del modulo
+└── hooks/
+    └── useVoiceAgent.ts         # Hook principal
+
+app/api/voice-agent/
+├── webhook/route.ts             # Webhook que recibe llamadas VAPI
+├── phone-numbers/route.ts       # API para comprar/listar numeros
+└── config/route.ts              # API para configuracion
+```
+
+## 🧠 Sistema de Aprendizaje Automatico de IA (AI Learning)
 
 ### Que es?
 
-El sistema de aprendizaje automatico analiza mensajes entrantes para extraer patrones y mejorar las respuestas de la IA con el tiempo.
+El sistema de aprendizaje automatico analiza **todos los mensajes entrantes** para extraer patrones, vocabulario y comportamientos que mejoran las respuestas de la IA con el tiempo. Funciona tanto para mensajes de texto como para transcripciones de llamadas.
 
-### Caracteristicas
+### Flujo de Aprendizaje
 
-- **Analisis de patrones** - Extrae patrones de mensajes entrantes
-- **Vocabulario especifico** - Aprende terminos y jerga del negocio
-- **Preferencias de horarios** - Detecta horarios preferidos por clientes
-- **Objeciones comunes** - Identifica objeciones frecuentes
-- **Insights automaticos** - Genera insights basados en datos
-- **Especifico por vertical** - Dental, restaurant, medical tienen diferentes patrones
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     AI LEARNING PIPELINE                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐            │
+│   │  MENSAJE    │    │  LLAMADA    │    │   OTRO      │            │
+│   │  WHATSAPP   │    │    VOZ      │    │   CANAL     │            │
+│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘            │
+│          │                  │                  │                    │
+│          └──────────────────┼──────────────────┘                    │
+│                             ▼                                       │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                 AI LEARNING QUEUE                           │   │
+│   │  Tabla: ai_learning_queue (procesamiento asincrono)         │   │
+│   └────────────────────────┬────────────────────────────────────┘   │
+│                            │                                        │
+│                            ▼ CRON: /api/cron/process-learning       │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │              MESSAGE LEARNING SERVICE                       │   │
+│   │  ───────────────────────────────────────────────────────    │   │
+│   │  extractPatterns()     → Detecta patrones de comportamiento │   │
+│   │  extractVocabulary()   → Aprende terminos del negocio       │   │
+│   │  extractPreferences()  → Horarios preferidos, preferencias  │   │
+│   │  extractObjections()   → Objeciones y preocupaciones        │   │
+│   │  generateInsights()    → Insights automaticos               │   │
+│   └────────────────────────┬────────────────────────────────────┘   │
+│                            │                                        │
+│                            ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                 TABLAS DE APRENDIZAJE                       │   │
+│   │  ───────────────────────────────────────────────────────    │   │
+│   │  ai_message_patterns    → Patrones detectados               │   │
+│   │  ai_learned_vocabulary  → Vocabulario aprendido             │   │
+│   │  ai_business_insights   → Insights generados                │   │
+│   └────────────────────────┬────────────────────────────────────┘   │
+│                            │                                        │
+│                            ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │            BUSINESS CONTEXT (ai_learning)                   │   │
+│   │  ───────────────────────────────────────────────────────    │   │
+│   │  Se incluye en get_tenant_ai_context() para que todos       │   │
+│   │  los agentes tengan acceso al conocimiento aprendido        │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Tipos de Patrones Extraidos
+
+| Tipo | Descripcion | Ejemplo |
+|------|-------------|---------|
+| **Vocabulario** | Terminos especificos del negocio/region | "blanqueamiento", "profilaxis" |
+| **Horarios Preferidos** | Cuando prefieren los clientes | "Tardes despues de las 5pm" |
+| **Objeciones Comunes** | Preocupaciones frecuentes | "Es muy caro", "No tengo tiempo" |
+| **Preguntas Frecuentes** | Dudas que se repiten | "Aceptan tarjeta?" |
+| **Patrones de Compra** | Comportamientos de conversion | "Primero piden precio, luego horario" |
+
+### Caracteristicas por Vertical
+
+El sistema extrae patrones **especificos por tipo de negocio**:
+
+- **Dental**: Urgencias, tipos de tratamiento, seguros dentales
+- **Restaurant**: Reservaciones, alergias, eventos especiales
+- **Medical**: Sintomas, especialidades, seguros medicos
+- **General**: Patrones universales de atencion al cliente
 
 ### Disponibilidad
 
@@ -146,28 +428,108 @@ Solo disponible para planes **Essentials** y superiores.
 
 ```sql
 -- Patrones extraidos de mensajes
-ai_message_patterns
+ai_message_patterns (tenant_id, pattern_type, pattern_value, frequency, confidence)
 
 -- Vocabulario especifico del negocio
-ai_learned_vocabulary
+ai_learned_vocabulary (tenant_id, term, context, usage_count)
 
 -- Insights automaticos generados
-ai_business_insights
+ai_business_insights (tenant_id, insight_type, insight_data, generated_at)
 
 -- Configuracion por tenant
-ai_learning_config
+ai_learning_config (tenant_id, enabled, vertical_type, settings)
 
--- Cola de procesamiento
-ai_learning_queue
+-- Cola de procesamiento asincrono
+ai_learning_queue (tenant_id, message_id, status, processed_at)
 ```
 
 ### Endpoint CRON
 
 ```
 POST /api/cron/process-learning
+Authorization: Bearer <CRON_SECRET>
 ```
 
-Procesa la cola de mensajes pendientes para extraccion de patrones.
+Procesa la cola de mensajes pendientes para extraccion de patrones. Se ejecuta cada 15 minutos.
+
+## 💼 Business IA (Knowledge Base)
+
+### Que es?
+
+Business IA es la **interfaz de configuracion** donde los usuarios administran todo el conocimiento que la IA utiliza. Es el "cerebro configurable" del negocio.
+
+### Pestanas de Configuracion
+
+En **Configuracion > Business IA** se encuentran:
+
+#### 1. General (Identidad del Negocio)
+- Nombre del negocio
+- Tipo de negocio (vertical)
+- Tono de comunicacion
+- Idioma preferido
+- Instrucciones generales para el AI
+
+#### 2. Servicios (Catalogo)
+- Lista de servicios/productos
+- Precios y duraciones
+- Descripciones detalladas
+- Categorias y subcategorias
+
+#### 3. FAQs (Preguntas Frecuentes)
+- Preguntas y respuestas predefinidas
+- Organizadas por categoria
+- Priorizacion de respuestas
+
+#### 4. Politicas
+- Politicas de cancelacion
+- Politicas de pago
+- Garantias y devoluciones
+- Terminos especiales
+
+#### 5. Knowledge Base (Base de Conocimiento)
+- Documentos y archivos
+- Informacion adicional del negocio
+- **Generacion de instrucciones con IA** - Analiza el contenido y sugiere instrucciones
+
+#### 6. AI Learning (Aprendizaje)
+- Patrones detectados automaticamente
+- Vocabulario aprendido
+- Insights del negocio
+- Configuracion de aprendizaje
+
+### Generacion de Instrucciones con IA
+
+El boton "Generar Instrucciones con IA" en la pestana Knowledge Base:
+
+1. Analiza todo el contenido cargado (servicios, FAQs, politicas, documentos)
+2. Genera instrucciones optimizadas para el AI
+3. Sugiere mejoras basadas en el conocimiento del negocio
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    BUSINESS IA DASHBOARD                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────┬──────────┬──────┬──────────┬─────────────┬──────────┐  │
+│  │ General │ Servicios│ FAQs │ Politicas│ Knowledge   │ Learning │  │
+│  │         │          │      │          │ Base        │          │  │
+│  └─────────┴──────────┴──────┴──────────┴─────────────┴──────────┘  │
+│                                                                     │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │                    CONTENIDO DE LA PESTAÑA                    │  │
+│  │                                                               │  │
+│  │  [Formularios de configuracion especificos]                   │  │
+│  │                                                               │  │
+│  │  [Boton: Guardar Cambios]                                     │  │
+│  │                                                               │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Integracion con LangGraph
+
+Todo el contenido de Business IA se carga via `get_tenant_ai_context()` y se inyecta en cada agente del sistema multi-agente. Esto significa que cualquier cambio en la configuracion se refleja **inmediatamente** en las respuestas del AI.
 
 ### Configuracion del Feature Flag
 
@@ -229,26 +591,86 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
 ```
 tistis-platform/
-├── app/                          # Next.js App Router
-│   ├── (auth)/                   # Rutas de autenticación
-│   ├── (dashboard)/              # Rutas del dashboard
-│   └── api/                      # API Routes
+├── app/                              # Next.js App Router
+│   ├── (auth)/                       # Rutas de autenticacion
+│   │   ├── login/
+│   │   └── signup/
+│   ├── (dashboard)/                  # Rutas del dashboard
+│   │   └── dashboard/
+│   │       ├── page.tsx              # Dashboard principal (con skeleton loading)
+│   │       ├── leads/                # Gestion de leads
+│   │       ├── patients/             # Gestion de pacientes
+│   │       ├── calendario/           # Calendario de citas
+│   │       ├── inbox/                # Conversaciones multi-canal
+│   │       ├── analytics/            # Metricas y reportes
+│   │       ├── lealtad/              # Sistema de lealtad
+│   │       ├── configuracion/        # Configuracion general
+│   │       ├── business-ia/          # 💼 Business IA (Knowledge Base)
+│   │       └── ai-agent-voz/         # 📞 AI Agent Voz (VAPI)
+│   └── api/                          # API Routes
+│       ├── leads/
+│       ├── appointments/
+│       ├── patients/
+│       ├── conversations/
+│       ├── voice-agent/              # 📞 Voice Agent APIs
+│       │   ├── webhook/              # Webhook VAPI
+│       │   ├── phone-numbers/        # Gestion de numeros
+│       │   └── config/               # Configuracion
+│       ├── webhook/                  # Webhooks externos
+│       │   ├── whatsapp/[tenantSlug]/
+│       │   ├── instagram/[tenantSlug]/
+│       │   ├── facebook/[tenantSlug]/
+│       │   └── tiktok/[tenantSlug]/
+│       ├── cron/
+│       │   ├── process-learning/     # 🧠 CRON AI Learning
+│       │   └── reminders/            # CRON Recordatorios
+│       ├── jobs/
+│       └── search/
+│
 ├── src/
-│   ├── features/                 # Features por funcionalidad
-│   │   ├── auth/
-│   │   ├── leads/
-│   │   ├── appointments/
-│   │   ├── patients/
-│   │   └── conversations/
-│   └── shared/                   # Código compartido
+│   ├── features/                     # Features por funcionalidad
+│   │   ├── auth/                     # Autenticacion
+│   │   ├── dashboard/                # Dashboard (con DashboardSkeleton)
+│   │   ├── leads/                    # Gestion de leads
+│   │   ├── appointments/             # Citas y calendario
+│   │   ├── patients/                 # Pacientes
+│   │   ├── conversations/            # Mensajeria multi-canal
+│   │   ├── loyalty/                  # Sistema de lealtad
+│   │   ├── settings/                 # Configuracion
+│   │   │   └── components/
+│   │   │       └── BusinessAISettings.tsx  # 💼 UI Business IA
+│   │   ├── ai/                       # 🤖 Sistema LangGraph
+│   │   │   ├── state/
+│   │   │   │   └── agent-state.ts
+│   │   │   ├── agents/
+│   │   │   │   ├── supervisor/
+│   │   │   │   ├── routing/
+│   │   │   │   └── specialists/
+│   │   │   ├── graph/
+│   │   │   │   └── tistis-graph.ts
+│   │   │   └── services/
+│   │   │       ├── langgraph-ai.service.ts
+│   │   │       └── message-learning.service.ts  # 🧠 AI Learning
+│   │   └── voice-agent/              # 📞 Voice Agent Feature
+│   │       ├── components/
+│   │       ├── services/
+│   │       ├── types/
+│   │       └── hooks/
+│   │
+│   └── shared/                       # Codigo compartido
 │       ├── components/
+│       │   └── ui/                   # Componentes UI reutilizables
 │       ├── hooks/
-│       ├── lib/
+│       ├── stores/                   # Zustand stores
+│       ├── lib/                      # Configuraciones (supabase, etc)
+│       ├── utils/
 │       └── types/
+│
 ├── supabase/
-│   └── migrations/               # 9 migraciones SQL
+│   └── migrations/                   # 65+ migraciones SQL
+│
 ├── public/
-└── docs/                         # Documentación técnica
+└── docs/                             # Documentacion tecnica
 ```
 
 ## 🗄️ Base de Datos
@@ -373,16 +795,35 @@ Cada webhook verifica firmas criptográficas y procesa mensajes de forma asíncr
 
 ### Componentes Clave
 
-- `/dashboard` - Overview con stats
-- `/dashboard/leads` - Gestión de leads con scoring
-- `/dashboard/calendario` - Calendario de citas
-- `/dashboard/inbox` - Conversaciones WhatsApp
-- `/dashboard/patients` - Gestión de pacientes
-- `/dashboard/analytics` - Métricas y reportes
+| Ruta | Descripcion | Features |
+|------|-------------|----------|
+| `/dashboard` | Overview con stats | DashboardSkeleton, Promise.all queries |
+| `/dashboard/leads` | Gestion de leads | Scoring, clasificacion, timeline |
+| `/dashboard/calendario` | Calendario de citas | Recordatorios automaticos |
+| `/dashboard/inbox` | Conversaciones multi-canal | WhatsApp, Instagram, FB, TikTok |
+| `/dashboard/patients` | Gestion de pacientes | Odontograma, historial |
+| `/dashboard/analytics` | Metricas y reportes | Charts, KPIs |
+| `/dashboard/lealtad` | Sistema de lealtad | Puntos, beneficios |
+| `/dashboard/business-ia` | 💼 Business IA | Knowledge Base, AI Learning |
+| `/dashboard/ai-agent-voz` | 📞 Voice Agent | Numeros VAPI, config voz |
 
-### Optimizaciones Implementadas
+### Diseno del Dashboard
 
-- ✅ Debounce en búsquedas (300ms)
+El dashboard principal utiliza un diseno premium con:
+
+- **Sidebar colapsable** - Navegacion con animaciones suaves
+- **Stats cards** - Metricas con iconos y badges
+- **Leads list** - Vista previa de leads recientes
+- **Quick actions** - Acciones rapidas comunes
+- **Skeleton loading** - Feedback visual instantaneo
+
+### Optimizaciones de Performance
+
+- ✅ **DashboardSkeleton** - UI skeleton durante carga de auth
+- ✅ **Promise.all()** - Queries paralelas en dashboard
+- ✅ **useTransition** - Navegacion sin bloquear UI
+- ✅ **NavigationProgress** - Indicador de progreso
+- ✅ Debounce en busquedas (300ms)
 - ✅ AbortController para cancelar requests
 - ✅ Memory leaks corregidos en hooks
 - ✅ Realtime subscriptions optimizadas
@@ -429,20 +870,33 @@ npm run typecheck         # TypeScript check
 
 ## 📊 Estado del Proyecto
 
-### Fase 2 - Core Features: 95% Completa
+### Version 4.2.0 - Sistema AI Completo
 
-**Completado:**
-- ✅ Módulo de pacientes (100%)
+**Sistemas de IA Implementados:**
+- ✅ LangGraph Multi-Agente (100%)
+- ✅ Business IA / Knowledge Base (100%)
+- ✅ AI Agent Voz con VAPI (100%)
+- ✅ AI Learning automatico (100%)
+
+**Core Features:**
+- ✅ Modulo de pacientes (100%)
 - ✅ Sistema de archivos (100%)
 - ✅ Sistema de notificaciones (100%)
-- ✅ Módulo de cotizaciones - DB (100%)
-- ✅ Seguridad (100%)
+- ✅ Modulo de cotizaciones - DB (100%)
+- ✅ Seguridad multi-tenant (100%)
 - ✅ API Routes (100%)
+- ✅ Mensajeria multi-canal (100%)
+
+**Dashboard:**
+- ✅ Diseno premium actualizado
+- ✅ DashboardSkeleton para carga instantanea
+- ✅ Optimizaciones de performance
+- ✅ Sidebar colapsable con animaciones
 
 **Pendiente:**
-- ⏸️ Módulo de cotizaciones - API/UI
-- ⏸️ Upload UI component
-- ⏸️ Testing
+- ⏸️ Modulo de cotizaciones - API/UI
+- ⏸️ Testing automatizado
+- ⏸️ Documentacion de API (OpenAPI)
 
 Ver detalles completos en `STATUS_PROYECTO.md`
 
@@ -461,15 +915,29 @@ vercel
 ### Variables de Entorno
 
 Configurar en Vercel Dashboard:
+
+**Supabase:**
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `ANTHROPIC_API_KEY` - Para Claude AI
-- `OPENAI_API_KEY` - Para validación de comprobantes (Vision)
+
+**AI Providers:**
+- `OPENROUTER_API_KEY` - Para LangGraph (OpenRouter como LLM provider)
+- `OPENAI_API_KEY` - Para validacion de comprobantes (Vision)
+
+**Voice Agent (VAPI):**
+- `VAPI_API_KEY` - API key de VAPI
+- `VAPI_PHONE_NUMBER_ID` - ID del numero telefonico
+- `ELEVENLABS_API_KEY` - Para TTS (opcional, VAPI lo maneja)
+
+**Pagos:**
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_WEBHOOK_SECRET`
+
+**Sistema:**
 - `CRON_SECRET` - Para cron jobs seguros
+- `NEXTAUTH_SECRET` - Para autenticacion
 
 ## 🤝 Contribuir
 
