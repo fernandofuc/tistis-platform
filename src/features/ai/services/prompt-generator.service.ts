@@ -1,11 +1,21 @@
 // =====================================================
 // TIS TIS PLATFORM - AI Prompt Generator Service
-// Genera prompts profesionales usando Gemini 3.0
+// Sistema de Caché de Prompts Pre-Generados
 // =====================================================
-// Este servicio utiliza Gemini 3.0 para generar prompts
-// de alta calidad para los agentes de voz y mensajería.
-// El razonamiento avanzado de Gemini 3.0 permite crear
-// prompts personalizados y naturales para cada negocio.
+// Este servicio implementa un sistema de caché inteligente
+// donde los prompts se generan UNA SOLA VEZ cuando el usuario
+// guarda cambios en Business IA, y se reutilizan en cada
+// mensaje/llamada subsecuente.
+//
+// BENEFICIOS:
+// 1. Reducción de tokens por request (de ~5000 a ~1500)
+// 2. Prompts optimizados por canal (voice vs chat)
+// 3. Menor latencia en respuestas
+// 4. Costo reducido por mensaje
+//
+// FLUJO:
+// Usuario guarda cambios → Gemini genera prompt optimizado →
+// Se cachea en DB → Se usa en cada mensaje/llamada
 // =====================================================
 
 import { createServerClient } from '@/src/shared/lib/supabase';
@@ -14,12 +24,34 @@ import {
   DEFAULT_GEMINI_MODELS,
   isGeminiConfigured,
 } from '@/src/shared/lib/gemini';
+import crypto from 'crypto';
 
 // ======================
 // TYPES
 // ======================
 
 export type PromptType = 'voice' | 'messaging';
+
+// Canales soportados para caché (alineado con el sistema existente)
+export type CacheChannel = 'voice' | 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat';
+
+// Mapeo de PromptType a canales de caché
+const PROMPT_TYPE_TO_CHANNELS: Record<PromptType, CacheChannel[]> = {
+  voice: ['voice'],
+  messaging: ['whatsapp', 'instagram', 'facebook', 'tiktok', 'webchat'],
+};
+
+// Resultado de obtener prompt cacheado
+export interface CachedPromptResult {
+  found: boolean;
+  prompt_id?: string;
+  generated_prompt?: string;
+  system_prompt?: string;
+  prompt_version?: number;
+  source_data_hash?: string;
+  last_updated?: string;
+  needs_regeneration?: boolean;
+}
 
 export interface BusinessContext {
   tenantId: string;
@@ -908,12 +940,380 @@ export async function generateMessagingAgentPrompt(tenantId: string): Promise<Pr
 }
 
 // ======================
+// CACHE SYSTEM FUNCTIONS
+// ======================
+
+/**
+ * Calcula un hash SHA256 del contexto del negocio para detectar cambios
+ * Si el hash cambia, significa que los datos fueron modificados y el prompt debe regenerarse
+ */
+export function calculateBusinessContextHash(context: BusinessContext): string {
+  // Crear un objeto normalizado con los datos relevantes para el hash
+  const dataForHash = {
+    tenantName: context.tenantName,
+    vertical: context.vertical,
+    assistantName: context.assistantName,
+    assistantPersonality: context.assistantPersonality,
+    customInstructions: context.customInstructions,
+    branches: context.branches.map(b => ({
+      name: b.name,
+      address: b.address,
+      phone: b.phone,
+      operatingHours: b.operatingHours,
+    })),
+    services: context.services.map(s => ({
+      name: s.name,
+      description: s.description,
+      priceMin: s.priceMin,
+      priceMax: s.priceMax,
+      priceNote: s.priceNote,
+      durationMinutes: s.durationMinutes,
+      specialInstructions: s.specialInstructions,
+      promotionActive: s.promotionActive,
+      promotionText: s.promotionText,
+    })),
+    staff: context.staff.map(s => ({
+      name: s.name,
+      role: s.role,
+      specialty: s.specialty,
+    })),
+    faqs: context.faqs,
+    customInstructionsList: context.customInstructionsList,
+    businessPolicies: context.businessPolicies,
+    knowledgeArticles: context.knowledgeArticles,
+    responseTemplates: context.responseTemplates,
+    competitorHandling: context.competitorHandling,
+    escalationEnabled: context.escalationEnabled,
+    escalationPhone: context.escalationPhone,
+    goodbyeMessage: context.goodbyeMessage,
+  };
+
+  // Convertir a JSON estable (ordenado) y calcular hash
+  const jsonString = JSON.stringify(dataForHash, Object.keys(dataForHash).sort());
+  return crypto.createHash('sha256').update(jsonString).digest('hex');
+}
+
+/**
+ * Obtiene el prompt cacheado para un tenant y canal específico
+ * Esta función es usada en cada mensaje/llamada para obtener el prompt sin regenerar
+ */
+export async function getCachedPrompt(
+  tenantId: string,
+  channel: CacheChannel
+): Promise<CachedPromptResult> {
+  const supabase = createServerClient();
+
+  try {
+    // Usar el RPC que actualiza estadísticas de uso automáticamente
+    const { data, error } = await supabase.rpc('get_cached_prompt', {
+      p_tenant_id: tenantId,
+      p_channel: channel,
+    });
+
+    if (error) {
+      console.error('[PromptCache] Error fetching cached prompt:', error);
+      return { found: false };
+    }
+
+    if (!data || data.length === 0) {
+      console.log(`[PromptCache] No cached prompt found for tenant ${tenantId}, channel ${channel}`);
+      return { found: false, needs_regeneration: true };
+    }
+
+    const cachedPrompt = data[0];
+    return {
+      found: true,
+      prompt_id: cachedPrompt.prompt_id,
+      generated_prompt: cachedPrompt.generated_prompt,
+      system_prompt: cachedPrompt.system_prompt,
+      prompt_version: cachedPrompt.prompt_version,
+      source_data_hash: cachedPrompt.source_data_hash,
+      last_updated: cachedPrompt.last_updated,
+    };
+  } catch (error) {
+    console.error('[PromptCache] Exception fetching cached prompt:', error);
+    return { found: false };
+  }
+}
+
+/**
+ * Verifica si el prompt necesita regenerarse (datos cambiaron)
+ */
+export async function checkNeedsRegeneration(
+  tenantId: string,
+  channel: CacheChannel
+): Promise<boolean> {
+  const supabase = createServerClient();
+
+  try {
+    const { data, error } = await supabase.rpc('check_prompt_needs_regeneration', {
+      p_tenant_id: tenantId,
+      p_channel: channel,
+    });
+
+    if (error) {
+      console.error('[PromptCache] Error checking regeneration:', error);
+      return true; // Si hay error, asumir que necesita regeneración
+    }
+
+    return data === true;
+  } catch (error) {
+    console.error('[PromptCache] Exception checking regeneration:', error);
+    return true;
+  }
+}
+
+/**
+ * Guarda un prompt generado en el caché
+ */
+export async function saveCachedPrompt(
+  tenantId: string,
+  channel: CacheChannel,
+  generatedPrompt: string,
+  systemPrompt: string,
+  sourceDataHash: string,
+  generatorModel: string = 'gemini-2.0-flash-exp',
+  tokensEstimated?: number
+): Promise<string | null> {
+  const supabase = createServerClient();
+
+  try {
+    const { data, error } = await supabase.rpc('upsert_generated_prompt', {
+      p_tenant_id: tenantId,
+      p_channel: channel,
+      p_generated_prompt: generatedPrompt,
+      p_system_prompt: systemPrompt,
+      p_source_data_hash: sourceDataHash,
+      p_generator_model: generatorModel,
+      p_tokens_estimated: tokensEstimated || null,
+      p_generation_config: {},
+    });
+
+    if (error) {
+      console.error('[PromptCache] Error saving cached prompt:', error);
+      return null;
+    }
+
+    console.log(`[PromptCache] Saved prompt for tenant ${tenantId}, channel ${channel}`);
+    return data;
+  } catch (error) {
+    console.error('[PromptCache] Exception saving cached prompt:', error);
+    return null;
+  }
+}
+
+/**
+ * Genera y cachea un prompt para un canal específico
+ * Esta es la función principal que se llama cuando el usuario guarda cambios en Business IA
+ */
+export async function generateAndCachePrompt(
+  tenantId: string,
+  channel: CacheChannel
+): Promise<PromptGenerationResult> {
+  console.log(`[PromptCache] Generating and caching prompt for tenant ${tenantId}, channel ${channel}`);
+
+  // 1. Determinar el tipo de prompt basado en el canal
+  const promptType: PromptType = channel === 'voice' ? 'voice' : 'messaging';
+
+  // 2. Recopilar contexto del negocio
+  const context = await collectBusinessContext(tenantId, promptType);
+
+  if (!context) {
+    return {
+      success: false,
+      prompt: '',
+      error: 'No se pudo obtener el contexto del negocio',
+      generatedAt: new Date().toISOString(),
+      model: 'none',
+      processingTimeMs: 0,
+    };
+  }
+
+  // 3. Calcular hash de los datos actuales
+  const sourceDataHash = calculateBusinessContextHash(context);
+
+  // 4. Verificar si ya existe un prompt con el mismo hash (sin cambios)
+  const existingPrompt = await getCachedPrompt(tenantId, channel);
+  if (existingPrompt.found && existingPrompt.source_data_hash === sourceDataHash) {
+    console.log(`[PromptCache] Prompt already up-to-date for channel ${channel}`);
+    return {
+      success: true,
+      prompt: existingPrompt.generated_prompt || '',
+      generatedAt: existingPrompt.last_updated || new Date().toISOString(),
+      model: 'cached',
+      processingTimeMs: 0,
+    };
+  }
+
+  // 5. Generar nuevo prompt con Gemini
+  const result = await generatePromptWithAI(context, promptType);
+
+  if (!result.success) {
+    return result;
+  }
+
+  // 6. Guardar en caché
+  const promptId = await saveCachedPrompt(
+    tenantId,
+    channel,
+    result.prompt,
+    result.prompt, // El system_prompt es el mismo que el generated_prompt por ahora
+    sourceDataHash,
+    result.model,
+    Math.ceil(result.prompt.length / 4) // Estimación aproximada de tokens
+  );
+
+  if (!promptId) {
+    console.warn('[PromptCache] Could not save to cache, but prompt was generated');
+  }
+
+  console.log(`[PromptCache] Successfully generated and cached prompt for channel ${channel}`);
+  return result;
+}
+
+/**
+ * Genera y cachea prompts para TODOS los canales de un tipo
+ * Por ejemplo, si promptType = 'messaging', genera para whatsapp, instagram, etc.
+ */
+export async function generateAndCacheAllPrompts(
+  tenantId: string,
+  promptType: PromptType
+): Promise<{ success: boolean; channels: Record<CacheChannel, boolean>; errors: string[] }> {
+  const channels = PROMPT_TYPE_TO_CHANNELS[promptType];
+  const results: Record<CacheChannel, boolean> = {} as Record<CacheChannel, boolean>;
+  const errors: string[] = [];
+
+  console.log(`[PromptCache] Generating prompts for ${promptType} channels:`, channels);
+
+  for (const channel of channels) {
+    try {
+      const result = await generateAndCachePrompt(tenantId, channel);
+      results[channel] = result.success;
+      if (!result.success && result.error) {
+        errors.push(`${channel}: ${result.error}`);
+      }
+    } catch (error) {
+      results[channel] = false;
+      errors.push(`${channel}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  const allSuccess = Object.values(results).every(v => v);
+  return { success: allSuccess, channels: results, errors };
+}
+
+/**
+ * Obtiene el prompt optimizado para usar en runtime
+ * Si existe en caché y está actualizado, lo usa. Si no, regenera.
+ *
+ * Esta es la función que los servicios LangGraph y Voice deben llamar
+ * en cada mensaje/llamada en vez de generar el prompt desde cero.
+ */
+export async function getOptimizedPrompt(
+  tenantId: string,
+  channel: CacheChannel
+): Promise<{ prompt: string; fromCache: boolean; version?: number }> {
+  // 1. Intentar obtener del caché
+  const cached = await getCachedPrompt(tenantId, channel);
+
+  if (cached.found && cached.generated_prompt) {
+    // Verificar si necesita regeneración (datos cambiaron)
+    const needsRegen = await checkNeedsRegeneration(tenantId, channel);
+
+    if (!needsRegen) {
+      console.log(`[PromptCache] Using cached prompt v${cached.prompt_version} for ${channel}`);
+      return {
+        prompt: cached.generated_prompt,
+        fromCache: true,
+        version: cached.prompt_version,
+      };
+    }
+
+    console.log(`[PromptCache] Cached prompt outdated, regenerating for ${channel}`);
+  }
+
+  // 2. No hay caché válido, generar nuevo prompt
+  console.log(`[PromptCache] Generating fresh prompt for ${channel}`);
+  const result = await generateAndCachePrompt(tenantId, channel);
+
+  if (result.success) {
+    return {
+      prompt: result.prompt,
+      fromCache: false,
+    };
+  }
+
+  // 3. Si falló la generación pero hay caché antiguo, usarlo como fallback
+  if (cached.found && cached.generated_prompt) {
+    console.warn(`[PromptCache] Using stale cache as fallback for ${channel}`);
+    return {
+      prompt: cached.generated_prompt,
+      fromCache: true,
+      version: cached.prompt_version,
+    };
+  }
+
+  // 4. No hay caché ni se pudo generar, retornar prompt vacío
+  console.error(`[PromptCache] No prompt available for ${channel}`);
+  return {
+    prompt: '',
+    fromCache: false,
+  };
+}
+
+/**
+ * Invalida el caché de prompts para un tenant (fuerza regeneración)
+ * Útil cuando se hacen cambios masivos o hay errores
+ */
+export async function invalidatePromptCache(
+  tenantId: string,
+  channel?: CacheChannel
+): Promise<boolean> {
+  const supabase = createServerClient();
+
+  try {
+    let query = supabase
+      .from('ai_generated_prompts')
+      .update({ status: 'archived', updated_at: new Date().toISOString() })
+      .eq('tenant_id', tenantId);
+
+    if (channel) {
+      query = query.eq('channel', channel);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      console.error('[PromptCache] Error invalidating cache:', error);
+      return false;
+    }
+
+    console.log(`[PromptCache] Cache invalidated for tenant ${tenantId}${channel ? `, channel ${channel}` : ''}`);
+    return true;
+  } catch (error) {
+    console.error('[PromptCache] Exception invalidating cache:', error);
+    return false;
+  }
+}
+
+// ======================
 // EXPORTS
 // ======================
 
 export const PromptGeneratorService = {
+  // Funciones originales
   collectBusinessContext,
   generatePromptWithAI,
   generateVoiceAgentPrompt,
   generateMessagingAgentPrompt,
+
+  // Funciones de caché
+  getCachedPrompt,
+  checkNeedsRegeneration,
+  saveCachedPrompt,
+  generateAndCachePrompt,
+  generateAndCacheAllPrompts,
+  getOptimizedPrompt,
+  invalidatePromptCache,
+  calculateBusinessContextHash,
 };

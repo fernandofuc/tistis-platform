@@ -2,6 +2,11 @@
 // TIS TIS PLATFORM - LangGraph AI Service
 // Servicio que integra LangGraph con el sistema existente
 // =====================================================
+// OPTIMIZACIÓN: Usa prompts pre-cacheados de ai_generated_prompts
+// en lugar de reconstruir el contexto completo cada vez.
+// Los prompts se generan UNA VEZ cuando el usuario guarda
+// cambios en Business IA, reduciendo tokens de ~5000 a ~1500.
+// =====================================================
 
 import { createServerClient } from '@/src/shared/lib/supabase';
 import {
@@ -18,6 +23,10 @@ import type {
 import type { AIProcessingResult } from './ai.service';
 import type { AISignal } from '@/src/shared/types/whatsapp';
 import { MessageLearningService } from './message-learning.service';
+import {
+  getOptimizedPrompt,
+  type CacheChannel,
+} from './prompt-generator.service';
 
 // ======================
 // LEARNING INTEGRATION
@@ -75,11 +84,19 @@ async function queueForLearning(
 // ======================
 
 /**
- * Carga el contexto completo del tenant para el grafo
+ * Carga el contexto del tenant para el grafo
+ *
+ * OPTIMIZACIÓN: Usa el prompt pre-cacheado de ai_generated_prompts
+ * en lugar de reconstruir el system_prompt desde los datos raw.
+ * Esto reduce significativamente los tokens por request.
  */
-async function loadTenantContext(tenantId: string): Promise<TenantInfo | null> {
+async function loadTenantContext(
+  tenantId: string,
+  channel: CacheChannel = 'whatsapp'
+): Promise<TenantInfo | null> {
   const supabase = createServerClient();
 
+  // 1. Cargar datos básicos del tenant y AI config
   const { data, error } = await supabase.rpc('get_tenant_ai_context', {
     p_tenant_id: tenantId,
   });
@@ -89,6 +106,19 @@ async function loadTenantContext(tenantId: string): Promise<TenantInfo | null> {
     return null;
   }
 
+  // 2. Obtener prompt optimizado del caché
+  // Este es el prompt pre-generado por Gemini, mucho más conciso y estructurado
+  const { prompt: cachedPrompt, fromCache, version } = await getOptimizedPrompt(tenantId, channel);
+
+  if (fromCache) {
+    console.log(`[LangGraph AI] Using cached prompt v${version} for channel ${channel}`);
+  } else if (cachedPrompt) {
+    console.log(`[LangGraph AI] Using freshly generated prompt for channel ${channel}`);
+  }
+
+  // 3. Usar el prompt cacheado si existe, sino usar el de ai_config
+  const systemPrompt = cachedPrompt || data.ai_config?.system_prompt || '';
+
   // Mapear al formato del estado
   return {
     tenant_id: data.tenant_id,
@@ -96,7 +126,7 @@ async function loadTenantContext(tenantId: string): Promise<TenantInfo | null> {
     vertical: data.vertical || 'general',
     timezone: data.timezone || 'America/Mexico_City',
     ai_config: {
-      system_prompt: data.ai_config?.system_prompt || '',
+      system_prompt: systemPrompt,
       model: data.ai_config?.model || 'gpt-5-mini',
       temperature: data.ai_config?.temperature || 0.7,
       response_style: data.ai_config?.response_style || 'professional',
@@ -299,23 +329,31 @@ async function loadBusinessContext(tenantId: string): Promise<BusinessContext | 
  *
  * Esta función reemplaza a generateAIResponse() del ai.service.ts original.
  * Mantiene la misma interfaz de salida para compatibilidad.
+ *
+ * OPTIMIZACIÓN: Usa prompts pre-cacheados de ai_generated_prompts.
+ * El prompt se determina según el canal de la conversación.
  */
 export async function generateAIResponseWithGraph(
   tenantId: string,
   conversationId: string,
   currentMessage: string,
-  leadId?: string
+  leadId?: string,
+  channel?: CacheChannel
 ): Promise<AIProcessingResult> {
   const startTime = Date.now();
 
   console.log(`[LangGraph AI] Processing message for tenant ${tenantId}`);
 
   try {
+    // 0. Primero cargar el contexto de conversación para determinar el canal
+    const conversationContext = await loadConversationContext(conversationId);
+    const effectiveChannel = (channel || conversationContext?.channel || 'whatsapp') as CacheChannel;
+
     // 1. Cargar todos los contextos en paralelo
-    const [tenantContext, leadContext, conversationContext, businessContext] = await Promise.all([
-      loadTenantContext(tenantId),
+    // Nota: loadTenantContext ahora usa el prompt cacheado según el canal
+    const [tenantContext, leadContext, businessContext] = await Promise.all([
+      loadTenantContext(tenantId, effectiveChannel),
       leadId ? loadLeadContext(leadId) : Promise.resolve(null),
-      loadConversationContext(conversationId),
       loadBusinessContext(tenantId),
     ]);
 
@@ -329,7 +367,7 @@ export async function generateAIResponseWithGraph(
       conversation_id: conversationId,
       lead_id: leadId || '',
       current_message: currentMessage,
-      channel: conversationContext?.channel || 'whatsapp',
+      channel: effectiveChannel,
       tenant_context: tenantContext,
       lead_context: leadContext,
       conversation_context: conversationContext,

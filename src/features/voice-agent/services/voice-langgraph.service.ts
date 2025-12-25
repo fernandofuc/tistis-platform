@@ -2,6 +2,11 @@
 // TIS TIS PLATFORM - Voice LangGraph Integration Service
 // Integra el Voice Agent con el sistema LangGraph existente
 // =====================================================
+// OPTIMIZACIÓN: Usa prompts pre-cacheados de ai_generated_prompts
+// para el canal 'voice'. Los prompts se generan UNA VEZ cuando
+// el usuario guarda cambios en Business IA, reduciendo tokens
+// y mejorando latencia en cada llamada telefónica.
+// =====================================================
 
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -9,6 +14,7 @@ import {
   type GraphExecutionInput,
 } from '@/src/features/ai/graph';
 import { LangGraphAIService } from '@/src/features/ai/services/langgraph-ai.service';
+import { getOptimizedPrompt } from '@/src/features/ai/services/prompt-generator.service';
 import type {
   VoiceAgentConfig,
   VoiceCall,
@@ -133,6 +139,10 @@ ${config.custom_instructions || 'Sin instrucciones adicionales.'}
  *
  * Esta función es el punto de entrada para procesar transcripciones de voz.
  * Integra con el sistema LangGraph existente pero añade contexto específico para voz.
+ *
+ * OPTIMIZACIÓN: Usa el prompt pre-cacheado del canal 'voice' en lugar de
+ * reconstruir el contexto completo cada vez. El prompt ya incluye toda la
+ * información del negocio estructurada de forma óptima para llamadas de voz.
  */
 export async function processVoiceMessage(
   context: VoiceAgentContext,
@@ -142,7 +152,20 @@ export async function processVoiceMessage(
   console.log(`[Voice LangGraph] Processing voice message for call ${context.call_id}`);
 
   try {
-    // 1. Cargar contextos usando los loaders de LangGraphAIService
+    // 1. Obtener prompt cacheado para voz
+    // Este prompt ya fue generado por Gemini y está optimizado para voz
+    const { prompt: cachedVoicePrompt, fromCache, version } = await getOptimizedPrompt(
+      context.tenant_id,
+      'voice'
+    );
+
+    if (fromCache) {
+      console.log(`[Voice LangGraph] Using cached voice prompt v${version}`);
+    } else if (cachedVoicePrompt) {
+      console.log(`[Voice LangGraph] Using freshly generated voice prompt`);
+    }
+
+    // 2. Cargar contextos base usando los loaders de LangGraphAIService
     const [tenantContext, businessContext] = await Promise.all([
       LangGraphAIService.loadTenantContext(context.tenant_id),
       LangGraphAIService.loadBusinessContext(context.tenant_id),
@@ -152,23 +175,38 @@ export async function processVoiceMessage(
       throw new Error('Could not load tenant context');
     }
 
-    // 2. Inyectar instrucciones de voz al system prompt
-    const voiceInstructions = generateVoiceInstructions(context.voice_config);
+    // 3. Determinar el system prompt a usar
+    // Prioridad: 1) Prompt cacheado, 2) Prompt del tenant + instrucciones de voz
+    let finalSystemPrompt: string;
+
+    if (cachedVoicePrompt) {
+      // Usar el prompt cacheado que ya está optimizado para voz
+      // Solo añadir instrucciones de voz si no están incluidas
+      finalSystemPrompt = cachedVoicePrompt;
+      console.log(`[Voice LangGraph] Using optimized cached prompt (${cachedVoicePrompt.length} chars)`);
+    } else {
+      // Fallback: generar instrucciones de voz y concatenar
+      const voiceInstructions = generateVoiceInstructions(context.voice_config);
+      finalSystemPrompt = `${tenantContext.ai_config.system_prompt}\n\n${voiceInstructions}`;
+      console.log(`[Voice LangGraph] Using fallback prompt with voice instructions`);
+    }
+
+    // 4. Crear contexto mejorado para voz
     const enhancedTenantContext = {
       ...tenantContext,
       ai_config: {
         ...tenantContext.ai_config,
-        system_prompt: `${tenantContext.ai_config.system_prompt}\n\n${voiceInstructions}`,
+        system_prompt: finalSystemPrompt,
         max_response_length: 150, // Respuestas más cortas para voz
       },
     };
 
-    // 3. Construir historial de conversación para el grafo
+    // 5. Construir historial de conversación para el grafo
     const conversationHistory = context.conversation_history
       .map((msg) => `${msg.role === 'user' ? 'Cliente' : 'Asistente'}: ${msg.content}`)
       .join('\n');
 
-    // 4. Preparar input para el grafo
+    // 6. Preparar input para el grafo
     const graphInput: GraphExecutionInput = {
       tenant_id: context.tenant_id,
       conversation_id: context.call_id, // Usamos call_id como conversation_id
@@ -189,7 +227,7 @@ export async function processVoiceMessage(
       business_context: businessContext,
     };
 
-    // 5. Ejecutar el grafo
+    // 7. Ejecutar el grafo
     const result = await executeGraph(graphInput);
 
     const processingTime = Date.now() - startTime;

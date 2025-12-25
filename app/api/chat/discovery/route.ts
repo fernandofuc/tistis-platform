@@ -18,6 +18,66 @@ function getSupabaseClient() {
   );
 }
 
+// Guardar sesión en background (no bloquea el stream)
+async function saveSessionInBackground(
+  sessionToken: string,
+  messages: Array<{ role: string; content: string }>,
+  accumulatedText: string
+) {
+  try {
+    const supabase = getSupabaseClient();
+
+    // Parsear análisis si existe
+    const analysisMatch = accumulatedText.match(/ANALYSIS_COMPLETE::({[\s\S]*})/);
+    let aiAnalysis = null;
+    if (analysisMatch) {
+      try {
+        aiAnalysis = JSON.parse(analysisMatch[1]);
+      } catch {
+        // Ignorar errores de parsing
+      }
+    }
+
+    const updatedHistory = [
+      ...messages,
+      { role: 'assistant', content: accumulatedText }
+    ];
+
+    const isComplete = aiAnalysis !== null;
+
+    const { data: existingSession } = await supabase
+      .from('discovery_sessions')
+      .select('id')
+      .eq('session_token', sessionToken)
+      .single();
+
+    const sessionData = {
+      conversation_history: updatedHistory,
+      ai_analysis: aiAnalysis,
+      status: isComplete ? 'completed' : 'active',
+      completed_at: isComplete ? new Date().toISOString() : null,
+      business_type: aiAnalysis?.business_type || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingSession) {
+      await supabase
+        .from('discovery_sessions')
+        .update(sessionData)
+        .eq('session_token', sessionToken);
+    } else {
+      await supabase
+        .from('discovery_sessions')
+        .insert({
+          session_token: sessionToken,
+          ...sessionData,
+        });
+    }
+  } catch (dbError) {
+    console.error('Background save error:', dbError);
+  }
+}
+
 // Tipos de negocio soportados
 type BusinessType = 'dental' | 'restaurant' | 'otro';
 
@@ -150,8 +210,6 @@ export async function POST(req: NextRequest) {
   try {
     const { messages, sessionToken } = await req.json();
 
-    // Chat Discovery request received
-
     if (!messages || !Array.isArray(messages)) {
       return new Response(
         JSON.stringify({ error: 'Messages array is required' }),
@@ -167,87 +225,67 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Llamada a la IA
-    const response_ai = await openai.chat.completions.create({
+    // Llamada a la IA con STREAMING habilitado
+    const stream = await openai.chat.completions.create({
       model: DEFAULT_MODELS.CHAT_DISCOVERY,
       max_tokens: OPENAI_CONFIG.defaultMaxTokens,
       temperature: OPENAI_CONFIG.defaultTemperature,
+      stream: true, // Habilitar streaming
       messages: [
         { role: 'system', content: DISCOVERY_SYSTEM_PROMPT },
         ...messages,
       ],
     });
 
-    const accumulatedText = response_ai.choices[0]?.message?.content || '';
-
-    // AI response processed
-
-    // Guardar en base de datos
-    if (sessionToken && accumulatedText) {
-      try {
-        const updatedHistory = [
-          ...messages,
-          { role: 'assistant', content: accumulatedText }
-        ];
-
-        const aiAnalysis = parseAIAnalysis(accumulatedText);
-        const isComplete = aiAnalysis !== null;
-
-        const supabase = getSupabaseClient();
-        const { data: existingSession } = await supabase
-          .from('discovery_sessions')
-          .select('id')
-          .eq('session_token', sessionToken)
-          .single();
-
-        const sessionData = {
-          conversation_history: updatedHistory,
-          ai_analysis: aiAnalysis,
-          status: isComplete ? 'completed' : 'active',
-          completed_at: isComplete ? new Date().toISOString() : null,
-          business_type: aiAnalysis?.business_type || null,
-          updated_at: new Date().toISOString(),
-        };
-
-        if (existingSession) {
-          await supabase
-            .from('discovery_sessions')
-            .update(sessionData)
-            .eq('session_token', sessionToken);
-        } else {
-          await supabase
-            .from('discovery_sessions')
-            .insert({
-              session_token: sessionToken,
-              ...sessionData,
-            });
-        }
-
-        // Session saved to database
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-      }
-    }
-
-    // Retornar respuesta
+    // Crear un ReadableStream para enviar chunks al cliente
     const encoder = new TextEncoder();
-    const textBuffer = encoder.encode(accumulatedText);
+    let accumulatedText = '';
 
-    return new Response(textBuffer, {
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              accumulatedText += content;
+              // Enviar cada chunk inmediatamente al cliente
+              controller.enqueue(encoder.encode(content));
+            }
+          }
+
+          // Stream completado, guardar en DB en background
+          if (sessionToken && accumulatedText) {
+            // No esperamos a que termine, se ejecuta en background
+            saveSessionInBackground(sessionToken, messages, accumulatedText);
+          }
+
+          controller.close();
+        } catch (error) {
+          console.error('Stream error:', error);
+          controller.error(error);
+        }
+      },
+    });
+
+    return new Response(readableStream, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
+        'Transfer-Encoding': 'chunked',
       },
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('API Route Error:', error);
+
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+    const errorDetails = error instanceof Error ? error.toString() : String(error);
 
     return new Response(
       JSON.stringify({
-        error: error.message || 'Error desconocido',
-        details: error.toString(),
+        error: errorMessage,
+        details: errorDetails,
       }),
       {
         status: 500,

@@ -1,6 +1,10 @@
 // =====================================================
 // TIS TIS PLATFORM - Voice Agent Prompt Generation API
-// Genera prompts profesionales usando Gemini 3.0
+// Genera y cachea prompts profesionales para voz
+// =====================================================
+// Este endpoint genera prompts UNA VEZ y los cachea.
+// Los prompts solo se regeneran cuando cambian los datos
+// del negocio (servicios, sucursales, FAQs, etc.)
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -59,7 +63,7 @@ async function getUserContext(supabase: ReturnType<typeof createAuthenticatedCli
 }
 
 // ======================
-// POST - Generate voice agent prompt
+// POST - Generate and cache voice agent prompt
 // ======================
 export async function POST(request: NextRequest) {
   try {
@@ -98,9 +102,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generar prompt profesional usando Gemini 3.0
-    console.log('[Voice Agent Generate] Generating prompt with Gemini 3.0...');
-    const result = await PromptGeneratorService.generateVoiceAgentPrompt(tenantId);
+    // Generar y cachear prompt usando el nuevo sistema
+    console.log('[Voice Agent Generate] Generating and caching voice prompt...');
+    const result = await PromptGeneratorService.generateAndCachePrompt(tenantId, 'voice');
 
     if (!result.success) {
       console.error('[Voice Agent Generate] Error generating prompt:', result.error);
@@ -110,7 +114,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Voice Agent Generate] Prompt generated in ${result.processingTimeMs}ms using ${result.model}`);
+    // También guardar en voice_agent_config para compatibilidad
+    await serviceSupabase
+      .from('voice_agent_config')
+      .update({
+        system_prompt: result.prompt,
+        system_prompt_generated_at: result.generatedAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('tenant_id', tenantId);
+
+    console.log(`[Voice Agent Generate] Prompt generated and cached in ${result.processingTimeMs}ms using ${result.model}`);
 
     return NextResponse.json({
       success: true,
@@ -118,6 +132,8 @@ export async function POST(request: NextRequest) {
       generated_at: result.generatedAt,
       model: result.model,
       processing_time_ms: result.processingTimeMs,
+      cached: result.model === 'cached',
+      channel: 'voice',
     });
   } catch (error) {
     console.error('[Voice Agent Generate] Error:', error);
@@ -130,7 +146,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ======================
-// GET - Get current prompt and preview of what would be generated
+// GET - Get current prompt, cache status, and context summary
 // ======================
 export async function GET(request: NextRequest) {
   try {
@@ -169,6 +185,12 @@ export async function GET(request: NextRequest) {
       .eq('id', tenantId)
       .single();
 
+    // Obtener estado del caché para voice
+    const cachedPrompt = await PromptGeneratorService.getCachedPrompt(tenantId, 'voice');
+    const needsRegeneration = cachedPrompt.found
+      ? await PromptGeneratorService.checkNeedsRegeneration(tenantId, 'voice')
+      : true;
+
     // Recopilar contexto del negocio usando el servicio centralizado
     console.log('[Voice Agent Generate] Calling collectBusinessContext for tenant:', tenantId);
     const businessContext = await PromptGeneratorService.collectBusinessContext(tenantId, 'voice');
@@ -185,7 +207,6 @@ export async function GET(request: NextRequest) {
     const faqsCount = businessContext?.faqs?.length || 0;
     const instructionsCount = businessContext?.customInstructionsList?.length || 0;
     const policiesCount = businessContext?.businessPolicies?.length || 0;
-    // Knowledge Base completo
     const knowledgeArticlesCount = businessContext?.knowledgeArticles?.length || 0;
     const responseTemplatesCount = businessContext?.responseTemplates?.length || 0;
     const competitorHandlingCount = businessContext?.competitorHandling?.length || 0;
@@ -195,6 +216,14 @@ export async function GET(request: NextRequest) {
       current_prompt: config?.system_prompt || null,
       current_prompt_generated_at: config?.system_prompt_generated_at || null,
       custom_instructions: config?.custom_instructions || null,
+      // Información del caché
+      cache_status: {
+        channel: 'voice',
+        has_cached_prompt: cachedPrompt.found,
+        cached_prompt_version: cachedPrompt.prompt_version || null,
+        last_generated: cachedPrompt.last_updated || null,
+        needs_regeneration: needsRegeneration,
+      },
       context_summary: {
         // Info del tenant
         vertical: tenant?.vertical || 'general',

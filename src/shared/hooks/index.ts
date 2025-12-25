@@ -37,3 +37,11 @@ export {
   getSearchResultLabel,
   type SearchResult,
 } from './useGlobalSearch';
+
+// Streaming Text (typing effect)
+export {
+  useStreamingText,
+  useDirectStreaming,
+  type UseStreamingTextOptions,
+  type UseStreamingTextReturn,
+} from './useStreamingText';

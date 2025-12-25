@@ -1,11 +1,18 @@
 // =====================================================
 // TIS TIS PLATFORM - AI Config Prompt Generation API
-// Genera prompts profesionales para mensajería usando Gemini 3.0
+// Genera y cachea prompts profesionales para mensajería
+// =====================================================
+// Este endpoint genera prompts UNA VEZ y los cachea.
+// Los prompts solo se regeneran cuando cambian los datos
+// del negocio (servicios, sucursales, FAQs, etc.)
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { PromptGeneratorService } from '@/src/features/ai/services/prompt-generator.service';
+import {
+  PromptGeneratorService,
+  type CacheChannel,
+} from '@/src/features/ai/services/prompt-generator.service';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -51,7 +58,7 @@ async function getUserContext(supabase: ReturnType<typeof createAuthenticatedCli
 }
 
 // ======================
-// POST - Generate messaging agent prompt with Gemini 3.0
+// POST - Generate and cache messaging agent prompts
 // ======================
 export async function POST(request: NextRequest) {
   try {
@@ -83,9 +90,20 @@ export async function POST(request: NextRequest) {
 
     const tenantId = context.userRole.tenant_id;
 
-    // Generar prompt profesional usando Gemini 3.0
-    console.log('[AI Config Generate] Generating messaging prompt with Gemini 3.0...');
-    const result = await PromptGeneratorService.generateMessagingAgentPrompt(tenantId);
+    // Obtener canal específico del body (opcional)
+    let channel: CacheChannel = 'whatsapp'; // default
+    try {
+      const body = await request.json();
+      if (body.channel && ['whatsapp', 'instagram', 'facebook', 'tiktok', 'webchat'].includes(body.channel)) {
+        channel = body.channel;
+      }
+    } catch {
+      // Si no hay body o no es JSON válido, usar default
+    }
+
+    // Generar y cachear prompt usando el nuevo sistema
+    console.log(`[AI Config Generate] Generating and caching prompt for channel ${channel}...`);
+    const result = await PromptGeneratorService.generateAndCachePrompt(tenantId, channel);
 
     if (!result.success) {
       console.error('[AI Config Generate] Error generating prompt:', result.error);
@@ -95,7 +113,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[AI Config Generate] Prompt generated in ${result.processingTimeMs}ms using ${result.model}`);
+    // También guardar en ai_tenant_config para compatibilidad
+    const serviceSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    await serviceSupabase
+      .from('ai_tenant_config')
+      .update({
+        custom_instructions: result.prompt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('tenant_id', tenantId);
+
+    console.log(`[AI Config Generate] Prompt generated and cached in ${result.processingTimeMs}ms using ${result.model}`);
 
     return NextResponse.json({
       success: true,
@@ -103,6 +135,8 @@ export async function POST(request: NextRequest) {
       generated_at: result.generatedAt,
       model: result.model,
       processing_time_ms: result.processingTimeMs,
+      cached: result.model === 'cached',
+      channel,
     });
   } catch (error) {
     console.error('[AI Config Generate] Error:', error);
@@ -115,7 +149,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ======================
-// GET - Get context summary for prompt generation
+// GET - Get context summary and cache status
 // ======================
 export async function GET(request: NextRequest) {
   try {
@@ -139,6 +173,10 @@ export async function GET(request: NextRequest) {
 
     const tenantId = context.userRole.tenant_id;
 
+    // Obtener canal de query params (default: whatsapp)
+    const { searchParams } = new URL(request.url);
+    const channel = (searchParams.get('channel') || 'whatsapp') as CacheChannel;
+
     // Obtener configuración actual
     const { data: config } = await supabase
       .from('ai_tenant_config')
@@ -153,6 +191,12 @@ export async function GET(request: NextRequest) {
       .eq('id', tenantId)
       .single();
 
+    // Obtener estado del caché para el canal
+    const cachedPrompt = await PromptGeneratorService.getCachedPrompt(tenantId, channel);
+    const needsRegeneration = cachedPrompt.found
+      ? await PromptGeneratorService.checkNeedsRegeneration(tenantId, channel)
+      : true;
+
     // Recopilar contexto del negocio
     const businessContext = await PromptGeneratorService.collectBusinessContext(tenantId, 'messaging');
 
@@ -163,7 +207,6 @@ export async function GET(request: NextRequest) {
     const faqsCount = businessContext?.faqs?.length || 0;
     const instructionsCount = businessContext?.customInstructionsList?.length || 0;
     const policiesCount = businessContext?.businessPolicies?.length || 0;
-    // NUEVOS: Knowledge Base completo
     const knowledgeArticlesCount = businessContext?.knowledgeArticles?.length || 0;
     const responseTemplatesCount = businessContext?.responseTemplates?.length || 0;
     const competitorHandlingCount = businessContext?.competitorHandling?.length || 0;
@@ -173,6 +216,14 @@ export async function GET(request: NextRequest) {
       current_instructions: config?.custom_instructions || null,
       current_personality: config?.ai_personality || 'professional_friendly',
       last_updated: config?.updated_at || null,
+      // Información del caché
+      cache_status: {
+        channel,
+        has_cached_prompt: cachedPrompt.found,
+        cached_prompt_version: cachedPrompt.prompt_version || null,
+        last_generated: cachedPrompt.last_updated || null,
+        needs_regeneration: needsRegeneration,
+      },
       context_summary: {
         // Pestaña: General
         vertical: tenant?.vertical || 'general',

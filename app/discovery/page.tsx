@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Send, ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useStreamingText } from '@/src/shared/hooks';
 
 // ============================================================
 // TIPOS Y CONSTANTES
@@ -357,12 +358,32 @@ export default function DiscoveryPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentInput, setCurrentInput] = useState('');
   const [sessionToken] = useState(() => generateSessionToken());
-  const [streamingContent, setStreamingContent] = useState<string>('');
+  const [rawStreamingContent, setRawStreamingContent] = useState<string>('');
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Hook para efecto de typing progresivo
+  const {
+    displayedText: streamingContent,
+    isTyping,
+    setSourceText,
+    reset: resetTyping,
+  } = useStreamingText({
+    baseSpeed: 15,        // Velocidad base rápida
+    speedVariation: 8,    // Variación pequeña para naturalidad
+    punctuationPause: 80, // Pausa breve en puntuación
+    enabled: true,
+  });
+
+  // Actualizar el texto fuente cuando llega del streaming
+  useEffect(() => {
+    if (rawStreamingContent) {
+      setSourceText(rawStreamingContent);
+    }
+  }, [rawStreamingContent, setSourceText]);
 
   // Auto-scroll al nuevo mensaje
   const scrollToBottom = () => {
@@ -394,7 +415,8 @@ export default function DiscoveryPage() {
   // Enviar mensaje a la IA
   const sendMessageToAI = useCallback(async (conversationHistory: Message[]) => {
     setIsLoading(true);
-    setStreamingContent('');
+    setRawStreamingContent('');
+    resetTyping();
     const aiMessageId = `ai_${Date.now()}`;
     setStreamingMessageId(aiMessageId);
 
@@ -423,13 +445,15 @@ export default function DiscoveryPage() {
       const decoder = new TextDecoder();
       let accumulatedText = '';
 
+      // Leer el stream chunk por chunk
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
         accumulatedText += chunk;
-        setStreamingContent(cleanContent(accumulatedText));
+        // Actualizar el contenido raw, el hook de typing lo mostrará progresivamente
+        setRawStreamingContent(cleanContent(accumulatedText));
       }
 
       // Verificar si hay análisis completo
@@ -468,7 +492,8 @@ export default function DiscoveryPage() {
       };
 
       setMessages(prev => [...prev, finalMessage]);
-      setStreamingContent('');
+      setRawStreamingContent('');
+      resetTyping();
       setStreamingMessageId(null);
 
     } catch (error) {
@@ -480,12 +505,13 @@ export default function DiscoveryPage() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
-      setStreamingContent('');
+      setRawStreamingContent('');
+      resetTyping();
       setStreamingMessageId(null);
     } finally {
       setIsLoading(false);
     }
-  }, [sessionToken, router]);
+  }, [sessionToken, router, resetTyping]);
 
   // Cargar mensaje inicial - solo se ejecuta una vez al montar el componente
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -601,8 +627,8 @@ export default function DiscoveryPage() {
               </motion.div>
             ))}
 
-            {/* Mensaje en streaming */}
-            {isLoading && streamingMessageId && (
+            {/* Mensaje en streaming con efecto de typing */}
+            {(isLoading || isTyping) && streamingMessageId && (
               <motion.div
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -616,13 +642,27 @@ export default function DiscoveryPage() {
                         <span className="text-slate-400">Escribiendo...</span>
                       </span>
                     )}
-                    {streamingContent && (
-                      <span className="inline-block w-0.5 h-4 bg-slate-400 animate-pulse ml-0.5" />
+                    {/* Cursor parpadeante mientras escribe */}
+                    {(streamingContent || isTyping) && (
+                      <span
+                        className="inline-block w-0.5 h-4 bg-tis-coral ml-0.5 align-middle"
+                        style={{
+                          animation: 'blink 0.8s step-end infinite',
+                        }}
+                      />
                     )}
                   </p>
                 </div>
               </motion.div>
             )}
+
+            {/* Estilos para el cursor */}
+            <style jsx>{`
+              @keyframes blink {
+                0%, 50% { opacity: 1; }
+                51%, 100% { opacity: 0; }
+              }
+            `}</style>
 
             <div ref={messagesEndRef} />
           </div>
