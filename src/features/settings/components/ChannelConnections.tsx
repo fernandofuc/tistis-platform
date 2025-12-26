@@ -266,21 +266,45 @@ function AccountCard({ connection, onEdit, onToggleAI, onOpenAISettings }: Accou
           <StatusBadge status={connection.status} />
         </div>
 
-        {/* AI Settings Preview */}
+        {/* AI Settings Preview - SIEMPRE visible cuando está conectado */}
         {isConnected && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {personality && (
-              <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-700">
-                <SparklesIcon className="w-3.5 h-3.5 mr-1.5 text-tis-coral" />
-                {personality.name}
-              </span>
-            )}
-            {connection.first_message_delay_seconds > 0 && (
-              <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-700">
-                <ClockIcon className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
-                {formatDelay(connection.first_message_delay_seconds)}
-              </span>
-            )}
+          <div className="mt-4 p-3 bg-gradient-to-r from-tis-coral/5 to-gray-50/50 rounded-xl border border-gray-100">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              {/* Label */}
+              <div className="flex items-center gap-2">
+                <SparklesIcon className="w-4 h-4 text-tis-coral" />
+                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Configuración AI
+                </span>
+              </div>
+
+              {/* Status */}
+              {personality ? (
+                // Personalizado
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-tis-coral text-white shadow-sm">
+                    Personalizado
+                  </span>
+                  <span className="text-sm font-medium text-gray-700">
+                    {personality.name}
+                  </span>
+                  {connection.first_message_delay_seconds > 0 && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-600">
+                      <ClockIcon className="w-3 h-3 mr-1" />
+                      {formatDelay(connection.first_message_delay_seconds)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                // Config Global
+                <span
+                  className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-300 bg-white text-gray-600"
+                  title="Este canal usa la configuración global de AI. Puedes personalizarlo haciendo click en 'Configurar AI'"
+                >
+                  Usando config global
+                </span>
+              )}
+            </div>
           </div>
         )}
 
@@ -320,19 +344,20 @@ function AccountCard({ connection, onEdit, onToggleAI, onOpenAISettings }: Accou
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
-              {/* AI Settings Button */}
+              {/* AI Settings Button - MÁS PROMINENTE */}
               <button
                 onClick={onOpenAISettings}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-tis-coral hover:bg-tis-coral/10 rounded-xl transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-tis-coral border border-tis-coral/30 hover:bg-tis-coral/10 hover:border-tis-coral/50 rounded-xl transition-all shadow-sm hover:shadow-md"
+                title="Personaliza cómo responde el AI en este canal"
               >
                 <SparklesIcon className="w-4 h-4" />
-                AI
+                Configurar AI
               </button>
 
               {/* Edit/API Button */}
               <button
                 onClick={onEdit}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
               >
                 <SettingsIcon className="w-4 h-4" />
                 API
