@@ -12,6 +12,7 @@ import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, cn } from '@/src/shared/utils';
+import { ChannelIcon, ChannelBadge } from '@/src/shared/components/ChannelBadge';
 import type { Conversation, Message, Lead } from '@/src/shared/types';
 
 // ======================
@@ -67,6 +68,18 @@ const FILTER_TABS = [
   { key: 'escalated', label: 'Escaladas' },
 ] as const;
 
+// Channel filter options
+const CHANNEL_FILTERS = [
+  { key: 'all', label: 'Todos', icon: null },
+  { key: 'whatsapp', label: 'WhatsApp', icon: 'whatsapp' },
+  { key: 'instagram', label: 'Instagram', icon: 'instagram' },
+  { key: 'facebook', label: 'Facebook', icon: 'facebook' },
+  { key: 'tiktok', label: 'TikTok', icon: 'tiktok' },
+  { key: 'webchat', label: 'Web', icon: 'webchat' },
+] as const;
+
+type ChannelFilterType = typeof CHANNEL_FILTERS[number]['key'];
+
 // ======================
 // COMPONENT
 // ======================
@@ -80,6 +93,7 @@ export default function InboxPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'escalated'>('all');
+  const [channelFilter, setChannelFilter] = useState<ChannelFilterType>('all');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -158,9 +172,14 @@ export default function InboxPage() {
   // Filter conversations
   const filteredConversations = useMemo(() => {
     return conversations.filter((conv) => {
+      // Status filter
       if (filter === 'active' && conv.status === 'escalated') return false;
       if (filter === 'escalated' && conv.status !== 'escalated') return false;
 
+      // Channel filter
+      if (channelFilter !== 'all' && conv.channel !== channelFilter) return false;
+
+      // Search filter
       if (search) {
         const searchLower = search.toLowerCase();
         const leadName = conv.leads?.full_name?.toLowerCase() || '';
@@ -170,7 +189,7 @@ export default function InboxPage() {
 
       return true;
     });
-  }, [conversations, filter, search]);
+  }, [conversations, filter, channelFilter, search]);
 
   // Counts for tabs
   const counts = useMemo(() => ({
@@ -178,6 +197,17 @@ export default function InboxPage() {
     active: conversations.filter((c) => c.status !== 'escalated').length,
     escalated: conversations.filter((c) => c.status === 'escalated').length,
   }), [conversations]);
+
+  // Counts by channel
+  const channelCounts = useMemo(() => {
+    const result: Record<string, number> = { all: conversations.length };
+    conversations.forEach((c) => {
+      if (c.channel) {
+        result[c.channel] = (result[c.channel] || 0) + 1;
+      }
+    });
+    return result;
+  }, [conversations]);
 
   // Get classification emoji
   const getClassificationEmoji = (classification?: string) => {
@@ -232,6 +262,41 @@ export default function InboxPage() {
                 </button>
               ))}
             </div>
+
+            {/* Channel Filters */}
+            <div className="flex gap-1.5 mt-3 flex-wrap">
+              {CHANNEL_FILTERS.map((channel) => {
+                const count = channelCounts[channel.key] || 0;
+                // Solo mostrar canales que tienen conversaciones (excepto "all")
+                if (channel.key !== 'all' && count === 0) return null;
+
+                return (
+                  <button
+                    key={channel.key}
+                    onClick={() => setChannelFilter(channel.key)}
+                    className={cn(
+                      'inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all duration-200',
+                      channelFilter === channel.key
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    )}
+                  >
+                    {channel.icon && (
+                      <ChannelIcon channel={channel.icon} size="xs" />
+                    )}
+                    <span>{channel.label}</span>
+                    {count > 0 && (
+                      <span className={cn(
+                        'ml-0.5 text-[10px]',
+                        channelFilter === channel.key ? 'text-white/70' : 'text-slate-400'
+                      )}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Conversations List */}
@@ -279,7 +344,7 @@ export default function InboxPage() {
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        {/* Avatar with AI indicator */}
+                        {/* Avatar with Channel indicator */}
                         <div className="relative flex-shrink-0">
                           <Avatar
                             name={conv.leads?.full_name || conv.leads?.phone || '?'}
@@ -289,9 +354,10 @@ export default function InboxPage() {
                               isSelected ? 'ring-tis-coral/30' : 'ring-transparent'
                             )}
                           />
-                          {conv.ai_handling && (
-                            <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 ring-2 ring-white">
-                              {icons.ai}
+                          {/* Channel icon - bottom right of avatar */}
+                          {conv.channel && (
+                            <span className="absolute -bottom-0.5 -right-0.5">
+                              <ChannelIcon channel={conv.channel} size="xs" />
                             </span>
                           )}
                         </div>
@@ -311,10 +377,16 @@ export default function InboxPage() {
                           </div>
 
                           {/* Badges row */}
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {conv.status === 'escalated' && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-50 text-red-600 border border-red-100">
                                 Escalada
+                              </span>
+                            )}
+                            {conv.ai_handling && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-600 border border-purple-100">
+                                {icons.ai}
+                                <span>IA</span>
                               </span>
                             )}
                             {classificationEmoji && (
@@ -341,18 +413,36 @@ export default function InboxPage() {
               <div className="px-6 py-4 border-b border-slate-100 bg-white">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <Avatar
-                      name={selectedConversation.leads?.full_name || '?'}
-                      size="md"
-                      className="ring-2 ring-slate-100"
-                    />
+                    {/* Avatar with channel indicator */}
+                    <div className="relative">
+                      <Avatar
+                        name={selectedConversation.leads?.full_name || '?'}
+                        size="md"
+                        className="ring-2 ring-slate-100"
+                      />
+                      {selectedConversation.channel && (
+                        <span className="absolute -bottom-0.5 -right-0.5">
+                          <ChannelIcon channel={selectedConversation.channel} size="sm" />
+                        </span>
+                      )}
+                    </div>
                     <div>
                       <h3 className="font-semibold text-slate-900">
                         {selectedConversation.leads?.full_name || 'Sin nombre'}
                       </h3>
-                      <p className="text-sm text-slate-500">
-                        {selectedConversation.leads?.phone}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-slate-500">
+                          {selectedConversation.leads?.phone}
+                        </p>
+                        {/* Channel badge */}
+                        {selectedConversation.channel && (
+                          <ChannelBadge
+                            channel={selectedConversation.channel}
+                            size="xs"
+                            showLabel
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
 
