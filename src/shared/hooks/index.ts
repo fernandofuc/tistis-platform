@@ -45,3 +45,6 @@ export {
   type UseStreamingTextOptions,
   type UseStreamingTextReturn,
 } from './useStreamingText';
+
+// Theme (Dark Mode)
+export { useTheme, type Theme } from './useTheme';

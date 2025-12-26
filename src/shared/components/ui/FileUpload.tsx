@@ -6,7 +6,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { cn } from '@/shared/utils';
-import { supabase, ESVA_TENANT_ID } from '@/shared/lib/supabase';
+import { supabase, DEFAULT_TENANT_ID } from '@/shared/lib/supabase';
 
 // ======================
 // TYPES
@@ -230,8 +230,8 @@ export function FileUpload({
 
         // Build full path: {tenant_id}/{optional_path}/{filename}
         const fullPath = path
-          ? `${ESVA_TENANT_ID}/${path}/${fileName}`
-          : `${ESVA_TENANT_ID}/${fileName}`;
+          ? `${DEFAULT_TENANT_ID}/${path}/${fileName}`
+          : `${DEFAULT_TENANT_ID}/${fileName}`;
 
         const { data, error } = await supabase.storage
           .from(bucket)

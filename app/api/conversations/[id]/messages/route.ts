@@ -5,9 +5,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/src/shared/lib/supabase';
-
-const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
+import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 
 // ======================
 // GET - Fetch messages for a conversation
@@ -28,7 +26,7 @@ export async function GET(
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .select('id')
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', id)
       .single();
 
@@ -104,7 +102,7 @@ export async function POST(
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .select('id, lead_id, status')
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', id)
       .single();
 

@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase, ESVA_TENANT_ID } from '@/src/shared/lib/supabase';
+import { supabase, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 
 type RealtimeEvent = 'INSERT' | 'UPDATE' | 'DELETE' | '*';
 
@@ -47,8 +47,8 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>({
 
     // Build filter with tenant_id
     const filter = config.filter
-      ? `${config.filter},tenant_id=eq.${ESVA_TENANT_ID}`
-      : `tenant_id=eq.${ESVA_TENANT_ID}`;
+      ? `${config.filter},tenant_id=eq.${DEFAULT_TENANT_ID}`
+      : `tenant_id=eq.${DEFAULT_TENANT_ID}`;
 
     const channel = supabase.channel(channelName);
 

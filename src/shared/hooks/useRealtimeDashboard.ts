@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase, ESVA_TENANT_ID } from '@/src/shared/lib/supabase';
+import { supabase, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 import { useAppStore } from '@/src/shared/stores/appStore';
 
 interface DashboardRealtimeState {
@@ -43,7 +43,7 @@ export function useRealtimeDashboard(options: UseRealtimeDashboardOptions = {}) 
   }, []);
 
   useEffect(() => {
-    const channelName = `dashboard:${ESVA_TENANT_ID}:${Date.now()}`;
+    const channelName = `dashboard:${DEFAULT_TENANT_ID}:${Date.now()}`;
 
     channelRef.current = supabase.channel(channelName);
 
@@ -54,7 +54,7 @@ export function useRealtimeDashboard(options: UseRealtimeDashboardOptions = {}) 
         event: 'INSERT',
         schema: 'public',
         table: 'leads',
-        filter: `tenant_id=eq.${ESVA_TENANT_ID}`,
+        filter: `tenant_id=eq.${DEFAULT_TENANT_ID}`,
       },
       (payload) => {
         console.log('[Dashboard Realtime] New lead:', payload.new);
@@ -113,7 +113,7 @@ export function useRealtimeDashboard(options: UseRealtimeDashboardOptions = {}) 
         event: 'UPDATE',
         schema: 'public',
         table: 'appointments',
-        filter: `tenant_id=eq.${ESVA_TENANT_ID}`,
+        filter: `tenant_id=eq.${DEFAULT_TENANT_ID}`,
       },
       (payload) => {
         const appointment = payload.new as Record<string, unknown>;
@@ -144,7 +144,7 @@ export function useRealtimeDashboard(options: UseRealtimeDashboardOptions = {}) 
         event: 'UPDATE',
         schema: 'public',
         table: 'conversations',
-        filter: `tenant_id=eq.${ESVA_TENANT_ID}`,
+        filter: `tenant_id=eq.${DEFAULT_TENANT_ID}`,
       },
       (payload) => {
         const conversation = payload.new as Record<string, unknown>;
@@ -241,8 +241,8 @@ export function useCalendarRealtime(
 
   useEffect(() => {
     const filter = branchId
-      ? `tenant_id=eq.${ESVA_TENANT_ID},branch_id=eq.${branchId}`
-      : `tenant_id=eq.${ESVA_TENANT_ID}`;
+      ? `tenant_id=eq.${DEFAULT_TENANT_ID},branch_id=eq.${branchId}`
+      : `tenant_id=eq.${DEFAULT_TENANT_ID}`;
 
     const channelName = `calendar:${branchId || 'all'}:${Date.now()}`;
 

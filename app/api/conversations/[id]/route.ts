@@ -5,9 +5,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/src/shared/lib/supabase';
-
-const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
+import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 
 // ======================
 // GET - Fetch single conversation with messages
@@ -31,7 +29,7 @@ export async function GET(
         branch:branches(id, name, city),
         assigned_staff:staff(id, first_name, last_name, role, email)
       `)
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', id)
       .single();
 
@@ -123,7 +121,7 @@ export async function PATCH(
     const { data, error } = await supabase
       .from('conversations')
       .update(updateData)
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', id)
       .select(`
         *,

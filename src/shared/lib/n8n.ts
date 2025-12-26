@@ -78,7 +78,7 @@ class N8nClient {
   async triggerWebhook(
     path: string,
     data: Record<string, unknown>,
-    tenantId: string = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001'
+    tenantId: string = process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'a0000000-0000-0000-0000-000000000001'
   ): Promise<{ success: boolean; data?: unknown; error?: string }> {
     if (!this.isConfigured()) {
       console.log('[n8n] Not configured, skipping webhook trigger');
@@ -256,9 +256,9 @@ export async function triggerN8nWithRetry(
 }
 
 // ======================
-// Workflow Templates for ESVA
+// Workflow Templates
 // ======================
-export const ESVA_WORKFLOWS = {
+export const DEFAULT_WORKFLOWS = {
   // Main AI conversation handler
   AI_CONVERSATION: {
     path: '/ai-conversation',

@@ -5,9 +5,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/src/shared/lib/supabase';
-
-const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
+import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 
 // ======================
 // GET - Fetch dashboard statistics
@@ -28,7 +26,7 @@ export async function GET(request: NextRequest) {
     const weekStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     // Base query filters
-    const tenantFilter = { tenant_id: ESVA_TENANT_ID };
+    const tenantFilter = { tenant_id: DEFAULT_TENANT_ID };
     const branchFilter = branchId ? { branch_id: branchId } : {};
 
     // ==================

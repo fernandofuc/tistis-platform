@@ -125,9 +125,13 @@ export function subscribeToTable(
 }
 
 // ======================
-// ESVA TENANT CONSTANT
+// DEFAULT TENANT CONSTANT
 // ======================
-export const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
+// Used for development and single-tenant deployments
+export const DEFAULT_TENANT_ID = process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
+
+// @deprecated Use DEFAULT_TENANT_ID instead - keeping for backwards compatibility
+export const ESVA_TENANT_ID = DEFAULT_TENANT_ID;
 
 // ======================
 // DEBUG LOGGING
@@ -137,6 +141,6 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     hasUrl: !!supabaseUrl,
     hasKey: !!supabaseAnonKey,
     urlPreview: supabaseUrl ? supabaseUrl.substring(0, 30) : 'NOT SET',
-    tenantId: ESVA_TENANT_ID,
+    tenantId: DEFAULT_TENANT_ID,
   });
 }

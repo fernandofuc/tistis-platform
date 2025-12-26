@@ -5,10 +5,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/src/shared/lib/supabase';
+import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 import { LeadConversionService } from '@/src/features/ai/services/lead-conversion.service';
-
-const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
 
 // ======================
 // GET - Fetch single appointment
@@ -30,7 +28,7 @@ export async function GET(
         staff:staff(id, first_name, last_name, role, email),
         service:services(id, name, duration_minutes, price, description)
       `)
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', id)
       .single();
 
@@ -103,7 +101,7 @@ export async function PATCH(
     const { data, error } = await supabase
       .from('appointments')
       .update(updateData)
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', id)
       .select(`
         *,
@@ -184,7 +182,7 @@ export async function DELETE(
         cancelled_at: new Date().toISOString(),
         cancelled_reason: reason,
       })
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', id)
       .select()
       .single();

@@ -5,9 +5,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/src/shared/lib/supabase';
-
-const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
+import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 
 // ======================
 // GET - Fetch appointments
@@ -38,7 +36,7 @@ export async function GET(request: NextRequest) {
         staff:staff(id, first_name, last_name, role),
         service:services(id, name, duration_minutes, price)
       `, { count: 'exact' })
-      .eq('tenant_id', ESVA_TENANT_ID);
+      .eq('tenant_id', DEFAULT_TENANT_ID);
 
     // Apply filters
     if (status) {
@@ -125,7 +123,7 @@ export async function POST(request: NextRequest) {
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .select('id, full_name')
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('id', body.lead_id)
       .single();
 
@@ -152,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     // Create appointment
     const appointmentData = {
-      tenant_id: ESVA_TENANT_ID,
+      tenant_id: DEFAULT_TENANT_ID,
       lead_id: body.lead_id,
       branch_id: body.branch_id,
       staff_id: body.staff_id || null,

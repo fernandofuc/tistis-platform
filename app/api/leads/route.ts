@@ -5,9 +5,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/src/shared/lib/supabase';
-
-const ESVA_TENANT_ID = process.env.NEXT_PUBLIC_ESVA_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
+import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
 
 // ======================
 // GET - Fetch leads
@@ -30,7 +28,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('leads')
       .select('*, branches(name, city)', { count: 'exact' })
-      .eq('tenant_id', ESVA_TENANT_ID);
+      .eq('tenant_id', DEFAULT_TENANT_ID);
 
     // Apply filters
     if (classification) {
@@ -110,7 +108,7 @@ export async function POST(request: NextRequest) {
     const { data: existingLead } = await supabase
       .from('leads')
       .select('id')
-      .eq('tenant_id', ESVA_TENANT_ID)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
       .eq('phone_normalized', normalizedPhone)
       .single();
 
@@ -129,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     // Create lead
     const leadData = {
-      tenant_id: ESVA_TENANT_ID,
+      tenant_id: DEFAULT_TENANT_ID,
       phone: body.phone,
       phone_normalized: normalizedPhone,
       first_name: body.first_name || firstName,
