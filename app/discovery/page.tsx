@@ -7,7 +7,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Send, ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useStreamingText } from '@/src/shared/hooks';
 
 // ============================================================
 // TIPOS Y CONSTANTES
@@ -365,25 +364,6 @@ export default function DiscoveryPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Hook para efecto de typing progresivo
-  const {
-    displayedText: streamingContent,
-    isTyping,
-    setSourceText,
-    reset: resetTyping,
-  } = useStreamingText({
-    baseSpeed: 15,        // Velocidad base rápida
-    speedVariation: 8,    // Variación pequeña para naturalidad
-    punctuationPause: 80, // Pausa breve en puntuación
-    enabled: true,
-  });
-
-  // Actualizar el texto fuente cuando llega del streaming
-  useEffect(() => {
-    if (rawStreamingContent) {
-      setSourceText(rawStreamingContent);
-    }
-  }, [rawStreamingContent, setSourceText]);
 
   // Auto-scroll al nuevo mensaje
   const scrollToBottom = () => {
@@ -392,7 +372,7 @@ export default function DiscoveryPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent]);
+  }, [messages, rawStreamingContent]);
 
   // Parsear análisis del contenido
   const parseAnalysis = (content: string): AIAnalysis | null => {
@@ -416,7 +396,6 @@ export default function DiscoveryPage() {
   const sendMessageToAI = useCallback(async (conversationHistory: Message[]) => {
     setIsLoading(true);
     setRawStreamingContent('');
-    resetTyping();
     const aiMessageId = `ai_${Date.now()}`;
     setStreamingMessageId(aiMessageId);
 
@@ -493,7 +472,6 @@ export default function DiscoveryPage() {
 
       setMessages(prev => [...prev, finalMessage]);
       setRawStreamingContent('');
-      resetTyping();
       setStreamingMessageId(null);
 
     } catch (error) {
@@ -506,12 +484,11 @@ export default function DiscoveryPage() {
       };
       setMessages(prev => [...prev, errorMessage]);
       setRawStreamingContent('');
-      resetTyping();
       setStreamingMessageId(null);
     } finally {
       setIsLoading(false);
     }
-  }, [sessionToken, router, resetTyping]);
+  }, [sessionToken, router]);
 
   // Cargar mensaje inicial - solo se ejecuta una vez al montar el componente
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -627,7 +604,7 @@ export default function DiscoveryPage() {
               </motion.div>
             ))}
 
-            {/* Mensaje en streaming con efecto de typing */}
+            {/* Mensaje en streaming - muestra texto progresivamente */}
             {streamingMessageId && (
               <motion.div
                 initial={{ y: 10, opacity: 0 }}
@@ -636,12 +613,12 @@ export default function DiscoveryPage() {
               >
                 <div className="max-w-[85%] rounded-2xl px-5 py-3.5 bg-slate-100 text-slate-700">
                   <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                    {/* Mostrar contenido de streaming inmediatamente cuando esté disponible */}
-                    {streamingContent || rawStreamingContent ? (
+                    {rawStreamingContent ? (
+                      /* Mostrar el texto que va llegando del servidor */
                       <>
-                        {streamingContent}
-                        {/* Cursor parpadeante solo mientras escribe (no en loading) */}
-                        {(isTyping || (rawStreamingContent && !streamingContent)) && (
+                        {rawStreamingContent}
+                        {/* Cursor parpadeante mientras sigue llegando texto */}
+                        {isLoading && (
                           <span
                             className="inline-block w-0.5 h-4 bg-tis-coral ml-0.5 align-middle"
                             style={{
@@ -651,6 +628,7 @@ export default function DiscoveryPage() {
                         )}
                       </>
                     ) : isLoading ? (
+                      /* Esperando primer chunk del servidor */
                       <span className="flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span className="text-slate-400">Escribiendo...</span>
