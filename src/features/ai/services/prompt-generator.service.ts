@@ -25,6 +25,11 @@ import {
   isGeminiConfigured,
 } from '@/src/shared/lib/gemini';
 import crypto from 'crypto';
+import {
+  validateGeneratedPrompt,
+  formatValidationReport,
+  type ValidationResult,
+} from './prompt-validator.service';
 
 // ======================
 // TYPES
@@ -138,6 +143,8 @@ export interface PromptGenerationResult {
   generatedAt: string;
   model: string;
   processingTimeMs: number;
+  validation?: ValidationResult;  // Resultado de validación post-generación
+  validationReport?: string;      // Reporte legible de validación
 }
 
 // ======================
@@ -647,12 +654,41 @@ export async function generatePromptWithAI(
   cleanedPrompt = cleanedPrompt.replace(/\n?```$/gm, '');
   cleanedPrompt = cleanedPrompt.trim();
 
+  // 🔍 VALIDACIÓN POST-GENERACIÓN (CRÍTICO)
+  const validationResult = validateGeneratedPrompt(
+    cleanedPrompt,
+    promptType,
+    context.assistantPersonality || 'professional_friendly',
+    {
+      tenantName: context.tenantName,
+      services: context.services.map(s => s.name),
+      branches: context.branches.map(b => b.name),
+    }
+  );
+
+  const validationReport = formatValidationReport(validationResult);
+
+  // Log validación para debugging
+  console.log(`[PromptGenerator] Validation for ${promptType}:`, {
+    score: validationResult.score,
+    valid: validationResult.valid,
+    errors: validationResult.errors.length,
+    warnings: validationResult.warnings.length,
+  });
+
+  // Si hay errores críticos, logear el reporte completo
+  if (!validationResult.valid) {
+    console.error(`[PromptGenerator] VALIDATION FAILED:\n${validationReport}`);
+  }
+
   return {
     success: true,
     prompt: cleanedPrompt,
     generatedAt: new Date().toISOString(),
     model: result.model,
     processingTimeMs: result.processingTimeMs,
+    validation: validationResult,
+    validationReport,
   };
 }
 
@@ -800,15 +836,53 @@ Genera un prompt de sistema completo y profesional siguiendo estas directrices:
 
 2. **TONO Y ESTILO:**
    ${isVoice ? `
-   - El tono debe ser CONVERSACIONAL y NATURAL (es una llamada telefónica)
-   - Incluye muletillas naturales como "Mmm...", "Bueno...", "Claro...", "Déjame ver..."
-   - Las respuestas deben ser CONCISAS (no más de 2-3 oraciones por turno)
-   - Evita listas largas o información muy detallada de una sola vez
-   - El asistente debe tener un acento mexicano amigable y profesional` : `
+   ### IMPORTANTE: ESTE ES UN ASISTENTE DE VOZ (LLAMADAS TELEFÓNICAS)
+
+   **Personalidad configurada:** ${context.assistantPersonality}
+
+   ${context.assistantPersonality === 'formal' ? `
+   - TONO: Formal pero conversacional (es una llamada telefónica)
+   - MULETILLAS: Usa pausas profesionales como "Permítame verificar...", "Un momento por favor...", "Déjeme confirmar..."
+   - TRATAMIENTO: Usa "usted" de manera formal pero amigable
+   - ESTILO: Profesional, respetuoso, sin ser robótico
+   - IMPORTANTE: Las muletillas deben sonar naturales en una conversación formal
+   ` : context.assistantPersonality === 'casual' ? `
+   - TONO: Casual y cercano (es una llamada amigable)
+   - MULETILLAS: Usa expresiones casuales como "Mmm...", "Órale...", "Bueno...", "Pues...", "Déjame ver..."
+   - TRATAMIENTO: Usa "tú" de manera informal
+   - ESTILO: Relajado, amistoso, natural
+   - IMPORTANTE: Las muletillas deben sonar muy naturales y espontáneas
+   ` : `
+   - TONO: Profesional pero cálido (balance perfecto)
+   - MULETILLAS: Usa expresiones amigables como "Claro...", "Mmm...", "Déjame ver...", "Por supuesto...", "Entiendo..."
+   - TRATAMIENTO: Puede usar "tú" o "usted" según el contexto
+   - ESTILO: Profesional, amigable, accesible
+   - IMPORTANTE: Las muletillas deben sonar naturales y profesionales
+   `}
+
+   **REGLAS OBLIGATORIAS PARA VOZ:**
+   - Las respuestas DEBEN ser CONCISAS (no más de 2-3 oraciones por turno)
+   - SIEMPRE incluir muletillas conversacionales en cada respuesta (adaptadas a la personalidad)
+   - Evitar listas largas o información muy detallada de una sola vez
+   - Mantener acento mexicano (expresiones locales cuando sea natural)
+   - NUNCA usar emojis (es una llamada de voz, no se ven)
+   ` : `
+   ### IMPORTANTE: ESTE ES UN ASISTENTE DE MENSAJERÍA (TEXTO ESCRITO)
+
+   **Personalidad configurada:** ${context.assistantPersonality}
+
    - El tono debe ser ${context.assistantPersonality === 'casual' ? 'informal y cercano' : context.assistantPersonality === 'formal' ? 'muy formal y respetuoso' : 'profesional pero cálido'}
-   - Las respuestas pueden ser un poco más detalladas que en voz
-   - Puede usar formato con bullets cuando sea útil
-   - Evita emojis a menos que el cliente los use primero`}
+   - Las respuestas pueden ser más detalladas que en voz (es texto, pueden releerlo)
+   - Puede usar formato con bullets o listas cuando sea útil para claridad
+   - Mantener lenguaje claro y directo, sin pausas verbales
+
+   **REGLAS OBLIGATORIAS PARA MENSAJERÍA:**
+   - NUNCA uses muletillas de voz como "Mmm...", "Bueno...", "Eh...", "Déjame ver..." (es TEXTO ESCRITO, no conversación hablada)
+   - Las respuestas son mensaje de texto, deben ser claras y directas
+   - Emojis: SOLO usa emojis funcionales si son útiles: ✅ ❌ 📍 📞 ⏰ 📅
+   - NUNCA uses emojis de caritas o informales: 😊 😂 🤣 😍 etc.
+   - Si el cliente usa emojis casuales, puedes responder con emojis funcionales
+   `}
 
 3. **CONTENIDO OBLIGATORIO:**
    - Toda la información de servicios y precios debe estar incluida
