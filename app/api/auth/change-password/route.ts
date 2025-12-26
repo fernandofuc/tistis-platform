@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[ChangePassword] Password updated successfully for user:', user.id);
+    console.log('[ChangePassword] Password updated successfully');
 
     return NextResponse.json({
       success: true,

@@ -184,8 +184,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[Voice Agent API] POST body:', JSON.stringify(body));
-    console.log('[Voice Agent API] tenantId:', tenantId);
+    // Debug: log non-sensitive config keys only
+    console.log('[Voice Agent API] POST - updating config for tenant');
 
     // Obtener staff_id del usuario
     const { data: staff, error: staffError } = await supabase

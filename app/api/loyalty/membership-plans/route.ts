@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log('[Membership Plans API] POST body:', JSON.stringify(body));
+    console.log('[Membership Plans API] Creating new plan:', body.plan_name || 'unnamed');
 
     const {
       plan_name,

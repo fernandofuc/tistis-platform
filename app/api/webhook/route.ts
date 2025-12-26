@@ -7,8 +7,15 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import {
+  checkRateLimit,
+  getClientIP,
+  publicAPILimiter,
+  rateLimitExceeded,
+} from '@/src/shared/lib/rate-limit';
 
-const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'tistis_verify_token';
+// SECURITY: No fallback token - require proper configuration
+const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 
 // ======================
 // TYPES
@@ -24,6 +31,15 @@ interface TenantContext {
 // ======================
 export async function GET(request: NextRequest) {
   try {
+    // SECURITY: Verify token is configured
+    if (!WHATSAPP_VERIFY_TOKEN) {
+      console.error('[Webhook] WHATSAPP_VERIFY_TOKEN not configured');
+      return NextResponse.json(
+        { error: 'Webhook not configured' },
+        { status: 503 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
 
     // WhatsApp webhook verification
@@ -53,6 +69,15 @@ export async function GET(request: NextRequest) {
 // POST - Handle incoming webhooks
 // ======================
 export async function POST(request: NextRequest) {
+  // Rate limiting: 100 requests per minute per IP
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, publicAPILimiter);
+
+  if (!rateLimitResult.success) {
+    console.warn(`[Webhook] Rate limit exceeded for IP: ${clientIP}`);
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   try {
     const supabase = createServerClient();
     const body = await request.json();
@@ -60,7 +85,8 @@ export async function POST(request: NextRequest) {
     // Identify webhook source
     const source = identifyWebhookSource(body, request.headers);
 
-    console.log(`[Webhook] Received from: ${source}`, JSON.stringify(body, null, 2));
+    // Log webhook source without sensitive payload data
+    console.log(`[Webhook] Received from: ${source}`);
 
     switch (source) {
       case 'whatsapp':

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import {
+  checkRateLimit,
+  getClientIP,
+  contactLimiter,
+  rateLimitExceeded,
+} from '@/src/shared/lib/rate-limit';
 
 // Force dynamic rendering - this API handles POST requests
 export const dynamic = 'force-dynamic';
@@ -20,6 +26,14 @@ interface EnterpriseContactRequest {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limiting: 5 requests per 5 minutes per IP
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, contactLimiter);
+
+  if (!rateLimitResult.success) {
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   try {
     const body: EnterpriseContactRequest = await request.json();
 
@@ -61,18 +75,17 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error saving enterprise lead:', error);
+      console.error('Error saving enterprise lead:', error.message);
       // If table doesn't exist, we still want to acknowledge the request
       // In production, you'd want to send an email notification as backup
-      console.log('Enterprise lead data (backup):', body);
     }
 
     // TODO: Send email notification to sales team
     // TODO: Send confirmation email to prospect
 
-    console.log('✅ Enterprise lead received:', {
-      company: body.companyName,
-      email: body.email,
+    // Log only non-PII data
+    console.log('Enterprise lead received:', {
+      industry: body.industry,
       branches: body.branchCount
     });
 
