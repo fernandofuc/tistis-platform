@@ -346,4 +346,63 @@ Antes de deployar a producción:
 **Versión:** 2.0 (Mega Review + Correcciones Fases 1-3)
 **Mantenido por:** Equipo TIS TIS Platform
 
-**Estado:** 🟡 WORK IN PROGRESS - Fases 4-8 pendientes para producción
+**Estado:** 🟢 SEGUNDA REVISIÓN COMPLETADA - Edge cases críticos corregidos
+
+---
+
+## 🔥 SEGUNDA REVISIÓN - Edge Cases Corregidos (2025-12-25)
+
+Durante la segunda revisión crítica ("vuelve a revisar"), se identificaron y corrigieron **7 edge cases críticos**:
+
+### ✅ Edge Case #1: Race Condition entre cancelación manual y cron
+**Problema:** Usuario cancela trial MIENTRAS cron lo está procesando → Usuario es cobrado
+**Solución:** Añadido `FOR UPDATE` en `cancel_trial()` + validación de `will_convert_to_paid` en `convert_trial_to_paid()`
+**Archivos:** `073_FIX_FREE_TRIAL_SYSTEM.sql` línea 331
+
+### ✅ Edge Case #2: Mensaje de error genérico al cancelar trial expirado
+**Problema:** Usuario ve "La suscripción no está en trial activo" en vez de "Tu trial ya expiró"
+**Solución:** Separar validaciones en `cancel_trial()` para mensajes específicos
+**Archivos:** `073_FIX_FREE_TRIAL_SYSTEM.sql` líneas 339-346
+
+### ✅ Edge Case #3: Stripe cobra pero DB update falla
+**Problema:** Trial marcado "converted" sin pago real O cobro sin marcar converted
+**Solución:** Manejo explícito con logging de "CRITICAL" para intervención manual
+**Archivos:** `app/api/cron/process-trials/route.ts` líneas 210-226
+
+### ✅ Edge Case #4: Payment method inválida al momento de conversión
+**Problema:** Stripe permite crear subscription sin payment method → Servicio gratis
+**Solución:**
+- Validar que customer tiene payment method antes de crear subscription
+- Cambiar `payment_behavior: 'error_if_incomplete'` (falla si no puede cobrar)
+- Si falla → `endTrialWithoutConversion()` en vez de marcar como converted
+**Archivos:** `app/api/cron/process-trials/route.ts` líneas 82-110, 185-201
+
+### ✅ Edge Case #5: Cron corre 2 veces simultáneamente
+**Problema:** Ambas instancias procesan mismo trial → Doble cobro
+**Solución:**
+- Re-verificar estado de trial antes de procesar (línea 311)
+- `FOR UPDATE` locks previenen concurrencia en SQL
+- Idempotency keys en Stripe (línea 109)
+**Archivos:** `app/api/cron/process-trials/route.ts` líneas 307-321
+
+### ✅ Edge Case #6: Usuario quiere reactivar trial después de cancelarlo
+**Problema:** No existe función para reactivar → Mala UX
+**Solución:**
+- Creada función SQL `reactivate_trial()`
+- Creado servicio TypeScript `reactivateTrial()`
+- Creado API route `/api/subscriptions/reactivate-trial`
+- Añadido botón "Reactivar suscripción automática" en TrialBanner.tsx
+**Archivos:**
+- `073_FIX_FREE_TRIAL_SYSTEM.sql` líneas 371-430
+- `trial.service.ts` líneas 517-592
+- `app/api/subscriptions/reactivate-trial/route.ts` (NUEVO)
+- `TrialBanner.tsx` líneas 133-143
+
+### ✅ Edge Case #7: Admin elimina cliente mientras cron procesa trial
+**Problema:** Exception detiene procesamiento de batch completo
+**Solución:** Try-catch individual por trial en loop (continuar con siguiente si uno falla)
+**Archivos:** `app/api/cron/process-trials/route.ts` líneas 329-340
+
+---
+
+**Estado:** 🟢 SEGUNDA REVISIÓN COMPLETADA - Fases 1-3 + Edge Cases corregidos

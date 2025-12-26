@@ -88,6 +88,15 @@ export async function activateFreeTrial(
 
     const subscription = validation.data;
 
+    // En activateFreeTrial, trial_end DEBE existir (lo acabamos de crear)
+    if (!subscription.trial_end) {
+      console.error('[TrialService] Trial activated but trial_end is missing');
+      return {
+        success: false,
+        error: 'Error: trial creado sin trial_end',
+      };
+    }
+
     // Calcular días restantes (usar Math.floor para evitar reportar días extra)
     const trialEnd = new Date(subscription.trial_end);
     const now = new Date();
@@ -505,6 +514,83 @@ export function isTrialExpired(trialEnd: string): boolean {
   return new Date(trialEnd) < new Date();
 }
 
+/**
+ * Reactiva un trial cancelado (antes de que expire)
+ * Permite al usuario cambiar de opinión después de cancelar
+ */
+export async function reactivateTrial(
+  subscriptionId: string
+): Promise<TrialCancellationResult> {
+  try {
+    // Validar input con Zod
+    const UUIDSchema = z.string().uuid('subscriptionId debe ser un UUID válido');
+    const inputValidation = UUIDSchema.safeParse(subscriptionId);
+
+    if (!inputValidation.success) {
+      return {
+        success: false,
+        error: 'subscriptionId inválido: debe ser un UUID',
+      };
+    }
+
+    const supabase = createServerClient();
+
+    const { data, error } = await supabase
+      .rpc('reactivate_trial', {
+        p_subscription_id: subscriptionId,
+      })
+      .single();
+
+    if (error) {
+      console.error('[TrialService] Error reactivating trial:', error);
+      return {
+        success: false,
+        error: error.message || 'Error al reactivar la prueba gratuita',
+      };
+    }
+
+    // Validar response de DB con Zod
+    const responseValidation = safeValidateTrialSubscription(data);
+
+    if (!responseValidation.success) {
+      console.error('[TrialService] Invalid trial data from DB:', responseValidation.error);
+      return {
+        success: false,
+        error: 'Datos de suscripción inválidos recibidos de la base de datos',
+      };
+    }
+
+    const subscription = responseValidation.data;
+
+    console.log('[TrialService] Trial reactivated:', {
+      subscriptionId,
+      willConvertToPaid: subscription.will_convert_to_paid,
+      trialEnd: subscription.trial_end,
+    });
+
+    return {
+      success: true,
+      subscription,
+      message:
+        'Prueba gratuita reactivada. Se cobrará automáticamente al finalizar el período de prueba.',
+    };
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      console.error('[TrialService] Validation error:', err.errors);
+      return {
+        success: false,
+        error: 'Error de validación en los datos',
+      };
+    }
+
+    console.error('[TrialService] Unexpected error:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Error inesperado al reactivar la prueba',
+    };
+  }
+}
+
 // ======================
 // EXPORTS
 // ======================
@@ -512,6 +598,7 @@ export function isTrialExpired(trialEnd: string): boolean {
 export const TrialService = {
   activateFreeTrial,
   cancelTrial,
+  reactivateTrial, // NUEVO
   getTrialsExpiringToday,
   convertTrialToPaid,
   endTrialWithoutConversion,

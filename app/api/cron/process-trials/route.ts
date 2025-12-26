@@ -47,6 +47,7 @@ interface ProcessResult {
  * Crea suscripción en Stripe y cobra el primer mes
  */
 async function createStripeSubscription(
+  subscriptionId: string, // CRÍTICO: Para idempotency key
   clientEmail: string,
   clientName: string
 ): Promise<{
@@ -79,7 +80,20 @@ async function createStripeSubscription(
       customerId = customer.id;
     }
 
-    // 2. Crear suscripción (esto cobra automáticamente el primer mes)
+    // 2. Validar que customer tiene payment method
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: customerId,
+      type: 'card',
+    });
+
+    if (paymentMethods.data.length === 0) {
+      return {
+        success: false,
+        error: 'No payment method on file. Customer must add card before trial converts.',
+      };
+    }
+
+    // 3. Crear suscripción (CRÍTICO: error_if_incomplete para fallar si no puede cobrar)
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
       items: [
@@ -87,11 +101,15 @@ async function createStripeSubscription(
           price: process.env.STRIPE_STARTER_PLAN_PRICE_ID, // Price ID del plan Starter
         },
       ],
-      payment_behavior: 'default_incomplete',
+      payment_behavior: 'error_if_incomplete', // EDGE CASE FIX: Falla si no puede cobrar
       payment_settings: {
         payment_method_types: ['card'],
       },
       expand: ['latest_invoice.payment_intent'],
+    }, {
+      // CRÍTICO: Idempotency key DEBE ser estable (mismo valor en retries)
+      // Usar subscription_id garantiza que múltiples intentos usan MISMA key
+      idempotencyKey: `trial_conversion_${subscriptionId}`,
     });
 
     console.log('[Process Trials] Stripe subscription created:', {
@@ -163,17 +181,26 @@ async function processSingleTrial(trial: {
 
       // 1. Crear suscripción en Stripe y cobrar
       const stripeResult = await createStripeSubscription(
+        trial.subscription_id, // CRÍTICO: Para idempotency key
         trial.client_email,
         trial.client_name
       );
 
+      // EDGE CASE FIX #4: Si Stripe falla (sin payment method, tarjeta expirada, etc.)
+      // → NO convertir trial, cancelarlo sin cobro
       if (!stripeResult.success) {
+        console.error(`[Process Trials] Stripe failed, ending trial without conversion:`, stripeResult.error);
+
+        // Finalizar trial sin cobro (usuario no pudo/no quiso pagar)
+        await endTrialWithoutConversion(trial.subscription_id);
+        await sendCancellationEmail(trial.client_email, trial.client_name);
+
         return {
           subscription_id: trial.subscription_id,
           client_id: trial.client_id,
-          action: 'error',
-          success: false,
-          error: `Stripe error: ${stripeResult.error}`,
+          action: 'cancelled',
+          success: true,
+          error: `Trial ended without payment: ${stripeResult.error}`,
         };
       }
 
@@ -184,13 +211,21 @@ async function processSingleTrial(trial: {
         stripeResult.stripeCustomerId
       );
 
+      // EDGE CASE FIX #3: Si DB falla DESPUÉS de cobrar en Stripe
+      // → Esto es CRÍTICO, dejamos error para manual intervention
       if (!convertResult.success) {
+        console.error('[Process Trials] CRITICAL: Stripe charged but DB update failed!', {
+          subscriptionId: trial.subscription_id,
+          stripeSubscriptionId: stripeResult.stripeSubscriptionId,
+          error: convertResult.error,
+        });
+
         return {
           subscription_id: trial.subscription_id,
           client_id: trial.client_id,
           action: 'error',
           success: false,
-          error: convertResult.error,
+          error: `CRITICAL: Stripe charged (${stripeResult.stripeSubscriptionId}) but DB update failed: ${convertResult.error}`,
         };
       }
 
@@ -269,15 +304,44 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Process Trials] Processing ${trials.length} expiring trials`);
 
-    // 2. Procesar cada trial
+    // 2. Procesar cada trial (con manejo individual de errores)
     const results: ProcessResult[] = [];
 
     for (const trial of trials) {
-      const result = await processSingleTrial(trial);
-      results.push(result);
+      try {
+        // EDGE CASE FIX #5: Re-verificar que trial sigue activo
+        // (previene procesar 2x si cron corre simultáneamente)
+        const supabase = getSupabaseAdmin();
+        const { data: currentTrial } = await supabase
+          .from('subscriptions')
+          .select('id, trial_status, status')
+          .eq('id', trial.subscription_id)
+          .single();
 
-      // Small delay to avoid rate limiting
-      await new Promise((resolve) => setTimeout(resolve, 200));
+        // Si trial ya fue procesado por otra instancia, skip
+        if (!currentTrial || currentTrial.trial_status !== 'active' || currentTrial.status !== 'trialing') {
+          console.log(`[Process Trials] Trial ${trial.subscription_id} already processed, skipping`);
+          continue;
+        }
+
+        // Procesar trial
+        const result = await processSingleTrial(trial);
+        results.push(result);
+
+        // Small delay to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (error: any) {
+        // EDGE CASE FIX #7: Si cliente fue eliminado mientras procesamos
+        // → Continuar con siguiente trial sin detener todo el batch
+        console.error(`[Process Trials] Error processing trial ${trial.subscription_id}:`, error);
+        results.push({
+          subscription_id: trial.subscription_id,
+          client_id: trial.client_id,
+          action: 'error',
+          success: false,
+          error: error.message || 'Unknown error during processing',
+        });
+      }
     }
 
     // 3. Calcular estadísticas

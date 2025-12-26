@@ -30,6 +30,18 @@ export const PlanSchema = z.enum(['starter', 'professional', 'enterprise'], {
 
 /**
  * Schema para trial_status
+ *
+ * Máquina de estados:
+ * - NULL: Subscription sin trial
+ * - 'active': Trial en curso (usuario puede usar el servicio)
+ * - 'converted': Trial expiró y se convirtió a suscripción paga (cobro exitoso)
+ * - 'ended': Trial expiró sin conversión (usuario canceló o no tenía payment method)
+ * - 'cancelled': (DEPRECADO - usar 'ended' en su lugar)
+ *
+ * Transiciones válidas:
+ * NULL → 'active' (activateFreeTrial)
+ * 'active' → 'converted' (convertTrialToPaid)
+ * 'active' → 'ended' (endTrialWithoutConversion)
  */
 export const TrialStatusSchema = z.enum(['active', 'ended', 'converted', 'cancelled'], {
   errorMap: () => ({ message: 'Estado de trial inválido' }),
@@ -62,10 +74,10 @@ export const TrialSubscriptionSchema = z.object({
   monthly_amount: z.number().positive('monthly_amount debe ser positivo'),
   currency: z.string().length(3, 'currency debe ser código ISO 4217 (3 letras)'),
   status: SubscriptionStatusSchema,
-  trial_start: TimestampSchema,
-  trial_end: TimestampSchema,
-  trial_status: TrialStatusSchema,
-  will_convert_to_paid: z.boolean(),
+  trial_start: TimestampSchema.nullable().optional(),
+  trial_end: TimestampSchema.nullable().optional(),
+  trial_status: TrialStatusSchema.nullable().optional(),
+  will_convert_to_paid: z.boolean().nullable().optional(),
   created_at: TimestampSchema,
   updated_at: TimestampSchema,
   stripe_subscription_id: z.string().nullable().optional(),
@@ -76,10 +88,13 @@ export const TrialSubscriptionSchema = z.object({
   cancelled_at: TimestampSchema.nullable().optional(),
 }).refine(
   (data) => {
-    // Validar que trial_end > trial_start
-    const start = new Date(data.trial_start);
-    const end = new Date(data.trial_end);
-    return end > start;
+    // Validar que trial_end > trial_start SOLO si ambos existen
+    if (data.trial_start && data.trial_end) {
+      const start = new Date(data.trial_start);
+      const end = new Date(data.trial_end);
+      return end > start;
+    }
+    return true; // Si no hay trial dates, skip validation
   },
   {
     message: 'trial_end debe ser posterior a trial_start',

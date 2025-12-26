@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cancelTrial } from '@/src/features/subscriptions/services/trial.service';
+import { validateCancelTrialRequest } from '@/src/features/subscriptions/schemas/trial.schemas';
 import { createServerClient } from '@/src/shared/lib/supabase';
 
 export async function POST(request: NextRequest) {
@@ -20,19 +21,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    // 2. Obtener body
-    const body = await request.json();
-    const { subscription_id } = body;
-
-    // 3. Validar parámetros
-    if (!subscription_id) {
+    // 2. Obtener y validar body con Zod
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
       return NextResponse.json(
-        { error: 'subscription_id es requerido' },
+        { error: 'Request body must be valid JSON' },
         { status: 400 }
       );
     }
 
-    // 4. Verificar que el usuario tiene acceso a la suscripción
+    let validatedData;
+    try {
+      validatedData = validateCancelTrialRequest(body);
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: 'Datos inválidos',
+          details: validationError.errors || validationError.message
+        },
+        { status: 400 }
+      );
+    }
+
+    const { subscription_id } = validatedData;
+
+    // 3. Verificar que el usuario tiene acceso a la suscripción
     const { data: subscription, error: subError } = await supabase
       .from('subscriptions')
       .select('id, client_id, clients(user_id)')
@@ -46,8 +61,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // @ts-ignore - Supabase types might not recognize nested select
-    const clientUserId = subscription.clients?.user_id;
+    // Supabase retorna joins como arrays, acceder al primer elemento
+    const clientUserId = (subscription.clients as Array<{user_id: string}>)?.[0]?.user_id;
     if (clientUserId !== user.id) {
       return NextResponse.json(
         { error: 'No tienes permiso para acceder a esta suscripción' },
@@ -55,7 +70,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Cancelar trial
+    // 4. Cancelar trial
     const result = await cancelTrial(subscription_id);
 
     if (!result.success) {
@@ -65,7 +80,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Retornar éxito
+    // 5. Retornar éxito
     return NextResponse.json({
       success: true,
       subscription: result.subscription,

@@ -252,11 +252,11 @@ BEGIN
       v_subscription.trial_status, v_subscription.will_convert_to_paid;
   END IF;
 
-  -- Finalizar trial
+  -- Finalizar trial (usar 'ended' para indicar que expiró sin convertir)
   UPDATE public.subscriptions
   SET
     status = 'cancelled',
-    trial_status = 'cancelled',
+    trial_status = 'ended', -- CORRECCIÓN: 'ended' = trial expiró sin conversión
     cancelled_at = NOW(),
     updated_at = NOW()
   WHERE id = p_subscription_id
@@ -324,10 +324,11 @@ RETURNS public.subscriptions AS $$
 DECLARE
   v_subscription public.subscriptions;
 BEGIN
-  -- Obtener suscripción
+  -- Obtener suscripción con FOR UPDATE (previene race condition con cron)
   SELECT * INTO v_subscription
   FROM public.subscriptions
-  WHERE id = p_subscription_id;
+  WHERE id = p_subscription_id
+  FOR UPDATE; -- CRÍTICO: Previene que cron convierta mientras usuario cancela
 
   -- Validar que existe
   IF NOT FOUND THEN
@@ -335,11 +336,18 @@ BEGIN
   END IF;
 
   -- Validar que está en trial activo
-  IF v_subscription.trial_status != 'active' OR v_subscription.trial_end < NOW() THEN
+  IF v_subscription.trial_status != 'active' THEN
     RAISE EXCEPTION 'La suscripción no está en trial activo';
   END IF;
 
+  -- Validar que no ha expirado (mensaje específico)
+  IF v_subscription.trial_end < NOW() THEN
+    RAISE EXCEPTION 'La prueba gratuita ya expiró. No se puede cancelar.';
+  END IF;
+
   -- Marcar que NO se convertirá a pago
+  -- NOTA: trial_status permanece 'active' porque el trial SIGUE ACTIVO
+  -- Solo cambiará a 'ended' cuando el cron job lo procese al expirar
   UPDATE public.subscriptions
   SET
     will_convert_to_paid = false,
@@ -362,11 +370,74 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ======================
+-- PASO 9.5: REACTIVAR TRIAL (EDGE CASE FIX #6)
+-- ======================
+
+CREATE OR REPLACE FUNCTION public.reactivate_trial(
+  p_subscription_id UUID
+)
+RETURNS public.subscriptions AS $$
+DECLARE
+  v_subscription public.subscriptions;
+BEGIN
+  -- Obtener suscripción con FOR UPDATE
+  SELECT * INTO v_subscription
+  FROM public.subscriptions
+  WHERE id = p_subscription_id
+  FOR UPDATE;
+
+  -- Validar que existe
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Suscripción no encontrada';
+  END IF;
+
+  -- Validar que está en trial activo pero cancelado
+  IF v_subscription.trial_status != 'active' OR v_subscription.status != 'trialing' THEN
+    RAISE EXCEPTION 'Solo se puede reactivar un trial activo';
+  END IF;
+
+  -- Validar que no ha expirado
+  IF v_subscription.trial_end < NOW() THEN
+    RAISE EXCEPTION 'El trial ya expiró, no se puede reactivar';
+  END IF;
+
+  -- Validar que está marcado para NO convertir (si ya iba a convertir, no hay nada que reactivar)
+  IF v_subscription.will_convert_to_paid THEN
+    RAISE EXCEPTION 'El trial ya está configurado para convertir a pago';
+  END IF;
+
+  -- Reactivar: marcar que se convertirá a pago
+  UPDATE public.subscriptions
+  SET
+    will_convert_to_paid = true,
+    cancel_at = NULL,
+    updated_at = NOW()
+  WHERE id = p_subscription_id
+  RETURNING * INTO v_subscription;
+
+  -- Log auditoría
+  PERFORM public.log_trial_action(
+    p_subscription_id,
+    'reactivated',
+    'active_will_not_convert',
+    'active_will_convert',
+    jsonb_build_object('reactivated_at', NOW())
+  );
+
+  RETURN v_subscription;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION public.reactivate_trial IS
+'Permite al usuario reactivar trial después de cancelarlo (antes de que expire)';
+
+-- ======================
 -- PASO 10: GRANTS
 -- ======================
 
 GRANT EXECUTE ON FUNCTION public.activate_free_trial(UUID, VARCHAR) TO service_role;
 GRANT EXECUTE ON FUNCTION public.cancel_trial(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.reactivate_trial(UUID) TO service_role; -- NUEVO
 GRANT EXECUTE ON FUNCTION public.get_trials_expiring_today() TO service_role;
 GRANT EXECUTE ON FUNCTION public.convert_trial_to_paid(UUID, VARCHAR, VARCHAR) TO service_role;
 GRANT EXECUTE ON FUNCTION public.end_trial_without_conversion(UUID) TO service_role;

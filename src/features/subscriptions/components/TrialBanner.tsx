@@ -16,9 +16,10 @@ import {
 interface TrialBannerProps {
   clientId: string;
   onCancelTrial?: () => void;
+  onReactivateTrial?: () => void;
 }
 
-export function TrialBanner({ clientId, onCancelTrial }: TrialBannerProps) {
+export function TrialBanner({ clientId, onCancelTrial, onReactivateTrial }: TrialBannerProps) {
   const [trial, setTrial] = useState<TrialSubscription | null>(null);
   const [daysRemaining, setDaysRemaining] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -31,7 +32,7 @@ export function TrialBanner({ clientId, onCancelTrial }: TrialBannerProps) {
   async function loadTrial() {
     try {
       const activeTrial = await getActiveTrialForClient(clientId);
-      if (activeTrial) {
+      if (activeTrial && activeTrial.trial_end) {
         setTrial(activeTrial);
         setDaysRemaining(calculateDaysRemaining(activeTrial.trial_end));
       }
@@ -131,9 +132,12 @@ export function TrialBanner({ clientId, onCancelTrial }: TrialBannerProps) {
 
           {!willConvert && daysRemaining > 0 && (
             <p className="text-sm text-gray-600">
-              ¿Te gustó TIS TIS?{' '}
-              <button className="font-medium text-green-600 hover:text-green-700 underline transition-colors">
-                Continuar con suscripción paga
+              ¿Cambiaste de opinión?{' '}
+              <button
+                onClick={onReactivateTrial}
+                className="font-medium text-green-600 hover:text-green-700 underline transition-colors"
+              >
+                Reactivar suscripción automática
               </button>
             </p>
           )}
