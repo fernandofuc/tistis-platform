@@ -538,8 +538,17 @@ function getPhoneStatusDisplay(status: string): { label: string; color: string; 
 // PHONE NUMBER MANAGER COMPONENT
 // ======================
 
+// Tipo para branches (desde useTenant)
+interface BranchOption {
+  id: string;
+  name: string;
+  city: string;
+  is_headquarters: boolean;
+}
+
 function PhoneNumberManager({
   phoneNumbers,
+  branches,
   onRequestNumber,
   onReleaseNumber,
   loading,
@@ -547,7 +556,8 @@ function PhoneNumberManager({
   onClearMessage,
 }: {
   phoneNumbers: VoicePhoneNumber[];
-  onRequestNumber: (areaCode: string) => void;
+  branches: BranchOption[];
+  onRequestNumber: (areaCode: string, branchId?: string) => void;
   onReleaseNumber: (numberId: string) => void;
   loading: boolean;
   message?: { type: 'success' | 'error'; text: string } | null;
@@ -555,6 +565,7 @@ function PhoneNumberManager({
 }) {
   const [showAreaCodes, setShowAreaCodes] = useState(false);
   const [selectedAreaCode, setSelectedAreaCode] = useState<string | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
   // Auto-clear message after 5 seconds
   useEffect(() => {
@@ -568,11 +579,19 @@ function PhoneNumberManager({
 
   const handleRequestClick = () => {
     if (selectedAreaCode) {
-      console.log('[PhoneNumberManager] Solicitando número con LADA:', selectedAreaCode);
-      onRequestNumber(selectedAreaCode);
+      console.log('[PhoneNumberManager] Solicitando número con LADA:', selectedAreaCode, 'Branch:', selectedBranchId);
+      onRequestNumber(selectedAreaCode, selectedBranchId || undefined);
       setShowAreaCodes(false);
       setSelectedAreaCode(null);
+      setSelectedBranchId(null);
     }
+  };
+
+  // Obtener nombre de sucursal por ID
+  const getBranchName = (branchId: string | null) => {
+    if (!branchId) return null;
+    const branch = branches.find(b => b.id === branchId);
+    return branch ? branch.name : null;
   };
 
   return (
@@ -661,7 +680,7 @@ function PhoneNumberManager({
                     <p className="font-mono font-semibold text-slate-900 text-base tracking-tight">
                       {number.phone_number_display || number.phone_number}
                     </p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-xs text-slate-500">LADA {number.area_code}</span>
                       <span className="w-1 h-1 rounded-full bg-slate-300" />
                       <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${getPhoneStatusDisplay(number.status).bgColor} ${getPhoneStatusDisplay(number.status).color}`}>
@@ -670,6 +689,18 @@ function PhoneNumberManager({
                         )}
                         {getPhoneStatusDisplay(number.status).label}
                       </span>
+                      {number.branch_id && getBranchName(number.branch_id) && (
+                        <>
+                          <span className="w-1 h-1 rounded-full bg-slate-300" />
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-700">
+                            <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                              <circle cx="12" cy="10" r="3" />
+                            </svg>
+                            {getBranchName(number.branch_id)}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -775,12 +806,75 @@ function PhoneNumberManager({
                   ))}
                 </div>
 
+                {/* Selector de Sucursal (solo si hay más de 1) */}
+                {selectedAreaCode && branches.length > 1 && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
+                        <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900">
+                          Asignar a sucursal <span className="text-slate-400 font-normal">(opcional)</span>
+                        </h4>
+                        <p className="text-[10px] text-slate-500">
+                          Selecciona la sucursal que usará este número
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setSelectedBranchId(null)}
+                        className={`p-3 rounded-xl text-left transition-all ${
+                          selectedBranchId === null
+                            ? 'bg-slate-900 text-white ring-2 ring-slate-900 ring-offset-2'
+                            : 'bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        <p className={`font-semibold text-sm ${selectedBranchId === null ? 'text-white' : 'text-slate-900'}`}>
+                          Sin asignar
+                        </p>
+                        <p className={`text-[10px] ${selectedBranchId === null ? 'text-slate-300' : 'text-slate-500'}`}>
+                          Número general
+                        </p>
+                      </button>
+                      {branches.map((branch) => (
+                        <button
+                          key={branch.id}
+                          onClick={() => setSelectedBranchId(branch.id)}
+                          className={`p-3 rounded-xl text-left transition-all ${
+                            selectedBranchId === branch.id
+                              ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-2'
+                              : 'bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                          }`}
+                        >
+                          <p className={`font-semibold text-sm truncate ${selectedBranchId === branch.id ? 'text-white' : 'text-slate-900'}`}>
+                            {branch.name}
+                          </p>
+                          <p className={`text-[10px] truncate ${selectedBranchId === branch.id ? 'text-blue-200' : 'text-slate-500'}`}>
+                            {branch.city}
+                            {branch.is_headquarters && ' (Principal)'}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Footer con botón de confirmar */}
                 {selectedAreaCode && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                    <p className="text-xs text-slate-500">
-                      LADA seleccionada: <span className="font-mono font-semibold text-slate-900">{selectedAreaCode}</span>
-                    </p>
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+                    <div className="text-xs text-slate-500">
+                      <span>LADA: <span className="font-mono font-semibold text-slate-900">{selectedAreaCode}</span></span>
+                      {selectedBranchId && getBranchName(selectedBranchId) && (
+                        <span className="ml-2">
+                          • Sucursal: <span className="font-semibold text-blue-600">{getBranchName(selectedBranchId)}</span>
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={handleRequestClick}
                       disabled={loading}
@@ -1411,7 +1505,7 @@ function StatCardPremium({
 
 export default function AIAgentVozPage() {
   const { session } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, branches } = useTenant();
   const [data, setData] = useState<VoiceAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1524,8 +1618,8 @@ export default function AIAgentVozPage() {
     }
   };
 
-  const handleRequestPhoneNumber = async (areaCode: string) => {
-    console.log('[Phone Request] Iniciando solicitud para LADA:', areaCode);
+  const handleRequestPhoneNumber = async (areaCode: string, branchId?: string) => {
+    console.log('[Phone Request] Iniciando solicitud para LADA:', areaCode, 'Branch:', branchId);
 
     if (!accessToken) {
       console.error('[Phone Request] No hay access token');
@@ -1544,7 +1638,10 @@ export default function AIAgentVozPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ area_code: areaCode }),
+        body: JSON.stringify({
+          area_code: areaCode,
+          ...(branchId && { branch_id: branchId }),
+        }),
       });
 
       const result = await response.json();
@@ -1894,6 +1991,7 @@ export default function AIAgentVozPage() {
             >
               <PhoneNumberManager
                 phoneNumbers={phoneNumbers}
+                branches={branches}
                 onRequestNumber={handleRequestPhoneNumber}
                 onReleaseNumber={handleReleasePhoneNumber}
                 loading={saving}
