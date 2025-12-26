@@ -10,18 +10,7 @@ import { createServerClient } from '@/src/shared/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Autenticación
-    const supabase = createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-
-    // 2. Obtener y validar body con Zod
+    // 1. Obtener y validar body con Zod
     let body;
     try {
       body = await request.json();
@@ -32,44 +21,110 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let validatedData;
-    try {
-      validatedData = validateActivateTrialRequest(body);
-    } catch (validationError: any) {
+    const { plan, customerEmail, customerName, customerPhone, vertical, metadata } = body;
+
+    if (!customerEmail) {
       return NextResponse.json(
-        {
-          error: 'Datos inválidos',
-          details: validationError.errors || validationError.message
-        },
+        { error: 'customerEmail es requerido' },
         { status: 400 }
       );
     }
 
-    const { client_id, plan } = validatedData;
-
-    // 3. Verificar que el usuario tiene acceso al cliente
-    const { data: client, error: clientError } = await supabase
-      .from('clients')
-      .select('id, user_id')
-      .eq('id', client_id)
-      .single();
-
-    if (clientError || !client) {
+    if (plan !== 'starter') {
       return NextResponse.json(
-        { error: 'Cliente no encontrado' },
-        { status: 404 }
+        { error: 'Solo el plan Starter puede tener prueba gratuita' },
+        { status: 400 }
       );
     }
 
-    if (client.user_id !== user.id) {
-      return NextResponse.json(
-        { error: 'No tienes permiso para acceder a este cliente' },
-        { status: 403 }
-      );
+    // 2. Autenticación (opcional para trial - permite signup sin login)
+    const supabase = createServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    let clientId: string;
+
+    if (user) {
+      // Usuario autenticado - buscar o crear cliente
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (existingClient) {
+        clientId = existingClient.id;
+      } else {
+        // Crear nuevo cliente para usuario autenticado
+        const { data: newClient, error: createError } = await supabase
+          .from('clients')
+          .insert({
+            user_id: user.id,
+            email: customerEmail,
+            name: customerName || '',
+            phone: customerPhone || '',
+            vertical: vertical || 'dental',
+          })
+          .select('id')
+          .single();
+
+        if (createError || !newClient) {
+          console.error('[API] Error creating client:', createError);
+          return NextResponse.json(
+            { error: 'Error al crear cliente' },
+            { status: 500 }
+          );
+        }
+
+        clientId = newClient.id;
+      }
+    } else {
+      // Usuario NO autenticado - permitir trial sin login
+      // Verificar si ya existe un cliente con ese email
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id, user_id')
+        .eq('email', customerEmail)
+        .maybeSingle();
+
+      if (existingClient) {
+        // Cliente ya existe - no permitir otro trial
+        return NextResponse.json(
+          {
+            error: 'Este email ya tiene una cuenta. Por favor inicia sesión.',
+            code: 'EMAIL_ALREADY_EXISTS'
+          },
+          { status: 400 }
+        );
+      }
+
+      // Crear nuevo cliente sin user_id (signup flow)
+      const { data: newClient, error: createError } = await supabase
+        .from('clients')
+        .insert({
+          email: customerEmail,
+          name: customerName || '',
+          phone: customerPhone || '',
+          vertical: vertical || 'dental',
+        })
+        .select('id')
+        .single();
+
+      if (createError || !newClient) {
+        console.error('[API] Error creating client:', createError);
+        return NextResponse.json(
+          { error: 'Error al crear cliente' },
+          { status: 500 }
+        );
+      }
+
+      clientId = newClient.id;
     }
 
-    // 4. Activar trial
-    const result = await activateFreeTrial(client_id, plan);
+    // 3. Activar trial
+    const result = await activateFreeTrial(clientId, plan);
 
     if (!result.success) {
       return NextResponse.json(
@@ -78,7 +133,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Retornar éxito
+    // 4. Retornar éxito
     return NextResponse.json({
       success: true,
       subscription: result.subscription,

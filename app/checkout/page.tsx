@@ -2,7 +2,8 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, Lock, CreditCard, CheckCircle, AlertCircle, Building2 } from 'lucide-react';
+import { ArrowRight, Lock, CreditCard, CheckCircle, AlertCircle, Building2, Check, Gift, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 import Container from '@/components/layout/Container';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -76,9 +77,15 @@ function CheckoutContent() {
   const branchCost = calculateBranchCostPesos(planId, branches);
   const monthlyTotal = plan.monthlyPricePesos + branchCost;
 
+  // Determinar si es elegible para free trial
+  const isStarterPlan = planId === 'starter';
+  // Por ahora, mostrar trial solo para starter (la API verificará si ya existe)
+  // Si el usuario ya tiene cuenta, la API retornará error y lo manejaremos
+  const isFreeTrial = isStarterPlan;
+
   const handleCheckout = async () => {
     if (!customerEmail) {
-      setError('Por favor ingresa tu correo electronico');
+      setError('Por favor ingresa tu correo electrónico');
       return;
     }
 
@@ -86,35 +93,72 @@ function CheckoutContent() {
     setError(null);
 
     try {
-      const response = await fetch('/api/stripe/create-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          plan: planId,
-          customerEmail,
-          customerName,
-          customerPhone,
-          branches,
-          addons,
-          vertical, // Enviar vertical seleccionada
-          metadata: {
-            proposalId: sessionStorage.getItem('proposal_id') || '',
+      if (isFreeTrial) {
+        // FLUJO 1: Activar trial gratuito
+        const response = await fetch('/api/subscriptions/activate-trial', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        }),
-      });
+          body: JSON.stringify({
+            plan: planId,
+            customerEmail,
+            customerName,
+            customerPhone,
+            vertical,
+            metadata: {
+              proposalId: sessionStorage.getItem('proposal_id') || '',
+            },
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al crear sesion de pago');
-      }
+        if (!response.ok) {
+          // Manejar caso especial: email ya existe
+          if (data.code === 'EMAIL_ALREADY_EXISTS') {
+            setError('Este email ya está registrado. Por favor inicia sesión o usa otro email.');
+          } else {
+            throw new Error(data.error || 'Error al activar la prueba gratuita');
+          }
+          setLoading(false);
+          return;
+        }
 
-      if (data.url) {
-        window.location.href = data.url;
+        // Redirigir a página de éxito de trial
+        router.push('/trial-success?daysRemaining=' + (data.daysRemaining || 10));
       } else {
-        throw new Error('No se recibio URL de checkout');
+        // FLUJO 2: Proceso de pago normal con Stripe
+        const response = await fetch('/api/stripe/create-checkout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            plan: planId,
+            customerEmail,
+            customerName,
+            customerPhone,
+            branches,
+            addons,
+            vertical,
+            metadata: {
+              proposalId: sessionStorage.getItem('proposal_id') || '',
+            },
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Error al crear sesión de pago');
+        }
+
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error('No se recibió URL de checkout');
+        }
       }
     } catch (err: any) {
       console.error('Checkout error:', err);
@@ -124,184 +168,362 @@ function CheckoutContent() {
   };
 
   return (
-    <div className="min-h-screen bg-tis-bg-primary py-12">
-      <Container className="max-w-4xl">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Finalizar Pago</h1>
-          <p className="text-tis-text-secondary">
-            Estas a un paso de automatizar tu negocio
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-tis-pink/5 py-12">
+      <Container className="max-w-6xl">
+        {/* Header */}
+        <motion.div
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-slate-900 via-slate-800 to-tis-coral bg-clip-text text-transparent">
+            Finalizar Pago
+          </h1>
+          <p className="text-xl text-slate-600">
+            {isFreeTrial
+              ? '¡Estás a un paso de comenzar tu prueba gratuita! 🎉'
+              : 'Estás a un paso de automatizar tu negocio'
+            }
           </p>
-        </div>
+        </motion.div>
 
+        {/* Alerts */}
         {cancelled && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center gap-3">
+          <motion.div
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-xl flex items-center gap-3 shadow-sm"
+          >
             <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
-            <p className="text-yellow-800">
+            <p className="text-yellow-800 font-medium">
               El pago fue cancelado. Puedes intentar de nuevo cuando quieras.
             </p>
-          </div>
+          </motion.div>
         )}
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+          <motion.div
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-xl flex items-center gap-3 shadow-sm"
+          >
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            <p className="text-red-800">{error}</p>
-          </div>
+            <p className="text-red-800 font-medium">{error}</p>
+          </motion.div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Order Summary */}
-          <Card className="p-8">
-            <h2 className="text-2xl font-bold mb-6">Resumen del Pedido</h2>
-
-            <div className="space-y-4 mb-6">
-              {/* Plan base */}
-              <div className="flex justify-between">
-                <span className="text-tis-text-secondary">Plan {plan.name}</span>
-                <span className="font-semibold">${plan.monthlyPricePesos.toLocaleString('es-MX')} MXN/mes</span>
-              </div>
-
-              {/* Extra branches */}
-              {extraBranches > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-tis-text-secondary flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    {extraBranches} sucursal(es) extra
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+          >
+            <Card className="relative p-8 shadow-xl rounded-2xl border-slate-200">
+              {/* Badge para trial gratuito */}
+              {isFreeTrial && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                  <span className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold rounded-full shadow-lg flex items-center gap-2">
+                    <Gift className="w-4 h-4" />
+                    Prueba Gratis 10 Días
                   </span>
-                  <span className="font-semibold">${branchCost.toLocaleString('es-MX')} MXN/mes</span>
                 </div>
               )}
 
-              {/* Total mensual */}
-              <div className="border-t pt-4">
-                <div className="flex justify-between text-lg">
-                  <span className="font-bold">Total Mensual</span>
-                  <span className="font-bold text-tis-coral">
-                    ${monthlyTotal.toLocaleString('es-MX')} MXN/mes
-                  </span>
-                </div>
-                <p className="text-sm text-tis-text-muted mt-2">
-                  Suscripcion mensual - puedes cancelar cuando quieras
-                </p>
-              </div>
-            </div>
+              <h2 className="text-2xl font-bold mb-6 text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-tis-coral" />
+                Resumen del Pedido
+              </h2>
 
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-              <h3 className="font-semibold text-green-800 mb-2">Lo que obtienes:</h3>
-              <ul className="space-y-2 text-sm text-green-700">
-                {plan.features.map((feature, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-                {branches > 1 && (
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                    Soporte para {branches} sucursales
-                  </li>
+              <div className="space-y-4 mb-6">
+                {/* Plan base */}
+                <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+                  <div>
+                    <span className="font-semibold text-slate-900">Plan {plan.name}</span>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {isFreeTrial ? 'Luego $3,490 MXN/mes' : 'Facturación mensual'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {isFreeTrial ? (
+                      <>
+                        <span className="text-2xl font-bold text-green-600">$0</span>
+                        <p className="text-xs text-slate-500 line-through">
+                          ${plan.monthlyPricePesos.toLocaleString('es-MX')}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="text-xl font-bold text-slate-900">
+                        ${plan.monthlyPricePesos.toLocaleString('es-MX')} MXN
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Extra branches */}
+                {extraBranches > 0 && !isFreeTrial && (
+                  <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+                    <span className="text-slate-700 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-tis-coral" />
+                      {extraBranches} sucursal(es) extra
+                    </span>
+                    <span className="font-semibold text-slate-900">
+                      ${branchCost.toLocaleString('es-MX')} MXN/mes
+                    </span>
+                  </div>
                 )}
-              </ul>
-            </div>
-          </Card>
+
+                {/* Total mensual */}
+                <div className="border-t-2 border-slate-200 pt-4 mt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold text-slate-900">
+                      {isFreeTrial ? 'Hoy pagas' : 'Total Mensual'}
+                    </span>
+                    <div className="text-right">
+                      <span className={`text-3xl font-bold ${isFreeTrial ? 'text-green-600' : 'text-tis-coral'}`}>
+                        {isFreeTrial ? '$0' : `$${monthlyTotal.toLocaleString('es-MX')}`}
+                      </span>
+                      {!isFreeTrial && (
+                        <p className="text-sm text-slate-500">MXN/mes</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {isFreeTrial && (
+                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-800 font-medium">
+                        ✓ Sin tarjeta de crédito requerida
+                      </p>
+                      <p className="text-xs text-green-700 mt-1">
+                        Después de 10 días: $3,490/mes (puedes cancelar en cualquier momento)
+                      </p>
+                    </div>
+                  )}
+
+                  {!isFreeTrial && (
+                    <p className="text-sm text-slate-500 mt-2">
+                      Suscripción mensual - puedes cancelar cuando quieras
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Features List */}
+              <div className="bg-gradient-to-br from-slate-50 to-white border-2 border-slate-100 rounded-xl p-6 shadow-inner">
+                <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  Lo que obtienes:
+                </h3>
+                <ul className="space-y-3">
+                  {plan.features.slice(0, 6).map((feature, index) => (
+                    <motion.li
+                      key={index}
+                      initial={{ x: -10, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      transition={{ delay: 0.1 * index }}
+                      className="flex items-start gap-3"
+                    >
+                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Check className="w-3 h-3 text-green-600" />
+                      </div>
+                      <span className="text-sm text-slate-700 font-medium">{feature}</span>
+                    </motion.li>
+                  ))}
+                  {branches > 1 && (
+                    <motion.li
+                      initial={{ x: -10, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      className="flex items-start gap-3"
+                    >
+                      <div className="w-5 h-5 rounded-full bg-tis-coral/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Check className="w-3 h-3 text-tis-coral" />
+                      </div>
+                      <span className="text-sm text-slate-700 font-medium">
+                        Soporte para {branches} sucursales
+                      </span>
+                    </motion.li>
+                  )}
+                </ul>
+              </div>
+            </Card>
+          </motion.div>
 
           {/* Payment Info */}
-          <Card className="p-8">
-            <h2 className="text-2xl font-bold mb-6">Informacion de Pago</h2>
+          <motion.div
+            initial={{ x: 20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <Card className="p-8 shadow-xl rounded-2xl border-slate-200">
+              <h2 className="text-2xl font-bold mb-6 text-slate-900 flex items-center gap-2">
+                {isFreeTrial ? (
+                  <>
+                    <Gift className="w-6 h-6 text-green-600" />
+                    Información de Registro
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-6 h-6 text-tis-coral" />
+                    Información de Pago
+                  </>
+                )}
+              </h2>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-              <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-blue-600" />
-                <div>
-                  <p className="font-semibold text-blue-900">Pago 100% Seguro</p>
-                  <p className="text-sm text-blue-700">
-                    Procesado por Stripe - Encriptacion SSL de grado bancario
-                  </p>
+              {!isFreeTrial && (
+                <div className="bg-blue-50 border-l-4 border-blue-500 rounded-xl p-4 mb-6">
+                  <div className="flex items-center gap-3">
+                    <Lock className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold text-blue-900">Pago 100% Seguro</p>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Procesado por Stripe - Encriptación SSL de grado bancario
+                      </p>
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {isFreeTrial && (
+                <div className="bg-green-50 border-l-4 border-green-500 rounded-xl p-4 mb-6">
+                  <div className="flex items-center gap-3">
+                    <Gift className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold text-green-900">Sin Riesgo - Sin Tarjeta</p>
+                      <p className="text-sm text-green-700 mt-1">
+                        Comienza gratis hoy. Decide después si quieres continuar.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Email Field */}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Correo electrónico *
+                </label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-tis-coral transition-all duration-200 text-slate-900 placeholder:text-slate-400"
+                  required
+                />
               </div>
-            </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Correo electronico
-              </label>
-              <input
-                type="email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="tu@email.com"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-coral focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre completo
-              </label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Tu nombre"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-coral focus:border-transparent"
-              />
-            </div>
-
-            <div className="text-center">
-              <CreditCard className="w-12 h-12 text-tis-text-muted mx-auto mb-4" />
-              <p className="text-tis-text-secondary mb-6 text-sm">
-                Seras redirigido a Stripe para completar el pago de forma segura
-              </p>
-
-              <Button
-                size="xl"
-                variant="primary"
-                className="w-full"
-                onClick={handleCheckout}
-                loading={loading}
-                disabled={loading || !customerEmail}
-              >
-                {loading ? 'Redirigiendo a Stripe...' : 'Proceder al Pago Seguro'}
-                {!loading && <ArrowRight className="ml-2 w-5 h-5" />}
-              </Button>
-
-              <p className="text-xs text-tis-text-muted mt-4">
-                Al continuar, aceptas nuestros{' '}
-                <a href="/terms" className="underline hover:text-gray-700">terminos de servicio</a>
-                {' '}y{' '}
-                <a href="/privacy" className="underline hover:text-gray-700">politica de privacidad</a>
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t">
-              <span className="text-xs text-tis-text-muted">Aceptamos:</span>
-              <div className="flex items-center gap-2">
-                <div className="bg-white border rounded px-2 py-1">
-                  <span className="text-xs font-bold text-blue-600">VISA</span>
-                </div>
-                <div className="bg-white border rounded px-2 py-1">
-                  <span className="text-xs font-bold text-red-500">Mastercard</span>
-                </div>
-                <div className="bg-white border rounded px-2 py-1">
-                  <span className="text-xs font-bold text-blue-400">Amex</span>
-                </div>
+              {/* Name Field */}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Nombre completo
+                </label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Tu nombre"
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-tis-coral transition-all duration-200 text-slate-900 placeholder:text-slate-400"
+                />
               </div>
-            </div>
-          </Card>
+
+              {/* Phone Field */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Teléfono (opcional)
+                </label>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="+52 123 456 7890"
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-tis-coral transition-all duration-200 text-slate-900 placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* CTA Section */}
+              <div className="text-center">
+                {!isFreeTrial && (
+                  <>
+                    <CreditCard className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                    <p className="text-slate-600 mb-6 text-sm">
+                      Serás redirigido a Stripe para completar el pago de forma segura
+                    </p>
+                  </>
+                )}
+
+                <Button
+                  size="xl"
+                  variant="primary"
+                  className={`w-full shadow-lg hover:shadow-xl transition-all duration-300 ${
+                    isFreeTrial
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
+                      : ''
+                  }`}
+                  onClick={handleCheckout}
+                  loading={loading}
+                  disabled={loading || !customerEmail}
+                >
+                  {loading ? (
+                    isFreeTrial ? 'Activando prueba gratuita...' : 'Redirigiendo a Stripe...'
+                  ) : (
+                    <>
+                      {isFreeTrial ? 'Comenzar Prueba Gratuita' : 'Proceder al Pago Seguro'}
+                      {!loading && <ArrowRight className="ml-2 w-5 h-5" />}
+                    </>
+                  )}
+                </Button>
+
+                <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+                  Al continuar, aceptas nuestros{' '}
+                  <a href="/terms" className="underline hover:text-slate-700 transition-colors">
+                    términos de servicio
+                  </a>
+                  {' '}y{' '}
+                  <a href="/privacy" className="underline hover:text-slate-700 transition-colors">
+                    política de privacidad
+                  </a>
+                </p>
+              </div>
+
+              {/* Payment Methods */}
+              {!isFreeTrial && (
+                <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t-2 border-slate-100">
+                  <span className="text-xs text-slate-500 font-medium">Aceptamos:</span>
+                  <div className="flex items-center gap-2">
+                    <div className="bg-white border-2 border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
+                      <span className="text-xs font-bold text-blue-600">VISA</span>
+                    </div>
+                    <div className="bg-white border-2 border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
+                      <span className="text-xs font-bold text-red-500">Mastercard</span>
+                    </div>
+                    <div className="bg-white border-2 border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
+                      <span className="text-xs font-bold text-blue-400">Amex</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </motion.div>
         </div>
 
-        <div className="text-center mt-8">
-          <p className="text-sm text-tis-text-muted">
-            Quieres cambiar de plan?{' '}
+        {/* Back to pricing link */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="text-center mt-8"
+        >
+          <p className="text-sm text-slate-600">
+            ¿Quieres cambiar de plan?{' '}
             <button
               onClick={() => router.push('/pricing')}
-              className="text-tis-coral hover:underline"
+              className="text-tis-coral hover:text-tis-coral/80 font-semibold underline transition-colors"
             >
               Volver a precios
             </button>
           </p>
-        </div>
+        </motion.div>
       </Container>
     </div>
   );
@@ -309,10 +531,10 @@ function CheckoutContent() {
 
 function LoadingFallback() {
   return (
-    <div className="min-h-screen bg-tis-bg-primary py-12 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-tis-pink/5 py-12 flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tis-coral mx-auto mb-4"></div>
-        <p className="text-tis-text-secondary">Cargando checkout...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-tis-coral border-t-transparent mx-auto mb-4"></div>
+        <p className="text-slate-600 font-medium">Cargando checkout...</p>
       </div>
     </div>
   );
