@@ -134,6 +134,9 @@ export interface BusinessContext {
   escalationEnabled?: boolean;
   escalationPhone?: string;
   goodbyeMessage?: string;
+  // Voice-specific config
+  useFillerPhrases?: boolean;
+  fillerPhrases?: string[];
 }
 
 export interface PromptGenerationResult {
@@ -264,11 +267,13 @@ async function collectBusinessContextFallback(
     let escalationEnabled = false;
     let escalationPhone = '';
     let goodbyeMessage = '';
+    let useFillerPhrases = true;  // Default: activado
+    let fillerPhrases: string[] = [];
 
     if (promptType === 'voice') {
       const { data: voiceConfig } = await supabase
         .from('voice_agent_config')
-        .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message')
+        .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message, use_filler_phrases, filler_phrases')
         .eq('tenant_id', tenantId)
         .single();
 
@@ -279,6 +284,8 @@ async function collectBusinessContextFallback(
         escalationEnabled = voiceConfig.escalation_enabled || false;
         escalationPhone = voiceConfig.escalation_phone || '';
         goodbyeMessage = voiceConfig.goodbye_message || '';
+        useFillerPhrases = voiceConfig.use_filler_phrases ?? true;  // Default true si no existe
+        fillerPhrases = voiceConfig.filler_phrases || [];
       }
     }
 
@@ -425,6 +432,8 @@ async function collectBusinessContextFallback(
       escalationEnabled,
       escalationPhone,
       goodbyeMessage,
+      useFillerPhrases,
+      fillerPhrases,
     };
   } catch (error) {
     console.error('[PromptGenerator Fallback] Error:', error);
@@ -479,12 +488,14 @@ export async function collectBusinessContext(
     let escalationEnabled = false;
     let escalationPhone = '';
     let goodbyeMessage = '';
+    let useFillerPhrases = true;  // Default: activado
+    let fillerPhrases: string[] = [];
 
     if (promptType === 'voice') {
       // Para voice, obtener config específica de voice_agent_config
       const { data: voiceConfig } = await supabase
         .from('voice_agent_config')
-        .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message')
+        .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message, use_filler_phrases, filler_phrases')
         .eq('tenant_id', tenantId)
         .single();
 
@@ -495,6 +506,8 @@ export async function collectBusinessContext(
         escalationEnabled = voiceConfig.escalation_enabled || false;
         escalationPhone = voiceConfig.escalation_phone || '';
         goodbyeMessage = voiceConfig.goodbye_message || '';
+        useFillerPhrases = voiceConfig.use_filler_phrases ?? true;  // Default true si no existe
+        fillerPhrases = voiceConfig.filler_phrases || [];
       }
     }
 
@@ -588,6 +601,8 @@ export async function collectBusinessContext(
       escalationEnabled,
       escalationPhone,
       goodbyeMessage,
+      useFillerPhrases,
+      fillerPhrases,
     };
 
   } catch (error) {
@@ -663,6 +678,8 @@ export async function generatePromptWithAI(
       tenantName: context.tenantName,
       services: context.services.map(s => s.name),
       branches: context.branches.map(b => b.name),
+      useFillerPhrases: context.useFillerPhrases,
+      customFillerPhrases: context.fillerPhrases,
     }
   );
 
@@ -862,7 +879,13 @@ Genera un prompt de sistema completo y profesional siguiendo estas directrices:
 
    **REGLAS OBLIGATORIAS PARA VOZ:**
    - Las respuestas DEBEN ser CONCISAS (no más de 2-3 oraciones por turno)
-   - SIEMPRE incluir muletillas conversacionales en cada respuesta (adaptadas a la personalidad)
+   ${
+     context.useFillerPhrases
+       ? (context.fillerPhrases && context.fillerPhrases.length > 0
+           ? `- SIEMPRE incluir muletillas conversacionales en cada respuesta. Usa estas frases específicas: ${context.fillerPhrases.join(', ')}`
+           : `- SIEMPRE incluir muletillas conversacionales en cada respuesta (adaptadas a la personalidad)`)
+       : `- NO usar muletillas conversacionales (configuración del cliente)`
+   }
    - Evitar listas largas o información muy detallada de una sola vez
    - Mantener acento mexicano (expresiones locales cuando sea natural)
    - NUNCA usar emojis (es una llamada de voz, no se ven)
@@ -1060,6 +1083,9 @@ export function calculateBusinessContextHash(context: BusinessContext): string {
     escalationEnabled: context.escalationEnabled,
     escalationPhone: context.escalationPhone,
     goodbyeMessage: context.goodbyeMessage,
+    // Voice-specific config (afecta generación de prompt Voice)
+    useFillerPhrases: context.useFillerPhrases,
+    fillerPhrases: context.fillerPhrases,
   };
 
   // Convertir a JSON estable (ordenado) y calcular hash

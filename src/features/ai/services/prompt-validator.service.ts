@@ -6,8 +6,9 @@
 // cumplan con TODOS los requisitos críticos antes de activarse
 //
 // REGLAS CRÍTICAS:
-// 1. Voice DEBE tener muletillas conversacionales
-// 2. Messaging NO debe tener muletillas de voz
+// 1. Voice DEBE tener muletillas SI useFillerPhrases=true
+//    Voice NO debe mencionarlas SI useFillerPhrases=false
+// 2. Messaging NO debe tener muletillas de voz (nunca)
 // 3. Emojis permitidos: solo funcionales (✅ ❌ 📍 📞 ⏰ 📅)
 // 4. Coherencia con personalidad configurada
 // 5. Información completa y correcta
@@ -103,6 +104,18 @@ const VOICE_FILLER_INDICATORS = [
   'disculpe',
 ];
 
+// Pre-compilar regex de muletillas para performance
+// (evita compilar 60 regex por cada validación)
+const VOICE_FILLER_PATTERNS = VOICE_FILLER_INDICATORS.flatMap(filler => {
+  const escapedFiller = filler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return [
+    new RegExp(`${escapedFiller}\\.{2,3}`, 'i'),           // Mmm...
+    new RegExp(`^${escapedFiller}[\\s,]`, 'i'),            // ^Mmm
+    new RegExp(`\\s${escapedFiller}[\\s,]`, 'i'),          // " Mmm "
+    new RegExp(`${escapedFiller},`, 'i'),                  // Mmm,
+  ];
+});
+
 // Longitud esperada de prompts
 const PROMPT_LENGTH = {
   min: 800,   // Mínimo caracteres
@@ -126,6 +139,8 @@ export function validateGeneratedPrompt(
     tenantName?: string;
     services?: string[];
     branches?: string[];
+    useFillerPhrases?: boolean;  // Si está desactivado, Voice NO debe tener muletillas
+    customFillerPhrases?: string[];  // Frases personalizadas del cliente
   }
 ): ValidationResult {
   const errors: ValidationError[] = [];
@@ -136,7 +151,14 @@ export function validateGeneratedPrompt(
 
   // 2. Validaciones específicas por tipo
   if (promptType === 'voice') {
-    validateVoicePrompt(prompt, personality, errors, warnings);
+    validateVoicePrompt(
+      prompt,
+      personality,
+      context?.useFillerPhrases ?? true,
+      context?.customFillerPhrases,
+      errors,
+      warnings
+    );
   } else if (promptType === 'messaging') {
     validateMessagingPrompt(prompt, errors, warnings);
   }
@@ -203,26 +225,102 @@ function validateLength(
 function validateVoicePrompt(
   prompt: string,
   personality: string,
+  useFillerPhrases: boolean,
+  customFillerPhrases: string[] | undefined,
   errors: ValidationError[],
   warnings: ValidationWarning[]
 ): void {
   const promptLower = prompt.toLowerCase();
 
-  // CRÍTICO: Voice DEBE tener muletillas
-  const expectedFillers = FILLER_PHRASES_BY_PERSONALITY[personality] ||
-                          FILLER_PHRASES_BY_PERSONALITY.professional_friendly;
+  // Normalizar personalidad (handle diferentes formatos)
+  const normalizedPersonality = personality
+    .toLowerCase()
+    .replace(/-/g, '_')  // professional-friendly → professional_friendly
+    .trim();
 
-  const hasFillers = expectedFillers.some(filler =>
-    promptLower.includes(filler.toLowerCase())
-  );
-
-  if (!hasFillers) {
-    errors.push({
-      code: 'VOICE_MISSING_FILLERS',
-      message: `Voice prompt DEBE incluir muletillas conversacionales para personalidad "${personality}"`,
-      severity: 'critical',
-      category: 'voice',
+  // Verificar que personalidad existe en nuestro enum
+  const personalityExists = normalizedPersonality in FILLER_PHRASES_BY_PERSONALITY;
+  if (!personalityExists) {
+    warnings.push({
+      code: 'UNKNOWN_PERSONALITY',
+      message: `Personalidad "${personality}" no reconocida. Usando fallback "professional_friendly"`,
+      suggestion: `Personalidades válidas: ${Object.keys(FILLER_PHRASES_BY_PERSONALITY).join(', ')}`,
     });
+  }
+
+  // ========================================
+  // VALIDACIÓN DE MULETILLAS (según config)
+  // ========================================
+  if (useFillerPhrases) {
+    // Cliente tiene muletillas ACTIVADAS → Prompt DEBE incluirlas
+    // Priorizar custom phrases si existen, sino usar las de personalidad
+    const expectedFillers = (customFillerPhrases && customFillerPhrases.length > 0)
+      ? customFillerPhrases
+      : (FILLER_PHRASES_BY_PERSONALITY[normalizedPersonality] ||
+         FILLER_PHRASES_BY_PERSONALITY.professional_friendly);
+
+    // Verificar que el prompt MENCIONA usar muletillas (no solo las contiene)
+    const mentionsFillers = promptLower.includes('muletilla') ||
+                            expectedFillers.some(filler => promptLower.includes(filler.toLowerCase()));
+
+    // Verificar que INSTRUYE a usarlas (no solo las menciona)
+    const instructsFillers = /incluye|usa|utiliza|agrega|incorpora.*muletilla/i.test(prompt) ||
+                             /muletilla.*como|tales como.*["'].*["']/i.test(prompt);
+
+    // Verificar que usa palabras de OBLIGATORIEDAD (siempre, debe, obligatorio)
+    const hasObligatoryLanguage = /siempre|debe|obligatorio|necesario.*muletilla/i.test(prompt) ||
+                                   /muletilla.*siempre|debe|obligatorio|necesario/i.test(prompt);
+
+    if (!mentionsFillers) {
+      errors.push({
+        code: 'VOICE_MISSING_FILLERS',
+        message: `Voice prompt DEBE mencionar muletillas conversacionales para personalidad "${personality}"`,
+        severity: 'critical',
+        category: 'voice',
+      });
+    }
+
+    if (mentionsFillers && !instructsFillers) {
+      warnings.push({
+        code: 'VOICE_WEAK_FILLER_INSTRUCTION',
+        message: 'Prompt menciona muletillas pero no es explícito en instruir su uso',
+        suggestion: 'Agregar: "SIEMPRE incluye muletillas como..."',
+      });
+    }
+
+    if (mentionsFillers && instructsFillers && !hasObligatoryLanguage) {
+      warnings.push({
+        code: 'VOICE_MISSING_MANDATORY_LANGUAGE',
+        message: 'Prompt no enfatiza que muletillas son OBLIGATORIAS (debe usar "siempre", "debe", etc.)',
+        suggestion: 'Agregar: "SIEMPRE debe incluir muletillas..." o "Es obligatorio usar muletillas..."',
+      });
+    }
+  } else {
+    // Cliente tiene muletillas DESACTIVADAS → Prompt NO debe INSTRUIR a usarlas
+    // Está OK si menciona "NO usar muletillas", pero NO si instruye a usarlas
+    const instructsToUseFillersPattern = /siempre|debe|incluye|usa|utiliza|agrega|incorpora.*muletilla/i;
+    const prohibitsFillersPattern = /no.*usar.*muletilla|sin.*muletilla|evita.*muletilla/i;
+
+    const instructsToUseFillers = instructsToUseFillersPattern.test(prompt);
+    const prohibitsFillers = prohibitsFillersPattern.test(prompt);
+
+    if (instructsToUseFillers && !prohibitsFillers) {
+      errors.push({
+        code: 'VOICE_FILLERS_DISABLED_BUT_INSTRUCTED',
+        message: 'Cliente desactivó muletillas pero el prompt instruye a usarlas',
+        severity: 'critical',
+        category: 'voice',
+      });
+    }
+
+    // Opcional: Warning si NO menciona explícitamente la prohibición
+    if (!prohibitsFillers) {
+      warnings.push({
+        code: 'VOICE_FILLERS_DISABLED_NOT_EXPLICIT',
+        message: 'Cliente desactivó muletillas pero prompt no lo menciona explícitamente',
+        suggestion: 'Agregar: "NO usar muletillas conversacionales"',
+      });
+    }
   }
 
   // Validar que menciona que es una llamada de voz
@@ -275,11 +373,11 @@ function validateMessagingPrompt(
   const promptLower = prompt.toLowerCase();
 
   // CRÍTICO: Messaging NO debe tener muletillas de voz
-  const hasVoiceFillers = VOICE_FILLER_INDICATORS.some(filler => {
-    // Buscar patrón tipo: "Mmm...", "Bueno...", etc (con puntos suspensivos)
-    const pattern = new RegExp(`${filler}\\.{2,3}`, 'i');
-    return pattern.test(prompt);
-  });
+  // Nota: Estos patrones detectan USO de muletillas, no solo mención
+  // Ejemplo OK: "NO uses 'Mmm...'" → No matchea porque no está aislada
+  // Ejemplo MAL: "Mmm... sí tenemos eso" → Matchea (uso real)
+  // Usamos VOICE_FILLER_PATTERNS pre-compiladas para performance
+  const hasVoiceFillers = VOICE_FILLER_PATTERNS.some(pattern => pattern.test(prompt));
 
   if (hasVoiceFillers) {
     errors.push({
@@ -327,7 +425,8 @@ function validateEmojis(
   warnings: ValidationWarning[]
 ): void {
   // Detectar CUALQUIER emoji en el prompt
-  const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+  // Regex compatible con ES6+ (evita \p{} que requiere ES2018+)
+  const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E0}-\u{1F1FF}]/gu;
   const emojisFound = prompt.match(emojiRegex) || [];
 
   if (emojisFound.length === 0) {
@@ -343,7 +442,7 @@ function validateEmojis(
   if (forbiddenEmojisFound.length > 0) {
     errors.push({
       code: 'FORBIDDEN_EMOJIS',
-      message: `Emojis no permitidos encontrados: ${[...new Set(forbiddenEmojisFound)].join(', ')}`,
+      message: `Emojis no permitidos encontrados: ${Array.from(new Set(forbiddenEmojisFound)).join(', ')}`,
       severity: 'high',
       category: 'general',
     });
@@ -386,7 +485,7 @@ function validateContext(
   // Validar que menciona servicios (al menos algunos)
   if (context.services && context.services.length > 0) {
     const mentionsServices = context.services.some(service =>
-      promptLower.includes(service.toLowerCase())
+      service && promptLower.includes(service.toLowerCase())
     );
 
     if (!mentionsServices) {
@@ -401,7 +500,7 @@ function validateContext(
   // Validar que menciona sucursales
   if (context.branches && context.branches.length > 0) {
     const mentionsBranches = context.branches.some(branch =>
-      promptLower.includes(branch.toLowerCase())
+      branch && promptLower.includes(branch.toLowerCase())
     );
 
     if (!mentionsBranches && context.branches.length > 1) {
