@@ -628,7 +628,7 @@ export default function DiscoveryPage() {
             ))}
 
             {/* Mensaje en streaming con efecto de typing */}
-            {(isLoading || isTyping || streamingContent) && streamingMessageId && (
+            {streamingMessageId && (
               <motion.div
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -636,11 +636,12 @@ export default function DiscoveryPage() {
               >
                 <div className="max-w-[85%] rounded-2xl px-5 py-3.5 bg-slate-100 text-slate-700">
                   <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                    {streamingContent ? (
+                    {/* Mostrar contenido de streaming inmediatamente cuando esté disponible */}
+                    {streamingContent || rawStreamingContent ? (
                       <>
                         {streamingContent}
-                        {/* Cursor parpadeante mientras escribe */}
-                        {isTyping && (
+                        {/* Cursor parpadeante solo mientras escribe (no en loading) */}
+                        {(isTyping || (rawStreamingContent && !streamingContent)) && (
                           <span
                             className="inline-block w-0.5 h-4 bg-tis-coral ml-0.5 align-middle"
                             style={{
@@ -649,12 +650,12 @@ export default function DiscoveryPage() {
                           />
                         )}
                       </>
-                    ) : (
+                    ) : isLoading ? (
                       <span className="flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span className="text-slate-400">Escribiendo...</span>
                       </span>
-                    )}
+                    ) : null}
                   </p>
                 </div>
               </motion.div>
