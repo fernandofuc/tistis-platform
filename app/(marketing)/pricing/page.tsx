@@ -414,6 +414,7 @@ function InvestmentSummary({
 
   const branchCost = calculateBranchCostPesos(selectedPlan.id, branches);
   const totalPrice = selectedPlan.monthlyPrice + branchCost;
+  const isStarterWithTrial = selectedPlan.id === 'starter';
 
   return (
     <motion.div
@@ -434,19 +435,39 @@ function InvestmentSummary({
             </div>
             <div className="hidden md:block h-10 w-px bg-slate-200" />
             <div className="hidden md:block">
-              <p className="text-sm text-slate-500">Total mensual</p>
-              <p className="text-2xl font-bold text-tis-coral">
-                ${totalPrice.toLocaleString()}
+              <p className="text-sm text-slate-500">
+                {isStarterWithTrial ? 'Prueba gratuita' : 'Total mensual'}
               </p>
+              {isStarterWithTrial ? (
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl font-bold text-green-600">
+                    Gratis
+                  </p>
+                  <span className="text-sm text-slate-500">por 10 días</span>
+                </div>
+              ) : (
+                <p className="text-2xl font-bold text-tis-coral">
+                  ${totalPrice.toLocaleString()}
+                </p>
+              )}
+              {isStarterWithTrial && (
+                <p className="text-xs text-slate-400">
+                  Después ${totalPrice.toLocaleString()}/mes
+                </p>
+              )}
             </div>
           </div>
 
           {/* CTA */}
           <button
             onClick={onCheckout}
-            className="px-8 py-3 bg-tis-coral text-white font-semibold rounded-xl hover:bg-tis-pink transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+            className={`px-8 py-3 font-semibold rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 ${
+              isStarterWithTrial
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white'
+                : 'bg-tis-coral text-white hover:bg-tis-pink'
+            }`}
           >
-            <span>Continuar</span>
+            <span>{isStarterWithTrial ? 'Comenzar Gratis' : 'Continuar'}</span>
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
