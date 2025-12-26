@@ -37,6 +37,7 @@ import {
   AdvancedSettingsSection,
   EscalationSection,
   SectionGroup,
+  VoicePreviewCard,
 } from '@/src/features/voice-agent/components';
 import { useTenant } from '@/src/hooks/useTenant';
 
@@ -428,87 +429,28 @@ function BlockedState() {
 }
 
 // ======================
-// VOICE SELECTOR COMPONENT
+// VOICE SELECTOR COMPONENT (with audio preview)
 // ======================
 
 function VoiceSelector({
   selectedVoiceId,
   onSelect,
+  accessToken,
 }: {
   selectedVoiceId: string;
   onSelect: (voiceId: string) => void;
+  accessToken?: string;
 }) {
-  const [playingVoice, setPlayingVoice] = useState<string | null>(null);
-
-  const playPreview = (voice: AvailableVoice) => {
-    setPlayingVoice(voice.id);
-    setTimeout(() => setPlayingVoice(null), 3000);
-  };
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {AVAILABLE_VOICES.map((voice) => (
-        <button
+        <VoicePreviewCard
           key={voice.id}
-          onClick={() => onSelect(voice.id)}
-          className={`group relative p-5 rounded-2xl border-2 transition-all text-left ${
-            selectedVoiceId === voice.id
-              ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-tis-pink/5 shadow-lg shadow-tis-coral/10'
-              : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                voice.gender === 'male'
-                  ? selectedVoiceId === voice.id ? 'bg-tis-purple text-white' : 'bg-tis-purple/10 text-tis-purple'
-                  : selectedVoiceId === voice.id ? 'bg-tis-pink text-white' : 'bg-tis-pink/10 text-tis-pink'
-              }`}>
-                <VolumeIcon className="w-6 h-6" />
-              </div>
-              <div>
-                <span className="font-semibold text-slate-900 block">
-                  {voice.name}
-                </span>
-                {voice.is_default && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-tis-green/10 text-tis-green text-xs font-medium rounded-full mt-1">
-                    <CheckIcon className="w-3 h-3" />
-                    Recomendado
-                  </span>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                playPreview(voice);
-              }}
-              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
-                playingVoice === voice.id
-                  ? 'bg-tis-coral text-white'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 group-hover:bg-slate-200'
-              }`}
-            >
-              {playingVoice === voice.id ? (
-                <PauseIcon className="w-4 h-4" />
-              ) : (
-                <PlayIcon className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-          <p className="text-sm text-slate-500">
-            Acento {voice.accent} • {voice.gender === 'male' ? 'Masculino' : 'Femenino'}
-          </p>
-
-          {/* Selection indicator */}
-          {selectedVoiceId === voice.id && (
-            <div className="absolute top-3 right-3">
-              <div className="w-6 h-6 bg-tis-coral rounded-full flex items-center justify-center">
-                <CheckIcon className="w-4 h-4 text-white" />
-              </div>
-            </div>
-          )}
-        </button>
+          voice={voice}
+          isSelected={selectedVoiceId === voice.id}
+          onSelect={() => onSelect(voice.id)}
+          accessToken={accessToken}
+        />
       ))}
     </div>
   );
@@ -1332,32 +1274,21 @@ function ConfigSection({
                 <VoiceSelector
                   selectedVoiceId={formData.voice_id}
                   onSelect={(voiceId) => setFormData({ ...formData, voice_id: voiceId })}
+                  accessToken={accessToken}
                 />
               ) : (
-                <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100">
-                  {selectedVoice ? (
-                    <>
-                      <div className={`w-16 h-16 rounded-xl flex items-center justify-center shadow-lg ${
-                        selectedVoice.gender === 'male'
-                          ? 'bg-gradient-to-br from-tis-purple to-indigo-500'
-                          : 'bg-gradient-to-br from-tis-pink to-rose-500'
-                      }`}>
-                        <VolumeIcon className="w-8 h-8 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-lg font-bold text-slate-900">{selectedVoice.name}</p>
-                        <p className="text-sm text-slate-500">
-                          Acento {selectedVoice.accent} • {selectedVoice.gender === 'male' ? 'Masculino' : 'Femenino'}
-                        </p>
-                      </div>
-                      <button className="w-12 h-12 bg-slate-200 hover:bg-slate-300 rounded-xl flex items-center justify-center transition-colors">
-                        <PlayIcon className="w-5 h-5 text-slate-600" />
-                      </button>
-                    </>
-                  ) : (
+                selectedVoice ? (
+                  <VoicePreviewCard
+                    voice={selectedVoice}
+                    isSelected={true}
+                    onSelect={() => setIsEditing(true)}
+                    accessToken={accessToken}
+                  />
+                ) : (
+                  <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100">
                     <p className="text-slate-500">Voz no seleccionada</p>
-                  )}
-                </div>
+                  </div>
+                )
               )}
             </div>
           </PremiumCard>

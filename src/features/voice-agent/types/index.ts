@@ -682,9 +682,13 @@ export interface AvailableVoice {
   language: string;
   gender: 'male' | 'female' | 'neutral';
   accent?: string;
+  description?: string;
   preview_url?: string;
   is_default?: boolean;
 }
+
+// Sample text for voice preview (Spanish greeting)
+export const VOICE_PREVIEW_TEXT = 'Hola, soy tu asistente virtual. ¿En qué puedo ayudarte hoy?';
 
 export const AVAILABLE_VOICES: AvailableVoice[] = [
   // ElevenLabs Spanish Voices
@@ -695,6 +699,7 @@ export const AVAILABLE_VOICES: AvailableVoice[] = [
     language: 'es',
     gender: 'male',
     accent: 'mexicano',
+    description: 'Voz cálida y profesional, ideal para atención al cliente',
     is_default: true,
   },
   {
@@ -704,6 +709,7 @@ export const AVAILABLE_VOICES: AvailableVoice[] = [
     language: 'es',
     gender: 'female',
     accent: 'mexicano',
+    description: 'Voz amigable y clara, perfecta para servicios de salud',
   },
   {
     id: 'IKne3meq5aSn9XLyUdCD',
@@ -712,6 +718,7 @@ export const AVAILABLE_VOICES: AvailableVoice[] = [
     language: 'es',
     gender: 'male',
     accent: 'neutral',
+    description: 'Voz formal y confiable, excelente para negocios',
   },
   {
     id: 'XB0fDUnXU5powFXDhCwa',
@@ -720,6 +727,7 @@ export const AVAILABLE_VOICES: AvailableVoice[] = [
     language: 'es',
     gender: 'female',
     accent: 'neutral',
+    description: 'Voz suave y acogedora, ideal para reservaciones',
   },
 ];
 

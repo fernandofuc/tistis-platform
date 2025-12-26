@@ -9,3 +9,4 @@ export { GuidedInstructionsSection } from './GuidedInstructionsSection';
 export { AdvancedSettingsSection } from './AdvancedSettingsSection';
 export { EscalationSection } from './EscalationSection';
 export { SectionGroup } from './SectionGroup';
+export { VoicePreviewCard } from './VoicePreviewCard';
