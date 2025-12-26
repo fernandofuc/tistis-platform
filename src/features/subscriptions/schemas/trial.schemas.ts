@@ -118,13 +118,29 @@ export const TrialExpiringTodaySchema = z.object({
 // ======================
 
 /**
- * Schema para activar trial
+ * Schema para activar trial (interno - requiere client_id)
  */
 export const ActivateTrialRequestSchema = z.object({
   client_id: UUIDSchema,
   plan: z.literal('starter', {
     errorMap: () => ({ message: 'Solo el plan Starter puede tener prueba gratuita' }),
   }).default('starter'),
+});
+
+/**
+ * Schema para activar trial desde checkout (público - sin client_id)
+ * El cliente se crea en el endpoint si no existe
+ */
+export const ActivateTrialCheckoutRequestSchema = z.object({
+  plan: z.literal('starter', {
+    errorMap: () => ({ message: 'Solo el plan Starter puede tener prueba gratuita' }),
+  }),
+  customerEmail: z.string().email('Email inválido'),
+  customerName: z.string().min(1, 'Nombre es requerido').max(100, 'Nombre demasiado largo'),
+  customerPhone: z.string().optional(),
+  vertical: z.enum(['dental', 'restaurant', 'retail', 'services'], {
+    errorMap: () => ({ message: 'Vertical inválida' }),
+  }).optional(),
 });
 
 /**
@@ -185,6 +201,7 @@ export const TrialCancellationResultSchema = z.discriminatedUnion('success', [
 export type TrialSubscription = z.infer<typeof TrialSubscriptionSchema>;
 export type TrialExpiringToday = z.infer<typeof TrialExpiringTodaySchema>;
 export type ActivateTrialRequest = z.infer<typeof ActivateTrialRequestSchema>;
+export type ActivateTrialCheckoutRequest = z.infer<typeof ActivateTrialCheckoutRequestSchema>;
 export type CancelTrialRequest = z.infer<typeof CancelTrialRequestSchema>;
 export type ConvertTrialToPaidRequest = z.infer<typeof ConvertTrialToPaidRequestSchema>;
 export type TrialActivationResult = z.infer<typeof TrialActivationResultSchema>;
@@ -232,4 +249,12 @@ export function validateActivateTrialRequest(data: unknown): ActivateTrialReques
  */
 export function validateCancelTrialRequest(data: unknown): CancelTrialRequest {
   return CancelTrialRequestSchema.parse(data);
+}
+
+/**
+ * Valida request de activación de trial desde checkout (público)
+ * @throws ZodError si la validación falla
+ */
+export function validateActivateTrialCheckoutRequest(data: unknown): ActivateTrialCheckoutRequest {
+  return ActivateTrialCheckoutRequestSchema.parse(data);
 }

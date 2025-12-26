@@ -426,7 +426,14 @@ function validateEmojis(
 ): void {
   // Detectar CUALQUIER emoji en el prompt
   // Regex compatible con ES6+ (evita \p{} que requiere ES2018+)
-  const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E0}-\u{1F1FF}]/gu;
+  // Rangos incluidos:
+  // - U+1F300-1F9FF: Miscellaneous Symbols, Emoticons, etc.
+  // - U+2600-26FF: Miscellaneous Symbols (☀️, ⚡, etc.)
+  // - U+2700-27BF: Dingbats (✅, ❌, etc.)
+  // - U+1F1E0-1F1FF: Regional Indicator Symbols (banderas)
+  // - U+2300-23FF: Miscellaneous Technical (⏰, ⌛, ⏳, etc.)
+  // - U+2B50-2B55: Stars and symbols (⭐, etc.)
+  const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2300}-\u{23FF}]|[\u{2B50}-\u{2B55}]/gu;
   const emojisFound = prompt.match(emojiRegex) || [];
 
   if (emojisFound.length === 0) {

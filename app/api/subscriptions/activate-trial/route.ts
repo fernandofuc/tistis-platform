@@ -4,13 +4,14 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ZodError } from 'zod';
 import { activateFreeTrial } from '@/src/features/subscriptions/services/trial.service';
-import { validateActivateTrialRequest } from '@/src/features/subscriptions/schemas/trial.schemas';
+import { validateActivateTrialCheckoutRequest } from '@/src/features/subscriptions/schemas/trial.schemas';
 import { createServerClient } from '@/src/shared/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Obtener y validar body con Zod
+    // 1. Obtener body
     let body;
     try {
       body = await request.json();
@@ -21,27 +22,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { plan, customerEmail, customerName, customerPhone, vertical, metadata } = body;
-
-    if (!customerEmail) {
-      return NextResponse.json(
-        { error: 'customerEmail es requerido' },
-        { status: 400 }
-      );
+    // 2. Validar con Zod schema
+    let validatedData;
+    try {
+      validatedData = validateActivateTrialCheckoutRequest(body);
+    } catch (validationError) {
+      if (validationError instanceof ZodError) {
+        const firstError = validationError.errors[0];
+        return NextResponse.json(
+          {
+            error: firstError.message,
+            field: firstError.path.join('.'),
+            code: 'VALIDATION_ERROR',
+          },
+          { status: 400 }
+        );
+      }
+      throw validationError;
     }
 
-    if (plan !== 'starter') {
-      return NextResponse.json(
-        { error: 'Solo el plan Starter puede tener prueba gratuita' },
-        { status: 400 }
-      );
-    }
+    const { plan, customerEmail, customerName, customerPhone, vertical } = validatedData;
 
-    // 2. Autenticación (opcional para trial - permite signup sin login)
+    // 3. Autenticación (opcional para trial - permite signup sin login)
     const supabase = createServerClient();
     const {
       data: { user },
-      error: authError,
     } = await supabase.auth.getUser();
 
     let clientId: string;
@@ -63,8 +68,8 @@ export async function POST(request: NextRequest) {
           .insert({
             user_id: user.id,
             email: customerEmail,
-            name: customerName || '',
-            phone: customerPhone || '',
+            name: customerName,
+            phone: customerPhone || null,
             vertical: vertical || 'dental',
           })
           .select('id')
@@ -94,7 +99,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: 'Este email ya tiene una cuenta. Por favor inicia sesión.',
-            code: 'EMAIL_ALREADY_EXISTS'
+            code: 'EMAIL_ALREADY_EXISTS',
           },
           { status: 400 }
         );
@@ -105,8 +110,8 @@ export async function POST(request: NextRequest) {
         .from('clients')
         .insert({
           email: customerEmail,
-          name: customerName || '',
-          phone: customerPhone || '',
+          name: customerName,
+          phone: customerPhone || null,
           vertical: vertical || 'dental',
         })
         .select('id')
@@ -123,7 +128,7 @@ export async function POST(request: NextRequest) {
       clientId = newClient.id;
     }
 
-    // 3. Activar trial
+    // 4. Activar trial
     const result = await activateFreeTrial(clientId, plan);
 
     if (!result.success) {
@@ -133,17 +138,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Retornar éxito
+    // 5. Retornar éxito
     return NextResponse.json({
       success: true,
       subscription: result.subscription,
       daysRemaining: result.daysRemaining,
       message: `¡Prueba gratuita activada! Tienes ${result.daysRemaining} días para probar TIS TIS sin cargo.`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[API] Error activating trial:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error interno del servidor';
     return NextResponse.json(
-      { error: error.message || 'Error interno del servidor' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

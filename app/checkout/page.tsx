@@ -2,61 +2,94 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, Lock, CreditCard, CheckCircle, AlertCircle, Building2, Check, Gift, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import {
+  ArrowRight,
+  Lock,
+  CheckCircle,
+  AlertCircle,
+  Building2,
+  Check,
+  Zap,
+  Sparkles,
+  Shield,
+} from 'lucide-react';
 import Container from '@/components/layout/Container';
 import Button from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import Input from '@/components/ui/Input';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import {
   PLAN_CONFIG,
   getPlanConfig,
   calculateBranchCostPesos,
 } from '@/src/shared/config/plans';
 
+// ============================================================
+// CONSTANTES
+// ============================================================
+
+const VERTICALS_DISPLAY: Record<string, { name: string; icon: string }> = {
+  dental: { name: 'Clínica Dental', icon: '🦷' },
+  restaurant: { name: 'Restaurante', icon: '🍽️' },
+  retail: { name: 'Retail', icon: '🛍️' },
+  services: { name: 'Servicios', icon: '🔧' },
+};
+
+const PLAN_ICONS: Record<string, React.ReactNode> = {
+  starter: <Zap className="w-5 h-5" />,
+  essentials: <Sparkles className="w-5 h-5" />,
+  growth: <Building2 className="w-5 h-5" />,
+};
+
+// Validación de email
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+// ============================================================
+// COMPONENTE PRINCIPAL
+// ============================================================
+
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Estados
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [planId, setPlanId] = useState('essentials');
   const [branches, setBranches] = useState(1);
-  const [addons, setAddons] = useState<string[]>([]);
+  const [vertical, setVertical] = useState('dental');
+
+  // Form fields
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [vertical, setVertical] = useState('dental'); // Default vertical
+
+  // Field errors
+  const [emailError, setEmailError] = useState<string | undefined>();
+  const [nameError, setNameError] = useState<string | undefined>();
 
   const cancelled = searchParams.get('cancelled');
 
+  // Cargar datos de sessionStorage
   useEffect(() => {
-    // Get plan from URL first, then sessionStorage
     const urlPlan = searchParams.get('plan');
     const savedPlan = urlPlan || sessionStorage.getItem('selected_plan') || 'essentials';
     setPlanId(savedPlan);
 
-    // Get branches from sessionStorage (set by pricing page)
     const savedBranches = sessionStorage.getItem('pricing_branches');
     if (savedBranches) {
       setBranches(parseInt(savedBranches, 10) || 1);
     }
 
-    // Get addons from sessionStorage
-    const savedAddons = sessionStorage.getItem('pricing_addons');
-    if (savedAddons) {
-      try {
-        setAddons(JSON.parse(savedAddons) || []);
-      } catch (e) {
-        console.error('Error parsing addons:', e);
-      }
-    }
-
-    // Get vertical from sessionStorage (set by pricing page)
     const savedVertical = sessionStorage.getItem('selected_vertical');
     if (savedVertical) {
       setVertical(savedVertical);
     }
 
-    // Get contact info from questionnaire if available
+    // Cargar datos del cuestionario si existen
     const savedAnswers = sessionStorage.getItem('questionnaire_answers');
     if (savedAnswers) {
       try {
@@ -72,34 +105,58 @@ function CheckoutContent() {
     }
   }, [searchParams]);
 
+  // Datos del plan
   const plan = getPlanConfig(planId) || PLAN_CONFIG.essentials;
   const extraBranches = Math.max(0, branches - 1);
   const branchCost = calculateBranchCostPesos(planId, branches);
   const monthlyTotal = plan.monthlyPricePesos + branchCost;
 
-  // Determinar si es elegible para free trial
-  const isStarterPlan = planId === 'starter';
-  // Por ahora, mostrar trial solo para starter (la API verificará si ya existe)
-  // Si el usuario ya tiene cuenta, la API retornará error y lo manejaremos
-  const isFreeTrial = isStarterPlan;
+  // Determinar si es trial gratuito
+  const isFreeTrial = planId === 'starter';
+  const verticalInfo = VERTICALS_DISPLAY[vertical] || VERTICALS_DISPLAY.dental;
 
-  const handleCheckout = async () => {
-    if (!customerEmail) {
-      setError('Por favor ingresa tu correo electrónico');
-      return;
+  // Validar email en blur
+  const handleEmailBlur = () => {
+    if (customerEmail && !isValidEmail(customerEmail)) {
+      setEmailError('Por favor ingresa un email válido');
+    } else {
+      setEmailError(undefined);
     }
+  };
+
+  // Manejar checkout
+  const handleCheckout = async () => {
+    // Validación
+    let hasErrors = false;
+
+    if (!customerEmail) {
+      setEmailError('El email es requerido');
+      hasErrors = true;
+    } else if (!isValidEmail(customerEmail)) {
+      setEmailError('Por favor ingresa un email válido');
+      hasErrors = true;
+    } else {
+      setEmailError(undefined);
+    }
+
+    if (!customerName || customerName.trim().length < 2) {
+      setNameError('El nombre es requerido');
+      hasErrors = true;
+    } else {
+      setNameError(undefined);
+    }
+
+    if (hasErrors) return;
 
     setLoading(true);
     setError(null);
 
     try {
       if (isFreeTrial) {
-        // FLUJO 1: Activar trial gratuito
+        // FLUJO TRIAL: Activar prueba gratuita
         const response = await fetch('/api/subscriptions/activate-trial', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             plan: planId,
             customerEmail,
@@ -115,32 +172,32 @@ function CheckoutContent() {
         const data = await response.json();
 
         if (!response.ok) {
-          // Manejar caso especial: email ya existe
           if (data.code === 'EMAIL_ALREADY_EXISTS') {
-            setError('Este email ya está registrado. Por favor inicia sesión o usa otro email.');
-          } else {
-            throw new Error(data.error || 'Error al activar la prueba gratuita');
+            setEmailError('Este email ya está registrado. Inicia sesión o usa otro email.');
+            setLoading(false);
+            return;
           }
-          setLoading(false);
-          return;
+          throw new Error(data.error || 'Error al activar la prueba gratuita');
         }
 
-        // Redirigir a página de éxito de trial
-        router.push('/trial-success?daysRemaining=' + (data.daysRemaining || 10));
+        const successParams = new URLSearchParams({
+          daysRemaining: String(data.daysRemaining || 10),
+          plan: planId,
+          ...(vertical && { vertical }),
+        });
+        router.push('/trial-success?' + successParams.toString());
       } else {
-        // FLUJO 2: Proceso de pago normal con Stripe
+        // FLUJO PAGO: Stripe checkout
         const response = await fetch('/api/stripe/create-checkout', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             plan: planId,
             customerEmail,
             customerName,
             customerPhone,
             branches,
-            addons,
+            addons: [],
             vertical,
             metadata: {
               proposalId: sessionStorage.getItem('proposal_id') || '',
@@ -162,41 +219,55 @@ function CheckoutContent() {
       }
     } catch (err: any) {
       console.error('Checkout error:', err);
-      setError(err.message || 'Error al procesar el pago');
+      setError(err.message || 'Error al procesar');
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-tis-pink/5 py-12">
-      <Container className="max-w-6xl">
+    <div className="min-h-screen bg-slate-50 py-12">
+      <Container className="max-w-5xl">
         {/* Header */}
         <motion.div
-          initial={{ y: -20, opacity: 0 }}
+          initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="text-center mb-12"
+          className="text-center mb-10"
         >
-          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-slate-900 via-slate-800 to-tis-coral bg-clip-text text-transparent">
-            Finalizar Pago
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">
+            {isFreeTrial ? (
+              <>
+                Comienza tu{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-emerald-600">
+                  prueba gratuita
+                </span>
+              </>
+            ) : (
+              <>
+                Estás a un paso de{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-tis-coral to-tis-pink">
+                  automatizar
+                </span>
+              </>
+            )}
           </h1>
-          <p className="text-xl text-slate-600">
+          <p className="text-lg text-slate-600">
             {isFreeTrial
-              ? '¡Estás a un paso de comenzar tu prueba gratuita! 🎉'
-              : 'Estás a un paso de automatizar tu negocio'
+              ? '10 días gratis. Sin tarjeta. Sin compromiso.'
+              : 'Completa tus datos para continuar con el pago seguro.'
             }
           </p>
         </motion.div>
 
-        {/* Alerts */}
+        {/* Alertas */}
         {cancelled && (
           <motion.div
             initial={{ y: -10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-xl flex items-center gap-3 shadow-sm"
+            className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center gap-3"
           >
             <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
-            <p className="text-yellow-800 font-medium">
+            <p className="text-yellow-800">
               El pago fue cancelado. Puedes intentar de nuevo cuando quieras.
             </p>
           </motion.div>
@@ -206,319 +277,278 @@ function CheckoutContent() {
           <motion.div
             initial={{ y: -10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-xl flex items-center gap-3 shadow-sm"
+            className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3"
           >
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            <p className="text-red-800 font-medium">{error}</p>
+            <p className="text-red-800">{error}</p>
           </motion.div>
         )}
 
+        {/* Grid principal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Order Summary */}
+
+          {/* COLUMNA IZQUIERDA: Resumen del pedido */}
           <motion.div
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.1 }}
           >
-            <Card className="relative p-8 shadow-xl rounded-2xl border-slate-200">
-              {/* Badge para trial gratuito */}
+            <Card className="relative overflow-visible">
+              {/* Badge */}
               {isFreeTrial && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                  <span className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold rounded-full shadow-lg flex items-center gap-2">
-                    <Gift className="w-4 h-4" />
-                    Prueba Gratis 10 Días
+                  <span className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-semibold rounded-full shadow-lg whitespace-nowrap">
+                    🎉 Prueba Gratis 10 Días
                   </span>
                 </div>
               )}
 
-              <h2 className="text-2xl font-bold mb-6 text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-6 h-6 text-tis-coral" />
-                Resumen del Pedido
-              </h2>
-
-              <div className="space-y-4 mb-6">
-                {/* Plan base */}
-                <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+              <CardHeader className="pt-6">
+                <CardTitle className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isFreeTrial ? 'bg-green-100 text-green-600' : 'bg-tis-coral/10 text-tis-coral'}`}>
+                    {PLAN_ICONS[planId] || <Zap className="w-5 h-5" />}
+                  </div>
                   <div>
-                    <span className="font-semibold text-slate-900">Plan {plan.name}</span>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {isFreeTrial ? 'Luego $3,490 MXN/mes' : 'Facturación mensual'}
+                    <span className="text-xl">Plan {plan.name}</span>
+                    <p className="text-sm font-normal text-slate-500 mt-0.5">
+                      {verticalInfo.icon} {verticalInfo.name}
                     </p>
                   </div>
-                  <div className="text-right">
-                    {isFreeTrial ? (
-                      <>
-                        <span className="text-2xl font-bold text-green-600">$0</span>
-                        <p className="text-xs text-slate-500 line-through">
-                          ${plan.monthlyPricePesos.toLocaleString('es-MX')}
-                        </p>
-                      </>
-                    ) : (
-                      <span className="text-xl font-bold text-slate-900">
-                        ${plan.monthlyPricePesos.toLocaleString('es-MX')} MXN
-                      </span>
-                    )}
-                  </div>
-                </div>
+                </CardTitle>
+              </CardHeader>
 
-                {/* Extra branches */}
-                {extraBranches > 0 && !isFreeTrial && (
-                  <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
-                    <span className="text-slate-700 flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-tis-coral" />
-                      {extraBranches} sucursal(es) extra
-                    </span>
-                    <span className="font-semibold text-slate-900">
-                      ${branchCost.toLocaleString('es-MX')} MXN/mes
-                    </span>
-                  </div>
-                )}
-
-                {/* Total mensual */}
-                <div className="border-t-2 border-slate-200 pt-4 mt-4">
+              <CardContent>
+                {/* Precio */}
+                <div className="p-4 bg-slate-50 rounded-xl mb-6">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-slate-900">
-                      {isFreeTrial ? 'Hoy pagas' : 'Total Mensual'}
-                    </span>
+                    <div>
+                      <p className="text-sm text-slate-500">
+                        {isFreeTrial ? 'Hoy pagas' : 'Total mensual'}
+                      </p>
+                      {isFreeTrial && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          Después: ${plan.monthlyPricePesos.toLocaleString('es-MX')}/mes
+                        </p>
+                      )}
+                    </div>
                     <div className="text-right">
-                      <span className={`text-3xl font-bold ${isFreeTrial ? 'text-green-600' : 'text-tis-coral'}`}>
-                        {isFreeTrial ? '$0' : `$${monthlyTotal.toLocaleString('es-MX')}`}
-                      </span>
-                      {!isFreeTrial && (
-                        <p className="text-sm text-slate-500">MXN/mes</p>
+                      {isFreeTrial ? (
+                        <>
+                          <span className="text-3xl font-bold text-green-600">$0</span>
+                          <p className="text-sm text-slate-400 line-through">
+                            ${plan.monthlyPricePesos.toLocaleString('es-MX')}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-3xl font-bold text-slate-900">
+                            ${monthlyTotal.toLocaleString('es-MX')}
+                          </span>
+                          <p className="text-sm text-slate-500">MXN/mes</p>
+                        </>
                       )}
                     </div>
                   </div>
 
-                  {isFreeTrial && (
-                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-sm text-green-800 font-medium">
-                        ✓ Sin tarjeta de crédito requerida
-                      </p>
-                      <p className="text-xs text-green-700 mt-1">
-                        Después de 10 días: $3,490/mes (puedes cancelar en cualquier momento)
-                      </p>
+                  {/* Sucursales extra */}
+                  {extraBranches > 0 && !isFreeTrial && (
+                    <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between text-sm">
+                      <span className="text-slate-600 flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        {extraBranches} sucursal(es) extra
+                      </span>
+                      <span className="text-slate-700 font-medium">
+                        +${branchCost.toLocaleString('es-MX')}/mes
+                      </span>
                     </div>
                   )}
-
-                  {!isFreeTrial && (
-                    <p className="text-sm text-slate-500 mt-2">
-                      Suscripción mensual - puedes cancelar cuando quieras
-                    </p>
-                  )}
                 </div>
-              </div>
 
-              {/* Features List */}
-              <div className="bg-gradient-to-br from-slate-50 to-white border-2 border-slate-100 rounded-xl p-6 shadow-inner">
-                <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  Lo que obtienes:
-                </h3>
-                <ul className="space-y-3">
-                  {plan.features.slice(0, 6).map((feature, index) => (
-                    <motion.li
-                      key={index}
-                      initial={{ x: -10, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      transition={{ delay: 0.1 * index }}
-                      className="flex items-start gap-3"
-                    >
-                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Check className="w-3 h-3 text-green-600" />
+                {/* Nota de trial */}
+                {isFreeTrial && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-6">
+                    <div className="flex items-start gap-2">
+                      <Shield className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <p className="text-green-800 font-medium">Sin tarjeta de crédito</p>
+                        <p className="text-green-700 text-xs mt-0.5">
+                          Puedes cancelar en cualquier momento
+                        </p>
                       </div>
-                      <span className="text-sm text-slate-700 font-medium">{feature}</span>
-                    </motion.li>
-                  ))}
-                  {branches > 1 && (
-                    <motion.li
-                      initial={{ x: -10, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      className="flex items-start gap-3"
-                    >
-                      <div className="w-5 h-5 rounded-full bg-tis-coral/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Check className="w-3 h-3 text-tis-coral" />
-                      </div>
-                      <span className="text-sm text-slate-700 font-medium">
-                        Soporte para {branches} sucursales
-                      </span>
-                    </motion.li>
-                  )}
-                </ul>
-              </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Features */}
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    Lo que incluye:
+                  </h4>
+                  <ul className="space-y-2.5">
+                    {plan.features.slice(0, 5).map((feature, index) => (
+                      <li key={index} className="flex items-start gap-2.5">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${isFreeTrial ? 'bg-green-100' : 'bg-tis-coral/10'}`}>
+                          <Check className={`w-3 h-3 ${isFreeTrial ? 'text-green-600' : 'text-tis-coral'}`} />
+                        </div>
+                        <span className="text-sm text-slate-600">{feature}</span>
+                      </li>
+                    ))}
+                    {branches > 1 && (
+                      <li className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-tis-coral/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Check className="w-3 h-3 text-tis-coral" />
+                        </div>
+                        <span className="text-sm text-slate-600">
+                          Soporte para {branches} sucursales
+                        </span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              </CardContent>
             </Card>
           </motion.div>
 
-          {/* Payment Info */}
+          {/* COLUMNA DERECHA: Formulario */}
           <motion.div
-            initial={{ x: 20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.2 }}
           >
-            <Card className="p-8 shadow-xl rounded-2xl border-slate-200">
-              <h2 className="text-2xl font-bold mb-6 text-slate-900 flex items-center gap-2">
-                {isFreeTrial ? (
-                  <>
-                    <Gift className="w-6 h-6 text-green-600" />
-                    Información de Registro
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-6 h-6 text-tis-coral" />
-                    Información de Pago
-                  </>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {isFreeTrial ? (
+                    <>
+                      <Zap className="w-5 h-5 text-green-600" />
+                      Crea tu cuenta gratis
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-5 h-5 text-tis-coral" />
+                      Información de pago
+                    </>
+                  )}
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                {/* Info de seguridad para pago */}
+                {!isFreeTrial && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-2">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-600" />
+                      <div className="text-sm">
+                        <span className="text-blue-800 font-medium">Pago 100% seguro</span>
+                        <span className="text-blue-700"> · Procesado por Stripe</span>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </h2>
 
-              {!isFreeTrial && (
-                <div className="bg-blue-50 border-l-4 border-blue-500 rounded-xl p-4 mb-6">
-                  <div className="flex items-center gap-3">
-                    <Lock className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                    <div>
-                      <p className="font-semibold text-blue-900">Pago 100% Seguro</p>
-                      <p className="text-sm text-blue-700 mt-1">
-                        Procesado por Stripe - Encriptación SSL de grado bancario
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isFreeTrial && (
-                <div className="bg-green-50 border-l-4 border-green-500 rounded-xl p-4 mb-6">
-                  <div className="flex items-center gap-3">
-                    <Gift className="w-5 h-5 text-green-600 flex-shrink-0" />
-                    <div>
-                      <p className="font-semibold text-green-900">Sin Riesgo - Sin Tarjeta</p>
-                      <p className="text-sm text-green-700 mt-1">
-                        Comienza gratis hoy. Decide después si quieres continuar.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Email Field */}
-              <div className="mb-4">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Correo electrónico *
-                </label>
-                <input
+                {/* Email */}
+                <Input
+                  label="Correo electrónico"
                   type="email"
                   value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  onChange={(e) => {
+                    setCustomerEmail(e.target.value);
+                    if (emailError) setEmailError(undefined);
+                  }}
+                  onBlur={handleEmailBlur}
                   placeholder="tu@email.com"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-tis-coral transition-all duration-200 text-slate-900 placeholder:text-slate-400"
+                  error={emailError}
                   required
                 />
-              </div>
 
-              {/* Name Field */}
-              <div className="mb-4">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Nombre completo
-                </label>
-                <input
+                {/* Nombre */}
+                <Input
+                  label="Nombre completo"
                   type="text"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  onChange={(e) => {
+                    setCustomerName(e.target.value);
+                    if (nameError) setNameError(undefined);
+                  }}
                   placeholder="Tu nombre"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-tis-coral transition-all duration-200 text-slate-900 placeholder:text-slate-400"
+                  error={nameError}
+                  required
                 />
-              </div>
 
-              {/* Phone Field */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Teléfono (opcional)
-                </label>
-                <input
+                {/* Teléfono */}
+                <Input
+                  label="Teléfono (opcional)"
                   type="tel"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   placeholder="+52 123 456 7890"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-tis-coral transition-all duration-200 text-slate-900 placeholder:text-slate-400"
+                  helperText="Te contactaremos para ayudarte en tu setup"
                 />
-              </div>
 
-              {/* CTA Section */}
-              <div className="text-center">
-                {!isFreeTrial && (
-                  <>
-                    <CreditCard className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                    <p className="text-slate-600 mb-6 text-sm">
-                      Serás redirigido a Stripe para completar el pago de forma segura
-                    </p>
-                  </>
-                )}
+                {/* CTA Button */}
+                <div className="pt-2">
+                  <Button
+                    size="xl"
+                    variant="primary"
+                    className={`w-full ${isFreeTrial ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : ''}`}
+                    onClick={handleCheckout}
+                    isLoading={loading}
+                    disabled={loading || !customerEmail || !customerName}
+                  >
+                    {loading ? (
+                      isFreeTrial ? 'Activando...' : 'Redirigiendo...'
+                    ) : (
+                      <>
+                        {isFreeTrial ? 'Comenzar Prueba Gratuita' : 'Continuar al Pago'}
+                        <ArrowRight className="ml-2 w-5 h-5" />
+                      </>
+                    )}
+                  </Button>
+                </div>
 
-                <Button
-                  size="xl"
-                  variant="primary"
-                  className={`w-full shadow-lg hover:shadow-xl transition-all duration-300 ${
-                    isFreeTrial
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
-                      : ''
-                  }`}
-                  onClick={handleCheckout}
-                  loading={loading}
-                  disabled={loading || !customerEmail}
-                >
-                  {loading ? (
-                    isFreeTrial ? 'Activando prueba gratuita...' : 'Redirigiendo a Stripe...'
-                  ) : (
-                    <>
-                      {isFreeTrial ? 'Comenzar Prueba Gratuita' : 'Proceder al Pago Seguro'}
-                      {!loading && <ArrowRight className="ml-2 w-5 h-5" />}
-                    </>
-                  )}
-                </Button>
-
-                <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+                {/* Términos */}
+                <p className="text-xs text-slate-500 text-center leading-relaxed">
                   Al continuar, aceptas nuestros{' '}
-                  <a href="/terms" className="underline hover:text-slate-700 transition-colors">
+                  <a href="/terms" className="underline hover:text-slate-700">
                     términos de servicio
                   </a>
                   {' '}y{' '}
-                  <a href="/privacy" className="underline hover:text-slate-700 transition-colors">
+                  <a href="/privacy" className="underline hover:text-slate-700">
                     política de privacidad
                   </a>
                 </p>
-              </div>
 
-              {/* Payment Methods */}
-              {!isFreeTrial && (
-                <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t-2 border-slate-100">
-                  <span className="text-xs text-slate-500 font-medium">Aceptamos:</span>
-                  <div className="flex items-center gap-2">
-                    <div className="bg-white border-2 border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
-                      <span className="text-xs font-bold text-blue-600">VISA</span>
-                    </div>
-                    <div className="bg-white border-2 border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
-                      <span className="text-xs font-bold text-red-500">Mastercard</span>
-                    </div>
-                    <div className="bg-white border-2 border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
-                      <span className="text-xs font-bold text-blue-400">Amex</span>
+                {/* Métodos de pago (solo para pago) */}
+                {!isFreeTrial && (
+                  <div className="flex items-center justify-center gap-3 pt-4 border-t border-slate-100">
+                    <span className="text-xs text-slate-400">Aceptamos:</span>
+                    <div className="flex gap-2">
+                      {['VISA', 'Mastercard', 'Amex'].map((card) => (
+                        <div key={card} className="px-2 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600">
+                          {card}
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </CardContent>
             </Card>
           </motion.div>
         </div>
 
-        {/* Back to pricing link */}
+        {/* Footer link */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.3 }}
           className="text-center mt-8"
         >
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-500">
             ¿Quieres cambiar de plan?{' '}
             <button
               onClick={() => router.push('/pricing')}
-              className="text-tis-coral hover:text-tis-coral/80 font-semibold underline transition-colors"
+              className="text-tis-coral hover:underline font-medium"
             >
               Volver a precios
             </button>
@@ -529,16 +559,24 @@ function CheckoutContent() {
   );
 }
 
+// ============================================================
+// LOADING FALLBACK
+// ============================================================
+
 function LoadingFallback() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-tis-pink/5 py-12 flex items-center justify-center">
+    <div className="min-h-screen bg-slate-50 py-12 flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-tis-coral border-t-transparent mx-auto mb-4"></div>
-        <p className="text-slate-600 font-medium">Cargando checkout...</p>
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-tis-coral border-t-transparent mx-auto mb-4" />
+        <p className="text-slate-600">Cargando...</p>
       </div>
     </div>
   );
 }
+
+// ============================================================
+// EXPORT
+// ============================================================
 
 export default function CheckoutPage() {
   return (
