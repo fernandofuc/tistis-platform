@@ -213,11 +213,18 @@ function PlanCard({
         ${plan.highlighted && !isSelected ? 'border-tis-coral/30' : ''}
       `}
     >
-      {/* Badge "Popular" */}
+      {/* Badge "Popular" o "Prueba Gratuita" */}
       {plan.highlighted && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="px-3 py-1 bg-gradient-to-r from-tis-coral to-tis-pink text-white text-xs font-semibold rounded-full">
             Mas Popular
+          </span>
+        </div>
+      )}
+      {plan.id === 'starter' && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-semibold rounded-full shadow-lg">
+            🎉 Prueba Gratis 10 Días
           </span>
         </div>
       )}
