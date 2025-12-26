@@ -493,7 +493,7 @@ function CheckoutContent() {
                     variant="primary"
                     className={`w-full ${isFreeTrial ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : ''}`}
                     onClick={handleCheckout}
-                    isLoading={loading}
+                    loading={loading}
                     disabled={loading || !customerEmail || !customerName}
                   >
                     {loading ? (

@@ -26,22 +26,21 @@ export function TrialBanner({ clientId, onCancelTrial, onReactivateTrial }: Tria
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    async function loadTrial() {
+      try {
+        const activeTrial = await getActiveTrialForClient(clientId);
+        if (activeTrial && activeTrial.trial_end) {
+          setTrial(activeTrial);
+          setDaysRemaining(calculateDaysRemaining(activeTrial.trial_end));
+        }
+      } catch (error) {
+        console.error('[TrialBanner] Error loading trial:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
     loadTrial();
   }, [clientId]);
-
-  async function loadTrial() {
-    try {
-      const activeTrial = await getActiveTrialForClient(clientId);
-      if (activeTrial && activeTrial.trial_end) {
-        setTrial(activeTrial);
-        setDaysRemaining(calculateDaysRemaining(activeTrial.trial_end));
-      }
-    } catch (error) {
-      console.error('[TrialBanner] Error loading trial:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   if (loading || !trial || dismissed) {
     return null;
