@@ -503,6 +503,40 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   // El plan_limit (límite máximo del plan) se calcula en el frontend
   const contractedBranches = branches ? parseInt(branches) : 1;
 
+  // ============================================
+  // FIX: Check if subscription already exists (prevents duplicates)
+  // ============================================
+  const { data: existingSubscription } = await supabase
+    .from('subscriptions')
+    .select('id, client_id')
+    .eq('stripe_subscription_id', subscription.id)
+    .single();
+
+  if (existingSubscription) {
+    console.log('⏭️ [Subscription] Subscription already exists, updating instead:', subscription.id);
+
+    // Update existing subscription
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        status: subscription.status === 'active' ? 'active' : 'pending',
+        current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('stripe_subscription_id', subscription.id);
+
+    if (updateError) {
+      console.error('🚨 [Subscription] Error updating existing subscription:', updateError);
+    } else {
+      console.log('✅ [Subscription] Existing subscription updated, skipping duplicate creation');
+    }
+
+    // Exit early - tenant provisioning was already done
+    return;
+  }
+
+  // Create new subscription record
   const { error } = await supabase.from('subscriptions').insert({
     client_id: client.id,
     stripe_customer_id: customerId,
