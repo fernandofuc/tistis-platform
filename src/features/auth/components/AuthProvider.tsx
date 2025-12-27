@@ -104,9 +104,11 @@ export function ProtectedRoute({
   if (!isAuthenticated) {
     if (fallback) return <>{fallback}</>;
 
-    // Redirect to login
+    // Redirect to login with small delay to avoid RSC prefetch race condition
     if (typeof window !== 'undefined') {
-      window.location.href = '/auth/login';
+      setTimeout(() => {
+        window.location.replace('/auth/login');
+      }, 50);
     }
     return null;
   }

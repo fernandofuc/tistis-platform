@@ -45,8 +45,11 @@ function LoginContent() {
         console.log('🔍 Login page - session check:', !!session);
         if (session) {
           console.log('✅ Already logged in, redirecting to dashboard...');
-          // Use window.location for hard redirect to avoid Next.js caching
-          window.location.href = '/dashboard';
+          // Use replace with small delay to avoid RSC prefetch race condition
+          // This prevents "Failed to fetch RSC payload" errors in Safari
+          setTimeout(() => {
+            window.location.replace('/dashboard');
+          }, 50);
         }
       } catch (error) {
         console.error('Error checking session:', error);
@@ -77,8 +80,10 @@ function LoginContent() {
 
       if (authData.session) {
         console.log('✅ Login successful, redirecting to dashboard...');
-        // Use window.location for hard redirect
-        window.location.href = '/dashboard';
+        // Use replace with small delay to avoid RSC prefetch race condition
+        setTimeout(() => {
+          window.location.replace('/dashboard');
+        }, 50);
       }
     } catch (err) {
       setError('Error al iniciar sesión. Intenta de nuevo.');
