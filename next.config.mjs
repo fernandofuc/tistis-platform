@@ -41,21 +41,19 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
           },
-          // CSP TEMPORARILY DISABLED for debugging - will re-enable after fixing RSC issue
-          // TODO: Re-enable after confirming RSC works
-          // {
-          //   key: 'Content-Security-Policy',
-          //   value: [
-          //     "default-src 'self'",
-          //     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://vercel.live https://*.vercel.app https://accounts.google.com https://apis.google.com https://*.supabase.co",
-          //     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com https://*.supabase.co",
-          //     "img-src 'self' data: https: blob:",
-          //     "font-src 'self' data: https://fonts.gstatic.com",
-          //     "connect-src 'self' https://*.vercel.app https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vercel.live wss://ws-us3.pusher.com https://accounts.google.com https://oauth2.googleapis.com https://github.com https://api.github.com",
-          //     "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://billing.stripe.com https://vercel.live https://*.supabase.co https://accounts.google.com https://github.com",
-          //     "form-action 'self' https://*.supabase.co https://accounts.google.com https://github.com",
-          //   ].join('; '),
-          // },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://vercel.live https://*.vercel.app https://accounts.google.com https://apis.google.com https://*.supabase.co",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com https://*.supabase.co",
+              "img-src 'self' data: https: blob:",
+              "font-src 'self' data: https://fonts.gstatic.com",
+              "connect-src 'self' https://*.vercel.app https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vercel.live wss://ws-us3.pusher.com https://accounts.google.com https://oauth2.googleapis.com https://github.com https://api.github.com",
+              "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://billing.stripe.com https://vercel.live https://*.supabase.co https://accounts.google.com https://github.com",
+              "form-action 'self' https://*.supabase.co https://accounts.google.com https://github.com",
+            ].join('; '),
+          },
         ],
       },
       {
