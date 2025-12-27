@@ -19,6 +19,7 @@ export interface VAPIAssistantCreateRequest {
     provider: 'deepgram' | 'google' | 'azure' | 'assembly-ai';
     model?: string;
     language?: string;
+    keywords?: string[]; // Deepgram keyword boosting (e.g., 'cita:2')
   };
 
   // Voice (TTS)

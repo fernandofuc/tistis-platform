@@ -89,11 +89,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const phoneNumbers = await VoiceAgentService.getPhoneNumbers(tenantId);
+    // Obtener números y límite en paralelo
+    const [phoneNumbers, limitInfo] = await Promise.all([
+      VoiceAgentService.getPhoneNumbers(tenantId),
+      VoiceAgentService.checkPhoneNumberLimit(tenantId),
+    ]);
 
     return NextResponse.json({
       success: true,
       data: phoneNumbers,
+      limit: {
+        current: limitInfo.currentNumbers,
+        max: limitInfo.maxAllowed,
+        canRequest: limitInfo.canRequest,
+        activeBranches: limitInfo.activeBranches,
+      },
     });
   } catch (error) {
     console.error('[Voice Agent Phone Numbers API] GET error:', error);

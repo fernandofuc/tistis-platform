@@ -224,6 +224,85 @@ export async function getVoiceAgentContext(tenantId: string): Promise<VoiceAgent
 // =====================================================
 
 /**
+ * Verificar límite de números telefónicos basado en sucursales
+ *
+ * REGLA: El tenant puede tener MÁXIMO tantos números como sucursales activas
+ * Ejemplo: 3 sucursales = máximo 3 números de teléfono
+ */
+export async function checkPhoneNumberLimit(tenantId: string): Promise<{
+  canRequest: boolean;
+  currentNumbers: number;
+  maxAllowed: number;
+  activeBranches: number;
+  message?: string;
+}> {
+  const supabase = createServerClient();
+
+  // 1. Contar sucursales activas del tenant
+  const { data: branches, error: branchError } = await supabase
+    .from('branches')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true);
+
+  if (branchError) {
+    console.error('[Voice Agent] Error counting branches:', branchError);
+    return {
+      canRequest: false,
+      currentNumbers: 0,
+      maxAllowed: 0,
+      activeBranches: 0,
+      message: 'Error al verificar sucursales',
+    };
+  }
+
+  const activeBranches = branches?.length || 0;
+
+  // Si no tiene sucursales, no puede tener números
+  if (activeBranches === 0) {
+    return {
+      canRequest: false,
+      currentNumbers: 0,
+      maxAllowed: 0,
+      activeBranches: 0,
+      message: 'Necesitas al menos una sucursal activa para adquirir números de teléfono',
+    };
+  }
+
+  // 2. Contar números activos del tenant
+  const { data: phoneNumbers, error: phoneError } = await supabase
+    .from('voice_phone_numbers')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .in('status', ['active', 'pending', 'provisioning']); // Contar todos los no-liberados
+
+  if (phoneError) {
+    console.error('[Voice Agent] Error counting phone numbers:', phoneError);
+    return {
+      canRequest: false,
+      currentNumbers: 0,
+      maxAllowed: activeBranches,
+      activeBranches,
+      message: 'Error al verificar números existentes',
+    };
+  }
+
+  const currentNumbers = phoneNumbers?.length || 0;
+  const maxAllowed = activeBranches;
+  const canRequest = currentNumbers < maxAllowed;
+
+  return {
+    canRequest,
+    currentNumbers,
+    maxAllowed,
+    activeBranches,
+    message: canRequest
+      ? undefined
+      : `Has alcanzado el límite de ${maxAllowed} número${maxAllowed > 1 ? 's' : ''} de teléfono (${activeBranches} sucursal${activeBranches > 1 ? 'es' : ''} activa${activeBranches > 1 ? 's' : ''})`,
+  };
+}
+
+/**
  * Obtener números de teléfono del tenant
  */
 export async function getPhoneNumbers(tenantId: string): Promise<VoicePhoneNumber[]> {
@@ -278,7 +357,18 @@ export async function requestPhoneNumber(
     };
   }
 
-  // 2. Obtener configuración de voz del tenant
+  // 2. Verificar límite de números por sucursales
+  const limitCheck = await checkPhoneNumberLimit(tenantId);
+
+  if (!limitCheck.canRequest) {
+    console.log('[Voice Agent] Phone number limit reached:', limitCheck);
+    return {
+      success: false,
+      error: limitCheck.message || `Límite alcanzado: ${limitCheck.currentNumbers}/${limitCheck.maxAllowed} números`,
+    };
+  }
+
+  // 3. Obtener configuración de voz del tenant
   const { data: voiceConfig } = await supabase
     .from('voice_agent_config')
     .select('*')
@@ -292,7 +382,7 @@ export async function requestPhoneNumber(
     };
   }
 
-  // 3. Construir webhook URL
+  // 4. Construir webhook URL
   const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
     ? `${process.env.NEXT_PUBLIC_APP_URL}/api/voice-agent/webhook`
     : '';
@@ -305,7 +395,7 @@ export async function requestPhoneNumber(
     };
   }
 
-  // 4. Provisionar con VAPI API (asistente + número)
+  // 5. Provisionar con VAPI API (asistente + número)
   console.log('[Voice Agent] Provisioning via VAPI API...');
 
   const provisionResult = await VAPIApiService.provisionPhoneNumberForTenant({
@@ -331,7 +421,7 @@ export async function requestPhoneNumber(
     vapiPhoneNumber: provisionResult.phoneNumber.number,
   });
 
-  // 5. Guardar en Supabase con IDs de VAPI
+  // 6. Guardar en Supabase con IDs de VAPI
   const { data: phoneNumber, error: dbError } = await supabase
     .from('voice_phone_numbers')
     .insert({
@@ -730,6 +820,7 @@ export const VoiceAgentService = {
   getPhoneNumbers,
   requestPhoneNumber,
   releasePhoneNumber,
+  checkPhoneNumberLimit,
 
   // Calls
   getRecentCalls,

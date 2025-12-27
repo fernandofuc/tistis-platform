@@ -67,6 +67,13 @@ import { useTenant } from '@/src/hooks/useTenant';
 // TYPES
 // ======================
 
+interface PhoneNumberLimit {
+  current: number;
+  max: number;
+  canRequest: boolean;
+  activeBranches: number;
+}
+
 interface VoiceAgentResponse {
   success: boolean;
   status: 'blocked' | 'inactive' | 'configuring' | 'active';
@@ -662,6 +669,7 @@ function PhoneNumbersTab({
   loading,
   message,
   onClearMessage,
+  phoneLimit,
 }: {
   phoneNumbers: VoicePhoneNumber[];
   branches: BranchOption[];
@@ -670,6 +678,7 @@ function PhoneNumbersTab({
   loading: boolean;
   message?: { type: 'success' | 'error'; text: string } | null;
   onClearMessage?: () => void;
+  phoneLimit?: PhoneNumberLimit | null;
 }) {
   const [showAreaCodes, setShowAreaCodes] = useState(false);
   const [selectedAreaCode, setSelectedAreaCode] = useState<string | null>(null);
@@ -706,22 +715,59 @@ function PhoneNumbersTab({
     }
   };
 
+  const limitReached = phoneLimit ? !phoneLimit.canRequest : false;
+  const limitMessage = phoneLimit
+    ? `${phoneLimit.current} de ${phoneLimit.max} número${phoneLimit.max > 1 ? 's' : ''} (${phoneLimit.activeBranches} sucursal${phoneLimit.activeBranches > 1 ? 'es' : ''})`
+    : null;
+
   return (
     <div className="max-w-3xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">Números Telefónicos</h3>
-          <p className="text-sm text-slate-500">Gestiona los números de tu asistente</p>
+          <p className="text-sm text-slate-500">
+            {limitMessage ? (
+              <>
+                Límite: <span className={limitReached ? 'text-amber-600 font-medium' : 'text-slate-600'}>{limitMessage}</span>
+              </>
+            ) : (
+              'Gestiona los números de tu asistente'
+            )}
+          </p>
         </div>
-        <Button
-          onClick={() => setShowAreaCodes(!showAreaCodes)}
-          className="gap-2"
-        >
-          <PlusIcon className="w-4 h-4" />
-          Agregar Número
-        </Button>
+        <div className="flex items-center gap-3">
+          {limitReached && (
+            <span className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg font-medium">
+              Límite alcanzado
+            </span>
+          )}
+          <Button
+            onClick={() => setShowAreaCodes(!showAreaCodes)}
+            className="gap-2"
+            disabled={limitReached}
+          >
+            <PlusIcon className="w-4 h-4" />
+            Agregar Número
+          </Button>
+        </div>
       </div>
+
+      {/* Limit Warning */}
+      {limitReached && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+          <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <AlertIcon className="w-4 h-4 text-amber-600" />
+          </div>
+          <div>
+            <p className="font-medium text-amber-800">Has alcanzado el límite de números</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              Solo puedes tener un número telefónico por cada sucursal activa.
+              Para agregar más números, primero agrega más sucursales desde Configuración.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Message */}
       {message && (
@@ -1078,9 +1124,29 @@ export default function AIAgentVozPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [selectedCall, setSelectedCall] = useState<VoiceCall | null>(null);
   const [phoneRequestMessage, setPhoneRequestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [phoneLimit, setPhoneLimit] = useState<PhoneNumberLimit | null>(null);
 
   const accessToken = session?.access_token;
   const vertical = (tenant?.vertical || 'dental') as 'dental' | 'restaurant' | 'medical' | 'general';
+
+  const fetchPhoneLimit = useCallback(async () => {
+    if (!accessToken) return;
+
+    try {
+      const response = await fetch('/api/voice-agent/phone-numbers', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.limit) {
+          setPhoneLimit(result.limit);
+        }
+      }
+    } catch (err) {
+      console.error('[Voice Agent] Error fetching phone limit:', err);
+    }
+  }, [accessToken]);
 
   const fetchVoiceAgent = useCallback(async () => {
     if (!accessToken) return;
@@ -1099,12 +1165,15 @@ export default function AIAgentVozPage() {
 
       const result = await response.json();
       setData(result);
+
+      // También obtenemos el límite de números
+      fetchPhoneLimit();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, fetchPhoneLimit]);
 
   useEffect(() => {
     fetchVoiceAgent();
@@ -1450,6 +1519,7 @@ export default function AIAgentVozPage() {
                 loading={saving}
                 message={phoneRequestMessage}
                 onClearMessage={() => setPhoneRequestMessage(null)}
+                phoneLimit={phoneLimit}
               />
             </motion.div>
           )}
