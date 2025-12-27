@@ -239,5 +239,23 @@ async function processWebhookBackground(
     }
   } catch (error) {
     console.error('[Facebook Webhook] Background processing failed:', error);
+
+    // Guardar en dead letter queue para reintentos/auditoría
+    try {
+      const supabase = (await import('@/src/shared/lib/supabase')).createServerClient();
+      await supabase.from('webhook_dead_letters').insert({
+        channel: 'facebook',
+        tenant_slug: tenantSlug,
+        payload: payload,
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        created_at: new Date().toISOString(),
+        retry_count: 0,
+        status: 'pending',
+      });
+      console.log('[Facebook Webhook] Saved to dead letter queue for retry');
+    } catch (dlqError) {
+      console.error('[Facebook Webhook] Failed to save to dead letter queue:', dlqError);
+      console.error('[Facebook Webhook] Original payload:', JSON.stringify(payload).substring(0, 500));
+    }
   }
 }

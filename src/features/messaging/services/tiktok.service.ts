@@ -79,7 +79,11 @@ export function verifyTikTokSignature(
     .update(signatureBase)
     .digest('hex');
 
-  const isValid = signature === expectedSignature;
+  // Usar timingSafeEqual para prevenir timing attacks
+  const isValid = crypto.timingSafeEqual(
+    Buffer.from(expectedSignature, 'hex'),
+    Buffer.from(signature, 'hex')
+  );
 
   if (!isValid) {
     console.error('[TikTok] Invalid signature');
@@ -321,7 +325,7 @@ export async function findOrCreateTikTokLead(
     throw new Error(`Failed to create lead: ${error.message}`);
   }
 
-  console.log(`[TikTok] New lead created: ${newLead.id} (open_id: ${openId})`);
+  console.log(`[TikTok] New lead created: ${newLead.id}`);
   return { ...newLead, isNew: true };
 }
 

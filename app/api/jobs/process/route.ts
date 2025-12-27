@@ -505,7 +505,7 @@ async function processSendInstagramJob(
 ): Promise<Record<string, unknown>> {
   const { message_id, channel_connection_id, recipient_psid, content } = payload;
 
-  console.log(`[Jobs API] Sending Instagram message to PSID: ${recipient_psid}`);
+  console.log(`[Jobs API] Sending Instagram message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
 
@@ -561,7 +561,7 @@ async function processSendFacebookJob(
 ): Promise<Record<string, unknown>> {
   const { message_id, channel_connection_id, recipient_psid, content } = payload;
 
-  console.log(`[Jobs API] Sending Facebook message to PSID: ${recipient_psid}`);
+  console.log(`[Jobs API] Sending Facebook message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
 
@@ -617,7 +617,7 @@ async function processSendTikTokJob(
 ): Promise<Record<string, unknown>> {
   const { message_id, channel_connection_id, recipient_open_id, content } = payload;
 
-  console.log(`[Jobs API] Sending TikTok message to open_id: ${recipient_open_id}`);
+  console.log(`[Jobs API] Sending TikTok message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
 

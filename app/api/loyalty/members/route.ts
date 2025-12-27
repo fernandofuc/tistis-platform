@@ -162,8 +162,10 @@ export async function GET(request: NextRequest) {
 
     // Apply search filter to BOTH queries
     if (search) {
+      // Sanitize search input to prevent PostgREST filter injection
+      const sanitizedSearch = search.replace(/[%_*\\]/g, '\\$&');
       // Use wildcard pattern for ILIKE search
-      const pattern = `*${search}*`;
+      const pattern = `*${sanitizedSearch}*`;
 
       // Search in leads
       leadsQuery = leadsQuery.or(

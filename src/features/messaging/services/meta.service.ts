@@ -400,7 +400,7 @@ export async function findOrCreateMetaLead(
     throw new Error(`Failed to create lead: ${error.message}`);
   }
 
-  console.log(`[Meta] New ${platform} lead created: ${newLead.id} (PSID: ${psid})`);
+  console.log(`[Meta] New ${platform} lead created: ${newLead.id}`);
   return { ...newLead, isNew: true };
 }
 

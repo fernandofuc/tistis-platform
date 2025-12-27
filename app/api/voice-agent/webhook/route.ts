@@ -261,14 +261,14 @@ async function handleAssistantRequest(event: VAPIAssistantRequest) {
   const calledNumber = event.call.phoneNumber.number;
   const callerNumber = event.call.customer.number;
 
-  console.log(`[Voice Webhook] Assistant request for ${calledNumber} from ${callerNumber}`);
+  console.log(`[Voice Webhook] Assistant request received, call_id: ${event.call.id}`);
   console.log(`[Voice Webhook] MODE: Server-Side Response (TIS TIS LangGraph genera respuestas)`);
 
   // Obtener tenant del número llamado
   const tenantId = await getTenantFromPhoneNumber(calledNumber);
 
   if (!tenantId) {
-    console.error('[Voice Webhook] No tenant found for number:', calledNumber);
+    console.error('[Voice Webhook] No tenant found for called number, call_id:', event.call.id);
     return {
       error: 'No assistant configured for this number',
     };

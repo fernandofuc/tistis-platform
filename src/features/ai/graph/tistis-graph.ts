@@ -11,8 +11,8 @@ import {
   createInitialState,
   getProcessingTimeMs,
 } from '../state';
-import { supervisorNode, supervisorRouter } from '../agents/supervisor';
-import { verticalRouterNode, verticalRouterRouter } from '../agents/routing';
+import { supervisorNode } from '../agents/supervisor';
+import { verticalRouterNode } from '../agents/routing';
 import {
   greetingNode,
   pricingNode,
