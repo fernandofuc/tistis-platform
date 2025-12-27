@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { getPlanConfig } from '@/src/shared/config/plans';
+import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -111,6 +112,14 @@ async function getOrCreatePriceForPlan(stripe: Stripe, planName: string): Promis
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting - prevent abuse of plan change endpoint
+    const clientIP = getClientIP(request);
+    const rateLimitResult = checkRateLimit(clientIP, strictLimiter);
+
+    if (!rateLimitResult.success) {
+      return rateLimitExceeded(rateLimitResult);
+    }
+
     // Get access token from Authorization header
     const accessToken = getAccessToken(request);
     if (!accessToken) {

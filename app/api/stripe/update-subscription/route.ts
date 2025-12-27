@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -53,6 +54,14 @@ function getBranchPrice(plan: string, branchNumber: number): number {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting - prevent abuse of subscription update endpoint
+    const clientIP = getClientIP(request);
+    const rateLimitResult = checkRateLimit(clientIP, strictLimiter);
+
+    if (!rateLimitResult.success) {
+      return rateLimitExceeded(rateLimitResult);
+    }
+
     const supabase = createServerClient();
     const body = await request.json();
     const { action } = body; // 'add_branch' | 'remove_branch'
