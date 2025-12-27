@@ -9,6 +9,24 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
+import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
+
+// Allowed origins for return URL (prevent open redirect)
+const ALLOWED_ORIGINS = [
+  'https://app.tistis.com',
+  'https://tistis.com',
+  process.env.NEXT_PUBLIC_URL,
+].filter(Boolean) as string[];
+
+// In development, also allow localhost
+if (process.env.NODE_ENV === 'development') {
+  ALLOWED_ORIGINS.push(
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:3003'
+  );
+}
 
 // Create Stripe client lazily
 function getStripeClient() {
@@ -17,6 +35,14 @@ function getStripeClient() {
 
 export async function POST(request: NextRequest) {
   try {
+    // 0. Rate limiting - prevent abuse of portal session creation
+    const clientIP = getClientIP(request);
+    const rateLimitResult = checkRateLimit(clientIP, strictLimiter);
+
+    if (!rateLimitResult.success) {
+      return rateLimitExceeded(rateLimitResult);
+    }
+
     // 1. Authenticate user
     const authContext = await getAuthenticatedContext(request);
 
@@ -78,32 +104,40 @@ export async function POST(request: NextRequest) {
     // 4. Create Stripe Customer Portal session
     const stripe = getStripeClient();
 
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com';
-    const returnUrl = `${origin}/dashboard/settings?tab=billing`;
+    // Validate origin to prevent open redirect attacks
+    const requestOrigin = request.headers.get('origin');
+    let returnOrigin = process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com';
+
+    if (requestOrigin && ALLOWED_ORIGINS.some(allowed => requestOrigin.startsWith(allowed))) {
+      returnOrigin = requestOrigin;
+    }
+
+    const returnUrl = `${returnOrigin}/dashboard/settings?tab=billing`;
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
       return_url: returnUrl,
     });
 
-    console.log('[Customer Portal] Session created for customer:', subscription.stripe_customer_id);
+    console.log('[Customer Portal] Session created for tenant:', tenantId);
 
     return NextResponse.json({
       url: portalSession.url,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Customer Portal] Error:', error);
 
-    // Handle specific Stripe errors
-    if (error.type === 'StripeInvalidRequestError') {
+    // Handle specific Stripe errors without exposing internal details
+    if (error instanceof Stripe.errors.StripeInvalidRequestError) {
       return NextResponse.json(
-        { error: 'Invalid customer. Please contact support.' },
+        { error: 'Error de configuración de facturación. Por favor contacta soporte.' },
         { status: 400 }
       );
     }
 
+    // Generic error - don't expose internal error messages
     return NextResponse.json(
-      { error: error.message || 'Failed to create portal session' },
+      { error: 'Error al crear la sesión del portal. Por favor intenta de nuevo.' },
       { status: 500 }
     );
   }

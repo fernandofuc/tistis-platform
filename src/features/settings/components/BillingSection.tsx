@@ -41,9 +41,12 @@ export function BillingSection() {
         throw new Error(data.error || 'Error al abrir el portal de facturación');
       }
 
-      // Redirect to Stripe Customer Portal
-      if (data.url) {
+      // Redirect to Stripe Customer Portal - validate URL is from Stripe
+      if (data.url && data.url.startsWith('https://billing.stripe.com/')) {
         window.location.href = data.url;
+      } else if (data.url) {
+        console.error('[BillingSection] Unexpected portal URL');
+        throw new Error('URL del portal no válida');
       }
     } catch (error: any) {
       console.error('[BillingSection] Portal error:', error);
