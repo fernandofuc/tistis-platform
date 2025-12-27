@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardContent, Button, Badge } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { useTenant } from '@/src/hooks/useTenant';
+import { supabase } from '@/src/shared/lib/supabase';
 
 export function BillingSection() {
   const router = useRouter();
@@ -30,9 +31,18 @@ export function BillingSection() {
     setPortalError(null);
 
     try {
+      // Get access token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No hay sesión activa. Por favor inicia sesión de nuevo.');
+      }
+
       const response = await fetch('/api/stripe/customer-portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
       });
 
       const data = await response.json();
