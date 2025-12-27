@@ -241,13 +241,13 @@ export function SecuritySection() {
           </div>
 
           {/* Active Sessions */}
-          <div className="pt-6 border-t border-gray-100 dark:border-gray-700">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-4">Sesiones Activas</h4>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="pt-6 border-t border-gray-100">
+            <h4 className="font-medium text-gray-900 mb-4">Sesiones Activas</h4>
+            <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">Esta sesión</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Navegador web - Activa ahora</p>
+                  <p className="font-medium text-gray-900">Esta sesión</p>
+                  <p className="text-sm text-gray-500">Navegador web - Activa ahora</p>
                 </div>
                 <Badge variant="success">Actual</Badge>
               </div>

@@ -11,7 +11,7 @@ import { cn } from '@/shared/utils';
 import { Avatar, Badge } from '@/shared/components/ui';
 import { useAuthContext } from '@/features/auth';
 import { useBranch } from '@/shared/stores';
-import { useNotifications, useGlobalSearch, useTheme, type SearchResult } from '@/shared/hooks';
+import { useNotifications, useGlobalSearch, type SearchResult } from '@/shared/hooks';
 import type { HeaderProps } from '../types';
 
 // ======================
@@ -91,16 +91,6 @@ const icons = {
   close: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  ),
-  sun: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  ),
-  moon: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
     </svg>
   ),
 };
@@ -194,7 +184,6 @@ export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
   const { staff, signOut } = useAuthContext();
   const { selectedBranch, branches, setSelectedBranchId } = useBranch();
-  const { resolvedTheme, toggleTheme } = useTheme();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -278,13 +267,13 @@ export function Header({ onMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-700/60">
+    <header className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-200/60">
       <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
         {/* Left: Mobile Menu + Search */}
         <div className="flex items-center gap-4">
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
           >
             {icons.menu}
           </button>
@@ -306,7 +295,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
                 placeholder="Buscar leads, citas, clientes..."
-                className="w-80 lg:w-96 pl-11 pr-12 py-2.5 bg-slate-100/70 dark:bg-slate-800/70 border-0 rounded-xl text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-slate-100/10 focus:bg-white dark:focus:bg-slate-800 transition-all"
+                className="w-80 lg:w-96 pl-11 pr-12 py-2.5 bg-slate-100/70 border-0 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:bg-white transition-all"
               />
               {searchQuery ? (
                 <button
@@ -446,7 +435,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative" ref={notificationsRef}>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              className="relative p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
             >
               {icons.bell}
               {unreadCount > 0 && (
@@ -568,20 +557,11 @@ export function Header({ onMenuClick }: HeaderProps) {
             )}
           </div>
 
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
-            title={resolvedTheme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-          >
-            {resolvedTheme === 'dark' ? icons.sun : icons.moon}
-          </button>
-
           {/* User Menu */}
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2.5 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              className="flex items-center gap-2.5 p-1.5 hover:bg-slate-100 rounded-xl transition-colors"
             >
               <Avatar
                 name={staff?.display_name || 'Usuario'}

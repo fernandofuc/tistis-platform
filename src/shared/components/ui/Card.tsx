@@ -17,9 +17,9 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 export const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ className, variant = 'default', padding = 'md', hover = true, children, ...props }, ref) => {
     const variantStyles = {
-      default: 'bg-white dark:bg-[#2f2f2f] shadow-card border border-slate-200/50 dark:border-[#404040]',
-      bordered: 'bg-white dark:bg-[#2f2f2f] border border-slate-200 dark:border-[#404040] shadow-card',
-      elevated: 'bg-white dark:bg-[#2f2f2f] shadow-card-elevated',
+      default: 'bg-white shadow-card border border-slate-200/50',
+      bordered: 'bg-white border border-slate-200 shadow-card',
+      elevated: 'bg-white shadow-card-elevated',
       premium: 'card-premium',
       hero: 'card-hero text-white',
     };
@@ -74,10 +74,10 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
       >
         <div>
           {title && (
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">{title}</h3>
+            <h3 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h3>
           )}
           {subtitle && (
-            <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
           )}
           {children}
         </div>
@@ -110,7 +110,7 @@ export const CardFooter = forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex items-center mt-4 pt-4 border-t border-slate-100 dark:border-[#404040]', className)}
+    className={cn('flex items-center mt-4 pt-4 border-t border-slate-100', className)}
     {...props}
   />
 ));

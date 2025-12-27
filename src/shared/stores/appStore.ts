@@ -14,7 +14,6 @@ interface AppState {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
   mobileMenuOpen: boolean;
-  theme: 'light' | 'dark' | 'system';
 
   // Branch Selection
   selectedBranchId: string | null;
@@ -34,7 +33,6 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setMobileMenuOpen: (open: boolean) => void;
-  setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setSelectedBranchId: (branchId: string | null) => void;
   setBranches: (branches: Branch[]) => void;
   setCurrentStaff: (staff: Staff | null) => void;
@@ -51,7 +49,6 @@ const initialState = {
   sidebarOpen: true,
   sidebarCollapsed: false,
   mobileMenuOpen: false,
-  theme: 'light' as const,
   selectedBranchId: null,
   branches: [],
   currentStaff: null,
@@ -73,8 +70,6 @@ export const useAppStore = create<AppState>()(
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
       setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
-
-      setTheme: (theme) => set({ theme }),
 
       setSelectedBranchId: (branchId) => set({ selectedBranchId: branchId }),
 
@@ -117,7 +112,6 @@ export const useAppStore = create<AppState>()(
       name: 'tistis-app-store',
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
-        theme: state.theme,
         selectedBranchId: state.selectedBranchId,
       }),
     }

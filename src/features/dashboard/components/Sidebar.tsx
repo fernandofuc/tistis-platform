@@ -274,13 +274,13 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen bg-white dark:bg-[#262626] border-r border-slate-200/80 dark:border-[#404040] transition-all duration-300 flex flex-col',
+        'fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200/80 transition-all duration-300 flex flex-col',
         collapsed ? 'w-20' : 'w-64'
       )}
     >
       {/* Logo TIS TIS - Links to landing page */}
       <div className={cn(
-        "h-16 flex items-center border-b border-slate-100/80 dark:border-[#404040] transition-all duration-300",
+        "h-16 flex items-center border-b border-slate-100/80 transition-all duration-300",
         collapsed ? "justify-center px-2" : "px-4"
       )}>
         <Link
@@ -309,7 +309,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
 
       {/* Plan badge - Premium styled */}
       {!collapsed && tenant?.plan && (
-        <div className="px-4 py-3 border-b border-slate-100/80 dark:border-[#404040]">
+        <div className="px-4 py-3 border-b border-slate-100/80">
           <span className={cn(
             'inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-lg',
             tenant.plan === 'growth' && 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-700 border border-purple-200/50',
@@ -322,7 +322,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       )}
 
       {/* Branch Selector - For multi-branch tenants */}
-      <div className="px-4 py-3 border-b border-slate-100/80 dark:border-[#404040]">
+      <div className="px-4 py-3 border-b border-slate-100/80">
         <BranchSelector collapsed={collapsed} />
       </div>
 
@@ -361,7 +361,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                         'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
                         isActive
                           ? 'bg-tis-coral/10 text-tis-coral font-medium'
-                          : 'text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#404040] hover:text-slate-900 dark:hover:text-white',
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
                         collapsed && 'justify-center px-2',
                         isPending && 'opacity-70 pointer-events-none'
                       )}
@@ -391,7 +391,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       </nav>
 
       {/* Bottom Section - Vertical indicator & Collapse */}
-      <div className="absolute bottom-0 left-0 right-0 border-t border-slate-100/80 dark:border-[#404040] bg-slate-50/50 dark:bg-[#1f1f1f]/50">
+      <div className="absolute bottom-0 left-0 right-0 border-t border-slate-100/80 bg-slate-50/50">
         {/* Vertical indicator (dental, restaurant, etc) */}
         {!collapsed && tenant?.vertical && (
           <div className="px-4 py-3">
@@ -409,7 +409,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
             onClick={() => handleCollapse(!collapsed)}
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-xl w-full',
-              'text-slate-400 hover:bg-slate-100 dark:hover:bg-[#404040] hover:text-slate-600 dark:hover:text-white transition-all duration-200',
+              'text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all duration-200',
               collapsed && 'justify-center px-2'
             )}
           >
