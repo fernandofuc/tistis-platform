@@ -269,12 +269,13 @@ export async function checkPhoneNumberLimit(tenantId: string): Promise<{
     };
   }
 
-  // 2. Contar números activos del tenant
+  // 2. Contar números del tenant (todos menos liberados)
+  // Incluye: active, pending, provisioning, suspended
   const { data: phoneNumbers, error: phoneError } = await supabase
     .from('voice_phone_numbers')
     .select('id')
     .eq('tenant_id', tenantId)
-    .in('status', ['active', 'pending', 'provisioning']); // Contar todos los no-liberados
+    .neq('status', 'released'); // Excluir solo los liberados
 
   if (phoneError) {
     console.error('[Voice Agent] Error counting phone numbers:', phoneError);
@@ -304,6 +305,9 @@ export async function checkPhoneNumberLimit(tenantId: string): Promise<{
 
 /**
  * Obtener números de teléfono del tenant
+ *
+ * IMPORTANTE: Solo retorna números NO liberados (active, pending, provisioning)
+ * Los números 'released' se excluyen para mantener consistencia con el límite
  */
 export async function getPhoneNumbers(tenantId: string): Promise<VoicePhoneNumber[]> {
   const supabase = createServerClient();
@@ -312,6 +316,7 @@ export async function getPhoneNumbers(tenantId: string): Promise<VoicePhoneNumbe
     .from('voice_phone_numbers')
     .select('*')
     .eq('tenant_id', tenantId)
+    .neq('status', 'released') // Excluir números liberados
     .order('created_at', { ascending: false });
 
   if (error) {

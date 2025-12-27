@@ -711,6 +711,8 @@ function PhoneNumbersTab({
       case 'active': return { label: 'Activo', color: 'text-tis-green', bgColor: 'bg-tis-green/10' };
       case 'pending': return { label: 'En proceso', color: 'text-amber-600', bgColor: 'bg-amber-50' };
       case 'provisioning': return { label: 'Configurando', color: 'text-blue-600', bgColor: 'bg-blue-50' };
+      case 'released': return { label: 'Liberado', color: 'text-slate-400', bgColor: 'bg-slate-100' };
+      case 'suspended': return { label: 'Suspendido', color: 'text-red-600', bgColor: 'bg-red-50' };
       default: return { label: 'Pendiente', color: 'text-slate-500', bgColor: 'bg-slate-100' };
     }
   };
