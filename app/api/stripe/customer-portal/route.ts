@@ -15,6 +15,7 @@ import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@
 const ALLOWED_ORIGINS = [
   'https://app.tistis.com',
   'https://tistis.com',
+  'https://tistis-platform-5fc5.vercel.app',
   process.env.NEXT_PUBLIC_URL,
 ].filter(Boolean) as string[];
 
