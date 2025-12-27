@@ -1,28 +1,12 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Routes that require authentication
-const protectedRoutes: string[] = ['/dashboard'];
-
-// Routes that should redirect to dashboard if already logged in
-const authRoutes = ['/auth/login', '/auth/signup'];
-
-// Routes that should bypass middleware completely
-const bypassRoutes = ['/auth/callback'];
-
+// SIMPLIFIED MIDDLEWARE - Let client-side handle auth redirects
+// This prevents RSC payload fetch issues in Safari
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
-  // CRITICAL: Bypass middleware for OAuth callback
-  if (bypassRoutes.some(route => pathname.startsWith(route))) {
-    return NextResponse.next();
-  }
-
-  // Create response early - this is important for cookie handling
-  let res = NextResponse.next({
-    request: { headers: req.headers },
-  });
+  // Create response
+  const res = NextResponse.next();
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -31,72 +15,35 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Track if cookies were modified
-  let cookiesModified = false;
-
+  // Only refresh the session - don't do any redirects in middleware
+  // Redirects in middleware cause RSC payload issues in Safari
   const supabase = createServerClient(
     supabaseUrl,
     supabaseAnonKey,
     {
       cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value;
+        getAll() {
+          return req.cookies.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          cookiesModified = true;
-          // Set on request for subsequent middleware/route handlers
-          req.cookies.set({ name, value, ...options });
-          // Set on response to send to browser
-          res.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookiesModified = true;
-          req.cookies.set({ name, value: '', ...options });
-          res.cookies.set({ name, value: '', ...options });
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            res.cookies.set(name, value, options);
+          });
         },
       },
     }
   );
 
-  // Use getUser() instead of getSession() - more secure and reliable
-  // getSession() is deprecated and can return stale data
-  const { data: { user }, error } = await supabase.auth.getUser();
-
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-  const isAuthRoute = authRoutes.some(route => pathname.startsWith(route));
-
-  // Redirect to login if accessing protected route without valid user
-  if (isProtectedRoute && (!user || error)) {
-    // Create redirect response and copy any cookies that were set
-    const redirectUrl = new URL('/auth/login', req.url);
-    const redirectRes = NextResponse.redirect(redirectUrl);
-
-    // Copy cookies from res to redirect response
-    res.cookies.getAll().forEach(cookie => {
-      redirectRes.cookies.set(cookie);
-    });
-
-    return redirectRes;
-  }
-
-  // Redirect to dashboard if accessing auth routes while logged in
-  if (isAuthRoute && user && !error) {
-    const redirectUrl = new URL('/dashboard', req.url);
-    const redirectRes = NextResponse.redirect(redirectUrl);
-
-    // Copy cookies from res to redirect response
-    res.cookies.getAll().forEach(cookie => {
-      redirectRes.cookies.set(cookie);
-    });
-
-    return redirectRes;
-  }
+  // Just refresh the session to keep it alive
+  // Auth protection is handled client-side in ProtectedRoute component
+  await supabase.auth.getUser();
 
   return res;
 }
 
 export const config = {
   matcher: [
+    // Match all routes except static files and API routes
     '/((?!_next/static|_next/image|favicon.ico|public|api|.*\\..*$).*)',
   ],
 };
