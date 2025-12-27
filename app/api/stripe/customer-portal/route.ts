@@ -50,19 +50,77 @@ export async function POST(request: NextRequest) {
       return createAuthErrorResponse(authContext);
     }
 
-    const { client: supabase, tenantId } = authContext;
+    const { client: supabase, tenantId, user } = authContext;
 
-    // 2. Get tenant - check if it has stripe_customer_id directly
-    const { data: tenant, error: tenantError } = await supabase
+    console.log('[Customer Portal] Looking for tenant:', tenantId, 'user:', user.id);
+
+    // 2. Get tenant with linked client info
+    let tenant: { id: string; name: string; client_id: string | null } | null = null;
+
+    const { data: tenantData, error: tenantError } = await supabase
       .from('tenants')
-      .select('id, name, stripe_customer_id')
+      .select('id, name, client_id')
       .eq('id', tenantId)
       .single();
 
-    if (tenantError || !tenant) {
-      console.error('[Customer Portal] Tenant not found:', tenantError);
+    if (tenantData) {
+      tenant = tenantData;
+      console.log('[Customer Portal] Found tenant directly:', tenant.id);
+    }
+
+    // Fallback: If tenant not found by tenantId, try to find via staff -> tenant
+    if (!tenant) {
+      console.log('[Customer Portal] Tenant not found by ID, trying staff lookup...');
+
+      const { data: staffData } = await supabase
+        .from('staff')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (staffData?.tenant_id) {
+        const { data: tenantFromStaff } = await supabase
+          .from('tenants')
+          .select('id, name, client_id')
+          .eq('id', staffData.tenant_id)
+          .single();
+
+        if (tenantFromStaff) {
+          tenant = tenantFromStaff;
+          console.log('[Customer Portal] Found tenant via staff:', tenant.id);
+        }
+      }
+    }
+
+    // Fallback 2: Try via clients table where user_id matches
+    if (!tenant && user.id) {
+      console.log('[Customer Portal] Trying client lookup by user_id...');
+
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('id, tenant_id, stripe_customer_id, business_name')
+        .eq('user_id', user.id)
+        .single();
+
+      if (clientData?.tenant_id) {
+        const { data: tenantFromClient } = await supabase
+          .from('tenants')
+          .select('id, name, client_id')
+          .eq('id', clientData.tenant_id)
+          .single();
+
+        if (tenantFromClient) {
+          tenant = tenantFromClient;
+          console.log('[Customer Portal] Found tenant via client.tenant_id:', tenant.id);
+        }
+      }
+    }
+
+    if (!tenant) {
+      console.error('[Customer Portal] Tenant not found for user:', user.id, 'tenantId:', tenantId, 'error:', tenantError);
       return NextResponse.json(
-        { error: 'Tenant not found' },
+        { error: 'No se encontró información del tenant. Por favor contacta soporte.' },
         { status: 404 }
       );
     }
@@ -70,18 +128,40 @@ export async function POST(request: NextRequest) {
     // 3. Find stripe_customer_id - try multiple sources
     let stripeCustomerId: string | null = null;
 
-    // Strategy 1: Check tenant.stripe_customer_id directly
-    if (tenant.stripe_customer_id) {
-      stripeCustomerId = tenant.stripe_customer_id;
-      console.log('[Customer Portal] Found stripe_customer_id in tenant');
+    // Strategy 1: Check via tenant.client_id -> clients.stripe_customer_id
+    if (tenant.client_id) {
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('stripe_customer_id')
+        .eq('id', tenant.client_id)
+        .single();
+
+      if (clientData?.stripe_customer_id) {
+        stripeCustomerId = clientData.stripe_customer_id;
+        console.log('[Customer Portal] Found stripe_customer_id via tenant.client_id');
+      }
     }
 
-    // Strategy 2: Check subscriptions table via client
+    // Strategy 2: Check clients table by tenant_id (reverse lookup)
+    if (!stripeCustomerId) {
+      const { data: clientByTenant } = await supabase
+        .from('clients')
+        .select('id, stripe_customer_id')
+        .eq('tenant_id', tenant.id)
+        .single();
+
+      if (clientByTenant?.stripe_customer_id) {
+        stripeCustomerId = clientByTenant.stripe_customer_id;
+        console.log('[Customer Portal] Found stripe_customer_id via clients.tenant_id');
+      }
+    }
+
+    // Strategy 3: Check subscriptions table via client
     if (!stripeCustomerId) {
       const { data: client } = await supabase
         .from('clients')
         .select('id')
-        .eq('tenant_id', tenantId)
+        .eq('tenant_id', tenant.id)
         .single();
 
       if (client) {
@@ -96,17 +176,31 @@ export async function POST(request: NextRequest) {
 
         if (subscription?.stripe_customer_id) {
           stripeCustomerId = subscription.stripe_customer_id;
-          console.log('[Customer Portal] Found stripe_customer_id in subscriptions');
+          console.log('[Customer Portal] Found stripe_customer_id in subscriptions via client');
         }
       }
     }
 
-    // Strategy 3: Check subscriptions table directly by tenant_id
+    // Strategy 4: Check clients table by user_id directly
+    if (!stripeCustomerId && user.id) {
+      const { data: clientByUser } = await supabase
+        .from('clients')
+        .select('stripe_customer_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (clientByUser?.stripe_customer_id) {
+        stripeCustomerId = clientByUser.stripe_customer_id;
+        console.log('[Customer Portal] Found stripe_customer_id via clients.user_id');
+      }
+    }
+
+    // Strategy 5: Check subscriptions table directly by tenant_id
     if (!stripeCustomerId) {
       const { data: subByTenant } = await supabase
         .from('subscriptions')
         .select('stripe_customer_id, status')
-        .eq('tenant_id', tenantId)
+        .eq('tenant_id', tenant.id)
         .in('status', ['active', 'past_due', 'trialing'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -119,9 +213,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (!stripeCustomerId) {
-      console.error('[Customer Portal] No stripe_customer_id found for tenant:', tenantId);
+      console.error('[Customer Portal] No stripe_customer_id found for tenant:', tenant.id, 'user:', user.id);
       return NextResponse.json(
-        { error: 'No active subscription found. Please contact support.' },
+        { error: 'No se encontró información de facturación. Por favor contacta soporte.' },
         { status: 404 }
       );
     }
@@ -144,7 +238,7 @@ export async function POST(request: NextRequest) {
       return_url: returnUrl,
     });
 
-    console.log('[Customer Portal] Session created for tenant:', tenantId);
+    console.log('[Customer Portal] Session created for tenant:', tenant.id, 'stripeCustomerId:', stripeCustomerId);
 
     return NextResponse.json({
       url: portalSession.url,
