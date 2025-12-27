@@ -13,8 +13,8 @@ import { rateLimit, RATE_LIMIT_PRESETS, createRateLimitResponse, getClientIdenti
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting to prevent abuse (trial activation is sensitive)
-    const clientId = getClientIdentifier(request);
-    const rateLimitResult = rateLimit(`activate-trial:${clientId}`, RATE_LIMIT_PRESETS.auth);
+    const rateLimitKey = getClientIdentifier(request);
+    const rateLimitResult = rateLimit(`activate-trial:${rateLimitKey}`, RATE_LIMIT_PRESETS.auth);
     if (!rateLimitResult.success) {
       return createRateLimitResponse(rateLimitResult);
     }

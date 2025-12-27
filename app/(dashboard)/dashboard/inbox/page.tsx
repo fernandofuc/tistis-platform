@@ -127,10 +127,10 @@ export default function InboxPage() {
       const newMessage: Message = {
         id: result.message_id,
         conversation_id: selectedConversation.id,
-        sender_type: 'staff',
+        role: 'assistant', // Staff messages appear as assistant role
         content,
-        message_type: 'text',
-        status: 'sent',
+        channel_message_id: null,
+        metadata: { sent_by: 'staff' },
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, newMessage]);
