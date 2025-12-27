@@ -3,41 +3,36 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Routes that require authentication
-// Using @supabase/ssr cookie-based auth for server-side session validation
 const protectedRoutes: string[] = ['/dashboard'];
 
 // Routes that should redirect to dashboard if already logged in
 const authRoutes = ['/auth/login', '/auth/signup'];
 
-// Routes that should bypass middleware (OAuth callbacks, etc)
+// Routes that should bypass middleware completely
 const bypassRoutes = ['/auth/callback'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // CRITICAL: Bypass middleware for OAuth callback to allow session exchange
-  const isBypassRoute = bypassRoutes.some(route =>
-    pathname.startsWith(route)
-  );
-
-  if (isBypassRoute) {
-    console.log('🟡 Middleware: Bypassing auth check for callback route:', pathname);
+  // CRITICAL: Bypass middleware for OAuth callback
+  if (bypassRoutes.some(route => pathname.startsWith(route))) {
     return NextResponse.next();
   }
 
+  // Create response early - this is important for cookie handling
   let res = NextResponse.next({
-    request: {
-      headers: req.headers,
-    },
+    request: { headers: req.headers },
   });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Skip auth check if env vars not available
   if (!supabaseUrl || !supabaseAnonKey) {
     return res;
   }
+
+  // Track if cookies were modified
+  let cookiesModified = false;
 
   const supabase = createServerClient(
     supabaseUrl,
@@ -48,74 +43,53 @@ export async function middleware(req: NextRequest) {
           return req.cookies.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          req.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-          res = NextResponse.next({
-            request: {
-              headers: req.headers,
-            },
-          });
-          res.cookies.set({
-            name,
-            value,
-            ...options,
-          });
+          cookiesModified = true;
+          // Set on request for subsequent middleware/route handlers
+          req.cookies.set({ name, value, ...options });
+          // Set on response to send to browser
+          res.cookies.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
-          req.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-          res = NextResponse.next({
-            request: {
-              headers: req.headers,
-            },
-          });
-          res.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
+          cookiesModified = true;
+          req.cookies.set({ name, value: '', ...options });
+          res.cookies.set({ name, value: '', ...options });
         },
       },
     }
   );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // Use getUser() instead of getSession() - more secure and reliable
+  // getSession() is deprecated and can return stale data
+  const { data: { user }, error } = await supabase.auth.getUser();
 
-  // Check if it's a protected route
-  const isProtectedRoute = protectedRoutes.some(route =>
-    pathname.startsWith(route)
-  );
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  const isAuthRoute = authRoutes.some(route => pathname.startsWith(route));
 
-  // Check if it's an auth route
-  const isAuthRoute = authRoutes.some(route =>
-    pathname.startsWith(route)
-  );
+  // Redirect to login if accessing protected route without valid user
+  if (isProtectedRoute && (!user || error)) {
+    // Create redirect response and copy any cookies that were set
+    const redirectUrl = new URL('/auth/login', req.url);
+    const redirectRes = NextResponse.redirect(redirectUrl);
 
-  // Debug logging for dashboard access (redacted for production)
-  if (isProtectedRoute && process.env.NODE_ENV === 'development') {
-    console.log('🔐 Middleware: Protected route access:', {
-      pathname,
-      hasSession: !!session,
+    // Copy cookies from res to redirect response
+    res.cookies.getAll().forEach(cookie => {
+      redirectRes.cookies.set(cookie);
     });
-  }
 
-  // Redirect to login if accessing protected route without session
-  if (isProtectedRoute && !session) {
-    console.log('🔴 Middleware: No session, redirecting to login');
-    return NextResponse.redirect(new URL('/auth/login', req.url));
+    return redirectRes;
   }
 
   // Redirect to dashboard if accessing auth routes while logged in
-  if (isAuthRoute && session) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+  if (isAuthRoute && user && !error) {
+    const redirectUrl = new URL('/dashboard', req.url);
+    const redirectRes = NextResponse.redirect(redirectUrl);
+
+    // Copy cookies from res to redirect response
+    res.cookies.getAll().forEach(cookie => {
+      redirectRes.cookies.set(cookie);
+    });
+
+    return redirectRes;
   }
 
   return res;
