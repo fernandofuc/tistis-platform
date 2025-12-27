@@ -198,11 +198,13 @@ export async function createAssistant(
     firstMessage: request.firstMessage,
     firstMessageMode: request.firstMessageMode || 'assistant-speaks-first',
 
-    // Transcriber (Deepgram por defecto - español)
+    // Transcriber (Deepgram - Multi-language con español principal)
+    // Usa detección automática para soportar inglés y otros idiomas
     transcriber: request.transcriber || {
       provider: 'deepgram',
       model: 'nova-2',
-      language: 'es',
+      language: 'multi', // Auto-detect: soporta español, inglés y más
+      keywords: ['cita:2', 'appointment:2', 'agendar:2', 'reservar:2'], // Boost keywords
     },
 
     // Voice (ElevenLabs - Javier por defecto)
@@ -225,7 +227,7 @@ export async function createAssistant(
       onNoPunctuationSeconds: 1.2,
     },
 
-    // Frases de fin de llamada (español)
+    // Frases de fin de llamada (español + inglés)
     endCallPhrases: request.endCallPhrases || [
       'adiós',
       'hasta luego',
@@ -233,6 +235,10 @@ export async function createAssistant(
       'chao',
       'eso es todo',
       'gracias, eso es todo',
+      'goodbye',
+      'that is all',
+      'thank you, goodbye',
+      'thanks, bye',
     ],
 
     recordingEnabled: request.recordingEnabled ?? true,
