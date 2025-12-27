@@ -15,13 +15,24 @@
   --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   --font-body: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
 
-  /* TIS TIS Brand Colors */
+  /* TIS TIS Brand Colors (same for both modes) */
   --tis-coral: rgb(223, 115, 115);
   --tis-pink: rgb(194, 51, 80);
   --tis-green: #9DB8A1;
   --tis-purple: #667eea;
 
-  /* Neutral Colors */
+  /* Light Mode Colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
+  --border-primary: #e2e8f0;
+  --border-secondary: rgba(226, 232, 240, 0.5);
+
+  /* Neutral Colors (legacy) */
   --slate-50: #f8fafc;
   --slate-100: #f1f5f9;
   --slate-200: #e2e8f0;
@@ -35,15 +46,51 @@
   --card-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
 }
 
+/* ==============================================
+   Dark Mode - Claude-style Gray Background
+   TIS TIS accent colors preserved
+   ============================================== */
+.dark {
+  /* Dark Mode Colors - Claude-inspired gray palette */
+  --bg-primary: #2f2f2f;
+  --bg-secondary: #262626;
+  --bg-tertiary: #1f1f1f;
+  --text-primary: #ececec;
+  --text-secondary: #a8a8a8;
+  --text-muted: #8e8e8e;
+  --text-disabled: #6e6e6e;
+  --border-primary: #404040;
+  --border-secondary: rgba(64, 64, 64, 0.5);
+
+  /* Override neutrals for dark mode */
+  --slate-50: #2f2f2f;
+  --slate-100: #262626;
+  --slate-200: #404040;
+  --slate-400: #8e8e8e;
+  --slate-500: #a8a8a8;
+  --slate-600: #c4c4c4;
+  --slate-900: #ececec;
+
+  /* Dark mode gradients */
+  --bg-gradient: linear-gradient(135deg, #1f1f1f 0%, #2f2f2f 50%, rgba(194,51,80,0.05) 100%);
+}
+
 body {
   font-family: var(--font-body);
   font-optical-sizing: auto;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-  color: var(--slate-900);
+  color: var(--text-primary);
   background: var(--bg-gradient);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark mode body overrides */
+.dark body,
+html.dark body {
+  background: var(--bg-gradient);
+  color: var(--text-primary);
 }
 
 /* ==============================================
@@ -96,15 +143,23 @@ body {
      ============================================== */
 
   .card-premium {
-    @apply bg-white rounded-2xl;
-    border: 1px solid rgba(226, 232, 240, 0.5);
+    @apply bg-white dark:bg-[#2f2f2f] rounded-2xl;
+    border: 1px solid var(--border-secondary);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02), 0 4px 8px rgba(0, 0, 0, 0.02);
     transition: all 0.2s ease;
+  }
+
+  .dark .card-premium {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1);
   }
 
   .card-premium:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
     transform: translateY(-1px);
+  }
+
+  .dark .card-premium:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.15);
   }
 
   /* Hero Card (dark gradient) */
@@ -156,9 +211,9 @@ body {
   .skeleton {
     background: linear-gradient(
       90deg,
-      var(--slate-100) 25%,
-      var(--slate-200) 50%,
-      var(--slate-100) 75%
+      var(--bg-tertiary) 25%,
+      var(--border-primary) 50%,
+      var(--bg-tertiary) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
@@ -187,8 +242,8 @@ body {
      ============================================== */
 
   .bottom-nav {
-    @apply bg-white/95 backdrop-blur-lg;
-    border-top: 1px solid rgba(226, 232, 240, 0.5);
+    @apply bg-white/95 dark:bg-[#2f2f2f]/95 backdrop-blur-lg;
+    border-top: 1px solid var(--border-secondary);
   }
 
   .bottom-nav-item {

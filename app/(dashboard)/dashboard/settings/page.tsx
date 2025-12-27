@@ -13,6 +13,7 @@ import {
   AIConfiguration,
   SecuritySection,
   PaymentsSection,
+  BillingSection,
   fetchNotificationPreferences,
   updateNotificationPreferences,
   type NotificationPreferences,
@@ -68,12 +69,17 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
     </svg>
   ),
+  billing: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  ),
 };
 
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'payments' | 'security';
+type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'payments' | 'billing' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
@@ -81,6 +87,7 @@ const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'ai', label: 'AI Agent', icon: icons.ai },
   { key: 'payments', label: 'Pagos', icon: icons.payments },
   { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
+  { key: 'billing', label: 'Facturación', icon: icons.billing },
   { key: 'security', label: 'Seguridad', icon: icons.lock },
 ];
 
@@ -260,11 +267,11 @@ export default function SettingsPage() {
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
                       activeTab === tab.key
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        ? 'bg-tis-coral/10 text-tis-coral dark:bg-tis-coral/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#404040] hover:text-gray-900 dark:hover:text-white'
                     )}
                   >
-                    <span className={cn(activeTab === tab.key && 'text-blue-600')}>
+                    <span className={cn(activeTab === tab.key && 'text-tis-coral')}>
                       {tab.icon}
                     </span>
                     <span className="font-medium text-sm">{tab.label}</span>
@@ -644,6 +651,11 @@ export default function SettingsPage() {
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <PaymentsSection />
+          )}
+
+          {/* Billing Tab */}
+          {activeTab === 'billing' && (
+            <BillingSection />
           )}
 
           {/* Security Tab */}

@@ -30,7 +30,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <NavigationProgress />
         </Suspense>
 
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 dark:bg-[#1f1f1f]">
           {/* Desktop Sidebar */}
           <div className="hidden lg:block">
             <Sidebar />
@@ -82,8 +82,8 @@ export function PageWrapper({ title, subtitle, actions, children }: PageWrapperP
       {/* Page Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-          {subtitle && <p className="text-gray-500 mt-1">{subtitle}</p>}
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h1>
+          {subtitle && <p className="text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
         </div>
         {actions && <div className="flex items-center gap-3">{actions}</div>}
       </div>

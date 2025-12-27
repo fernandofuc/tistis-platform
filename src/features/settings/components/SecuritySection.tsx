@@ -6,14 +6,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardContent, Button, Input, Badge } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 
 export function SecuritySection() {
-  const router = useRouter();
-  const { user, staff } = useAuthContext();
+  const { user } = useAuthContext();
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -140,9 +138,6 @@ export function SecuritySection() {
     }
   };
 
-  // Check if user is owner (can manage subscription)
-  const isOwner = staff?.role === 'owner';
-
   return (
     <Card variant="bordered">
       <CardHeader title="Seguridad" subtitle="Protege tu cuenta" />
@@ -246,51 +241,18 @@ export function SecuritySection() {
           </div>
 
           {/* Active Sessions */}
-          <div className="pt-6 border-t border-gray-100">
-            <h4 className="font-medium text-gray-900 mb-4">Sesiones Activas</h4>
-            <div className="p-4 bg-gray-50 rounded-lg">
+          <div className="pt-6 border-t border-gray-100 dark:border-gray-700">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-4">Sesiones Activas</h4>
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">Esta sesión</p>
-                  <p className="text-sm text-gray-500">Navegador web - Activa ahora</p>
+                  <p className="font-medium text-gray-900 dark:text-white">Esta sesión</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Navegador web - Activa ahora</p>
                 </div>
                 <Badge variant="success">Actual</Badge>
               </div>
             </div>
           </div>
-
-          {/* Subscription Management - Only for Owners */}
-          {isOwner && (
-            <div className="pt-6 border-t border-gray-100">
-              <h4 className="font-medium text-gray-900 mb-2">Gestión de Suscripción</h4>
-              <p className="text-sm text-gray-500 mb-4">
-                Administra tu plan y facturación.
-              </p>
-
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/dashboard/settings/subscription')}
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Cambiar Plan
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => router.push('/dashboard/settings/cancel-subscription')}
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Cancelar Suscripción
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>
