@@ -52,10 +52,10 @@ export async function POST(request: NextRequest) {
 
     const { client: supabase, tenantId } = authContext;
 
-    // 2. Get tenant to find stripe_customer_id
+    // 2. Get tenant - check if it has stripe_customer_id directly
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('id, name')
+      .select('id, name, stripe_customer_id')
       .eq('id', tenantId)
       .single();
 
@@ -67,34 +67,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Find subscription with stripe_customer_id for this tenant
-    // First get client_id from tenant
-    const { data: client } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .single();
+    // 3. Find stripe_customer_id - try multiple sources
+    let stripeCustomerId: string | null = null;
 
-    if (!client) {
-      console.error('[Customer Portal] Client not found for tenant:', tenantId);
-      return NextResponse.json(
-        { error: 'No client associated with this tenant' },
-        { status: 404 }
-      );
+    // Strategy 1: Check tenant.stripe_customer_id directly
+    if (tenant.stripe_customer_id) {
+      stripeCustomerId = tenant.stripe_customer_id;
+      console.log('[Customer Portal] Found stripe_customer_id in tenant');
     }
 
-    // Get subscription with stripe_customer_id
-    const { data: subscription, error: subError } = await supabase
-      .from('subscriptions')
-      .select('stripe_customer_id, status')
-      .eq('client_id', client.id)
-      .in('status', ['active', 'past_due', 'trialing'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Strategy 2: Check subscriptions table via client
+    if (!stripeCustomerId) {
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .single();
 
-    if (subError || !subscription?.stripe_customer_id) {
-      console.error('[Customer Portal] No active subscription found:', subError);
+      if (client) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('stripe_customer_id, status')
+          .eq('client_id', client.id)
+          .in('status', ['active', 'past_due', 'trialing'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (subscription?.stripe_customer_id) {
+          stripeCustomerId = subscription.stripe_customer_id;
+          console.log('[Customer Portal] Found stripe_customer_id in subscriptions');
+        }
+      }
+    }
+
+    // Strategy 3: Check subscriptions table directly by tenant_id
+    if (!stripeCustomerId) {
+      const { data: subByTenant } = await supabase
+        .from('subscriptions')
+        .select('stripe_customer_id, status')
+        .eq('tenant_id', tenantId)
+        .in('status', ['active', 'past_due', 'trialing'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (subByTenant?.stripe_customer_id) {
+        stripeCustomerId = subByTenant.stripe_customer_id;
+        console.log('[Customer Portal] Found stripe_customer_id in subscriptions by tenant_id');
+      }
+    }
+
+    if (!stripeCustomerId) {
+      console.error('[Customer Portal] No stripe_customer_id found for tenant:', tenantId);
       return NextResponse.json(
         { error: 'No active subscription found. Please contact support.' },
         { status: 404 }
@@ -115,7 +140,7 @@ export async function POST(request: NextRequest) {
     const returnUrl = `${returnOrigin}/dashboard/settings?tab=billing`;
 
     const portalSession = await stripe.billingPortal.sessions.create({
-      customer: subscription.stripe_customer_id,
+      customer: stripeCustomerId,
       return_url: returnUrl,
     });
 
