@@ -92,9 +92,57 @@ export default function InboxPage() {
   const [selectedConversation, setSelectedConversation] = useState<ConversationWithLead | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState('');
+  const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'escalated'>('all');
   const [channelFilter, setChannelFilter] = useState<ChannelFilterType>('all');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Send message function
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedConversation || sending) return;
+
+    const content = messageText.trim();
+    setMessageText('');
+    setSending(true);
+
+    try {
+      const response = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: selectedConversation.id,
+          content,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('[Inbox] Failed to send message:', result.error);
+        setMessageText(content); // Restore message on error
+        return;
+      }
+
+      // Add message to local state immediately
+      const newMessage: Message = {
+        id: result.message_id,
+        conversation_id: selectedConversation.id,
+        sender_type: 'staff',
+        content,
+        message_type: 'text',
+        status: 'sent',
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, newMessage]);
+
+      console.log('[Inbox] Message sent:', result.message_id);
+    } catch (error) {
+      console.error('[Inbox] Error sending message:', error);
+      setMessageText(content); // Restore message on error
+    } finally {
+      setSending(false);
+    }
+  };
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -514,22 +562,29 @@ export default function InboxPage() {
                     placeholder="Escribe un mensaje..."
                     className="flex-1 px-2 py-1 text-[15px] text-slate-700 placeholder:text-slate-400 bg-transparent border-none focus:outline-none"
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && messageText.trim()) {
+                      if (e.key === 'Enter' && !e.shiftKey && messageText.trim() && !sending) {
                         e.preventDefault();
-                        // TODO: Send message
+                        handleSendMessage();
                       }
                     }}
+                    disabled={sending}
                   />
                   <button
-                    disabled={!messageText.trim()}
+                    onClick={handleSendMessage}
+                    disabled={!messageText.trim() || sending}
                     className={cn(
                       'p-2.5 rounded-xl transition-all duration-200',
-                      messageText.trim()
+                      messageText.trim() && !sending
                         ? 'bg-tis-coral text-white hover:bg-tis-pink shadow-sm'
                         : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                     )}
                   >
-                    {icons.send}
+                    {sending ? (
+                      <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    ) : icons.send}
                   </button>
                 </div>
               </div>

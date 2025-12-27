@@ -1,9 +1,45 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+// This endpoint is for development debugging only
+// Protected by ADMIN_API_KEY in production (timing-safe)
+function verifyAdminKey(request: NextRequest): boolean {
+  const adminKey = request.headers.get('x-admin-key');
+  const expectedKey = process.env.ADMIN_API_KEY;
+
+  if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+    // Allow in development for debugging
+    return true;
+  }
+
+  if (!adminKey) {
+    return false;
+  }
+
+  try {
+    const keyBuffer = Buffer.from(adminKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(keyBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
+
+export async function GET(request: NextRequest) {
+  // Block in production without admin key
+  if (!verifyAdminKey(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   // Extract project ref from URL
@@ -15,20 +51,17 @@ export async function GET() {
     }
   }
 
+  // SECURITY: Only show configuration status, not actual values
   const diagnostics = {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
     supabase: {
       hasUrl: !!supabaseUrl,
-      urlPreview: supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : null,
       projectRef: projectRef,
       expectedCallback: supabaseUrl ? `${supabaseUrl}/auth/v1/callback` : null,
     },
     keys: {
       hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      anonKeyPreview: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        ? `${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.substring(0, 20)}...`
-        : null,
       hasServiceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     },
     instructions: {

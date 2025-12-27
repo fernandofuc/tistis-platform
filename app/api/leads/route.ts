@@ -5,30 +5,84 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+// Get authenticated context with tenant validation
+async function getAuthenticatedContext(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { error: 'Authentication required', status: 401 };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: 'Invalid or expired token', status: 401 };
+  }
+
+  const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+  const { data: userRole, error: roleError } = await serviceClient
+    .from('user_roles')
+    .select('tenant_id, role')
+    .eq('user_id', user.id)
+    .single();
+
+  if (roleError || !userRole) {
+    return { error: 'User has no assigned role', status: 403 };
+  }
+
+  return {
+    client: serviceClient,
+    user,
+    tenantId: userRole.tenant_id,
+    role: userRole.role,
+  };
+}
 
 // ======================
 // GET - Fetch leads
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if ('error' in authContext) {
+      return NextResponse.json(
+        { error: authContext.error },
+        { status: authContext.status }
+      );
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { searchParams } = new URL(request.url);
 
-    // Parse query params
+    // Parse query params with security limits
     const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
+    const pageSize = Math.min(parseInt(searchParams.get('pageSize') || '20'), 100); // Max 100
     const classification = searchParams.get('classification');
     const status = searchParams.get('status');
     const search = searchParams.get('search');
-    const sortBy = searchParams.get('sortBy') || 'score';
+
+    // Allowlist of valid sort columns (prevent SQL injection)
+    const ALLOWED_SORT_COLUMNS = ['score', 'created_at', 'status', 'classification', 'first_name', 'last_name', 'full_name', 'updated_at'];
+    const requestedSortBy = searchParams.get('sortBy') || 'score';
+    const sortBy = ALLOWED_SORT_COLUMNS.includes(requestedSortBy) ? requestedSortBy : 'score';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
-    // Build query
+    // Build query - use authenticated user's tenant
     let query = supabase
       .from('leads')
       .select('*, branches(name, city)', { count: 'exact' })
-      .eq('tenant_id', DEFAULT_TENANT_ID);
+      .eq('tenant_id', tenantId);
 
     // Apply filters
     if (classification) {
@@ -38,9 +92,12 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
     if (search) {
+      // Sanitize search input to prevent PostgREST filter injection
+      // Escape special characters used in PostgREST patterns
+      const sanitizedSearch = search.replace(/[%_*\\]/g, '\\$&');
       // Use * wildcard for more reliable PostgREST pattern matching
       // Search in full_name, first_name, last_name (not "name" which doesn't exist)
-      const pattern = `*${search}*`;
+      const pattern = `*${sanitizedSearch}*`;
       query = query.or(`full_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern},phone.ilike.${pattern},email.ilike.${pattern}`);
     }
 
@@ -57,7 +114,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error fetching leads:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to fetch leads' },
         { status: 500 }
       );
     }
@@ -85,7 +142,16 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if ('error' in authContext) {
+      return NextResponse.json(
+        { error: authContext.error },
+        { status: authContext.status }
+      );
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const body = await request.json();
 
     // Validate required fields
@@ -104,11 +170,11 @@ export async function POST(request: NextRequest) {
       normalizedPhone = `+${normalizedPhone}`;
     }
 
-    // Check if lead exists
+    // Check if lead exists in this tenant
     const { data: existingLead } = await supabase
       .from('leads')
       .select('id')
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('phone_normalized', normalizedPhone)
       .single();
 
@@ -125,9 +191,9 @@ export async function POST(request: NextRequest) {
     const firstName = nameParts[0] || null;
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
 
-    // Create lead
+    // Create lead with authenticated user's tenant
     const leadData = {
-      tenant_id: DEFAULT_TENANT_ID,
+      tenant_id: tenantId,
       phone: body.phone,
       phone_normalized: normalizedPhone,
       first_name: body.first_name || firstName,
@@ -153,7 +219,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error creating lead:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to create lead' },
         { status: 500 }
       );
     }

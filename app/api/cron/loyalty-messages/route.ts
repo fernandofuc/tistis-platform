@@ -4,6 +4,7 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import {
   processExpiringMemberships,
   processInactivePatients,
@@ -12,17 +13,35 @@ import {
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
 
-// Verify cron secret for security
+// Verify cron secret for security (timing-safe)
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Loyalty Cron] CRON_SECRET not set in production');
+      return false;
+    }
     console.warn('[Loyalty Cron] CRON_SECRET not set');
     return true; // Allow in development
   }
 
-  return authHeader === `Bearer ${cronSecret}`;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+
+  const token = authHeader.substring(7);
+  try {
+    const tokenBuffer = Buffer.from(token);
+    const secretBuffer = Buffer.from(cronSecret);
+    if (tokenBuffer.length !== secretBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(tokenBuffer, secretBuffer);
+  } catch {
+    return false;
+  }
 }
 
 export async function GET(request: NextRequest) {

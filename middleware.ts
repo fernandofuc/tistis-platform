@@ -3,10 +3,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Routes that require authentication
-// TEMPORARILY DISABLED - Let client-side ProtectedRoute handle auth
-// The middleware can't read the session properly when using localStorage
-// TODO: Implement proper @supabase/ssr cookie-based auth
-const protectedRoutes: string[] = []; // Was: ['/dashboard']
+// Using @supabase/ssr cookie-based auth for server-side session validation
+const protectedRoutes: string[] = ['/dashboard'];
 
 // Routes that should redirect to dashboard if already logged in
 const authRoutes = ['/auth/login', '/auth/signup'];
@@ -101,13 +99,11 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith(route)
   );
 
-  // Debug logging for dashboard access
-  if (isProtectedRoute) {
+  // Debug logging for dashboard access (redacted for production)
+  if (isProtectedRoute && process.env.NODE_ENV === 'development') {
     console.log('🔐 Middleware: Protected route access:', {
       pathname,
       hasSession: !!session,
-      userId: session?.user?.id,
-      email: session?.user?.email,
     });
   }
 

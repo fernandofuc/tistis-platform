@@ -10,6 +10,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PromptGeneratorService } from '@/src/features/ai/services/prompt-generator.service';
+import {
+  checkRateLimit,
+  getClientIP,
+  aiLimiter,
+  rateLimitExceeded,
+} from '@/src/shared/lib/rate-limit';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -66,6 +72,14 @@ async function getUserContext(supabase: ReturnType<typeof createAuthenticatedCli
 // POST - Generate and cache voice agent prompt
 // ======================
 export async function POST(request: NextRequest) {
+  // Rate limiting: prevent abuse of OpenAI API (20 per minute per IP)
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, aiLimiter);
+
+  if (!rateLimitResult.success) {
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   try {
     const accessToken = getAccessToken(request);
     if (!accessToken) {

@@ -324,7 +324,7 @@ export async function findOrCreateLead(
     throw new Error(`Failed to create lead: ${error.message}`);
   }
 
-  console.log(`[WhatsApp] New lead created: ${newLead.id} (${phoneNormalized})`);
+  console.log(`[WhatsApp] New lead created: ${newLead.id}`);
   return { ...newLead, isNew: true };
 }
 

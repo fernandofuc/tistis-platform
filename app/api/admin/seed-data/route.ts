@@ -3,6 +3,7 @@
  *
  * Este endpoint crea datos de ejemplo para un tenant específico.
  * Uso: POST /api/admin/seed-data
+ * Headers: x-admin-key: <ADMIN_API_KEY>
  * Body: { tenant_id: string }
  */
 
@@ -10,6 +11,36 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
+
+// Verify admin API key (timing-safe)
+function verifyAdminKey(request: NextRequest): boolean {
+  const adminKey = request.headers.get('x-admin-key');
+  const expectedKey = process.env.ADMIN_API_KEY;
+
+  if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Admin API] ADMIN_API_KEY not configured in production');
+      return false;
+    }
+    return true;
+  }
+
+  if (!adminKey) {
+    return false;
+  }
+
+  try {
+    const keyBuffer = Buffer.from(adminKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(keyBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -28,6 +59,11 @@ function getSupabaseAdmin() {
 }
 
 export async function POST(req: NextRequest) {
+  // Verify admin authorization
+  if (!verifyAdminKey(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { tenant_id } = body;
@@ -48,7 +84,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (tenantError || !tenant) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
     // Get a branch for this tenant (required for appointments)
@@ -147,7 +183,7 @@ export async function POST(req: NextRequest) {
 
     if (leadsError) {
       console.error('❌ [SeedData] Error creating leads:', leadsError);
-      return NextResponse.json({ error: 'Error creating leads', details: leadsError }, { status: 500 });
+      return NextResponse.json({ error: 'Error creating leads' }, { status: 500 });
     }
 
     console.log('✅ [SeedData] Created', leads?.length, 'leads');
@@ -255,7 +291,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('💥 [SeedData] Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Unexpected error', details: error instanceof Error ? error.message : 'Unknown' },
+      { error: 'Unexpected error' },
       { status: 500 }
     );
   }
@@ -263,6 +299,11 @@ export async function POST(req: NextRequest) {
 
 // GET endpoint to see current data count
 export async function GET(req: NextRequest) {
+  // Verify admin authorization
+  if (!verifyAdminKey(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const tenant_id = req.nextUrl.searchParams.get('tenant_id');
 
   if (!tenant_id) {

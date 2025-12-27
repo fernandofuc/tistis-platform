@@ -5,7 +5,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
+import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
 
 // ======================
 // GET - Fetch messages for a conversation
@@ -15,18 +15,24 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { id } = await params;
-    const supabase = createServerClient();
     const { searchParams } = new URL(request.url);
 
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const before = searchParams.get('before'); // For pagination
 
-    // Verify conversation exists and belongs to tenant
+    // Verify conversation exists and belongs to authenticated user's tenant
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .select('id')
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('id', id)
       .single();
 
@@ -86,8 +92,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { id } = await params;
-    const supabase = createServerClient();
     const body = await request.json();
 
     // Validate required fields
@@ -98,11 +110,11 @@ export async function POST(
       );
     }
 
-    // Verify conversation exists and get details
+    // Verify conversation exists and belongs to authenticated user's tenant
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .select('id, lead_id, status')
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('id', id)
       .single();
 

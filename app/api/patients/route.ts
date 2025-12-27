@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -13,10 +14,41 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 async function getAuthenticatedContext(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
 
-  // If no auth header, create service client for server-side calls
+  // If no auth header, require INTERNAL_API_KEY for service calls
   if (!authHeader) {
-    // For server-side calls without auth header, use service role
-    // but require tenant_id in query params for security
+    const internalApiKey = request.headers.get('x-internal-api-key');
+    const expectedKey = process.env.INTERNAL_API_KEY;
+
+    // In production, INTERNAL_API_KEY is required for service calls
+    if (!expectedKey) {
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'Service authentication not configured', status: 503 };
+      }
+      // Development only - allow without key
+      return {
+        client: createClient(supabaseUrl, supabaseServiceKey),
+        user: null,
+        tenantId: null,
+        role: null,
+        isServiceCall: true,
+      };
+    }
+
+    if (!internalApiKey) {
+      return { error: 'Authentication required', status: 401 };
+    }
+
+    // Timing-safe comparison
+    try {
+      const keyBuffer = Buffer.from(internalApiKey);
+      const expectedBuffer = Buffer.from(expectedKey);
+      if (keyBuffer.length !== expectedBuffer.length || !timingSafeEqual(keyBuffer, expectedBuffer)) {
+        return { error: 'Invalid API key', status: 401 };
+      }
+    } catch {
+      return { error: 'Invalid API key', status: 401 };
+    }
+
     return {
       client: createClient(supabaseUrl, supabaseServiceKey),
       user: null,
@@ -130,8 +162,11 @@ export async function GET(request: NextRequest) {
 
     // Search by name, email, phone, patient_number
     if (search) {
+      // Sanitize search input to prevent PostgREST filter injection
+      // Escape special characters used in PostgREST patterns
+      const sanitizedSearch = search.replace(/[%_*\\]/g, '\\$&');
       // Use * wildcard for more reliable PostgREST pattern matching
-      const pattern = `*${search}*`;
+      const pattern = `*${sanitizedSearch}*`;
       query = query.or(
         `first_name.ilike.${pattern},last_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern},patient_number.ilike.${pattern}`
       );
@@ -142,7 +177,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error fetching patients:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch patients', details: error.message },
+        { error: 'Failed to fetch patients' },
         { status: 500 }
       );
     }
@@ -293,7 +328,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error creating patient:', error);
       return NextResponse.json(
-        { error: 'Failed to create patient', details: error.message },
+        { error: 'Failed to create patient' },
         { status: 500 }
       );
     }

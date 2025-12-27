@@ -395,7 +395,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       });
 
       if (emailResult.success) {
-        console.log('📧 Welcome email sent to:', customerEmail);
+        console.log('📧 Welcome email sent successfully');
       } else {
         console.error('📧 Failed to send welcome email:', emailResult.error);
       }
@@ -413,7 +413,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const { plan, customerName, customerPhone, branches, addons, vertical, proposalId } = subscription.metadata || {};
   const customerId = subscription.customer as string;
 
-  console.log('📋 Subscription metadata:', { plan, customerName, customerPhone, branches, addons });
+  // Log without exposing PII
+  console.log('📋 Subscription metadata:', { plan, branches, addons, hasCustomerPhone: !!customerPhone });
 
   // Get customer email from Stripe
   const customer = await stripe.customers.retrieve(customerId);
@@ -591,14 +592,13 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
           tenantSlug: provisionResult.tenant_slug || '',
         });
 
-        console.log('📧 [Webhook] Credentials email sent to:', customerEmail);
+        console.log('📧 [Webhook] Credentials email sent successfully');
       } catch (emailError) {
         console.error('📧 [Webhook] Error sending credentials email:', emailError);
       }
     } else {
       // Usuario existente - puede usar su misma cuenta de TIS TIS
       console.log('✅ [Webhook] User already has TIS TIS account - no credentials email needed');
-      console.log('   User can login with their existing account:', customerEmail);
     }
   } else {
     // ============================================
@@ -742,7 +742,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       });
 
       if (emailResult.success) {
-        console.log('📧 Cancellation email sent to:', customerEmail);
+        console.log('📧 Cancellation email sent successfully');
       } else {
         console.error('📧 Failed to send cancellation email:', emailResult.error);
       }
@@ -825,9 +825,8 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
       estimated_minutes: result.data?.estimated_duration_minutes
     });
 
-    // TODO: Trigger n8n Master Deployment workflow here
-    // This will be implemented when n8n webhook is configured
-    // await triggerN8nDeployment(result.data?.deployment_id);
+    // Note: Deployment is now handled entirely by Assembly Engine
+    // No external workflow trigger needed
 
   } catch (error) {
     console.error('💥 [AssemblyTrigger] Unexpected error:', error);
@@ -895,7 +894,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     });
 
     if (emailResult.success) {
-      console.log('📧 Payment confirmed email sent to:', customerEmail);
+      console.log('📧 Payment confirmed email sent successfully');
     } else {
       console.error('📧 Failed to send payment email:', emailResult.error);
     }
@@ -970,7 +969,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     });
 
     if (emailResult.success) {
-      console.log('📧 Payment failed email sent to:', customerEmail);
+      console.log('📧 Payment failed email sent successfully');
     } else {
       console.error('📧 Failed to send payment failed email:', emailResult.error);
     }

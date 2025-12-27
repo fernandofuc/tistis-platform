@@ -2,17 +2,85 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 
-// Create client lazily to avoid build-time errors
-function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
+// Get authenticated context with tenant validation
+async function getAuthenticatedContext(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+
+  // If no auth header, require INTERNAL_API_KEY for service calls
+  if (!authHeader) {
+    const internalApiKey = request.headers.get('x-internal-api-key');
+    const expectedKey = process.env.INTERNAL_API_KEY;
+
+    if (!expectedKey) {
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'Service authentication not configured', status: 503 };
+      }
+      return {
+        client: createClient(supabaseUrl, supabaseServiceKey),
+        user: null,
+        tenantId: null,
+        role: null,
+        isServiceCall: true,
+      };
+    }
+
+    if (!internalApiKey) {
+      return { error: 'Authentication required', status: 401 };
+    }
+
+    try {
+      const keyBuffer = Buffer.from(internalApiKey);
+      const expectedBuffer = Buffer.from(expectedKey);
+      if (keyBuffer.length !== expectedBuffer.length || !timingSafeEqual(keyBuffer, expectedBuffer)) {
+        return { error: 'Invalid API key', status: 401 };
+      }
+    } catch {
+      return { error: 'Invalid API key', status: 401 };
+    }
+
+    return {
+      client: createClient(supabaseUrl, supabaseServiceKey),
+      user: null,
+      tenantId: null,
+      role: null,
+      isServiceCall: true,
+    };
   }
 
-  return createClient(supabaseUrl, supabaseKey);
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: 'Invalid or expired token', status: 401 };
+  }
+
+  const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+  const { data: userRole, error: roleError } = await serviceClient
+    .from('user_roles')
+    .select('tenant_id, role')
+    .eq('user_id', user.id)
+    .single();
+
+  if (roleError || !userRole) {
+    return { error: 'User has no assigned role', status: 403 };
+  }
+
+  return {
+    client: serviceClient,
+    user,
+    tenantId: userRole.tenant_id,
+    role: userRole.role,
+    isServiceCall: false,
+  };
 }
 
 // =====================================================
@@ -23,8 +91,48 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = getSupabaseClient();
     const { id: patientId } = await params;
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(patientId)) {
+      return NextResponse.json(
+        { error: 'Invalid patient ID format' },
+        { status: 400 }
+      );
+    }
+
+    const authContext = await getAuthenticatedContext(request);
+
+    if ('error' in authContext) {
+      return NextResponse.json(
+        { error: authContext.error },
+        { status: authContext.status }
+      );
+    }
+
+    const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
+
+    // Verify patient belongs to user's tenant
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('id, tenant_id')
+      .eq('id', patientId)
+      .single();
+
+    if (patientError || !patient) {
+      return NextResponse.json(
+        { error: 'Patient not found' },
+        { status: 404 }
+      );
+    }
+
+    if (!isServiceCall && patient.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this patient' },
+        { status: 403 }
+      );
+    }
 
     const { data, error } = await supabase
       .from('clinical_history')
@@ -41,7 +149,7 @@ export async function GET(
     if (error) {
       console.error('Error fetching clinical history:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch clinical history', details: error.message },
+        { error: 'Failed to fetch clinical history' },
         { status: 500 }
       );
     }
@@ -64,11 +172,30 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = getSupabaseClient();
     const { id: patientId } = await params;
     const body = await request.json();
 
-    // Verify patient exists
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(patientId)) {
+      return NextResponse.json(
+        { error: 'Invalid patient ID format' },
+        { status: 400 }
+      );
+    }
+
+    const authContext = await getAuthenticatedContext(request);
+
+    if ('error' in authContext) {
+      return NextResponse.json(
+        { error: authContext.error },
+        { status: authContext.status }
+      );
+    }
+
+    const { client: supabase, tenantId: userTenantId, isServiceCall } = authContext;
+
+    // Verify patient exists and belongs to tenant
     const { data: patient, error: patientError } = await supabase
       .from('patients')
       .select('id, tenant_id')
@@ -79,6 +206,13 @@ export async function POST(
       return NextResponse.json(
         { error: 'Patient not found' },
         { status: 404 }
+      );
+    }
+
+    if (!isServiceCall && patient.tenant_id !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Access denied to this patient' },
+        { status: 403 }
       );
     }
 
@@ -126,7 +260,7 @@ export async function POST(
     if (error) {
       console.error('Error creating clinical history record:', error);
       return NextResponse.json(
-        { error: 'Failed to create clinical history record', details: error.message },
+        { error: 'Failed to create clinical history record' },
         { status: 500 }
       );
     }

@@ -5,13 +5,43 @@
  * que no lo tienen configurado correctamente.
  *
  * POST /api/admin/sync-tenant-metadata - Sincroniza usuario actual
- * GET /api/admin/sync-tenant-metadata?email=X - Verifica estado del usuario
+ * Headers: Authorization: Bearer <user_token> OR x-admin-key: <ADMIN_API_KEY>
+ * GET /api/admin/sync-tenant-metadata?email=X - Verifica estado del usuario (requires admin key)
  */
 
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
+
+// Verify admin API key (timing-safe to prevent timing attacks)
+function verifyAdminKey(request: NextRequest): boolean {
+  const adminKey = request.headers.get('x-admin-key');
+  const expectedKey = process.env.ADMIN_API_KEY;
+
+  if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+    return true;
+  }
+
+  if (!adminKey) {
+    return false;
+  }
+
+  try {
+    const keyBuffer = Buffer.from(adminKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(keyBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 // Admin client with service role
 function getSupabaseAdmin() {
@@ -40,7 +70,7 @@ function getSupabaseAuth() {
 
 export async function POST(req: NextRequest) {
   try {
-    // Get the authorization header
+    // Get the authorization header (user token for self-sync)
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: 'No authorization header' }, { status: 401 });
@@ -55,7 +85,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    console.log('�� [SyncMetadata] Syncing for user:', user.email);
+    // Log without exposing PII
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 [SyncMetadata] Syncing for user:', user.id);
+    }
 
     const supabase = getSupabaseAdmin();
 
@@ -104,7 +137,7 @@ export async function POST(req: NextRequest) {
             .from('staff')
             .update({ user_id: user.id })
             .eq('id', staffByEmail.id);
-          console.log('🔗 [SyncMetadata] Linked staff to user by email');
+          console.log('🔗 [SyncMetadata] Linked staff to user');
         }
       }
 

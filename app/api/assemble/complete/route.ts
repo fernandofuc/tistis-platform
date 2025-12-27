@@ -8,7 +8,38 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 import { emailService } from '@/src/lib/email';
+
+// Verify internal API key for service-to-service calls (timing-safe)
+function verifyInternalApiKey(request: NextRequest): boolean {
+  const internalApiKey = request.headers.get('x-internal-api-key');
+  const expectedKey = process.env.INTERNAL_API_KEY;
+
+  if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[AssemblyComplete] INTERNAL_API_KEY not configured in production');
+      return false;
+    }
+    // Allow in development without key
+    return true;
+  }
+
+  if (!internalApiKey) {
+    return false;
+  }
+
+  try {
+    const keyBuffer = Buffer.from(internalApiKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(keyBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 function getSupabaseAdmin() {
   return createClient(
@@ -24,6 +55,11 @@ interface CompleteDeploymentRequest {
 }
 
 export async function POST(request: NextRequest) {
+  // Verify internal API key
+  if (!verifyInternalApiKey(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const supabase = getSupabaseAdmin();
 
   try {
@@ -162,7 +198,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (emailResult.success) {
-          console.log('[AssemblyComplete] 📧 Brain Ready email sent to:', client.contact_email);
+          console.log('[AssemblyComplete] 📧 Brain Ready email sent successfully');
         } else {
           console.error('[AssemblyComplete] 📧 Failed to send email:', emailResult.error);
         }

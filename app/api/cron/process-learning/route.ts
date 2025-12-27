@@ -9,6 +9,7 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { MessageLearningService } from '@/src/features/ai/services/message-learning.service';
 
 // Evitar que Next.js cachee esta ruta
@@ -22,47 +23,40 @@ const MAX_LIMIT = 500; // Límite máximo de mensajes por ejecución
 const DEFAULT_LIMIT = 100;
 
 /**
- * Comparación segura de strings para evitar timing attacks
- */
-function secureCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
-}
-
-/**
- * Verifica el token de autorización para CRON jobs
+ * Verifica el token de autorización para CRON jobs (timing-safe)
  */
 function verifyCronAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
 
   // En desarrollo, permitir sin auth si no hay CRON_SECRET configurado
-  if (process.env.NODE_ENV === 'development' && !process.env.CRON_SECRET) {
+  if (!cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[CRON Auth] CRON_SECRET not configured in production');
+      return false;
+    }
     console.warn('[CRON Auth] Running without authentication in development mode');
     return true;
   }
 
-  // Verificar que exista CRON_SECRET configurado
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    console.error('[CRON Auth] CRON_SECRET not configured');
-    return false;
-  }
-
   // Verificar header de autorización
-  if (!authHeader) {
+  if (!authHeader?.startsWith('Bearer ')) {
     return false;
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  const token = authHeader.substring(7);
 
-  // Usar comparación segura contra timing attacks
-  return secureCompare(token, cronSecret);
+  // Usar crypto.timingSafeEqual para comparación timing-safe
+  try {
+    const tokenBuffer = Buffer.from(token);
+    const secretBuffer = Buffer.from(cronSecret);
+    if (tokenBuffer.length !== secretBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(tokenBuffer, secretBuffer);
+  } catch {
+    return false;
+  }
 }
 
 /**

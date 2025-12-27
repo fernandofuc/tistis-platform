@@ -64,10 +64,11 @@ export async function GET(request: NextRequest, context: RouteParams) {
       .single();
 
     if (!tenant) {
+      // Log internally but return generic error to prevent tenant enumeration
       console.error(`[TikTok Webhook] Tenant not found: ${tenantSlug}`);
       return NextResponse.json(
-        { error: 'Tenant not found' },
-        { status: 404 }
+        { error: 'Verification failed' },
+        { status: 403 }
       );
     }
 
@@ -154,10 +155,11 @@ export async function POST(request: NextRequest, context: RouteParams) {
       .single();
 
     if (!tenant) {
+      // Log internally but return generic error to prevent tenant enumeration
       console.error(`[TikTok Webhook] Tenant not found: ${tenantSlug}`);
       return NextResponse.json(
-        { error: 'Tenant not found' },
-        { status: 404 }
+        { error: 'Invalid webhook' },
+        { status: 403 }
       );
     }
 
@@ -189,7 +191,15 @@ export async function POST(request: NextRequest, context: RouteParams) {
         );
       }
     } else {
-      console.warn('[TikTok Webhook] No client secret configured - skipping signature verification');
+      // In production, require signature verification
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[TikTok Webhook] No client secret configured in production - rejecting');
+        return NextResponse.json(
+          { error: 'Webhook signature verification not configured' },
+          { status: 500 }
+        );
+      }
+      console.warn('[TikTok Webhook] No client secret configured - skipping signature verification in development');
     }
 
     // 6. Log del evento recibido

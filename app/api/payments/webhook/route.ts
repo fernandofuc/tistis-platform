@@ -21,7 +21,7 @@ const supabaseAdmin = createClient(
 );
 
 // Webhook secret for verifying events
-const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET!;
+const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
 
 // ======================
 // POST - Handle Stripe webhook events
@@ -34,6 +34,12 @@ export async function POST(request: NextRequest) {
     if (!signature) {
       console.error('[Stripe Webhook] No signature found');
       return NextResponse.json({ error: 'No signature' }, { status: 400 });
+    }
+
+    // Validate webhook secret is configured
+    if (!endpointSecret) {
+      console.error('[Stripe Webhook] STRIPE_CONNECT_WEBHOOK_SECRET not configured');
+      return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
     }
 
     // Verify webhook signature

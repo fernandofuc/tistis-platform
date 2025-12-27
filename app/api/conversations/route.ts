@@ -5,27 +5,37 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
+import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
 
 // ======================
 // GET - Fetch conversations
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { searchParams } = new URL(request.url);
 
-    // Parse query params
+    // Parse query params with security limits
     const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
+    const pageSize = Math.min(parseInt(searchParams.get('pageSize') || '20'), 100); // Max 100
     const status = searchParams.get('status');
     const channel = searchParams.get('channel');
     const aiHandling = searchParams.get('ai_handling');
     const branchId = searchParams.get('branch_id');
-    const sortBy = searchParams.get('sortBy') || 'last_message_at';
+
+    // Allowlist of valid sort columns (prevent SQL injection)
+    const ALLOWED_SORT_COLUMNS = ['last_message_at', 'created_at', 'status', 'channel', 'updated_at'];
+    const requestedSortBy = searchParams.get('sortBy') || 'last_message_at';
+    const sortBy = ALLOWED_SORT_COLUMNS.includes(requestedSortBy) ? requestedSortBy : 'last_message_at';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
-    // Build query
+    // Build query - use authenticated user's tenant
     let query = supabase
       .from('conversations')
       .select(`
@@ -34,7 +44,7 @@ export async function GET(request: NextRequest) {
         branch:branches(id, name),
         assigned_staff:staff(id, first_name, last_name, role)
       `, { count: 'exact' })
-      .eq('tenant_id', DEFAULT_TENANT_ID);
+      .eq('tenant_id', tenantId);
 
     // Apply filters
     if (status) {
@@ -63,7 +73,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error fetching conversations:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to fetch conversations' },
         { status: 500 }
       );
     }
@@ -91,7 +101,13 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const body = await request.json();
 
     // Validate required fields
@@ -102,11 +118,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify lead exists
+    // Verify lead exists and belongs to this tenant
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .select('id, full_name, branch_id')
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('id', body.lead_id)
       .single();
 
@@ -121,7 +137,7 @@ export async function POST(request: NextRequest) {
     const { data: existingConversation } = await supabase
       .from('conversations')
       .select('id')
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('lead_id', body.lead_id)
       .in('status', ['active', 'pending'])
       .single();
@@ -136,9 +152,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create conversation
+    // Create conversation with authenticated user's tenant
     const conversationData = {
-      tenant_id: DEFAULT_TENANT_ID,
+      tenant_id: tenantId,
       lead_id: body.lead_id,
       branch_id: body.branch_id || lead.branch_id,
       channel: body.channel || 'whatsapp',
@@ -162,7 +178,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error creating conversation:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to create conversation' },
         { status: 500 }
       );
     }

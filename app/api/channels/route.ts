@@ -248,10 +248,19 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, tenant_id: _, ...updates } = body;
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
+    }
+
+    // Allowlist of permitted update fields (prevent prototype pollution)
+    const allowedFields = ['account_name', 'status', 'ai_enabled', 'whatsapp_phone_number_id', 'whatsapp_access_token', 'instagram_user_id', 'instagram_access_token', 'tiktok_open_id', 'tiktok_access_token'];
+    const updates: Record<string, unknown> = {};
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updates[field] = body[field];
+      }
     }
 
     // Verify ownership

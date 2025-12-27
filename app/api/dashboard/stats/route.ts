@@ -5,14 +5,20 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
+import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
 
 // ======================
 // GET - Fetch dashboard statistics
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('branch_id');
 
@@ -25,8 +31,8 @@ export async function GET(request: NextRequest) {
     // Week range
     const weekStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Base query filters
-    const tenantFilter = { tenant_id: DEFAULT_TENANT_ID };
+    // Base query filters - use authenticated user's tenant
+    const tenantFilter = { tenant_id: tenantId };
     const branchFilter = branchId ? { branch_id: branchId } : {};
 
     // ==================

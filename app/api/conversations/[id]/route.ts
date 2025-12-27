@@ -5,7 +5,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
+import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
 
 // ======================
 // GET - Fetch single conversation with messages
@@ -15,8 +15,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { id } = await params;
-    const supabase = createServerClient();
     const { searchParams } = new URL(request.url);
     const includeMessages = searchParams.get('include_messages') !== 'false';
 
@@ -29,7 +35,7 @@ export async function GET(
         branch:branches(id, name, city),
         assigned_staff:staff(id, first_name, last_name, role, email)
       `)
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('id', id)
       .single();
 
@@ -84,8 +90,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { id } = await params;
-    const supabase = createServerClient();
     const body = await request.json();
 
     // Fields allowed for update
@@ -121,7 +133,7 @@ export async function PATCH(
     const { data, error } = await supabase
       .from('conversations')
       .update(updateData)
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('id', id)
       .select(`
         *,

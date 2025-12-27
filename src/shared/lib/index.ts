@@ -2,7 +2,16 @@
 // TIS TIS PLATFORM - Shared Lib Index
 // =====================================================
 
-export { supabase, DEFAULT_TENANT_ID, ESVA_TENANT_ID, createServerClient, isSupabaseConfigured, getSupabaseUrl } from './supabase';
+export {
+  supabase,
+  DEFAULT_TENANT_ID,
+  ESVA_TENANT_ID,
+  createServerClient,
+  isSupabaseConfigured,
+  getSupabaseUrl,
+  getUserTenantId,
+  validateUserTenantAccess,
+} from './supabase';
 export {
   rateLimit,
   rateLimitHeaders,

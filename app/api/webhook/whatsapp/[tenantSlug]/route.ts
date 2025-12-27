@@ -67,10 +67,11 @@ export async function GET(request: NextRequest, context: RouteParams) {
       .single();
 
     if (!tenant) {
+      // Log internally but return generic error to prevent tenant enumeration
       console.error(`[WhatsApp Webhook] Tenant not found: ${tenantSlug}`);
       return NextResponse.json(
-        { error: 'Tenant not found' },
-        { status: 404 }
+        { error: 'Verification failed' },
+        { status: 403 }
       );
     }
 
@@ -155,10 +156,11 @@ export async function POST(request: NextRequest, context: RouteParams) {
       .single();
 
     if (!tenant) {
+      // Log internally but return generic error to prevent tenant enumeration
       console.error(`[WhatsApp Webhook] Tenant not found: ${tenantSlug}`);
       return NextResponse.json(
-        { error: 'Tenant not found' },
-        { status: 404 }
+        { error: 'Invalid webhook' },
+        { status: 403 }
       );
     }
 
@@ -186,8 +188,15 @@ export async function POST(request: NextRequest, context: RouteParams) {
         );
       }
     } else {
-      // En desarrollo, log warning pero continuar
-      console.warn('[WhatsApp Webhook] No app secret configured - skipping signature verification');
+      // In production, reject webhooks without signature verification
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[WhatsApp Webhook] No app secret configured in production - rejecting');
+        return NextResponse.json(
+          { error: 'Webhook signature verification not configured' },
+          { status: 500 }
+        );
+      }
+      console.warn('[WhatsApp Webhook] No app secret configured - skipping signature verification in development');
     }
 
     // 3. Procesar webhook (async, no bloquea respuesta)
@@ -239,8 +248,24 @@ async function processWebhookBackground(
   } catch (error) {
     console.error('[WhatsApp Webhook] Background processing failed:', error);
 
-    // TODO: Enviar a dead letter queue o sistema de alertas
-    // await alertService.notify('webhook_processing_failed', { tenantSlug, error });
+    // Guardar en dead letter queue para reintentos/auditoría
+    try {
+      const supabase = (await import('@/src/shared/lib/supabase')).createServerClient();
+      await supabase.from('webhook_dead_letters').insert({
+        channel: 'whatsapp',
+        tenant_slug: tenantSlug,
+        payload: payload,
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        created_at: new Date().toISOString(),
+        retry_count: 0,
+        status: 'pending',
+      });
+      console.log('[WhatsApp Webhook] Saved to dead letter queue for retry');
+    } catch (dlqError) {
+      // Si falla el DLQ, al menos logear todo
+      console.error('[WhatsApp Webhook] Failed to save to dead letter queue:', dlqError);
+      console.error('[WhatsApp Webhook] Original payload:', JSON.stringify(payload).substring(0, 500));
+    }
   }
 }
 

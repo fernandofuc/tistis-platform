@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const leadId = searchParams.get('lead_id');
     const transactionType = searchParams.get('type');
     const startDate = searchParams.get('start_date');

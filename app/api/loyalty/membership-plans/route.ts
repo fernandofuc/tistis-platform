@@ -204,8 +204,7 @@ export async function POST(request: NextRequest) {
       console.error('[Membership Plans API] POST error:', error);
       console.error('[Membership Plans API] Error details:', JSON.stringify(error));
       return NextResponse.json({
-        error: `Error al crear plan: ${error.message || 'Error desconocido'}`,
-        details: error.code
+        error: 'Error al crear plan'
       }, { status: 500 });
     }
 
@@ -214,7 +213,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Membership Plans API] POST catch error:', error);
     return NextResponse.json({
-      error: `Error interno: ${error instanceof Error ? error.message : 'Error desconocido'}`
+      error: 'Error interno'
     }, { status: 500 });
   }
 }
@@ -241,10 +240,41 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
+    }
+
+    // Allowlist of fields that can be updated (prevent mass assignment)
+    const ALLOWED_UPDATE_FIELDS = [
+      'plan_name',
+      'plan_description',
+      'price_monthly',
+      'price_annual',
+      'benefits',
+      'discount_percent',
+      'discount_percentage',
+      'tokens_multiplier',
+      'priority_booking',
+      'is_active',
+      'is_featured',
+    ];
+
+    const updateData: Record<string, unknown> = {};
+    for (const field of ALLOWED_UPDATE_FIELDS) {
+      if (body[field] !== undefined) {
+        // Map discount_percentage to discount_percent (DB column name)
+        if (field === 'discount_percentage') {
+          updateData.discount_percent = body[field];
+        } else {
+          updateData[field] = body[field];
+        }
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No hay campos válidos para actualizar' }, { status: 400 });
     }
 
     const { data: plan, error } = await supabase

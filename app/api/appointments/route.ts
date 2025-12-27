@@ -5,25 +5,35 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
+import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
 
 // ======================
 // GET - Fetch appointments
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { searchParams } = new URL(request.url);
 
-    // Parse query params
+    // Parse query params with security limits
     const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
+    const pageSize = Math.min(parseInt(searchParams.get('pageSize') || '20'), 100); // Max 100
     const status = searchParams.get('status');
     const branchId = searchParams.get('branch_id');
     const staffId = searchParams.get('staff_id');
     const dateFrom = searchParams.get('date_from');
     const dateTo = searchParams.get('date_to');
-    const sortBy = searchParams.get('sortBy') || 'scheduled_at';
+
+    // Allowlist of valid sort columns (prevent SQL injection)
+    const ALLOWED_SORT_COLUMNS = ['scheduled_at', 'created_at', 'status', 'duration_minutes', 'updated_at'];
+    const requestedSortBy = searchParams.get('sortBy') || 'scheduled_at';
+    const sortBy = ALLOWED_SORT_COLUMNS.includes(requestedSortBy) ? requestedSortBy : 'scheduled_at';
     const sortOrder = searchParams.get('sortOrder') || 'asc';
 
     // Build query
@@ -36,7 +46,7 @@ export async function GET(request: NextRequest) {
         staff:staff(id, first_name, last_name, role),
         service:services(id, name, duration_minutes, price)
       `, { count: 'exact' })
-      .eq('tenant_id', DEFAULT_TENANT_ID);
+      .eq('tenant_id', tenantId);
 
     // Apply filters
     if (status) {
@@ -96,7 +106,13 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const body = await request.json();
 
     // Validate required fields
@@ -119,11 +135,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify lead exists
+    // Verify lead exists and belongs to user's tenant
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .select('id, full_name')
-      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .eq('tenant_id', tenantId)
       .eq('id', body.lead_id)
       .single();
 
@@ -148,9 +164,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create appointment
+    // Create appointment with authenticated user's tenant
     const appointmentData = {
-      tenant_id: DEFAULT_TENANT_ID,
+      tenant_id: tenantId,
       lead_id: body.lead_id,
       branch_id: body.branch_id,
       staff_id: body.staff_id || null,

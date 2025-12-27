@@ -7,6 +7,12 @@ import {
   getPlanConfig,
   calculateBranchCostCentavos,
 } from '@/src/shared/config/plans';
+import {
+  checkRateLimit,
+  getClientIP,
+  checkoutLimiter,
+  rateLimitExceeded,
+} from '@/src/shared/lib/rate-limit';
 
 // Create Stripe client lazily
 function getStripeClient() {
@@ -14,6 +20,14 @@ function getStripeClient() {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limiting: prevent abuse of Stripe checkout sessions (10 per hour per IP)
+  const clientIP = getClientIP(req);
+  const rateLimitResult = checkRateLimit(clientIP, checkoutLimiter);
+
+  if (!rateLimitResult.success) {
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   try {
     const body = await req.json();
     const {
@@ -25,9 +39,21 @@ export async function POST(req: NextRequest) {
       addons = [],
       vertical = 'dental', // Default vertical
       proposalId,
-      metadata,
+      metadata: rawMetadata,
     } = body;
     const stripe = getStripeClient();
+
+    // Allowlist for metadata fields to prevent arbitrary data injection
+    const ALLOWED_METADATA_KEYS = ['referralCode', 'campaignId', 'source', 'utm_source', 'utm_medium', 'utm_campaign'];
+    const sanitizedMetadata: Record<string, string> = {};
+    if (rawMetadata && typeof rawMetadata === 'object') {
+      for (const key of ALLOWED_METADATA_KEYS) {
+        if (rawMetadata[key] !== undefined && typeof rawMetadata[key] === 'string') {
+          // Sanitize value: limit length and remove potentially dangerous characters
+          sanitizedMetadata[key] = String(rawMetadata[key]).slice(0, 500);
+        }
+      }
+    }
 
     const planConfig = getPlanConfig(plan);
     if (!planConfig) {
@@ -98,7 +124,7 @@ export async function POST(req: NextRequest) {
           customerPhone: customerPhone || '',
           vertical, // Include vertical for Assembly Engine
           proposalId: proposalId || '',
-          ...metadata,
+          ...sanitizedMetadata,
         },
       },
       success_url: `${origin}/onboarding/welcome?session_id={CHECKOUT_SESSION_ID}`,
@@ -111,7 +137,7 @@ export async function POST(req: NextRequest) {
         customerPhone: customerPhone || '',
         vertical,
         proposalId: proposalId || '',
-        ...metadata,
+        ...sanitizedMetadata,
       },
     });
 

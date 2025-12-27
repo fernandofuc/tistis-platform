@@ -3,6 +3,7 @@
  *
  * Este endpoint configura un usuario existente con un tenant.
  * Uso: POST /api/admin/setup-user
+ * Headers: x-admin-key: <ADMIN_API_KEY>
  * Body: { email: string, vertical?: string }
  *
  * IMPORTANTE: Este endpoint solo debe usarse en desarrollo/testing.
@@ -13,6 +14,38 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
+
+// Verify admin API key (timing-safe)
+function verifyAdminKey(request: NextRequest): boolean {
+  const adminKey = request.headers.get('x-admin-key');
+  const expectedKey = process.env.ADMIN_API_KEY;
+
+  // In production, ADMIN_API_KEY is required
+  if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Admin API] ADMIN_API_KEY not configured in production');
+      return false;
+    }
+    // Allow in development without key
+    return true;
+  }
+
+  if (!adminKey) {
+    return false;
+  }
+
+  try {
+    const keyBuffer = Buffer.from(adminKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(keyBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 // Admin client with service role
 function getSupabaseAdmin() {
@@ -32,6 +65,11 @@ function getSupabaseAdmin() {
 }
 
 export async function POST(req: NextRequest) {
+  // Verify admin authorization
+  if (!verifyAdminKey(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { email, vertical = 'dental' } = body;
@@ -40,7 +78,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
-    console.log('🚀 [SetupUser] Starting setup for:', email);
+    // Log user ID instead of email for privacy
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🚀 [SetupUser] Starting setup for email hash:', email.substring(0, 3) + '***');
+    }
 
     const supabase = getSupabaseAdmin();
 
@@ -308,6 +349,11 @@ async function createSampleData(supabase: any, tenantId: string) {
 
 // GET endpoint to check user status
 export async function GET(req: NextRequest) {
+  // Verify admin authorization
+  if (!verifyAdminKey(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const email = req.nextUrl.searchParams.get('email');
 
   if (!email) {

@@ -1,9 +1,35 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
 
 export const runtime = 'edge';
+
+// Simple in-memory rate limiting for Edge runtime
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(identifier: string, maxRequests = 10, windowMs = 60000): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(identifier);
+
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(identifier, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+
+  if (record.count >= maxRequests) {
+    return false;
+  }
+
+  record.count++;
+  return true;
+}
+
+function getClientIp(request: NextRequest): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+         request.headers.get('x-real-ip') ||
+         'unknown';
+}
 
 // OpenAI client para Chat Discovery
 const openai = new OpenAI({
@@ -208,6 +234,15 @@ ANALYSIS_COMPLETE::{
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limiting to prevent abuse (10 requests per minute per IP)
+    const clientIp = getClientIp(req);
+    if (!checkRateLimit(`discovery:${clientIp}`, 10, 60000)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     const { messages, sessionToken } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
@@ -279,13 +314,9 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     console.error('API Route Error:', error);
 
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    const errorDetails = error instanceof Error ? error.toString() : String(error);
-
     return new Response(
       JSON.stringify({
-        error: errorMessage,
-        details: errorDetails,
+        error: 'Error processing request',
       }),
       {
         status: 500,

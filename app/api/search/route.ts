@@ -94,8 +94,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Sanitize search input to prevent PostgREST filter injection
+    // Escape special characters used in PostgREST patterns
+    const sanitizedQuery = query.replace(/[%_*\\]/g, '\\$&');
     // Use wildcard pattern for PostgREST ilike
-    const searchPattern = `*${query}*`;
+    const searchPattern = `*${sanitizedQuery}*`;
     const results: SearchResult[] = [];
 
     // Search in Leads

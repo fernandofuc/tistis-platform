@@ -154,7 +154,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, tenant_id: _, branchAssignments, ...staffData } = body;
+    const { id, branchAssignments } = body;
+
+    // Allowlist of permitted fields (prevent prototype pollution)
+    const allowedFields = ['first_name', 'last_name', 'display_name', 'email', 'phone', 'role', 'status', 'avatar_url', 'specialization', 'license_number', 'bio'];
+    const staffData: Record<string, unknown> = {};
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        staffData[field] = body[field];
+      }
+    }
 
     // Auto-generate display_name if not provided
     if (!staffData.display_name && (staffData.first_name || staffData.last_name)) {

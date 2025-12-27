@@ -369,7 +369,7 @@ export async function requestPhoneNumber(
     };
   }
 
-  console.log('[Voice Agent] Phone number provisioned successfully:', phoneNumber.phone_number);
+  console.log('[Voice Agent] Phone number provisioned successfully:', phoneNumber.id);
 
   return { success: true, phoneNumber: phoneNumber as VoicePhoneNumber };
 }

@@ -6,11 +6,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
+import Stripe from 'stripe';
 import {
   getTrialsExpiringToday,
   convertTrialToPaid,
   endTrialWithoutConversion,
 } from '@/src/features/subscriptions/services/trial.service';
+import { sendEmail } from '@/src/lib/email/sender';
+
+// Create Stripe client lazily (validated)
+function getStripeClient(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY is not configured');
+  }
+  return new Stripe(secretKey);
+}
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -22,17 +34,36 @@ function getSupabaseAdmin() {
   );
 }
 
-// Verify cron secret for security
+// Verify cron secret for security (timing-safe)
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
+  // In production, CRON_SECRET is required
   if (!cronSecret) {
-    console.warn('[Process Trials] CRON_SECRET not set');
-    return true; // Allow in development
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Process Trials] CRON_SECRET not set in production');
+      return false;
+    }
+    console.warn('[Process Trials] CRON_SECRET not set - allowing in development');
+    return true;
   }
 
-  return authHeader === `Bearer ${cronSecret}`;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+
+  const token = authHeader.substring(7);
+  try {
+    const tokenBuffer = Buffer.from(token);
+    const secretBuffer = Buffer.from(cronSecret);
+    if (tokenBuffer.length !== secretBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(tokenBuffer, secretBuffer);
+  } catch {
+    return false;
+  }
 }
 
 interface ProcessResult {
@@ -57,7 +88,7 @@ async function createStripeSubscription(
   error?: string;
 }> {
   try {
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const stripe = getStripeClient();
 
     // 1. Buscar o crear customer en Stripe
     const customers = await stripe.customers.list({
@@ -140,9 +171,34 @@ async function sendWelcomeEmail(
   clientName: string
 ): Promise<void> {
   try {
-    // TODO: Implementar envío de email
-    // Puedes usar Resend, SendGrid, etc.
-    console.log('[Process Trials] Welcome email sent to:', clientEmail);
+    const dashboardUrl = process.env.NEXT_PUBLIC_URL || 'https://tistis.com';
+
+    await sendEmail({
+      to: { email: clientEmail, name: clientName },
+      subject: '🎉 ¡Bienvenido a TIS TIS Platform!',
+      html: `
+        <h2>¡Felicidades ${clientName}!</h2>
+        <p>Tu suscripción a TIS TIS Platform está ahora <strong>activa</strong>.</p>
+        <p>Tu período de prueba ha terminado y hemos procesado exitosamente tu primer pago.</p>
+
+        <h3>¿Qué sigue?</h3>
+        <ul>
+          <li>✅ Acceso completo a todas las funcionalidades</li>
+          <li>✅ Soporte prioritario por WhatsApp y email</li>
+          <li>✅ Actualizaciones automáticas incluidas</li>
+        </ul>
+
+        <p><a href="${dashboardUrl}/dashboard" style="background: #FF6B6B; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Ir al Dashboard</a></p>
+
+        <p>Si tienes alguna pregunta, responde a este correo.</p>
+
+        <p>¡Gracias por confiar en TIS TIS!</p>
+        <p><em>El equipo de TIS TIS</em></p>
+      `,
+      tags: ['trial-converted', 'welcome'],
+    });
+
+    console.log('[Process Trials] Welcome email sent successfully');
   } catch (error) {
     console.error('[Process Trials] Error sending welcome email:', error);
   }
@@ -156,8 +212,30 @@ async function sendCancellationEmail(
   clientName: string
 ): Promise<void> {
   try {
-    // TODO: Implementar envío de email
-    console.log('[Process Trials] Cancellation email sent to:', clientEmail);
+    const dashboardUrl = process.env.NEXT_PUBLIC_URL || 'https://tistis.com';
+
+    await sendEmail({
+      to: { email: clientEmail, name: clientName },
+      subject: 'Tu período de prueba ha terminado - TIS TIS',
+      html: `
+        <h2>Hola ${clientName},</h2>
+        <p>Tu período de prueba de TIS TIS Platform ha terminado.</p>
+        <p>Lamentamos que no hayas podido continuar con nosotros. Tu cuenta ha sido desactivada.</p>
+
+        <h3>¿Cambiaste de opinión?</h3>
+        <p>Puedes reactivar tu suscripción en cualquier momento:</p>
+
+        <p><a href="${dashboardUrl}/pricing" style="background: #FF6B6B; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Ver Planes</a></p>
+
+        <p>Si tuviste algún problema o tienes feedback, nos encantaría escucharte. Responde a este correo.</p>
+
+        <p>¡Gracias por probar TIS TIS!</p>
+        <p><em>El equipo de TIS TIS</em></p>
+      `,
+      tags: ['trial-ended', 'cancellation'],
+    });
+
+    console.log('[Process Trials] Cancellation email sent successfully');
   } catch (error) {
     console.error('[Process Trials] Error sending cancellation email:', error);
   }

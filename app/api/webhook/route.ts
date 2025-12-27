@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import { timingSafeEqual } from 'crypto';
 import {
   checkRateLimit,
   getClientIP,
@@ -16,6 +17,23 @@ import {
 
 // SECURITY: No fallback token - require proper configuration
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+
+// SECURITY: Timing-safe token verification to prevent timing attacks
+function verifyTokenTimingSafe(providedToken: string | null, expectedToken: string | undefined): boolean {
+  if (!expectedToken || !providedToken) {
+    return false;
+  }
+  try {
+    const providedBuffer = Buffer.from(providedToken);
+    const expectedBuffer = Buffer.from(expectedToken);
+    if (providedBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(providedBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 // ======================
 // TYPES
@@ -47,7 +65,8 @@ export async function GET(request: NextRequest) {
     const token = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
 
-    if (mode === 'subscribe' && token === WHATSAPP_VERIFY_TOKEN) {
+    // Use timing-safe comparison to prevent timing attacks
+    if (mode === 'subscribe' && verifyTokenTimingSafe(token, WHATSAPP_VERIFY_TOKEN)) {
       console.log('[Webhook] WhatsApp verification successful');
       return new NextResponse(challenge, { status: 200 });
     }
@@ -275,8 +294,8 @@ async function processIncomingWhatsAppMessage(
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversation.id);
 
-  // TODO: Trigger AI response if ai_handling is true
-  // This will be connected to n8n workflow
+  // AI response handled by new multi-tenant webhook: /api/webhook/whatsapp/[tenantSlug]
+  // See: src/features/messaging/services/whatsapp.service.ts -> enqueueAIResponseJob
   console.log(`[WhatsApp] Message saved for lead ${lead.id}, conversation ${conversation.id}`);
 }
 
@@ -453,7 +472,8 @@ async function handleAIResponse(
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversationId);
 
-  // TODO: Send message via WhatsApp API
+  // Message sending handled by job queue system
+  // See: src/features/messaging/services/whatsapp.service.ts -> sendWhatsAppMessage
   console.log(`[n8n] AI response saved for conversation ${conversationId}`);
 
   return NextResponse.json({ success: true, action: 'ai_response_saved' });

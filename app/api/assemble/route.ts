@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 import {
   selectComponents,
   resolveDependencies,
@@ -10,15 +11,53 @@ import {
   ClientConfig
 } from '@/lib/assembly';
 
+// Verify internal API key for service-to-service calls (timing-safe)
+function verifyInternalApiKey(request: NextRequest): boolean {
+  const internalApiKey = request.headers.get('x-internal-api-key');
+  const expectedKey = process.env.INTERNAL_API_KEY;
+
+  if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Assembly API] INTERNAL_API_KEY not configured in production');
+      return false;
+    }
+    // Allow in development without key
+    return true;
+  }
+
+  if (!internalApiKey) {
+    return false;
+  }
+
+  try {
+    const keyBuffer = Buffer.from(internalApiKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(keyBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
+
 // Supabase Admin client for privileged operations
 function getSupabaseAdmin() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for assembly operations');
+  }
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    serviceRoleKey
   );
 }
 
 export async function POST(request: NextRequest) {
+  // Verify internal API key
+  if (!verifyInternalApiKey(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
   const supabase = getSupabaseAdmin();
@@ -157,7 +196,6 @@ export async function POST(request: NextRequest) {
           success: false,
           error: 'DATABASE_ERROR',
           message: 'Error saving deployment plan',
-          details: insertError.message,
           requestId
         },
         { status: 500 }
@@ -272,6 +310,11 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint to check deployment status
 export async function GET(request: NextRequest) {
+  // Verify internal API key
+  if (!verifyInternalApiKey(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const deploymentId = searchParams.get('deployment_id');

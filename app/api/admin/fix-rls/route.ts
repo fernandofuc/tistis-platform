@@ -5,6 +5,7 @@
  * en las políticas RLS de user_roles.
  *
  * Uso: POST /api/admin/fix-rls
+ * Headers: x-admin-key: <ADMIN_API_KEY>
  *
  * IMPORTANTE: Este endpoint solo debe usarse una vez para arreglar el error.
  */
@@ -13,6 +14,36 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
+
+// Verify admin API key (timing-safe to prevent timing attacks)
+function verifyAdminKey(request: NextRequest): boolean {
+  const adminKey = request.headers.get('x-admin-key');
+  const expectedKey = process.env.ADMIN_API_KEY;
+
+  if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Admin API] ADMIN_API_KEY not configured in production');
+      return false;
+    }
+    return true;
+  }
+
+  if (!adminKey) {
+    return false;
+  }
+
+  try {
+    const keyBuffer = Buffer.from(adminKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(keyBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 // Admin client with service role
 function getSupabaseAdmin() {
@@ -32,6 +63,11 @@ function getSupabaseAdmin() {
 }
 
 export async function POST(req: NextRequest) {
+  // Verify admin authorization
+  if (!verifyAdminKey(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   console.log('🔧 [FixRLS] Starting RLS fix...');
 
   try {

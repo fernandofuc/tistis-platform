@@ -5,27 +5,34 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, DEFAULT_TENANT_ID } from '@/src/shared/lib/supabase';
+import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
 
 // ======================
 // GET - Fetch staff members
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
     const { searchParams } = new URL(request.url);
 
     const branchId = searchParams.get('branch_id');
     const role = searchParams.get('role');
     const isActive = searchParams.get('is_active');
 
+    // Query staff for authenticated user's tenant
     let query = supabase
       .from('staff')
       .select(`
         *,
         branch:branches(id, name, city)
       `)
-      .eq('tenant_id', DEFAULT_TENANT_ID);
+      .eq('tenant_id', tenantId);
 
     if (branchId) {
       query = query.eq('branch_id', branchId);
@@ -44,7 +51,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error fetching staff:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to fetch staff' },
         { status: 500 }
       );
     }

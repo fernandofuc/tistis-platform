@@ -169,7 +169,22 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { tenant_id: _, id: __, ...configData } = body;
+
+    // Allowlist of permitted fields (prevent prototype pollution)
+    const allowedFields = [
+      'ai_model', 'temperature', 'max_tokens', 'system_prompt',
+      'business_name', 'business_description', 'business_hours',
+      'services', 'pricing_info', 'booking_rules', 'faq',
+      'tone', 'language', 'greeting_message', 'fallback_message',
+      'escalation_keywords', 'auto_escalate_after_minutes',
+      'enabled', 'whatsapp_enabled', 'instagram_enabled', 'voice_enabled'
+    ];
+    const configData: Record<string, unknown> = {};
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        configData[field] = body[field];
+      }
+    }
 
     // First, check if config exists
     const { data: existingConfig } = await supabase

@@ -8,9 +8,17 @@ import { ZodError } from 'zod';
 import { activateFreeTrial } from '@/src/features/subscriptions/services/trial.service';
 import { validateActivateTrialCheckoutRequest } from '@/src/features/subscriptions/schemas/trial.schemas';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import { rateLimit, RATE_LIMIT_PRESETS, createRateLimitResponse, getClientIdentifier } from '@/src/shared/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting to prevent abuse (trial activation is sensitive)
+    const clientId = getClientIdentifier(request);
+    const rateLimitResult = rateLimit(`activate-trial:${clientId}`, RATE_LIMIT_PRESETS.auth);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     // 1. Obtener body
     let body;
     try {

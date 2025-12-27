@@ -6,12 +6,31 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { emailService } from '@/src/lib/email';
 import type { EmailTemplateType } from '@/src/lib/email';
 
 // This endpoint should only be called from internal services
-// In production, add authentication/API key validation
+// SECURITY: Always require API key in production
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+
+// SECURITY: Timing-safe API key verification to prevent timing attacks
+function verifyApiKeyTimingSafe(authHeader: string | null, expectedKey: string): boolean {
+  if (!authHeader || !expectedKey) {
+    return false;
+  }
+  try {
+    const providedKey = authHeader.replace('Bearer ', '');
+    const providedBuffer = Buffer.from(providedKey);
+    const expectedBuffer = Buffer.from(expectedKey);
+    if (providedBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(providedBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 interface SendEmailRequest {
   template: EmailTemplateType;
@@ -21,9 +40,20 @@ interface SendEmailRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    // Validate API key (for internal use)
+    // SECURITY: Validate API key (required in production)
     const authHeader = request.headers.get('authorization');
-    if (INTERNAL_API_KEY && authHeader !== `Bearer ${INTERNAL_API_KEY}`) {
+
+    if (!INTERNAL_API_KEY) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[Email API] INTERNAL_API_KEY not configured in production');
+        return NextResponse.json(
+          { error: 'Email service not configured' },
+          { status: 503 }
+        );
+      }
+      // Allow without key in development
+      console.warn('[Email API] INTERNAL_API_KEY not configured - skipping auth in development');
+    } else if (!verifyApiKeyTimingSafe(authHeader, INTERNAL_API_KEY)) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

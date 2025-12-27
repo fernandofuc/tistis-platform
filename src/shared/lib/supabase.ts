@@ -127,11 +127,88 @@ export function subscribeToTable(
 // ======================
 // DEFAULT TENANT CONSTANT
 // ======================
-// Used for development and single-tenant deployments
+// ⚠️ SECURITY WARNING: DEFAULT_TENANT_ID should ONLY be used for:
+// 1. Development/testing with single-tenant deployments
+// 2. Public endpoints that don't require user authentication
+// 3. Cron jobs or internal service-to-service calls
+//
+// For authenticated endpoints, ALWAYS use getUserTenantId() to get
+// the tenant from the authenticated user's metadata or user_roles table.
+// Using DEFAULT_TENANT_ID in authenticated endpoints creates IDOR vulnerabilities.
 export const DEFAULT_TENANT_ID = process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'a0000000-0000-0000-0000-000000000001';
 
 // @deprecated Use DEFAULT_TENANT_ID instead - keeping for backwards compatibility
 export const ESVA_TENANT_ID = DEFAULT_TENANT_ID;
+
+// ======================
+// TENANT HELPER FUNCTIONS
+// ======================
+
+/**
+ * Get tenant_id from authenticated user's metadata or user_roles
+ * IMPORTANT: Use this instead of DEFAULT_TENANT_ID in authenticated endpoints
+ *
+ * @param supabase - Server client with auth context
+ * @returns Promise<{ tenantId: string | null, userId: string | null, error: string | null }>
+ */
+export async function getUserTenantId(supabase: SupabaseClient): Promise<{
+  tenantId: string | null;
+  userId: string | null;
+  error: string | null;
+}> {
+  try {
+    // Get current user from session
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { tenantId: null, userId: null, error: 'Not authenticated' };
+    }
+
+    // First, try to get tenant_id from user metadata (faster)
+    const metadataTenantId = user.user_metadata?.tenant_id;
+    if (metadataTenantId) {
+      return { tenantId: metadataTenantId, userId: user.id, error: null };
+    }
+
+    // Fallback: Query user_roles table
+    const { data: userRole, error: roleError } = await supabase
+      .from('user_roles')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (roleError || !userRole) {
+      return { tenantId: null, userId: user.id, error: 'No tenant assigned to user' };
+    }
+
+    return { tenantId: userRole.tenant_id, userId: user.id, error: null };
+  } catch (error) {
+    console.error('[getUserTenantId] Error:', error);
+    return { tenantId: null, userId: null, error: 'Failed to get tenant' };
+  }
+}
+
+/**
+ * Validates that the user has access to the specified tenant
+ * Use for endpoints where tenant_id comes from request params/body
+ */
+export async function validateUserTenantAccess(
+  supabase: SupabaseClient,
+  requestedTenantId: string
+): Promise<{ hasAccess: boolean; userId: string | null; error: string | null }> {
+  const { tenantId, userId, error } = await getUserTenantId(supabase);
+
+  if (error) {
+    return { hasAccess: false, userId: null, error };
+  }
+
+  if (tenantId !== requestedTenantId) {
+    return { hasAccess: false, userId, error: 'Access denied to this tenant' };
+  }
+
+  return { hasAccess: true, userId, error: null };
+}
 
 // ======================
 // DEBUG LOGGING

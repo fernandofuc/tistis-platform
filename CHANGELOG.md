@@ -7,6 +7,154 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [4.3.0] - 2024-12-27
+
+### Resumen
+
+**Actualizacion mayor de seguridad** con 25+ vulnerabilidades corregidas a traves de 6 auditorias
+exhaustivas (#11-#16). Incluye rediseno de AI Agent Voz y optimizaciones arquitectonicas significativas.
+
+### Seguridad (Auditorias #11-#16)
+
+#### Prevencion de Timing Attacks
+Se implemento `timingSafeEqual` de Node.js crypto para evitar ataques de timing:
+
+| Archivo | Cambio |
+|---------|--------|
+| `app/api/webhook/route.ts` | Verificacion timing-safe del WhatsApp verify token |
+| `app/api/email/send/route.ts` | API key verification timing-safe |
+| `app/api/webhook/whatsapp/[tenantSlug]/route.ts` | Timing-safe para webhook secrets |
+| `app/api/ai-config/generate-prompt/route.ts` | Timing-safe para CRON secrets |
+| `app/api/voice-agent/generate-prompt/route.ts` | Timing-safe para secrets internos |
+
+```typescript
+import { timingSafeEqual } from 'crypto';
+
+function verifyTokenTimingSafe(providedToken: string | null, expectedToken: string | undefined): boolean {
+  if (!expectedToken || !providedToken) return false;
+  try {
+    const providedBuffer = Buffer.from(providedToken);
+    const expectedBuffer = Buffer.from(expectedToken);
+    if (providedBuffer.length !== expectedBuffer.length) return false;
+    return timingSafeEqual(providedBuffer, expectedBuffer);
+  } catch { return false; }
+}
+```
+
+#### Prevencion de IDOR (Insecure Direct Object Reference)
+
+**NUEVO archivo:** `src/shared/lib/auth-helper.ts` - Sistema centralizado de autenticacion
+
+```typescript
+export async function getAuthenticatedContext(request: NextRequest): Promise<AuthContext | AuthError>
+export function isAuthError(context: AuthContext | AuthError): context is AuthError
+export function createAuthErrorResponse(error: AuthError): NextResponse
+```
+
+**Rutas migradas al nuevo patron:**
+- `app/api/leads/[id]/route.ts`
+- `app/api/appointments/[id]/route.ts`
+- `app/api/conversations/[id]/route.ts`
+- `app/api/conversations/[id]/messages/route.ts` (reescrito completamente)
+- `app/api/admin/sync-tenant-metadata/route.ts`
+
+#### Rate Limiting Expandido
+
+**Nuevos limitadores en `src/shared/lib/rate-limit.ts`:**
+- `publicAPILimiter` - 100 req/min para APIs publicas
+- `webhookLimiter` - 1000 req/min para webhooks
+- `aiLimiter` - 30 req/min para endpoints de IA
+- `cronLimiter` - 10 req/min para jobs CRON
+
+**Endpoints protegidos:**
+- `app/api/onboarding/status/route.ts`
+- `app/api/chat/discovery/route.ts`
+- `app/api/stripe/webhook/route.ts`
+- `app/api/voice-agent/preview/route.ts`
+- `app/api/enterprise-contact/route.ts`
+- Todos los webhooks multi-canal
+
+#### Sanitizacion de Busquedas (Filter Injection Prevention)
+
+```typescript
+const sanitizedSearch = search.replace(/[%_*\\]/g, '\\$&');
+const pattern = `*${sanitizedSearch}*`;
+```
+
+**Endpoints protegidos:**
+- `app/api/leads/route.ts`
+- `app/api/patients/route.ts`
+- `app/api/search/route.ts`
+
+#### Webhooks Multi-Canal Hardened
+
+| Canal | Mejoras |
+|-------|---------|
+| Facebook | Validacion payload.object, X-Hub-Signature-256, background processing |
+| Instagram | Validacion tipo, signature verification, rate limiting |
+| TikTok | Event type validation, firma TikTok, rate limiting |
+| WhatsApp | Timing-safe signatures, rate limiting por IP |
+
+#### Headers de Seguridad (next.config.mjs)
+
+```javascript
+// Content-Security-Policy, X-Frame-Options: DENY, X-Content-Type-Options: nosniff,
+// Strict-Transport-Security, Referrer-Policy, Permissions-Policy
+```
+
+### UI/UX - AI Agent Voz
+
+#### Rediseno Completo
+- Cards de estadisticas con iconos y colores consistentes
+- Panel de configuracion de voz con preview de ElevenLabs
+- UI mejorada para gestion de numeros VAPI
+- Panel de testing con logs en tiempo real
+- Indicadores visuales de estado (conectado/desconectado)
+
+### Arquitectura
+
+#### Sistema de Autenticacion Centralizado
+- Patron unificado `getAuthenticatedContext()` para todas las rutas API
+- Extraccion automatica de tenantId del usuario autenticado
+- Manejo consistente de errores de autenticacion
+
+#### Rate Limiting Mejorado
+- Factory function para limitadores personalizados
+- Sliding window algorithm
+- Respuestas con headers Retry-After
+
+#### Nueva Migracion
+- `076_voice_quotes_security.sql` - Indices y RLS actualizados
+
+### Estadisticas de Cambios
+
+```
+68 archivos modificados
++1,910 lineas agregadas
+-277 lineas eliminadas
+```
+
+**Archivos nuevos destacados:**
+- `src/shared/lib/auth-helper.ts`
+- `supabase/migrations/076_voice_quotes_security.sql`
+- `.github/` (workflows)
+
+### Notas de Upgrade
+
+**Para nuevas rutas API:**
+```typescript
+import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
+
+export async function GET(request: NextRequest) {
+  const authContext = await getAuthenticatedContext(request);
+  if (isAuthError(authContext)) return createAuthErrorResponse(authContext);
+  const { client: supabase, tenantId } = authContext;
+  // ... logica
+}
+```
+
+---
+
 ## [4.1.0] - 2024-12-21
 
 ### Anadido - Integracion LangGraph con Configuraciones del Cliente
@@ -413,4 +561,4 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-**Ultima actualizacion:** 21 de Diciembre, 2024
+**Ultima actualizacion:** 27 de Diciembre, 2024

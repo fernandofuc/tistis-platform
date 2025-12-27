@@ -170,6 +170,13 @@ export const strictLimiter: RateLimitConfig = {
   identifier: 'strict',
 };
 
+/** Rate limit for checkout/payment sessions (prevent abuse) */
+export const checkoutLimiter: RateLimitConfig = {
+  limit: 10,
+  windowSeconds: 3600, // 1 hour
+  identifier: 'checkout',
+};
+
 // ======================
 // Helper for NextResponse
 // ======================

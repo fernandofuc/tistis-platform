@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -13,7 +14,38 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 async function getAuthenticatedContext(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
 
+  // If no auth header, require INTERNAL_API_KEY for service calls
   if (!authHeader) {
+    const internalApiKey = request.headers.get('x-internal-api-key');
+    const expectedKey = process.env.INTERNAL_API_KEY;
+
+    if (!expectedKey) {
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'Service authentication not configured', status: 503 };
+      }
+      return {
+        client: createClient(supabaseUrl, supabaseServiceKey),
+        user: null,
+        tenantId: null,
+        role: null,
+        isServiceCall: true,
+      };
+    }
+
+    if (!internalApiKey) {
+      return { error: 'Authentication required', status: 401 };
+    }
+
+    try {
+      const keyBuffer = Buffer.from(internalApiKey);
+      const expectedBuffer = Buffer.from(expectedKey);
+      if (keyBuffer.length !== expectedBuffer.length || !timingSafeEqual(keyBuffer, expectedBuffer)) {
+        return { error: 'Invalid API key', status: 401 };
+      }
+    } catch {
+      return { error: 'Invalid API key', status: 401 };
+    }
+
     return {
       client: createClient(supabaseUrl, supabaseServiceKey),
       user: null,
@@ -130,7 +162,7 @@ export async function GET(
     if (error) {
       console.error('Error fetching quote:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch quote', details: error.message },
+        { error: 'Failed to fetch quote' },
         { status: 500 }
       );
     }
@@ -298,7 +330,7 @@ export async function PATCH(
     if (error) {
       console.error('Error updating quote:', error);
       return NextResponse.json(
-        { error: 'Failed to update quote', details: error.message },
+        { error: 'Failed to update quote' },
         { status: 500 }
       );
     }
@@ -391,7 +423,7 @@ export async function DELETE(
     if (error) {
       console.error('Error cancelling quote:', error);
       return NextResponse.json(
-        { error: 'Failed to cancel quote', details: error.message },
+        { error: 'Failed to cancel quote' },
         { status: 500 }
       );
     }

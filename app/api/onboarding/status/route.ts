@@ -2,6 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import {
+  checkRateLimit,
+  getClientIP,
+  publicAPILimiter,
+  rateLimitExceeded,
+} from '@/src/shared/lib/rate-limit';
 import { createClient } from '@supabase/supabase-js';
 
 function getStripeClient() {
@@ -16,6 +22,14 @@ function getSupabaseClient() {
 }
 
 export async function GET(req: NextRequest) {
+  // Rate limiting: prevent abuse of Stripe API queries
+  const clientIP = getClientIP(req);
+  const rateLimitResult = checkRateLimit(clientIP, publicAPILimiter);
+
+  if (!rateLimitResult.success) {
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   const sessionId = req.nextUrl.searchParams.get('session_id');
 
   if (!sessionId) {

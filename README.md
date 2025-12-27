@@ -2,9 +2,9 @@
 
 Sistema completo de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API y automatizacion de procesos multi-canal.
 
-**Version:** 4.2.0
-**Estado:** Produccion - Sistema Completo con LangGraph + AI Learning + Voice Agent
-**Ultima actualizacion:** 24 de Diciembre, 2024
+**Version:** 4.3.0
+**Estado:** Produccion - Security Hardened + AI Agent Voz Rediseñado
+**Ultima actualizacion:** 27 de Diciembre, 2024
 
 ---
 
@@ -764,8 +764,16 @@ Cada webhook verifica firmas criptográficas y procesa mensajes de forma asíncr
 
 ## 🔐 Seguridad
 
-### Implementado
+### Implementado (v4.3.0 - Security Hardened)
 
+**Prevencion de Ataques:**
+- ✅ **Timing-safe token verification** - `timingSafeEqual` en todos los endpoints criticos
+- ✅ **IDOR Prevention** - Sistema centralizado `getAuthenticatedContext()`
+- ✅ **Rate Limiting** - Limitadores pre-configurados por tipo de endpoint
+- ✅ **Filter Injection Prevention** - Sanitizacion de busquedas PostgREST
+- ✅ **Security Headers** - CSP, X-Frame-Options, HSTS configurados
+
+**Multi-Tenant Security:**
 - ✅ Row Level Security (RLS) en todas las tablas
 - ✅ Validación de tenant en todas las operaciones
 - ✅ Advisory locks para prevenir race conditions
@@ -773,6 +781,8 @@ Cada webhook verifica firmas criptográficas y procesa mensajes de forma asíncr
 - ✅ Autenticación en API routes
 - ✅ Validación de permisos por rol
 - ✅ Storage policies con validación de path
+
+**Auditorias Completadas:** #11, #12, #13, #14, #15, #16 (25+ vulnerabilidades corregidas)
 
 ### Roles Disponibles
 
@@ -870,12 +880,20 @@ npm run typecheck         # TypeScript check
 
 ## 📊 Estado del Proyecto
 
-### Version 4.2.0 - Sistema AI Completo
+### Version 4.3.0 - Security Hardened + AI Agent Voz Rediseñado
+
+**Seguridad (NUEVO v4.3.0):**
+- ✅ 6 Auditorias de seguridad completadas (#11-#16)
+- ✅ 25+ vulnerabilidades corregidas
+- ✅ Sistema de autenticacion centralizado
+- ✅ Rate limiting expandido
+- ✅ Timing-safe token verification
+- ✅ Filter injection prevention
 
 **Sistemas de IA Implementados:**
 - ✅ LangGraph Multi-Agente (100%)
 - ✅ Business IA / Knowledge Base (100%)
-- ✅ AI Agent Voz con VAPI (100%)
+- ✅ AI Agent Voz con VAPI (100%) - **UI Rediseñada**
 - ✅ AI Learning automatico (100%)
 
 **Core Features:**

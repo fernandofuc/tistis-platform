@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AVAILABLE_VOICES, VOICE_PREVIEW_TEXT } from '@/src/features/voice-agent/types';
+import { rateLimit, createRateLimitResponse, getClientIdentifier } from '@/src/shared/lib/rate-limiter';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,13 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting to prevent abuse of ElevenLabs API credits (5 per minute)
+    const clientId = getClientIdentifier(request);
+    const rateLimitResult = rateLimit(`voice-preview:${clientId}`, { limit: 5, windowSizeInSeconds: 60 });
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const body = await request.json();
     const { voice_id, text = VOICE_PREVIEW_TEXT } = body;
 

@@ -59,9 +59,10 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       };
     }
 
+    // Log success without exposing email addresses
     console.log('[Email] Sent successfully:', {
       messageId: data?.id,
-      to: recipients.map((r) => (typeof r === 'string' ? r : r.email)),
+      recipientCount: recipients.length,
       subject,
     });
 

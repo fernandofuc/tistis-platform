@@ -10,6 +10,12 @@ import {
   canGenerateInsights,
   getUnseenInsightsCount,
 } from '@/src/features/ai/services/business-insights.service';
+import {
+  checkRateLimit,
+  getClientIP,
+  publicAPILimiter,
+  rateLimitExceeded,
+} from '@/src/shared/lib/rate-limit';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -65,6 +71,14 @@ async function getUserContext(supabase: ReturnType<typeof createAuthenticatedCli
 // GET - Retrieve business insights for tenant
 // ======================
 export async function GET(request: NextRequest) {
+  // Rate limiting: prevent excessive queries (100 per minute)
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, publicAPILimiter);
+
+  if (!rateLimitResult.success) {
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   try {
     const accessToken = getAccessToken(request);
     if (!accessToken) {

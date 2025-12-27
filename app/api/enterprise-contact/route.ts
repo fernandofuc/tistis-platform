@@ -6,9 +6,23 @@ import {
   contactLimiter,
   rateLimitExceeded,
 } from '@/src/shared/lib/rate-limit';
+import { sendEmail } from '@/src/lib/email/sender';
 
 // Force dynamic rendering - this API handles POST requests
 export const dynamic = 'force-dynamic';
+
+// HTML escape function to prevent XSS in emails
+function escapeHtml(text: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '/': '&#x2F;',
+  };
+  return text.replace(/[&<>"'/]/g, (char) => htmlEscapes[char] || char);
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -80,11 +94,49 @@ export async function POST(request: NextRequest) {
       // In production, you'd want to send an email notification as backup
     }
 
-    // TODO: Send email notification to sales team
-    // TODO: Send confirmation email to prospect
+    // Send email notification to sales team
+    await sendEmail({
+      to: { email: process.env.EMAIL_REPLY_TO || 'hola@tistis.com', name: 'TIS TIS Sales' },
+      subject: `🚀 Nuevo Lead Enterprise: ${escapeHtml(body.companyName)}`,
+      html: `
+        <h2>Nuevo Lead Enterprise</h2>
+        <p><strong>Empresa:</strong> ${escapeHtml(body.companyName)}</p>
+        <p><strong>Contacto:</strong> ${escapeHtml(body.contactName)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(body.email)}</p>
+        <p><strong>Teléfono:</strong> ${escapeHtml(body.phone)}</p>
+        <p><strong>Industria:</strong> ${escapeHtml(body.industry)}</p>
+        <p><strong>Sucursales:</strong> ${escapeHtml(body.branchCount)}</p>
+        <p><strong>Descripción:</strong></p>
+        <p>${escapeHtml(body.businessDescription)}</p>
+        <hr>
+        <p><em>Contactar en menos de 2 horas para máxima conversión.</em></p>
+      `,
+      tags: ['enterprise-lead', escapeHtml(body.industry)],
+    });
+
+    // Send confirmation email to prospect
+    await sendEmail({
+      to: { email: body.email, name: escapeHtml(body.contactName) },
+      subject: '¡Recibimos tu solicitud! - TIS TIS Platform',
+      html: `
+        <h2>¡Hola ${escapeHtml(body.contactName)}!</h2>
+        <p>Gracias por tu interés en TIS TIS Platform para <strong>${escapeHtml(body.companyName)}</strong>.</p>
+        <p>Hemos recibido tu solicitud y un especialista te contactará en <strong>menos de 2 horas</strong> para:</p>
+        <ul>
+          <li>Entender las necesidades específicas de tu negocio</li>
+          <li>Mostrarte cómo TIS TIS puede ayudarte</li>
+          <li>Responder todas tus preguntas</li>
+        </ul>
+        <p>Mientras tanto, si tienes alguna pregunta urgente, responde a este correo.</p>
+        <br>
+        <p>¡Gracias por elegir TIS TIS!</p>
+        <p><em>El equipo de TIS TIS</em></p>
+      `,
+      tags: ['enterprise-lead-confirmation'],
+    });
 
     // Log only non-PII data
-    console.log('Enterprise lead received:', {
+    console.log('[Enterprise Lead] Received and emails sent:', {
       industry: body.industry,
       branches: body.branchCount
     });

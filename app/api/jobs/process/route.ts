@@ -10,6 +10,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60; // 60 seconds max for Vercel
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { JobProcessor } from '@/src/features/ai/services/job-processor.service';
 import {
@@ -34,21 +35,37 @@ import type { TikTokSendMessageJobPayload } from '@/src/shared/types/tiktok-mess
 // AUTHENTICATION
 // ======================
 
-const CRON_SECRET = process.env.CRON_SECRET || 'dev-secret';
-
 function validateRequest(request: NextRequest): boolean {
-  // Verificar header de autorización para cron jobs
+  const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
-  if (authHeader === `Bearer ${CRON_SECRET}`) {
+
+  // SECURITY: In production, CRON_SECRET is required
+  if (!cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Jobs API] CRITICAL: CRON_SECRET not configured in production');
+      return false;
+    }
+    // Allow in development without secret
+    console.warn('[Jobs API] CRON_SECRET not configured - allowing in development');
     return true;
   }
 
-  // En desarrollo, permitir sin auth
-  if (process.env.NODE_ENV === 'development') {
-    return true;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
   }
 
-  return false;
+  // Timing-safe comparison to prevent timing attacks
+  const token = authHeader.substring(7);
+  try {
+    const tokenBuffer = Buffer.from(token);
+    const secretBuffer = Buffer.from(cronSecret);
+    if (tokenBuffer.length !== secretBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(tokenBuffer, secretBuffer);
+  } catch {
+    return false;
+  }
 }
 
 // ======================
@@ -439,7 +456,8 @@ async function processSendWhatsAppJob(
 ): Promise<Record<string, unknown>> {
   const { message_id, channel_connection_id, recipient_phone, content } = payload;
 
-  console.log(`[Jobs API] Sending WhatsApp message to ${recipient_phone}`);
+  // Log without exposing phone number
+  console.log(`[Jobs API] Sending WhatsApp message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
 

@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit, RATE_LIMIT_PRESETS, createRateLimitResponse, getClientIdentifier } from '@/src/shared/lib/rate-limiter';
 
 // Admin client for password verification workaround
 function getSupabaseAdmin() {
@@ -18,6 +19,14 @@ function getSupabaseAdmin() {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limiting - auth preset (10 requests per minute)
+  const clientId = getClientIdentifier(request);
+  const rateLimitResult = rateLimit(`change-password:${clientId}`, RATE_LIMIT_PRESETS.auth);
+
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(rateLimitResult);
+  }
+
   try {
     const supabase = createServerClient();
     const body = await request.json();

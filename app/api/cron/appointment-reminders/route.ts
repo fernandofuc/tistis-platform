@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -17,17 +18,35 @@ function getSupabaseAdmin() {
   );
 }
 
-// Verify cron secret for security
+// Verify cron secret for security (timing-safe)
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Appointment Reminders] CRON_SECRET not set in production');
+      return false;
+    }
     console.warn('[Appointment Reminders] CRON_SECRET not set');
     return true; // Allow in development
   }
 
-  return authHeader === `Bearer ${cronSecret}`;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+
+  const token = authHeader.substring(7);
+  try {
+    const tokenBuffer = Buffer.from(token);
+    const secretBuffer = Buffer.from(cronSecret);
+    if (tokenBuffer.length !== secretBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(tokenBuffer, secretBuffer);
+  } catch {
+    return false;
+  }
 }
 
 // Types

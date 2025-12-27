@@ -117,10 +117,73 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // SSRF Prevention: Validate image_url if provided
+    let validatedImageUrl: string | null = null;
+    if (image_url) {
+      try {
+        const url = new URL(image_url);
+
+        // Only allow HTTPS URLs
+        if (url.protocol !== 'https:') {
+          return NextResponse.json({
+            error: 'Solo se permiten URLs con HTTPS'
+          }, { status: 400 });
+        }
+
+        // Allowlist of trusted domains for image hosting
+        const ALLOWED_DOMAINS = [
+          'storage.googleapis.com',
+          'supabase.co',
+          'supabase.in',
+          's3.amazonaws.com',
+          'cloudinary.com',
+          'res.cloudinary.com',
+          'imgur.com',
+          'i.imgur.com',
+        ];
+
+        const domain = url.hostname.toLowerCase();
+        const isAllowed = ALLOWED_DOMAINS.some(allowed =>
+          domain === allowed || domain.endsWith('.' + allowed)
+        );
+
+        if (!isAllowed) {
+          return NextResponse.json({
+            error: 'Dominio de imagen no permitido. Use un servicio de almacenamiento de imágenes confiable.'
+          }, { status: 400 });
+        }
+
+        // Block private IPs
+        const privatePatterns = [
+          /^localhost$/i,
+          /^127\./,
+          /^10\./,
+          /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+          /^192\.168\./,
+          /^0\./,
+          /^169\.254\./,
+          /^fc00:/i,
+          /^fe80:/i,
+        ];
+
+        if (privatePatterns.some(pattern => pattern.test(domain))) {
+          return NextResponse.json({
+            error: 'URL de imagen no válida'
+          }, { status: 400 });
+        }
+
+        validatedImageUrl = image_url;
+      } catch {
+        return NextResponse.json({
+          error: 'URL de imagen inválida'
+        }, { status: 400 });
+      }
+    }
+
     // Prepare image for OpenAI Vision
     const imageContent = image_base64
       ? { type: 'image_url' as const, image_url: { url: `data:image/jpeg;base64,${image_base64}` } }
-      : { type: 'image_url' as const, image_url: { url: image_url } };
+      : { type: 'image_url' as const, image_url: { url: validatedImageUrl! } };
 
     // Analyze payment proof with OpenAI Vision
     const completion = await openai.chat.completions.create({

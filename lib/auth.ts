@@ -56,11 +56,10 @@ export function useAuth() {
               error: error.message,
             }));
           } else {
-            console.log('🟢 Session fetched:', {
-              hasSession: !!session,
-              userId: session?.user?.id,
-              email: session?.user?.email,
-            });
+            // Log session state without exposing PII
+            if (process.env.NODE_ENV === 'development') {
+              console.log('🟢 Session fetched:', { hasSession: !!session });
+            }
 
             setState(prev => ({
               ...prev,
@@ -93,7 +92,9 @@ export function useAuth() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔵 Auth state changed:', { event, hasSession: !!session });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔵 Auth state changed:', { event, hasSession: !!session });
+        }
 
         if (mounted) {
           setState(prev => ({

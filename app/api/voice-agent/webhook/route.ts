@@ -6,11 +6,28 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 import { VoiceLangGraphService } from '@/src/features/voice-agent/services/voice-langgraph.service';
 import type { VoiceAgentConfig, VoiceCallMessage } from '@/src/features/voice-agent/types';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
+
+// Timing-safe comparison for webhook secret
+function verifyWebhookSecret(authHeader: string | null, webhookSecret: string): boolean {
+  if (!authHeader) return false;
+
+  try {
+    const authBuffer = Buffer.from(authHeader);
+    const secretBuffer = Buffer.from(webhookSecret);
+    if (authBuffer.length !== secretBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(authBuffer, secretBuffer);
+  } catch {
+    return false;
+  }
+}
 
 // Create service client
 function createServiceClient() {
@@ -620,14 +637,22 @@ async function handleStatusUpdate(event: VAPIStatusUpdate) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar secret si está configurado
+    // Verify webhook secret (timing-safe)
     const webhookSecret = process.env.VAPI_WEBHOOK_SECRET;
+    const authHeader = request.headers.get('x-vapi-secret');
+
     if (webhookSecret) {
-      const authHeader = request.headers.get('x-vapi-secret');
-      if (authHeader !== webhookSecret) {
+      if (!verifyWebhookSecret(authHeader, webhookSecret)) {
         console.warn('[Voice Webhook] Invalid webhook secret');
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
+    } else {
+      // In production, require webhook secret
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[Voice Webhook] VAPI_WEBHOOK_SECRET not configured in production');
+        return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
+      }
+      console.warn('[Voice Webhook] VAPI_WEBHOOK_SECRET not set - skipping verification in development');
     }
 
     let body: VAPIWebhookEvent;
