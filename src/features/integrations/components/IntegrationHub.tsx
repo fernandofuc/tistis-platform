@@ -58,7 +58,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: false,
       orders: false,
     },
-    coming_soon: true,
   },
   {
     type: 'zoho_crm',
@@ -77,7 +76,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: false,
       orders: false,
     },
-    coming_soon: true,
   },
   {
     type: 'pipedrive',
@@ -96,7 +94,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: false,
       orders: false,
     },
-    coming_soon: true,
   },
   // Dental Software
   {
@@ -116,7 +113,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: false,
       orders: false,
     },
-    coming_soon: true,
   },
   {
     type: 'open_dental',
@@ -135,7 +131,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: false,
       orders: false,
     },
-    coming_soon: true,
   },
   // POS Systems
   {
@@ -155,7 +150,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: true,
       orders: true,
     },
-    coming_soon: true,
   },
   {
     type: 'toast',
@@ -174,7 +168,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: true,
       orders: true,
     },
-    coming_soon: true,
   },
   // Calendar
   {
@@ -194,7 +187,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: false,
       orders: false,
     },
-    coming_soon: true,
   },
   {
     type: 'calendly',
@@ -213,7 +205,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: false,
       orders: false,
     },
-    coming_soon: true,
   },
   // Generic
   {
@@ -269,7 +260,6 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       inventory: true,
       orders: true,
     },
-    coming_soon: true,
   },
 ];
 
@@ -478,8 +468,13 @@ function ConfigurationModal({ isOpen, onClose, connection, connector, onSave, is
     sync_appointments: true,
     sync_products: false,
     sync_inventory: false,
+    // Auth fields
+    api_key: '',
+    api_secret: '',
+    external_api_base_url: '',
   });
   const [copied, setCopied] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   // Initialize form data when connection changes
   useEffect(() => {
@@ -492,6 +487,9 @@ function ConfigurationModal({ isOpen, onClose, connection, connector, onSave, is
         sync_appointments: connection.sync_appointments ?? true,
         sync_products: connection.sync_products ?? false,
         sync_inventory: connection.sync_inventory ?? false,
+        api_key: '', // Never pre-fill API keys for security
+        api_secret: '',
+        external_api_base_url: connection.external_api_base_url || '',
       });
     } else if (connector) {
       setFormData({
@@ -502,6 +500,9 @@ function ConfigurationModal({ isOpen, onClose, connection, connector, onSave, is
         sync_appointments: connector.sync_capabilities.appointments,
         sync_products: connector.sync_capabilities.products,
         sync_inventory: connector.sync_capabilities.inventory,
+        api_key: '',
+        api_secret: '',
+        external_api_base_url: '',
       });
     }
   }, [connection, connector]);
@@ -579,6 +580,104 @@ function ConfigurationModal({ isOpen, onClose, connection, connector, onSave, is
             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral outline-none transition-all"
           />
         </div>
+
+        {/* Authentication Section */}
+        {connector?.auth_type === 'oauth2' && !connection && (
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100">Conexión OAuth2</h4>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  Al crear esta integración, se te redirigirá a {connector.name} para autorizar el acceso.
+                  Asegúrate de tener una cuenta activa en {connector.name}.
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                  TIS TIS solo accederá a los datos que autorices.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {connector?.auth_type === 'api_key' && connector.type !== 'csv_import' && (
+          <div className="space-y-4">
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                <strong>Credenciales requeridas:</strong> Ingresa tu API Key de {connector.name} para conectar.
+              </p>
+            </div>
+
+            {/* API Key */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                API Key
+              </label>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={formData.api_key}
+                  onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
+                  placeholder="Ingresa tu API Key"
+                  className="w-full px-4 py-2.5 pr-12 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral outline-none transition-all bg-white dark:bg-gray-800"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showApiKey ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* API Secret (optional) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                API Secret <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <input
+                type="password"
+                value={formData.api_secret}
+                onChange={(e) => setFormData(prev => ({ ...prev, api_secret: e.target.value }))}
+                placeholder="Ingresa tu API Secret si lo requiere"
+                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral outline-none transition-all bg-white dark:bg-gray-800"
+              />
+            </div>
+
+            {/* API Base URL (for custom APIs) */}
+            {connector.type === 'api_custom' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  URL Base de la API
+                </label>
+                <input
+                  type="url"
+                  value={formData.external_api_base_url}
+                  onChange={(e) => setFormData(prev => ({ ...prev, external_api_base_url: e.target.value }))}
+                  placeholder="https://api.ejemplo.com/v1"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral outline-none transition-all bg-white dark:bg-gray-800"
+                />
+                <p className="mt-1.5 text-xs text-gray-500">
+                  La URL base donde TIS TIS enviará las peticiones
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Webhook URL (only for webhook type or if exists) */}
         {(connector?.type === 'webhook_incoming' || connection?.webhook_url) && connection?.webhook_url && (

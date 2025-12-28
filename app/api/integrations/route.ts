@@ -108,6 +108,10 @@ export async function POST(request: NextRequest) {
       sync_appointments = true,
       sync_products = false,
       sync_inventory = false,
+      // Auth credentials (optional, depends on auth_type)
+      api_key,
+      api_secret,
+      external_api_base_url,
     } = body;
 
     if (!integration_type) {
@@ -222,12 +226,17 @@ export async function POST(request: NextRequest) {
         tenant_id: tenantId,
         branch_id: validatedBranchId,
         integration_type,
-        status: 'configuring',
+        status: api_key ? 'connected' : 'configuring', // If API key provided, mark as connected
         auth_type: authType,
         connection_name: connection_name || integration_type,
         webhook_url: webhookUrl,
         webhook_secret: webhookSecret,
-        sync_enabled: false,
+        // Auth credentials
+        api_key: api_key || null,
+        api_secret: api_secret || null,
+        external_api_base_url: external_api_base_url || null,
+        // Sync configuration
+        sync_enabled: !!api_key, // Enable sync if credentials provided
         sync_direction,
         sync_frequency_minutes: 60,
         sync_contacts,
