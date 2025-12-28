@@ -18,6 +18,7 @@ import {
   updateNotificationPreferences,
   type NotificationPreferences,
 } from '@/src/features/settings';
+import { IntegrationHub } from '@/src/features/integrations';
 import { cn } from '@/src/shared/utils';
 
 // ======================
@@ -74,12 +75,17 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
     </svg>
   ),
+  integrations: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+    </svg>
+  ),
 };
 
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'payments' | 'billing' | 'security';
+type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'payments' | 'billing' | 'integrations' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
@@ -88,6 +94,7 @@ const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'payments', label: 'Pagos', icon: icons.payments },
   { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
   { key: 'billing', label: 'Facturación', icon: icons.billing },
+  { key: 'integrations', label: 'Integraciones', icon: icons.integrations },
   { key: 'security', label: 'Seguridad', icon: icons.lock },
 ];
 
@@ -656,6 +663,11 @@ export default function SettingsPage() {
           {/* Billing Tab */}
           {activeTab === 'billing' && (
             <BillingSection />
+          )}
+
+          {/* Integrations Tab */}
+          {activeTab === 'integrations' && (
+            <IntegrationHub />
           )}
 
           {/* Security Tab */}

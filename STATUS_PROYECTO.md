@@ -1,8 +1,8 @@
 # Estado del Proyecto TIS TIS Platform
 
-**Ultima actualizacion:** 21 de Diciembre, 2024
-**Version:** 4.1.0
-**Fase actual:** Produccion - Sistema Completo con LangGraph + AI Learning
+**Ultima actualizacion:** 27 de Diciembre, 2024
+**Version:** 4.4.0
+**Fase actual:** Produccion - Sistema Completo con LangGraph + AI Learning + Integration Hub
 
 ---
 
@@ -13,17 +13,19 @@
 | **Fase 1** | Completada (100%) |
 | **Fase 2** | Completada (100%) |
 | **Fase 3** | Completada (100%) |
-| **Fase 4 - LangGraph** | Completada (100%) - NUEVO |
-| **Base de Datos** | 27+ tablas creadas |
-| **API Endpoints** | 27+ endpoints activos |
+| **Fase 4 - LangGraph** | Completada (100%) |
+| **Fase 5 - Integration Hub** | Completada (100%) - NUEVO |
+| **Base de Datos** | 32+ tablas creadas |
+| **API Endpoints** | 30+ endpoints activos |
 | **Webhooks Multi-Canal** | 4 plataformas integradas |
-| **AI Multi-Agente** | LangGraph con 11 agentes + contexto completo |
-| **AI Learning** | Sistema de aprendizaje automatico - NUEVO |
+| **AI Multi-Agente** | LangGraph con 11 agentes + contexto completo + datos externos |
+| **AI Learning** | Sistema de aprendizaje automatico |
 | **AI por Canal** | Configuracion personalizada por canal |
+| **Integration Hub** | CRM, POS, software dental, calendarios - NUEVO |
 | **Recordatorios Citas** | Automaticos (1 semana, 24h, 4h) |
 | **Membresias** | Validacion de comprobantes con AI Vision |
-| **Dashboard Pages** | 8+ paginas funcionales |
-| **Migraciones aplicadas** | 65+ (LangGraph + AI Learning) |
+| **Dashboard Pages** | 9+ paginas funcionales |
+| **Migraciones aplicadas** | 78+ (Integration Hub) |
 | **Seguridad** | Multi-tenant completamente corregido |
 | **Listo para produccion** | 100% |
 
@@ -75,11 +77,18 @@
 ✅ notification_preferences
 ✅ plans (ACTUALIZADO - precios 2025)
 ✅ addons (ACTUALIZADO - precios 2025)
-✅ ai_message_patterns (NUEVO - sistema de aprendizaje)
-✅ ai_learned_vocabulary (NUEVO - vocabulario especifico)
-✅ ai_business_insights (NUEVO - insights automaticos)
-✅ ai_learning_config (NUEVO - configuracion por tenant)
-✅ ai_learning_queue (NUEVO - cola de procesamiento)
+✅ ai_message_patterns (sistema de aprendizaje)
+✅ ai_learned_vocabulary (vocabulario especifico)
+✅ ai_business_insights (insights automaticos)
+✅ ai_learning_config (configuracion por tenant)
+✅ ai_learning_queue (cola de procesamiento)
+✅ integration_connections (NUEVO - conexiones sistemas externos)
+✅ external_contacts (NUEVO - contactos de CRM con dedup)
+✅ external_appointments (NUEVO - citas de calendarios externos)
+✅ external_inventory (NUEVO - inventario de POS)
+✅ external_products (NUEVO - productos/menus de POS)
+✅ integration_sync_logs (NUEVO - auditoria de sincronizaciones)
+✅ integration_actions (NUEVO - acciones bidireccionales)
 ```
 
 ### 3. 🔌 API Routes Completos (100%)
@@ -110,13 +119,18 @@
 🤖 COLA DE TRABAJOS
 ✅ GET/POST /api/jobs/process
 
-🧠 AI LEARNING (NUEVO)
+🧠 AI LEARNING
 ✅ POST /api/cron/process-learning
+
+🔌 INTEGRATION HUB (NUEVO)
+✅ GET/POST /api/integrations
+✅ GET/PATCH/DELETE /api/integrations/[id]
+✅ POST /api/integrations/[id]/sync
 ```
 
-**Total:** 27+ endpoints activos
+**Total:** 30+ endpoints activos
 
-### 4. 🎨 Dashboard UI Completo (7 páginas)
+### 4. 🎨 Dashboard UI Completo (9 páginas)
 
 ```
 ✅ /dashboard - Overview con stats
@@ -124,8 +138,10 @@
 ✅ /dashboard/calendario - Calendario de citas
 ✅ /dashboard/inbox - Conversaciones WhatsApp
 ✅ /dashboard/analytics - Analytics y métricas
-✅ /dashboard/settings - Configuración
-✅ /dashboard/patients - Gestión de pacientes (NUEVO)
+✅ /dashboard/settings - Configuración (incluye tab Integraciones - NUEVO)
+✅ /dashboard/patients - Gestión de pacientes
+✅ /dashboard/settings?tab=business-ia - Business IA / Knowledge Base
+✅ /dashboard/settings?tab=ai-agent-voz - AI Agent Voz
 ```
 
 ### 5. 🩺 Módulo de Pacientes (100%)
@@ -372,6 +388,86 @@ Solo para planes **Essentials** y superiores.
 | `ai_business_insights` | Insights automaticos generados |
 | `ai_learning_config` | Configuracion por tenant |
 | `ai_learning_queue` | Cola de procesamiento |
+
+---
+
+### 12. Integration Hub - Sistema de Integraciones Externas (100%) - NUEVO v4.4.0
+
+**Concepto:**
+Sistema que permite conectar TIS TIS con sistemas externos (CRMs, POS, software dental, calendarios) de manera bidireccional. Los datos externos se almacenan en tablas separadas (`external_*`) y estan disponibles para el AI.
+
+**Sistemas Soportados:**
+
+| Categoria | Sistemas | Estado |
+|-----------|----------|--------|
+| CRM | HubSpot, Salesforce, Zoho CRM, Pipedrive | HubSpot listo, otros proximamente |
+| Software Dental | Dentrix, Open Dental, Eaglesoft, Curve Dental | Proximamente |
+| POS | Square, Toast, Clover, Lightspeed | Proximamente |
+| Calendario | Google Calendar, Calendly, Acuity | Proximamente |
+| Generico | Webhook Entrante, CSV Import, API Custom | Disponible |
+
+**Funcionalidades:**
+- Conexion via OAuth2 o API Key segun el sistema
+- Sincronizacion configurable (inbound, outbound, bidirectional)
+- Frecuencia de sync ajustable (5, 15, 30, 60 minutos)
+- Mapeo de campos personalizable
+- Deduplicacion inteligente de contactos (por telefono y email)
+- Logs de sincronizacion con auditoria completa
+- Acciones bidireccionales trigger-based
+
+**Tablas Nuevas:**
+
+| Tabla | Proposito |
+|-------|-----------|
+| `integration_connections` | Conexiones y credenciales de sistemas externos |
+| `external_contacts` | Contactos sincronizados de CRM con deduplicacion |
+| `external_appointments` | Citas de calendarios externos |
+| `external_inventory` | Inventario de POS con alertas de stock bajo |
+| `external_products` | Productos/menus de sistemas externos |
+| `integration_sync_logs` | Auditoria de sincronizaciones |
+| `integration_actions` | Acciones bidireccionales configuradas |
+
+**Funciones RPC:**
+
+| Funcion | Proposito |
+|---------|-----------|
+| `normalize_phone_number()` | Normaliza telefonos para matching |
+| `find_matching_lead_for_dedup()` | Busca leads existentes por telefono/email |
+| `get_tenant_external_data()` | Obtiene datos externos para contexto del AI |
+
+**API Endpoints:**
+
+| Metodo | Endpoint | Descripcion |
+|--------|----------|-------------|
+| GET/POST | `/api/integrations` | Lista y crea integraciones |
+| GET/PATCH/DELETE | `/api/integrations/[id]` | CRUD de integracion especifica |
+| POST | `/api/integrations/[id]/sync` | Inicia sincronizacion manual |
+
+**Archivos Creados:**
+
+| Archivo | Proposito |
+|---------|-----------|
+| `supabase/migrations/078_INTEGRATION_HUB.sql` | Tablas, funciones y RLS |
+| `src/features/integrations/types/integration.types.ts` | Tipos TypeScript |
+| `src/features/integrations/components/IntegrationHub.tsx` | UI componente principal |
+| `src/features/integrations/index.ts` | Exports del feature |
+| `app/api/integrations/route.ts` | API GET/POST |
+| `app/api/integrations/[id]/route.ts` | API GET/PATCH/DELETE |
+| `app/api/integrations/[id]/sync/route.ts` | API sync manual |
+
+**Integracion con AI:**
+Los datos externos se cargan via `get_tenant_external_data()` y se incluyen en el campo `external_data` del `BusinessContext` de LangGraph. Esto permite que los agentes tengan informacion de:
+- Productos con stock bajo (alertas automaticas)
+- Menu/catalogo del POS
+- Cantidad de citas externas proximas
+- Sistemas conectados al tenant
+
+**Acceso en Dashboard:**
+En **Configuracion > Integraciones** los usuarios pueden gestionar todas las integraciones desde una UI premium con:
+- Cards de integraciones activas con estadisticas
+- Catalogo de conectores disponibles por categoria
+- Configuracion de sincronizacion
+- Logs y estado de errores
 
 ---
 
@@ -903,3 +999,76 @@ Solo para planes Essentials y superiores.
 | 065_AI_MESSAGE_LEARNING_SYSTEM.sql | 5 tablas nuevas |
 | message-learning.service.ts | Servicio de aprendizaje |
 | process-learning/route.ts | Endpoint CRON |
+
+---
+
+## Notas de la Sesion (27 Dic 2024) - v4.4.0: INTEGRATION HUB
+
+### Sistema de Integraciones Externas
+
+**Concepto:**
+Sistema completo para conectar TIS TIS con sistemas externos (CRMs, POS, software dental, calendarios) de manera bidireccional.
+
+**Archivos Creados:**
+
+| Archivo | Proposito |
+|---------|-----------|
+| `supabase/migrations/078_INTEGRATION_HUB.sql` | Tablas, funciones RPC, RLS policies |
+| `src/features/integrations/types/integration.types.ts` | Tipos TypeScript completos |
+| `src/features/integrations/components/IntegrationHub.tsx` | UI componente premium |
+| `src/features/integrations/index.ts` | Exports del feature |
+| `app/api/integrations/route.ts` | API GET/POST integraciones |
+| `app/api/integrations/[id]/route.ts` | API GET/PATCH/DELETE |
+| `app/api/integrations/[id]/sync/route.ts` | API sync manual |
+
+**Tablas Nuevas (7):**
+
+| Tabla | Proposito |
+|-------|-----------|
+| `integration_connections` | Conexiones y credenciales |
+| `external_contacts` | Contactos de CRM con dedup |
+| `external_appointments` | Citas de calendarios externos |
+| `external_inventory` | Inventario de POS |
+| `external_products` | Productos/menus externos |
+| `integration_sync_logs` | Auditoria de syncs |
+| `integration_actions` | Acciones bidireccionales |
+
+**Funciones RPC (3):**
+
+| Funcion | Proposito |
+|---------|-----------|
+| `normalize_phone_number()` | Normaliza telefonos para matching |
+| `find_matching_lead_for_dedup()` | Busca leads existentes |
+| `get_tenant_external_data()` | Datos externos para AI context |
+
+**Archivos Modificados:**
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/features/ai/state/agent-state.ts` | Nuevo campo `external_data` en BusinessContext |
+| `src/features/ai/services/langgraph-ai.service.ts` | Carga paralela de datos externos |
+| `app/(dashboard)/dashboard/settings/page.tsx` | Nuevo tab "Integraciones" |
+
+**Sistemas Soportados:**
+
+| Categoria | Sistemas |
+|-----------|----------|
+| CRM | HubSpot (listo), Salesforce, Zoho, Pipedrive |
+| Dental | Dentrix, Open Dental, Eaglesoft |
+| POS | Square, Toast, Clover, Lightspeed |
+| Calendario | Google Calendar, Calendly, Acuity |
+| Generico | Webhook Entrante, CSV Import |
+
+**Beneficios:**
+- Los agentes LangGraph tienen acceso a datos de sistemas externos
+- Alertas automaticas de stock bajo
+- Menu/catalogo del POS disponible para el AI
+- Deduplicacion inteligente de contactos (telefono + email)
+- Auditoria completa de sincronizaciones
+
+---
+
+**Ultima actualizacion:** 27 de Diciembre, 2024
+**Responsable:** Claude Code
+**Version:** 4.4.0
+**Estado:** Produccion - Sistema Completo con LangGraph + AI Learning + Integration Hub

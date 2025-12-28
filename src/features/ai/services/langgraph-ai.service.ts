@@ -219,10 +219,27 @@ async function loadConversationContext(
 async function loadBusinessContext(tenantId: string): Promise<BusinessContext | null> {
   const supabase = createServerClient();
 
-  // Usar el RPC que ya trae TODO el contexto en una sola llamada
-  const { data, error } = await supabase.rpc('get_tenant_ai_context', {
-    p_tenant_id: tenantId,
-  });
+  // Cargar contexto core y datos externos EN PARALELO
+  // Si external_data falla, el AI sigue funcionando normalmente
+  const loadExternalData = async () => {
+    try {
+      const result = await supabase.rpc('get_tenant_external_data', { p_tenant_id: tenantId });
+      return result;
+    } catch (err: unknown) {
+      // Fallback silencioso - external_data es opcional
+      const errorMessage = err instanceof Error ? err.message : 'RPC not found';
+      console.log('[LangGraph AI] External data not available (optional):', errorMessage);
+      return { data: null, error: null };
+    }
+  };
+
+  const [coreResult, externalResult] = await Promise.all([
+    supabase.rpc('get_tenant_ai_context', { p_tenant_id: tenantId }),
+    loadExternalData(),
+  ]);
+
+  const { data, error } = coreResult;
+  const externalData = externalResult?.data;
 
   if (error || !data) {
     console.error('[LangGraph AI] Error loading business context via RPC:', error);
@@ -317,6 +334,31 @@ async function loadBusinessContext(tenantId: string): Promise<BusinessContext | 
       talking_points: ch.talking_points as string[] | undefined,
       avoid_saying: ch.avoid_saying as string[] | undefined,
     })),
+
+    // =====================================================
+    // DATOS EXTERNOS - De sistemas integrados (CRM, POS, etc.)
+    // OPCIONAL: Solo presente si el tenant tiene integraciones activas
+    // =====================================================
+    external_data: externalData ? {
+      has_integrations: externalData.has_integrations as boolean,
+      source_systems: (externalData.source_systems as string[]) || [],
+      low_stock_items: (externalData.low_stock_items as Array<{
+        name: string;
+        sku?: string;
+        quantity: number;
+        reorder_point?: number;
+        category?: string;
+      }>) || [],
+      external_products: (externalData.external_products as Array<{
+        name: string;
+        price?: number;
+        category?: string;
+        is_available: boolean;
+        preparation_time?: number;
+      }>) || [],
+      external_appointments_count: externalData.external_appointments_count as number | undefined,
+      last_sync_at: externalData.last_sync_at as string | undefined,
+    } : undefined,
   };
 }
 

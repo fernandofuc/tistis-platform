@@ -1,11 +1,11 @@
 # TIS TIS Platform - Integration Guide
 
-**Versión:** 3.1.0
-**Última actualización:** 22 de Diciembre, 2024
+**Version:** 4.4.0
+**Ultima actualizacion:** 27 de Diciembre, 2024
 
-## 🔌 Overview
+## Overview
 
-This document describes how to complete the multi-channel messaging, Voice Agent, and AI integrations for the TIS TIS Platform.
+This document describes how to complete the multi-channel messaging, Voice Agent, AI integrations, and External System integrations for the TIS TIS Platform.
 
 The platform now includes a **complete AI multi-channel system** with:
 1. WhatsApp Business Cloud API
@@ -15,6 +15,7 @@ The platform now includes a **complete AI multi-channel system** with:
 5. Voice Agent with VAPI (inbound/outbound calls)
 6. Claude AI integration for automated responses
 7. Job queue system for asynchronous processing
+8. **Integration Hub** for CRM, POS, and external systems (NEW v4.4.0)
 
 **Status:** All code, webhooks, and services are fully implemented and ready for configuration.
 
@@ -973,4 +974,293 @@ curl -X POST http://localhost:3000/api/voice-agent/webhook \
 
 ---
 
-*The multi-channel AI system is fully implemented and ready for production. For Voice Agent technical details, see `/docs/VOICE_AGENT_SYSTEM.md`. For messaging integration details, see `/docs/MULTI_CHANNEL_AI_SYSTEM.md`.*
+## Integration Hub - External Systems (NEW v4.4.0)
+
+### Overview
+
+Integration Hub allows connecting TIS TIS with external systems (CRMs, POS, dental software, calendars) bidirectionally. External data is stored in separate tables (`external_*`) and is optionally available to the AI agents.
+
+### Supported Systems
+
+| Category | Systems | Status |
+|----------|---------|--------|
+| **CRM** | HubSpot, Salesforce, Zoho CRM, Pipedrive, Freshsales | HubSpot ready, others coming soon |
+| **Dental Software** | Dentrix, Open Dental, Eaglesoft, Curve Dental | Coming soon |
+| **POS** | Square, Toast, Clover, Lightspeed, SoftRestaurant | Coming soon |
+| **Calendar** | Google Calendar, Calendly, Acuity | Coming soon |
+| **Medical** | Epic, Cerner, Athenahealth | Coming soon |
+| **Generic** | Incoming Webhook, CSV Import, Custom API | Available |
+
+### Authentication Types
+
+| Type | Description | Systems |
+|------|-------------|---------|
+| `oauth2` | OAuth 2.0 flow with refresh tokens | HubSpot, Salesforce, Square, Google Calendar |
+| `api_key` | Simple API key authentication | Dentrix, Open Dental, Custom API |
+| `basic_auth` | Username + Password | Legacy systems |
+| `webhook_secret` | HMAC signature verification | Incoming Webhook |
+
+### Sync Configuration
+
+**Sync Direction:**
+- `inbound` - External system to TIS TIS only
+- `outbound` - TIS TIS to external system only
+- `bidirectional` - Both directions
+
+**Sync Frequency Options:**
+- 5, 15, 30, 60 minutes (configurable per integration)
+
+**Data Types:**
+- Contacts (customers, leads)
+- Appointments (calendar events)
+- Products (menu items, catalog)
+- Inventory (stock levels with low-stock alerts)
+- Orders (sales, transactions)
+
+### Database Tables
+
+```sql
+-- Main integration connection table
+integration_connections (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL,
+  branch_id UUID,                    -- Optional: branch-specific integration
+  integration_type TEXT NOT NULL,    -- 'hubspot', 'dentrix', 'square', etc.
+  status TEXT NOT NULL,              -- 'pending', 'connected', 'error', etc.
+  auth_type TEXT NOT NULL,           -- 'oauth2', 'api_key', 'basic_auth'
+
+  -- Credentials (encrypted at rest)
+  credentials_encrypted BYTEA,
+
+  -- Sync configuration
+  sync_enabled BOOLEAN DEFAULT false,
+  sync_direction TEXT DEFAULT 'inbound',
+  sync_frequency_minutes INTEGER DEFAULT 60,
+  sync_contacts BOOLEAN DEFAULT true,
+  sync_appointments BOOLEAN DEFAULT true,
+  sync_products BOOLEAN DEFAULT false,
+  sync_inventory BOOLEAN DEFAULT false,
+
+  -- Statistics
+  last_sync_at TIMESTAMPTZ,
+  records_synced_total INTEGER DEFAULT 0,
+  records_synced_today INTEGER DEFAULT 0,
+  error_count INTEGER DEFAULT 0,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- External contacts with deduplication
+external_contacts (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL,
+  connection_id UUID NOT NULL,
+  external_id TEXT NOT NULL,         -- ID from external system
+
+  -- Contact data
+  full_name TEXT,
+  email TEXT,
+  phone TEXT,
+  phone_normalized TEXT,             -- Normalized for matching
+
+  -- Deduplication links
+  linked_lead_id UUID,               -- FK to leads table
+  linked_patient_id UUID,            -- FK to patients table
+  dedup_status TEXT DEFAULT 'pending',
+
+  raw_data JSONB,                    -- Original external data
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- External inventory with low-stock alerts
+external_inventory (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL,
+  connection_id UUID NOT NULL,
+
+  name TEXT NOT NULL,
+  sku TEXT,
+  quantity NUMERIC DEFAULT 0,
+  reorder_point NUMERIC,
+  is_low_stock BOOLEAN DEFAULT false,  -- quantity <= reorder_point
+  category TEXT,
+
+  raw_data JSONB,
+  last_synced_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Sync audit logs
+integration_sync_logs (
+  id UUID PRIMARY KEY,
+  connection_id UUID NOT NULL,
+  sync_started_at TIMESTAMPTZ DEFAULT NOW(),
+  sync_ended_at TIMESTAMPTZ,
+  status TEXT NOT NULL,              -- 'success', 'partial', 'error'
+  records_processed INTEGER DEFAULT 0,
+  records_created INTEGER DEFAULT 0,
+  records_updated INTEGER DEFAULT 0,
+  error_message TEXT
+);
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/integrations` | List tenant integrations |
+| POST | `/api/integrations` | Create new integration |
+| GET | `/api/integrations/[id]` | Get integration details |
+| PATCH | `/api/integrations/[id]` | Update integration |
+| DELETE | `/api/integrations/[id]` | Delete integration |
+| POST | `/api/integrations/[id]/sync` | Trigger manual sync |
+
+### RPC Functions
+
+```sql
+-- Normalize phone number for deduplication matching
+SELECT normalize_phone_number('+52 (555) 123-4567');
+-- Returns: 525551234567
+
+-- Find existing lead for deduplication
+SELECT * FROM find_matching_lead_for_dedup(
+  'tenant-uuid',
+  '+521234567890',
+  'email@example.com'
+);
+-- Returns: lead_id, match_type ('phone'|'email'), confidence (0.90-0.95)
+
+-- Get external data for AI context
+SELECT get_tenant_external_data('tenant-uuid');
+-- Returns JSONB:
+-- {
+--   "has_integrations": true,
+--   "source_systems": ["hubspot", "square"],
+--   "low_stock_items": [...],
+--   "external_products": [...],
+--   "external_appointments_count": 15,
+--   "last_sync_at": "2024-12-27T10:00:00Z"
+-- }
+```
+
+### AI Integration
+
+External data is loaded via `get_tenant_external_data()` and included in the `external_data` field of the `BusinessContext` for LangGraph agents.
+
+```typescript
+// In agent-state.ts, BusinessContext includes:
+interface BusinessContext {
+  // ... other fields ...
+
+  external_data?: {
+    has_integrations: boolean;
+    source_systems: string[];
+    low_stock_items?: Array<{
+      name: string;
+      sku?: string;
+      quantity: number;
+      reorder_point?: number;
+      category?: string;
+    }>;
+    external_products?: Array<{
+      name: string;
+      price?: number;
+      category?: string;
+      is_available: boolean;
+      preparation_time?: number;
+    }>;
+    external_appointments_count?: number;
+    last_sync_at?: string;
+  };
+}
+```
+
+This allows AI agents to:
+- Alert about low-stock items
+- Reference external product catalogs (menus, etc.)
+- Know about upcoming external appointments
+- Provide more informed responses
+
+### Dashboard Access
+
+Users access Integration Hub at **Settings > Integrations** tab:
+
+1. **View Active Integrations** - Cards showing sync status and statistics
+2. **Add New Integration** - Catalog of available connectors by category
+3. **Configure Sync** - Select data types and frequency
+4. **View Logs** - Audit trail of sync operations
+5. **Manual Sync** - Trigger immediate synchronization
+
+### Setup Example: HubSpot
+
+1. **Create Integration:**
+```bash
+POST /api/integrations
+{
+  "integration_type": "hubspot",
+  "connection_name": "HubSpot CRM",
+  "sync_contacts": true,
+  "sync_appointments": true
+}
+```
+
+2. **Complete OAuth:**
+   - User is redirected to HubSpot authorization
+   - On callback, credentials are stored encrypted
+
+3. **Configure Sync:**
+```bash
+PATCH /api/integrations/[id]
+{
+  "sync_enabled": true,
+  "sync_frequency_minutes": 15,
+  "sync_direction": "bidirectional"
+}
+```
+
+4. **Monitor:**
+   - Check `last_sync_at` and `records_synced_total`
+   - Review `integration_sync_logs` for any errors
+
+### Setup Example: Incoming Webhook
+
+For systems that can push data via webhook:
+
+1. **Create Integration:**
+```bash
+POST /api/integrations
+{
+  "integration_type": "webhook_incoming",
+  "connection_name": "Custom CRM Webhook"
+}
+```
+
+2. **Get Webhook URL:**
+   - Response includes `webhook_url`: `/api/integrations/webhook/{tenant_id}/{webhook_id}`
+
+3. **Configure External System:**
+   - Point external system to webhook URL
+   - Include `X-Webhook-Secret` header for verification
+
+4. **Receive Data:**
+   - Webhook validates signature
+   - Data is stored in `external_contacts`, `external_appointments`, etc.
+   - Deduplication runs automatically
+
+### Integration Hub Checklist
+
+- [ ] Integration connection created via API or dashboard
+- [ ] OAuth flow completed (for OAuth2 systems) or API key configured
+- [ ] Sync settings configured (direction, frequency, data types)
+- [ ] Initial sync completed successfully
+- [ ] Deduplication reviewed (linked_lead_id, linked_patient_id)
+- [ ] AI context loading verified (external_data in BusinessContext)
+- [ ] Monitoring set up for sync errors
+
+### Migration
+
+Apply migration `078_INTEGRATION_HUB.sql` to create all required tables, functions, and RLS policies.
+
+---
+
+*The multi-channel AI system and Integration Hub are fully implemented and ready for production. For Voice Agent technical details, see `/docs/VOICE_AGENT_SYSTEM.md`. For messaging integration details, see `/docs/MULTI_CHANNEL_AI_SYSTEM.md`.*

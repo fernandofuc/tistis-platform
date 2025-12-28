@@ -212,6 +212,44 @@ export interface BusinessContext {
     talking_points?: string[];
     avoid_saying?: string[];
   }>;
+
+  // =====================================================
+  // DATOS EXTERNOS - De sistemas integrados (CRM, POS, etc.)
+  // OPCIONAL: Solo presente si el tenant tiene integraciones activas
+  // =====================================================
+
+  /** Datos sincronizados de sistemas externos (CRM, POS, software dental) */
+  external_data?: {
+    /** Indica si hay integraciones activas */
+    has_integrations: boolean;
+
+    /** Sistemas de origen de los datos */
+    source_systems: string[];
+
+    /** Productos/servicios externos con stock bajo */
+    low_stock_items?: Array<{
+      name: string;
+      sku?: string;
+      quantity: number;
+      reorder_point?: number;
+      category?: string;
+    }>;
+
+    /** Productos externos (menú de restaurante, catálogo, etc.) */
+    external_products?: Array<{
+      name: string;
+      price?: number;
+      category?: string;
+      is_available: boolean;
+      preparation_time?: number;
+    }>;
+
+    /** Número de citas externas pendientes */
+    external_appointments_count?: number;
+
+    /** Última sincronización exitosa */
+    last_sync_at?: string;
+  };
 }
 
 /**

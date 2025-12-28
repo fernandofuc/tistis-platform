@@ -2,8 +2,8 @@
 
 Sistema completo de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API y automatizacion de procesos multi-canal.
 
-**Version:** 4.3.0
-**Estado:** Produccion - Security Hardened + AI Agent Voz Rediseñado
+**Version:** 4.4.0
+**Estado:** Produccion - Integration Hub + External Systems Sync
 **Ultima actualizacion:** 27 de Diciembre, 2024
 
 ---
@@ -27,6 +27,7 @@ TIS TIS Platform es una solucion SaaS multi-tenant para gestion de negocios que 
 - **Configuracion de AI por canal** - Personaliza el comportamiento por canal
 - Sistema de citas y calendario con **recordatorios automaticos** (1 semana, 24h, 4h)
 - Sistema de **membresias con validacion de pagos por transferencia** (AI Vision)
+- **Integration Hub** - Conecta CRMs, POS y software externo (HubSpot, Dentrix, Square, etc.)
 - Historiales clinicos con odontograma
 - Cotizaciones y planes de pago con Stripe
 - Notificaciones en tiempo real
@@ -66,6 +67,7 @@ TIS TIS utiliza una arquitectura de IA de multiples capas donde cada componente 
 │  │  • knowledge_base[] (documentos y conocimiento)                       │  │
 │  │  • ai_learning (patrones, vocabulario, insights)                      │  │
 │  │  • conversation_history (ultimos 20 mensajes)                         │  │
+│  │  • external_data (datos de CRM, POS, software externo) - NUEVO        │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                  │                                          │
 │                                  ▼                                          │
@@ -556,6 +558,176 @@ La migracion `064_LANGGRAPH_FEATURE_FLAG.sql` agrega:
 - Indice optimizado para busqueda rapida
 - Funcion helper `tenant_uses_langgraph(tenant_id)`
 
+## 🔌 Integration Hub (Sistema de Integraciones Externas)
+
+### Que es?
+
+Integration Hub es el sistema que permite conectar TIS TIS con sistemas externos (CRMs, POS, software dental, calendarios) de manera bidireccional. Los datos sincronizados se almacenan en tablas separadas (`external_*`) y estan disponibles para el AI de forma opcional.
+
+### Sistemas Soportados
+
+| Categoria | Sistemas | Estado |
+|-----------|----------|--------|
+| **CRM** | HubSpot, Salesforce, Zoho CRM, Pipedrive, Freshsales | HubSpot disponible, otros proximamente |
+| **Software Dental** | Dentrix, Open Dental, Eaglesoft, Curve Dental | Proximamente |
+| **POS** | Square, Toast, Clover, Lightspeed, SoftRestaurant | Proximamente |
+| **Calendario** | Google Calendar, Calendly, Acuity | Proximamente |
+| **Medico** | Epic, Cerner, Athenahealth | Proximamente |
+| **Generico** | Webhook Entrante, CSV Import, API Custom | Disponible |
+
+### Arquitectura del Integration Hub
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         INTEGRATION HUB ARCHITECTURE                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │   HubSpot   │  │   Dentrix   │  │   Square    │  │  Calendly   │        │
+│  │     CRM     │  │   Dental    │  │     POS     │  │  Calendar   │        │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
+│         │                │                │                │               │
+│         └────────────────┴────────────────┴────────────────┘               │
+│                                   │                                         │
+│                                   ▼                                         │
+│         ┌─────────────────────────────────────────────────────────┐        │
+│         │               INTEGRATION CONNECTIONS                    │        │
+│         │  ───────────────────────────────────────────────────    │        │
+│         │  • OAuth2 / API Key / Webhook authentication            │        │
+│         │  • Sync configuration (direction, frequency)            │        │
+│         │  • Field mapping customization                          │        │
+│         │  • Error tracking and retry logic                       │        │
+│         └───────────────────────────┬─────────────────────────────┘        │
+│                                     │                                       │
+│                                     ▼                                       │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                     EXTERNAL DATA TABLES                              │ │
+│  │  ─────────────────────────────────────────────────────────────────    │ │
+│  │  external_contacts     → Contactos sincronizados con deduplicacion    │ │
+│  │  external_appointments → Citas de calendarios externos                │ │
+│  │  external_inventory    → Inventario de POS (con alertas stock bajo)   │ │
+│  │  external_products     → Productos/menus de POS                       │ │
+│  │  integration_sync_logs → Auditoria de sincronizaciones                │ │
+│  │  integration_actions   → Acciones bidireccionales configuradas        │ │
+│  └───────────────────────────┬───────────────────────────────────────────┘ │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                    DEDUPLICACION INTELIGENTE                          │ │
+│  │  ─────────────────────────────────────────────────────────────────    │ │
+│  │  • normalize_phone_number() - Normaliza telefonos para matching       │ │
+│  │  • find_matching_lead_for_dedup() - Busca leads existentes            │ │
+│  │  • linked_lead_id / linked_patient_id - FK a entidades TIS TIS        │ │
+│  └───────────────────────────┬───────────────────────────────────────────┘ │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                    AI CONTEXT INTEGRATION                             │ │
+│  │  ─────────────────────────────────────────────────────────────────    │ │
+│  │  get_tenant_external_data() RPC - Carga datos externos:               │ │
+│  │  • source_systems[] (sistemas conectados)                             │ │
+│  │  • low_stock_items[] (alertas de inventario bajo)                     │ │
+│  │  • external_products[] (menu/catalogo externo)                        │ │
+│  │  • external_appointments_count (citas proximas 7 dias)                │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Tablas de Base de Datos
+
+| Tabla | Proposito |
+|-------|-----------|
+| `integration_connections` | Conexiones de sistemas externos (credenciales, configuracion sync) |
+| `external_contacts` | Contactos sincronizados de CRM con deduplicacion inteligente |
+| `external_appointments` | Citas de calendarios externos |
+| `external_inventory` | Inventario de POS con alertas de stock bajo |
+| `external_products` | Productos/servicios externos (menus, catalogos) |
+| `integration_sync_logs` | Auditoria de sincronizaciones |
+| `integration_actions` | Acciones bidireccionales (trigger-based) |
+
+### Funciones RPC
+
+```sql
+-- Normaliza numero de telefono para deduplicacion
+SELECT normalize_phone_number('+52 (555) 123-4567');
+-- Resultado: 525551234567
+
+-- Busca lead existente para vincular
+SELECT * FROM find_matching_lead_for_dedup('tenant-id', '+521234567890', 'email@example.com');
+-- Resultado: lead_id, match_type (phone/email), confidence (0.90-0.95)
+
+-- Obtiene datos externos para contexto del AI
+SELECT get_tenant_external_data('tenant-id');
+-- Resultado: JSONB con source_systems, low_stock_items, external_products
+```
+
+### API Endpoints
+
+| Metodo | Endpoint | Descripcion |
+|--------|----------|-------------|
+| GET | `/api/integrations` | Lista integraciones del tenant |
+| POST | `/api/integrations` | Crea nueva integracion |
+| GET | `/api/integrations/[id]` | Detalle de integracion |
+| PATCH | `/api/integrations/[id]` | Actualiza integracion |
+| DELETE | `/api/integrations/[id]` | Elimina integracion |
+| POST | `/api/integrations/[id]/sync` | Inicia sincronizacion manual |
+
+### Acceso en Dashboard
+
+En **Configuracion > Integraciones** los usuarios pueden:
+
+- Ver integraciones activas con estadisticas de sync
+- Conectar nuevos sistemas (OAuth2 o API Key)
+- Configurar que datos sincronizar (contactos, citas, productos, inventario)
+- Ver logs de sincronizacion y errores
+- Iniciar sincronizacion manual
+
+### Integracion con AI
+
+Los datos externos se cargan en paralelo via `get_tenant_external_data()` y se incluyen en el `BusinessContext` de los agentes LangGraph. Esto permite:
+
+- **Alertas de stock bajo** - El AI puede informar sobre productos agotandose
+- **Menu externo** - El AI conoce el catalogo del POS
+- **Citas externas** - El AI sabe cuantas citas hay de otros sistemas
+- **Contexto enriquecido** - Respuestas mas informadas con datos de CRM
+
+```typescript
+// El campo external_data en BusinessContext incluye:
+interface ExternalData {
+  has_integrations: boolean;
+  source_systems: string[];      // ['hubspot', 'square']
+  low_stock_items: Array<{...}>;  // Productos con stock bajo
+  external_products: Array<{...}>; // Menu/catalogo del POS
+  external_appointments_count: number;
+  last_sync_at: string;
+}
+```
+
+### Tipos de Autenticacion
+
+| Tipo | Uso | Sistemas |
+|------|-----|----------|
+| `oauth2` | OAuth 2.0 flow | HubSpot, Salesforce, Square, Google Calendar |
+| `api_key` | API Key simple | Dentrix, Open Dental, API Custom |
+| `basic_auth` | Usuario + Password | Sistemas legacy |
+| `webhook_secret` | HMAC para webhooks | Webhook Entrante |
+
+### Direccion de Sincronizacion
+
+- **inbound** - Solo de sistema externo a TIS TIS
+- **outbound** - Solo de TIS TIS a sistema externo
+- **bidirectional** - Ambas direcciones
+
+### Migracion
+
+La migracion `078_INTEGRATION_HUB.sql` crea:
+- 7 tablas nuevas para el sistema de integraciones
+- 3 funciones RPC (normalize_phone_number, find_matching_lead_for_dedup, get_tenant_external_data)
+- Indices optimizados para busquedas y deduplicacion
+- RLS policies para aislamiento multi-tenant
+- Triggers para normalizacion automatica de telefonos
+
 ## 🚀 Quick Start
 
 ### Prerrequisitos
@@ -616,6 +788,11 @@ tistis-platform/
 │       │   ├── webhook/              # Webhook VAPI
 │       │   ├── phone-numbers/        # Gestion de numeros
 │       │   └── config/               # Configuracion
+│       ├── integrations/             # 🔌 Integration Hub APIs (NUEVO)
+│       │   ├── route.ts              # GET/POST integraciones
+│       │   └── [id]/
+│       │       ├── route.ts          # GET/PATCH/DELETE
+│       │       └── sync/route.ts     # POST sync manual
 │       ├── webhook/                  # Webhooks externos
 │       │   ├── whatsapp/[tenantSlug]/
 │       │   ├── instagram/[tenantSlug]/
@@ -651,11 +828,17 @@ tistis-platform/
 │   │   │   └── services/
 │   │   │       ├── langgraph-ai.service.ts
 │   │   │       └── message-learning.service.ts  # 🧠 AI Learning
-│   │   └── voice-agent/              # 📞 Voice Agent Feature
+│   │   ├── voice-agent/              # 📞 Voice Agent Feature
+│   │   │   ├── components/
+│   │   │   ├── services/
+│   │   │   ├── types/
+│   │   │   └── hooks/
+│   │   └── integrations/             # 🔌 Integration Hub Feature (NUEVO)
 │   │       ├── components/
-│   │       ├── services/
+│   │       │   └── IntegrationHub.tsx # UI principal
 │   │       ├── types/
-│   │       └── hooks/
+│   │       │   └── integration.types.ts
+│   │       └── index.ts
 │   │
 │   └── shared/                       # Codigo compartido
 │       ├── components/
@@ -667,7 +850,7 @@ tistis-platform/
 │       └── types/
 │
 ├── supabase/
-│   └── migrations/                   # 65+ migraciones SQL
+│   └── migrations/                   # 78+ migraciones SQL
 │
 ├── public/
 └── docs/                             # Documentacion tecnica
@@ -675,14 +858,14 @@ tistis-platform/
 
 ## 🗄️ Base de Datos
 
-### Schema v2.2
+### Schema v2.3
 
-- **25+ tablas** principales (tenants, leads, patients, quotes, user_roles, vertical_configs, ai_learning_*, etc.)
-- **11 funciones** PostgreSQL optimizadas con advisory locks
+- **32+ tablas** principales (tenants, leads, patients, quotes, user_roles, vertical_configs, ai_learning_*, integration_connections, external_*, etc.)
+- **14 funciones** PostgreSQL optimizadas con advisory locks
 - **4 views** para queries complejas (incluye staff_members)
 - **3 buckets** de Storage (patient-files, quotes-pdf, temp-uploads)
 - **RLS policies** corregidas usando user_roles (multi-tenant seguro)
-- **25+ índices** optimizados
+- **30+ indices** optimizados
 
 ### Migraciones Aplicadas
 
@@ -699,7 +882,9 @@ tistis-platform/
 11. `011_master_correction.sql` - Correccion master critica
 12. ... (migraciones 012-063) - Mejoras incrementales
 13. `064_LANGGRAPH_FEATURE_FLAG.sql` - Feature flag para LangGraph multi-agente
-14. `065_AI_MESSAGE_LEARNING_SYSTEM.sql` - **NUEVO** - Sistema de aprendizaje automatico de mensajes
+14. `065_AI_MESSAGE_LEARNING_SYSTEM.sql` - Sistema de aprendizaje automatico de mensajes
+15. ... (migraciones 066-077) - Mejoras incrementales
+16. `078_INTEGRATION_HUB.sql` - **NUEVO** - Sistema de integraciones externas (CRM, POS, etc.)
 
 ### Migración 011: Corrección Master (10 Dic 2024)
 
@@ -745,6 +930,9 @@ Ver detalles completos en `/supabase/migrations/MIGRATION_NOTES.md`
 | POST | `/api/webhook/facebook/[tenantSlug]` | Webhook Facebook | ⚠️ |
 | POST | `/api/webhook/tiktok/[tenantSlug]` | Webhook TikTok | ⚠️ |
 | POST | `/api/jobs/process` | Procesador de cola de trabajos | ⚠️ |
+| GET/POST | `/api/integrations` | Lista y crea integraciones | ✅ |
+| GET/PATCH/DELETE | `/api/integrations/[id]` | CRUD de integracion | ✅ |
+| POST | `/api/integrations/[id]/sync` | Sincronizacion manual | ✅ |
 
 Todas las rutas validan:
 - Autenticación vía header `Authorization`
@@ -880,9 +1068,18 @@ npm run typecheck         # TypeScript check
 
 ## 📊 Estado del Proyecto
 
-### Version 4.3.0 - Security Hardened + AI Agent Voz Rediseñado
+### Version 4.4.0 - Integration Hub + External Systems Sync
 
-**Seguridad (NUEVO v4.3.0):**
+**Integration Hub (NUEVO v4.4.0):**
+- ✅ Sistema de integraciones externas (CRM, POS, dental software, calendarios)
+- ✅ 7 tablas nuevas para manejo de datos externos
+- ✅ Deduplicacion inteligente de contactos (phone/email matching)
+- ✅ Sincronizacion bidireccional configurable
+- ✅ API endpoints completos para CRUD de integraciones
+- ✅ UI en dashboard (Configuracion > Integraciones)
+- ✅ Integracion con contexto del AI (external_data en BusinessContext)
+
+**Seguridad (v4.3.0):**
 - ✅ 6 Auditorias de seguridad completadas (#11-#16)
 - ✅ 25+ vulnerabilidades corregidas
 - ✅ Sistema de autenticacion centralizado
@@ -893,7 +1090,7 @@ npm run typecheck         # TypeScript check
 **Sistemas de IA Implementados:**
 - ✅ LangGraph Multi-Agente (100%)
 - ✅ Business IA / Knowledge Base (100%)
-- ✅ AI Agent Voz con VAPI (100%) - **UI Rediseñada**
+- ✅ AI Agent Voz con VAPI (100%)
 - ✅ AI Learning automatico (100%)
 
 **Core Features:**
@@ -904,6 +1101,7 @@ npm run typecheck         # TypeScript check
 - ✅ Seguridad multi-tenant (100%)
 - ✅ API Routes (100%)
 - ✅ Mensajeria multi-canal (100%)
+- ✅ Integration Hub - CRM, POS, External Systems (100%)
 
 **Dashboard:**
 - ✅ Diseno premium actualizado
