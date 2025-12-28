@@ -474,6 +474,10 @@ export interface CreateIntegrationRequest {
   sync_appointments?: boolean;
   sync_products?: boolean;
   sync_inventory?: boolean;
+  // Auth credentials (depends on auth_type)
+  api_key?: string;
+  api_secret?: string;
+  external_api_base_url?: string;
 }
 
 export interface UpdateIntegrationRequest {

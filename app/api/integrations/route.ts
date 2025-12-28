@@ -13,6 +13,46 @@ import {
 } from '@/src/shared/lib/auth-helper';
 
 // ======================
+// SECURITY: Safe fields to return in API responses
+// NEVER include: api_key, api_secret, access_token, refresh_token, webhook_secret, db_connection_string
+// ======================
+const SAFE_INTEGRATION_FIELDS = `
+  id,
+  tenant_id,
+  branch_id,
+  integration_type,
+  status,
+  auth_type,
+  connection_name,
+  webhook_url,
+  external_account_id,
+  external_account_name,
+  external_api_base_url,
+  sync_enabled,
+  sync_direction,
+  sync_frequency_minutes,
+  sync_contacts,
+  sync_appointments,
+  sync_products,
+  sync_inventory,
+  sync_orders,
+  field_mapping,
+  records_synced_total,
+  records_synced_today,
+  last_sync_at,
+  next_sync_at,
+  last_error_at,
+  last_error_message,
+  error_count,
+  consecutive_errors,
+  token_expires_at,
+  connected_at,
+  created_at,
+  updated_at,
+  metadata
+`;
+
+// ======================
 // GET - List integrations
 // ======================
 export async function GET(request: NextRequest) {
@@ -37,10 +77,10 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const integrationType = searchParams.get('type');
 
-    // Build query
+    // Build query - Use SAFE_INTEGRATION_FIELDS to exclude sensitive credentials
     let query = supabase
       .from('integration_connections')
-      .select('*')
+      .select(SAFE_INTEGRATION_FIELDS)
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
@@ -209,6 +249,24 @@ export async function POST(request: NextRequest) {
 
     const authType = AUTH_TYPES[integration_type] || 'api_key';
 
+    // Validate external_api_base_url format if provided
+    if (external_api_base_url) {
+      try {
+        const url = new URL(external_api_base_url);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return NextResponse.json(
+            { error: 'external_api_base_url must use http or https protocol' },
+            { status: 400 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: 'external_api_base_url must be a valid URL' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Generate webhook URL and secret for incoming webhook type
     let webhookUrl: string | undefined;
     let webhookSecret: string | undefined;
@@ -251,7 +309,7 @@ export async function POST(request: NextRequest) {
         consecutive_errors: 0,
         metadata: {},
       })
-      .select()
+      .select(SAFE_INTEGRATION_FIELDS)
       .single();
 
     if (error) {
@@ -273,7 +331,17 @@ export async function POST(request: NextRequest) {
 
     console.log('[Integrations API] Integration created:', data.id, integration_type);
 
-    return NextResponse.json({ connection: data }, { status: 201 });
+    // For webhook_incoming, include the webhook_secret in the response
+    // This is the ONLY time it will be shown to the user
+    const responseData = {
+      ...data,
+      // Only include webhook_secret for webhook_incoming type on creation
+      ...(integration_type === 'webhook_incoming' && webhookSecret
+        ? { webhook_secret: webhookSecret }
+        : {}),
+    };
+
+    return NextResponse.json({ connection: responseData }, { status: 201 });
   } catch (error) {
     console.error('[Integrations API] Unexpected error:', error);
     return NextResponse.json(
