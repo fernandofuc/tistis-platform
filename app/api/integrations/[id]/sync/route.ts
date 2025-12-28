@@ -48,10 +48,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Get the integration
+    // Get the integration - only select fields needed for sync validation
+    // SECURITY: Never select credentials even for internal use
     const { data: integration, error: fetchError } = await supabase
       .from('integration_connections')
-      .select('*')
+      .select('id, status, integration_type, sync_direction, sync_frequency_minutes, error_count, consecutive_errors')
       .eq('id', id)
       .eq('tenant_id', tenantId)
       .single();
