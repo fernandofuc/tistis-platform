@@ -835,6 +835,7 @@ interface IntegrationCardProps {
 function IntegrationCard({ connection, connector, onConfigure, onSync, onPause, onDelete, isLoading }: IntegrationCardProps) {
   const isConnected = connection.status === 'connected' || connection.status === 'syncing';
   const isPaused = connection.status === 'paused' || connection.status === 'disconnected';
+  const isConfiguring = connection.status === 'configuring' || connection.status === 'pending';
   const category = connector ? CATEGORY_METADATA[connector.category] : CATEGORY_METADATA.generic;
 
   const formatLastSync = (dateStr?: string) => {
@@ -853,43 +854,55 @@ function IntegrationCard({ connection, connector, onConfigure, onSync, onPause, 
   };
 
   return (
-    <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200">
-      {/* Header */}
-      <div className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            {/* Connector Icon */}
-            <div className={cn(
-              'w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm',
-              category.bgColor
-            )}>
-              <ConnectorIcon type={connection.integration_type} className={cn('w-7 h-7', category.color)} />
-            </div>
+    <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+      {/* Header with delete button always visible */}
+      <div className="p-5 relative">
+        {/* Delete button - always visible in top right corner */}
+        <button
+          onClick={onDelete}
+          disabled={isLoading}
+          className={cn(
+            'absolute top-3 right-3 p-2 rounded-lg transition-all group',
+            isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
+          )}
+          title="Eliminar integración"
+        >
+          <TrashIcon className="w-4 h-4" />
+        </button>
 
-            {/* Info */}
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {connection.connection_name || connector?.name || connection.integration_type}
-                </h3>
-                <span className={cn(
-                  'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                  category.bgColor,
-                  category.color
-                )}>
-                  {category.name}
-                </span>
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                {connection.external_account_name || connector?.description}
-              </p>
-            </div>
+        <div className="flex items-start gap-4 pr-10">
+          {/* Connector Icon */}
+          <div className={cn(
+            'w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0',
+            category.bgColor
+          )}>
+            <ConnectorIcon type={connection.integration_type} className={cn('w-7 h-7', category.color)} />
           </div>
 
-          <StatusBadge status={connection.status} />
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {connection.connection_name || connector?.name || connection.integration_type}
+              </h3>
+              <span className={cn(
+                'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                category.bgColor,
+                category.color
+              )}>
+                {category.name}
+              </span>
+              <StatusBadge status={connection.status} />
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {connection.external_account_name || connector?.description}
+            </p>
+          </div>
         </div>
 
-        {/* Sync Stats */}
+        {/* Sync Stats - only for connected/paused states */}
         {(isConnected || isPaused) && (
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div className="p-3 bg-gray-50 dark:bg-[#333] rounded-xl">
@@ -923,10 +936,41 @@ function IntegrationCard({ connection, connector, onConfigure, onSync, onPause, 
         )}
       </div>
 
-      {/* Footer */}
-      <div className="px-5 py-4 bg-gray-50/50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-700 rounded-b-2xl flex items-center justify-between">
-        {isConnected || isPaused ? (
-          <>
+      {/* Footer - Different layouts for different states */}
+      <div className="px-5 py-4 bg-gray-50/50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-700">
+        {isConfiguring ? (
+          /* Configuring state - two buttons side by side */
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onConfigure}
+              disabled={isLoading}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors',
+                isLoading
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-tis-coral text-white hover:bg-tis-coral/90'
+              )}
+            >
+              <SettingsIcon className="w-4 h-4" />
+              Continuar configuración
+            </button>
+            <button
+              onClick={onDelete}
+              disabled={isLoading}
+              className={cn(
+                'flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors border',
+                isLoading
+                  ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
+              )}
+            >
+              <TrashIcon className="w-4 h-4" />
+              Eliminar
+            </button>
+          </div>
+        ) : (
+          /* Connected/Paused state - full action bar */
+          <div className="flex items-center justify-between">
             {/* Left Actions */}
             <div className="flex items-center gap-2">
               {/* Sync Button */}
@@ -986,35 +1030,8 @@ function IntegrationCard({ connection, connector, onConfigure, onSync, onPause, 
                 <SettingsIcon className="w-4 h-4" />
                 Configurar
               </button>
-              <button
-                onClick={onDelete}
-                disabled={isLoading}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl transition-colors',
-                  isLoading
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
-                )}
-              >
-                <TrashIcon className="w-4 h-4" />
-                Eliminar
-              </button>
             </div>
-          </>
-        ) : (
-          <button
-            onClick={onConfigure}
-            disabled={isLoading}
-            className={cn(
-              'w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors',
-              isLoading
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-tis-coral text-white hover:bg-tis-coral/90'
-            )}
-          >
-            <SettingsIcon className="w-4 h-4" />
-            {connection.status === 'configuring' ? 'Continuar configuración' : 'Configurar'}
-          </button>
+          </div>
         )}
       </div>
     </div>
@@ -1040,13 +1057,14 @@ function AddConnectorCard({ connector, onClick, disabled }: AddConnectorCardProp
       onClick={onClick}
       disabled={isDisabled}
       className={cn(
-        'w-full bg-white dark:bg-[#2a2a2a] rounded-2xl border-2 border-dashed transition-all duration-200 p-6 text-left',
+        'w-full bg-white dark:bg-[#2a2a2a] rounded-2xl border-2 border-dashed transition-all duration-200 p-5 text-left group',
         isDisabled
           ? 'border-gray-200 dark:border-gray-700 opacity-60 cursor-not-allowed'
-          : 'border-gray-200 dark:border-gray-700 hover:border-tis-coral/50 hover:bg-gray-50/50 dark:hover:bg-[#333]'
+          : 'border-gray-200 dark:border-gray-700 hover:border-tis-coral/50 hover:bg-gray-50/50 dark:hover:bg-[#333] hover:shadow-sm'
       )}
     >
-      <div className="flex items-center gap-4">
+      {/* Top section with icon and add button */}
+      <div className="flex items-start justify-between mb-3">
         {/* Icon */}
         <div className={cn(
           'w-12 h-12 rounded-xl flex items-center justify-center',
@@ -1055,42 +1073,66 @@ function AddConnectorCard({ connector, onClick, disabled }: AddConnectorCardProp
           <ConnectorIcon type={connector.type} className={cn('w-6 h-6', category.color)} />
         </div>
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-              {connector.name}
-            </h3>
-            {connector.coming_soon && (
-              <Badge variant="default" size="sm">Próximamente</Badge>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-            {connector.description}
-          </p>
-        </div>
-
-        {/* Add Icon */}
-        {!connector.coming_soon && (
-          <div className="w-10 h-10 rounded-full bg-tis-coral/10 flex items-center justify-center flex-shrink-0">
-            <PlusIcon className="w-5 h-5 text-tis-coral" />
+        {/* Add Icon or Coming Soon badge */}
+        {connector.coming_soon ? (
+          <Badge variant="default" size="sm">Próximamente</Badge>
+        ) : (
+          <div className={cn(
+            'w-8 h-8 rounded-full flex items-center justify-center transition-colors',
+            'bg-gray-100 dark:bg-gray-700 group-hover:bg-tis-coral/10'
+          )}>
+            <PlusIcon className="w-4 h-4 text-gray-400 group-hover:text-tis-coral transition-colors" />
           </div>
         )}
       </div>
 
-      {/* Capabilities */}
-      <div className="mt-4 flex flex-wrap gap-2">
+      {/* Title and category */}
+      <div className="mb-2">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900 dark:text-white">
+            {connector.name}
+          </h3>
+          <span className={cn(
+            'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide',
+            category.bgColor,
+            category.color
+          )}>
+            {category.name}
+          </span>
+        </div>
+      </div>
+
+      {/* Description - full text, no truncation */}
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
+        {connector.description}
+      </p>
+
+      {/* Capabilities - as small pills */}
+      <div className="flex flex-wrap gap-1.5">
         {connector.sync_capabilities.contacts && (
-          <span className="text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md">Contactos</span>
+          <span className="text-[11px] px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full font-medium">
+            Contactos
+          </span>
         )}
         {connector.sync_capabilities.appointments && (
-          <span className="text-xs px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-md">Citas</span>
+          <span className="text-[11px] px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full font-medium">
+            Citas
+          </span>
         )}
         {connector.sync_capabilities.products && (
-          <span className="text-xs px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-md">Productos</span>
+          <span className="text-[11px] px-2 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-full font-medium">
+            Productos
+          </span>
         )}
         {connector.sync_capabilities.inventory && (
-          <span className="text-xs px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-md">Inventario</span>
+          <span className="text-[11px] px-2 py-0.5 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-full font-medium">
+            Inventario
+          </span>
+        )}
+        {connector.sync_capabilities.orders && (
+          <span className="text-[11px] px-2 py-0.5 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 rounded-full font-medium">
+            Órdenes
+          </span>
         )}
       </div>
     </button>
@@ -1514,7 +1556,7 @@ export function IntegrationHub() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {availableConnectors.map(connector => (
                   <AddConnectorCard
                     key={connector.type}
