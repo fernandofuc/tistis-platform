@@ -106,6 +106,7 @@ export interface IntegrationConnection {
 
   // Webhook config (for incoming webhooks)
   webhook_url?: string;
+  webhook_secret?: string;
 
   // Sync configuration
   sync_enabled: boolean;
