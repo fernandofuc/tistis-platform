@@ -90,16 +90,15 @@ function CheckoutContent() {
       setVertical(savedVertical);
     }
 
-    // Check for OAuth user email (set by callback)
+    // Check for OAuth user email (set by pricing page after OAuth redirect)
     const oauthEmail = sessionStorage.getItem('oauth_user_email');
     if (oauthEmail) {
       setCustomerEmail(oauthEmail);
       setIsOAuthUser(true);
-      // Extract name from email as a starting point
+      // Extract name from email as a starting point (only if name is empty)
       const namePart = oauthEmail.split('@')[0].replace(/[._]/g, ' ');
-      if (!customerName) {
-        setCustomerName(namePart.charAt(0).toUpperCase() + namePart.slice(1));
-      }
+      const capitalizedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+      setCustomerName(prev => prev || capitalizedName);
     }
 
     // Cargar datos del cuestionario si existen
@@ -111,14 +110,18 @@ function CheckoutContent() {
           if (!oauthEmail) {
             setCustomerEmail(answers.contact_info.email || '');
           }
-          setCustomerName(answers.contact_info.name || '');
-          setCustomerPhone(answers.contact_info.phone || '');
+          if (answers.contact_info.name) {
+            setCustomerName(answers.contact_info.name);
+          }
+          if (answers.contact_info.phone) {
+            setCustomerPhone(answers.contact_info.phone);
+          }
         }
       } catch (e) {
         console.error('Error parsing questionnaire answers:', e);
       }
     }
-  }, [searchParams, customerName]);
+  }, [searchParams]); // Removed customerName to prevent infinite loop
 
   // Datos del plan
   const plan = getPlanConfig(planId) || PLAN_CONFIG.essentials;
