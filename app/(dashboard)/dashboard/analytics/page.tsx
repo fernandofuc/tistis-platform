@@ -11,6 +11,7 @@ import { useAuthContext } from '@/src/features/auth';
 import { useBranch } from '@/src/shared/stores';
 import { supabase } from '@/src/shared/lib/supabase';
 import { formatNumber, cn } from '@/src/shared/utils';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import {
   AreaChart,
   Area,
@@ -143,6 +144,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function AnalyticsPage() {
   const { tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
+  const { terminology } = useVerticalTerminology();
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>('30d');
 
@@ -490,7 +492,7 @@ export default function AnalyticsPage() {
           loading={loading}
         />
         <StatCard
-          title="Citas Completadas"
+          title={`${terminology.appointments} Completadas`}
           value={`${stats.appointmentsCompleted}/${stats.appointmentsScheduled}`}
           changeLabel={`${stats.appointmentsCancelled} canceladas`}
           trend={stats.appointmentsCancelled > 0 ? 'down' : 'neutral'}
@@ -513,7 +515,7 @@ export default function AnalyticsPage() {
         <Card variant="bordered" className="overflow-hidden">
           <CardHeader
             title="Tendencia de Actividad"
-            subtitle="Leads, citas y conversaciones por día"
+            subtitle={`Leads, ${terminology.appointments.toLowerCase()} y conversaciones por día`}
           />
           <CardContent className="pt-2">
             {loading ? (
@@ -580,7 +582,7 @@ export default function AnalyticsPage() {
                   <Area
                     type="monotone"
                     dataKey="appointments"
-                    name="Citas"
+                    name={terminology.appointments}
                     stroke="#10B981"
                     strokeWidth={2.5}
                     fillOpacity={1}
@@ -667,7 +669,7 @@ export default function AnalyticsPage() {
 
         {/* Appointments Bar Chart */}
         <Card variant="bordered">
-          <CardHeader title="Estado de Citas" subtitle="Distribución por estado" />
+          <CardHeader title={`Estado de ${terminology.appointments}`} subtitle="Distribución por estado" />
           <CardContent>
             {loading ? (
               <div className="h-64 flex items-center justify-center">
@@ -676,7 +678,7 @@ export default function AnalyticsPage() {
             ) : appointmentBarData.length === 0 ? (
               <div className="h-64 flex items-center justify-center text-gray-400">
                 <div className="text-center">
-                  <p className="text-sm">No hay citas en este período</p>
+                  <p className="text-sm">No hay {terminology.appointments.toLowerCase()} en este período</p>
                 </div>
               </div>
             ) : (

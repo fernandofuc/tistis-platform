@@ -525,7 +525,7 @@ export default function DashboardPage() {
                             router.push(`/dashboard/calendario?lead_id=${lead.id}`);
                           }}
                           className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="Agendar cita"
+                          title={t('scheduleAction')}
                         >
                           {icons.calendar}
                         </button>
@@ -601,7 +601,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Sidebar - Citas de Hoy (1/3) */}
+        {/* Sidebar - Today's Appointments (1/3) - Uses dynamic terminology via t('todayAppointments') */}
         <div className="space-y-6">
           <Card variant="bordered" className="overflow-hidden">
             <CardHeader
@@ -729,7 +729,7 @@ export default function DashboardPage() {
                       href="/dashboard/calendario"
                       className="block p-4 text-center text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
                     >
-                      Ver {todayAppointments.length - 5} citas más
+                      Ver {todayAppointments.length - 5} {t('appointments').toLowerCase()} más
                     </Link>
                   )}
                 </div>

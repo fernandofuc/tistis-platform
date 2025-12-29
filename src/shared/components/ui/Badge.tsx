@@ -79,43 +79,71 @@ Badge.displayName = 'Badge';
 
 // ======================
 // STATUS BADGE (Pre-configured)
+// NOTE: This uses static labels. For dynamic terminology based on vertical,
+// use DynamicStatusBadge below with useVerticalTerminology() hook
 // ======================
 export interface StatusBadgeProps {
   status: string;
   className?: string;
 }
 
-export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const statusConfig: Record<string, { variant: BadgeProps['variant']; label: string }> = {
-    // Lead statuses
-    new: { variant: 'info', label: 'Nuevo' },
-    contacted: { variant: 'info', label: 'Contactado' },
-    qualified: { variant: 'success', label: 'Calificado' },
-    appointment_scheduled: { variant: 'info', label: 'Cita Agendada' },
-    converted: { variant: 'success', label: 'Convertido' },
-    lost: { variant: 'danger', label: 'Perdido' },
-    inactive: { variant: 'default', label: 'Inactivo' },
-    // Appointment statuses
-    scheduled: { variant: 'info', label: 'Programada' },
-    confirmed: { variant: 'success', label: 'Confirmada' },
-    in_progress: { variant: 'warning', label: 'En Progreso' },
-    completed: { variant: 'success', label: 'Completada' },
-    cancelled: { variant: 'danger', label: 'Cancelada' },
-    no_show: { variant: 'warning', label: 'No Asistió' },
-    rescheduled: { variant: 'info', label: 'Reagendada' },
-    // Conversation statuses
-    active: { variant: 'success', label: 'Activa' },
-    waiting_response: { variant: 'warning', label: 'Esperando' },
-    escalated: { variant: 'danger', label: 'Escalada' },
-    resolved: { variant: 'default', label: 'Resuelta' },
-    archived: { variant: 'default', label: 'Archivada' },
-  };
+// Default status config (static, for non-vertical-specific contexts)
+const DEFAULT_STATUS_CONFIG: Record<string, { variant: BadgeProps['variant']; label: string }> = {
+  // Lead statuses
+  new: { variant: 'info', label: 'Nuevo' },
+  contacted: { variant: 'info', label: 'Contactado' },
+  qualified: { variant: 'success', label: 'Calificado' },
+  appointment_scheduled: { variant: 'info', label: 'Cita Agendada' },
+  converted: { variant: 'success', label: 'Convertido' },
+  lost: { variant: 'danger', label: 'Perdido' },
+  inactive: { variant: 'default', label: 'Inactivo' },
+  // Appointment statuses
+  scheduled: { variant: 'info', label: 'Programada' },
+  confirmed: { variant: 'success', label: 'Confirmada' },
+  in_progress: { variant: 'warning', label: 'En Progreso' },
+  completed: { variant: 'success', label: 'Completada' },
+  cancelled: { variant: 'danger', label: 'Cancelada' },
+  no_show: { variant: 'warning', label: 'No Asistió' },
+  rescheduled: { variant: 'info', label: 'Reagendada' },
+  // Conversation statuses
+  active: { variant: 'success', label: 'Activa' },
+  waiting_response: { variant: 'warning', label: 'Esperando' },
+  escalated: { variant: 'danger', label: 'Escalada' },
+  resolved: { variant: 'default', label: 'Resuelta' },
+  archived: { variant: 'default', label: 'Archivada' },
+};
 
-  const config = statusConfig[status] || { variant: 'default', label: status };
+export function StatusBadge({ status, className }: StatusBadgeProps) {
+  const config = DEFAULT_STATUS_CONFIG[status] || { variant: 'default', label: status };
 
   return (
     <Badge variant={config.variant} dot className={className}>
       {config.label}
+    </Badge>
+  );
+}
+
+// ======================
+// DYNAMIC STATUS BADGE (with terminology support)
+// Use this in components that have access to useVerticalTerminology()
+// ======================
+export interface DynamicStatusBadgeProps {
+  status: string;
+  /** Dynamic label override for status - use terminology.appointmentScheduledStatus for 'appointment_scheduled' */
+  statusLabels?: Record<string, string>;
+  className?: string;
+}
+
+export function DynamicStatusBadge({ status, statusLabels, className }: DynamicStatusBadgeProps) {
+  // Get base config
+  const baseConfig = DEFAULT_STATUS_CONFIG[status] || { variant: 'default' as const, label: status };
+
+  // Use dynamic label if provided
+  const label = statusLabels?.[status] || baseConfig.label;
+
+  return (
+    <Badge variant={baseConfig.variant} dot className={className}>
+      {label}
     </Badge>
   );
 }

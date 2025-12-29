@@ -37,6 +37,24 @@ export interface ExtendedTerminology extends VerticalTerminology {
   // Time-based
   upcomingLabel: string;
   pastLabel: string;
+
+  // Lead status labels
+  appointmentScheduledStatus: string;
+  newAppointmentNotification: string;
+
+  // Appointment detail labels
+  appointmentDetail: string;
+  appointmentSummary: string;
+  appointmentNotes: string;
+  createAppointmentError: string;
+
+  // Integration labels
+  syncAppointments: string;
+  calendarSyncDescription: string;
+  schedulingDescription: string;
+
+  // Search placeholder
+  searchPlaceholder: string;
 }
 
 // ======================
@@ -73,6 +91,24 @@ const EXTENDED_TERMINOLOGY: Record<VerticalType, ExtendedTerminology> = {
     noRecentActivity: 'Sin actividad reciente',
     upcomingLabel: 'Próximas',
     pastLabel: 'Pasadas',
+
+    // Lead status labels
+    appointmentScheduledStatus: 'Cita Agendada',
+    newAppointmentNotification: 'Nueva Cita',
+
+    // Appointment detail labels
+    appointmentDetail: 'Detalle de Cita',
+    appointmentSummary: 'Resumen de la cita',
+    appointmentNotes: 'Información adicional sobre la cita, síntomas, indicaciones especiales...',
+    createAppointmentError: 'Error al crear la cita',
+
+    // Integration labels
+    syncAppointments: 'Citas',
+    calendarSyncDescription: 'Sincroniza citas con tu calendario',
+    schedulingDescription: 'Programación de citas automatizada',
+
+    // Search placeholder
+    searchPlaceholder: 'Buscar leads, citas, pacientes...',
   },
 
   clinic: {
@@ -105,6 +141,24 @@ const EXTENDED_TERMINOLOGY: Record<VerticalType, ExtendedTerminology> = {
     noRecentActivity: 'Sin actividad reciente',
     upcomingLabel: 'Próximas',
     pastLabel: 'Pasadas',
+
+    // Lead status labels
+    appointmentScheduledStatus: 'Consulta Agendada',
+    newAppointmentNotification: 'Nueva Consulta',
+
+    // Appointment detail labels
+    appointmentDetail: 'Detalle de Consulta',
+    appointmentSummary: 'Resumen de la consulta',
+    appointmentNotes: 'Información adicional sobre la consulta, síntomas, indicaciones especiales...',
+    createAppointmentError: 'Error al crear la consulta',
+
+    // Integration labels
+    syncAppointments: 'Consultas',
+    calendarSyncDescription: 'Sincroniza consultas con tu calendario',
+    schedulingDescription: 'Programación de consultas automatizada',
+
+    // Search placeholder
+    searchPlaceholder: 'Buscar leads, consultas, pacientes...',
   },
 
   restaurant: {
@@ -137,6 +191,24 @@ const EXTENDED_TERMINOLOGY: Record<VerticalType, ExtendedTerminology> = {
     noRecentActivity: 'Sin actividad reciente',
     upcomingLabel: 'Próximas',
     pastLabel: 'Pasadas',
+
+    // Lead status labels
+    appointmentScheduledStatus: 'Reservación Confirmada',
+    newAppointmentNotification: 'Nueva Reservación',
+
+    // Appointment detail labels
+    appointmentDetail: 'Detalle de Reservación',
+    appointmentSummary: 'Resumen de la reservación',
+    appointmentNotes: 'Información adicional sobre la reservación, preferencias, ocasión especial...',
+    createAppointmentError: 'Error al crear la reservación',
+
+    // Integration labels
+    syncAppointments: 'Reservaciones',
+    calendarSyncDescription: 'Sincroniza reservaciones con tu calendario',
+    schedulingDescription: 'Reservaciones automatizadas',
+
+    // Search placeholder
+    searchPlaceholder: 'Buscar leads, reservaciones, clientes...',
   },
 
   gym: {
@@ -169,6 +241,24 @@ const EXTENDED_TERMINOLOGY: Record<VerticalType, ExtendedTerminology> = {
     noRecentActivity: 'Sin actividad reciente',
     upcomingLabel: 'Próximas',
     pastLabel: 'Pasadas',
+
+    // Lead status labels
+    appointmentScheduledStatus: 'Clase Reservada',
+    newAppointmentNotification: 'Nueva Clase',
+
+    // Appointment detail labels
+    appointmentDetail: 'Detalle de Clase',
+    appointmentSummary: 'Resumen de la clase',
+    appointmentNotes: 'Información adicional sobre la clase, nivel, equipamiento necesario...',
+    createAppointmentError: 'Error al crear la clase',
+
+    // Integration labels
+    syncAppointments: 'Clases',
+    calendarSyncDescription: 'Sincroniza clases con tu calendario',
+    schedulingDescription: 'Programación de clases automatizada',
+
+    // Search placeholder
+    searchPlaceholder: 'Buscar leads, clases, miembros...',
   },
 
   beauty: {
@@ -201,6 +291,24 @@ const EXTENDED_TERMINOLOGY: Record<VerticalType, ExtendedTerminology> = {
     noRecentActivity: 'Sin actividad reciente',
     upcomingLabel: 'Próximas',
     pastLabel: 'Pasadas',
+
+    // Lead status labels
+    appointmentScheduledStatus: 'Cita Agendada',
+    newAppointmentNotification: 'Nueva Cita',
+
+    // Appointment detail labels
+    appointmentDetail: 'Detalle de Cita',
+    appointmentSummary: 'Resumen de la cita',
+    appointmentNotes: 'Información adicional sobre la cita, servicios deseados, preferencias...',
+    createAppointmentError: 'Error al crear la cita',
+
+    // Integration labels
+    syncAppointments: 'Citas',
+    calendarSyncDescription: 'Sincroniza citas con tu calendario',
+    schedulingDescription: 'Programación de citas automatizada',
+
+    // Search placeholder
+    searchPlaceholder: 'Buscar leads, citas, clientes...',
   },
 
   veterinary: {
@@ -233,6 +341,24 @@ const EXTENDED_TERMINOLOGY: Record<VerticalType, ExtendedTerminology> = {
     noRecentActivity: 'Sin actividad reciente',
     upcomingLabel: 'Próximas',
     pastLabel: 'Pasadas',
+
+    // Lead status labels
+    appointmentScheduledStatus: 'Consulta Agendada',
+    newAppointmentNotification: 'Nueva Consulta',
+
+    // Appointment detail labels
+    appointmentDetail: 'Detalle de Consulta',
+    appointmentSummary: 'Resumen de la consulta',
+    appointmentNotes: 'Información adicional sobre la consulta, síntomas de la mascota, indicaciones...',
+    createAppointmentError: 'Error al crear la consulta',
+
+    // Integration labels
+    syncAppointments: 'Consultas',
+    calendarSyncDescription: 'Sincroniza consultas con tu calendario',
+    schedulingDescription: 'Programación de consultas automatizada',
+
+    // Search placeholder
+    searchPlaceholder: 'Buscar leads, consultas, pacientes...',
   },
 };
 

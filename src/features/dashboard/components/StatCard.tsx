@@ -203,16 +203,22 @@ export function AppointmentsStatCard({
   today,
   upcoming,
   loading,
+  /** Dynamic title - use terminology.todayAppointments from useVerticalTerminology */
+  title = 'Citas Hoy',
+  /** Dynamic "upcoming" label - use terminology.upcomingLabel from useVerticalTerminology */
+  upcomingLabel = 'próximas',
 }: {
   today: number;
   upcoming: number;
   loading?: boolean;
+  title?: string;
+  upcomingLabel?: string;
 }) {
   return (
     <StatCard
-      title="Citas Hoy"
+      title={title}
       value={today}
-      changeLabel={`${upcoming} próximas`}
+      changeLabel={`${upcoming} ${upcomingLabel}`}
       loading={loading}
       icon={
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

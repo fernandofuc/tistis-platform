@@ -12,6 +12,7 @@ import { Avatar, Badge } from '@/shared/components/ui';
 import { useAuthContext } from '@/features/auth';
 import { useBranch } from '@/shared/stores';
 import { useNotifications, useGlobalSearch, type SearchResult } from '@/shared/hooks';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import type { HeaderProps } from '../types';
 
 // ======================
@@ -109,18 +110,8 @@ function getSearchIcon(type: SearchResult['type']) {
   }
 }
 
-function getSearchTypeLabel(type: SearchResult['type']) {
-  switch (type) {
-    case 'lead':
-      return 'Lead';
-    case 'patient':
-      return 'Paciente';
-    case 'appointment':
-      return 'Cita';
-    default:
-      return 'Resultado';
-  }
-}
+// Note: getSearchTypeLabel is now inside the component to access terminology
+// See Header component for dynamic implementation
 
 // ======================
 // NOTIFICATION HELPERS
@@ -184,6 +175,21 @@ export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
   const { staff, signOut } = useAuthContext();
   const { selectedBranch, branches, setSelectedBranchId } = useBranch();
+  const { terminology } = useVerticalTerminology();
+
+  // Dynamic search type labels based on vertical terminology
+  const getSearchTypeLabel = useCallback((type: SearchResult['type']) => {
+    switch (type) {
+      case 'lead':
+        return 'Lead';
+      case 'patient':
+        return terminology.patient;
+      case 'appointment':
+        return terminology.appointment;
+      default:
+        return 'Resultado';
+    }
+  }, [terminology]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -294,7 +300,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
-                placeholder="Buscar leads, citas, clientes..."
+                placeholder={terminology.searchPlaceholder}
                 className="w-80 lg:w-96 pl-11 pr-12 py-2.5 bg-slate-100/70 border-0 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:bg-white transition-all"
               />
               {searchQuery ? (

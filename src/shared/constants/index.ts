@@ -54,6 +54,8 @@ export const LEAD_SCORING_WEIGHTS = {
 
 // ======================
 // LEAD STATUS & CLASSIFICATION
+// NOTE: For dynamic terminology based on vertical, use getLeadStatuses() from
+// '@/src/shared/utils/terminologyHelpers' in React components with useVerticalTerminology()
 // ======================
 export const LEAD_STATUSES = [
   { value: 'new', label: 'Nuevo', color: 'blue' },
@@ -147,6 +149,8 @@ export const APPOINTMENT_DURATIONS = [
 
 // ======================
 // NOTIFICATION TYPES
+// NOTE: For dynamic terminology based on vertical, use getNotificationTypes() from
+// '@/src/shared/utils/terminologyHelpers' in React components with useVerticalTerminology()
 // ======================
 export const NOTIFICATION_TYPES = [
   { value: 'hot_lead', label: 'Lead Caliente', priority: 'high' },

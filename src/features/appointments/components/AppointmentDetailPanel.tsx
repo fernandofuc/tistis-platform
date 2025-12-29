@@ -5,12 +5,13 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button, Badge, Avatar } from '@/src/shared/components/ui';
 import { supabase } from '@/src/shared/lib/supabase';
 import { formatDate, formatTime, cn } from '@/src/shared/utils';
 import { APPOINTMENT_STATUSES } from '@/src/shared/constants';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import type { Appointment, Lead, Staff, Service, Branch } from '@/src/shared/types';
 
 // ======================
@@ -203,6 +204,8 @@ export function AppointmentDetailPanel({
 }: AppointmentDetailPanelProps) {
   const [loading, setLoading] = useState(false);
   const [fullData, setFullData] = useState<AppointmentWithRelations | null>(null);
+  const { terminology } = useVerticalTerminology();
+  const panelTitle = useMemo(() => terminology.appointmentDetail, [terminology]);
 
   // Fetch full appointment data with relations
   const fetchFullData = useCallback(async () => {
@@ -345,7 +348,7 @@ export function AppointmentDetailPanel({
                   >
                     {icons.close}
                   </button>
-                  <h2 className="text-lg font-semibold text-gray-900">Detalle de Cita</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">{panelTitle}</h2>
                 </div>
                 <div className={cn(
                   'flex items-center gap-2 px-3 py-1.5 rounded-full',

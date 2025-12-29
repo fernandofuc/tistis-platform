@@ -16,6 +16,7 @@ import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, formatPhone, cn } from '@/src/shared/utils';
 import { LEAD_STATUSES, LEAD_SOURCES } from '@/src/shared/constants';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import type { Lead, LeadClassification, Appointment, Staff, Service } from '@/src/shared/types';
 
 // Type for appointment with relations
@@ -176,6 +177,7 @@ const initialNewLeadForm: NewLeadForm = {
 export default function LeadsPage() {
   const { tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
+  const { terminology } = useVerticalTerminology();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -635,7 +637,7 @@ export default function LeadsPage() {
                     <button
                       onClick={(e) => handleCalendarClick(e, lead)}
                       className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                      title="Ver/Agendar cita"
+                      title={`Ver/Agendar ${terminology.appointment.toLowerCase()}`}
                     >
                       {icons.calendar}
                     </button>
@@ -871,7 +873,7 @@ export default function LeadsPage() {
                 >
                   <h4 className="text-sm font-semibold text-blue-700 flex items-center gap-2">
                     {icons.calendar}
-                    Citas Programadas
+                    {terminology.appointments} Programadas
                   </h4>
 
                   {loadingAppointments ? (
@@ -879,7 +881,7 @@ export default function LeadsPage() {
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     </div>
                   ) : leadAppointments.length === 0 ? (
-                    <p className="text-sm text-slate-500 italic py-2">No hay citas programadas para este lead</p>
+                    <p className="text-sm text-slate-500 italic py-2">No hay {terminology.appointments.toLowerCase()} programadas para este lead</p>
                   ) : (
                     <div className="space-y-3">
                       {leadAppointments.map((appointment) => (

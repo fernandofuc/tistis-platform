@@ -33,6 +33,8 @@ interface CallDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   accessToken: string;
+  /** Dynamic label for appointment_booked outcome - use terminology.appointment from useVerticalTerminology */
+  appointmentLabel?: string;
 }
 
 // ======================
@@ -63,9 +65,9 @@ function formatTime(dateString: string): string {
   });
 }
 
-function getOutcomeLabel(outcome: string | null): { label: string; color: string } {
+function getOutcomeLabel(outcome: string | null, appointmentLabel: string = 'Cita'): { label: string; color: string } {
   const outcomes: Record<string, { label: string; color: string }> = {
-    appointment_booked: { label: 'Cita agendada', color: 'text-tis-green bg-tis-green/10' },
+    appointment_booked: { label: `${appointmentLabel} agendada`, color: 'text-tis-green bg-tis-green/10' },
     information_given: { label: 'Información dada', color: 'text-blue-600 bg-blue-50' },
     escalated_human: { label: 'Escalado a humano', color: 'text-amber-600 bg-amber-50' },
     callback_requested: { label: 'Callback solicitado', color: 'text-purple-600 bg-purple-50' },
@@ -116,6 +118,7 @@ export function CallDetailModal({
   isOpen,
   onClose,
   accessToken,
+  appointmentLabel = 'Cita',
 }: CallDetailModalProps) {
   const [messages, setMessages] = useState<VoiceCallMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
@@ -176,7 +179,7 @@ export function CallDetailModal({
     }
   };
 
-  const outcomeInfo = getOutcomeLabel(call.outcome);
+  const outcomeInfo = getOutcomeLabel(call.outcome, appointmentLabel);
   const statusInfo = getStatusLabel(call.status);
 
   if (!isOpen) return null;

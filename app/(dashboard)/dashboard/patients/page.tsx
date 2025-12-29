@@ -1,6 +1,6 @@
 // =====================================================
 // TIS TIS PLATFORM - Patients Page
-// Pacientes registrados que ya han tenido citas
+// Patients who have had at least one appointment (uses dynamic terminology)
 // Design System: TIS TIS Premium (Apple-like aesthetics)
 // =====================================================
 
@@ -625,7 +625,7 @@ export default function PatientsPage() {
                     <button
                       onClick={(e) => handleCalendarClick(e, patient)}
                       className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                      title="Ver/Agendar cita"
+                      title={`Ver/Agendar ${terminology.appointment.toLowerCase()}`}
                     >
                       {icons.calendar}
                     </button>

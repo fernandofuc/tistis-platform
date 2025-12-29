@@ -11,6 +11,8 @@ import { useAuthContext } from '@/src/features/auth';
 import { useBranch } from '@/src/shared/stores';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
+import { getAppointmentLabels } from '@/src/shared/utils/terminologyHelpers';
 
 // ======================
 // TYPES
@@ -145,6 +147,8 @@ export function NewAppointmentModal({
 }: NewAppointmentModalProps) {
   const { tenant, branches: authBranches } = useAuthContext();
   const { selectedBranchId } = useBranch();
+  const { terminology } = useVerticalTerminology();
+  const appointmentLabels = useMemo(() => getAppointmentLabels(terminology), [terminology]);
 
   // Data states
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -370,7 +374,7 @@ export function NewAppointmentModal({
       resetForm();
     } catch (err) {
       console.error('Error creating appointment:', err);
-      setError(err instanceof Error ? err.message : 'Error al crear la cita');
+      setError(err instanceof Error ? err.message : appointmentLabels.errorMessage);
     } finally {
       setLoading(false);
     }
@@ -415,8 +419,8 @@ export function NewAppointmentModal({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Nueva Cita"
-      subtitle="Agenda una cita con todos los detalles"
+      title={appointmentLabels.title}
+      subtitle={appointmentLabels.subtitle}
       size="lg"
       footer={
         <>
@@ -424,7 +428,7 @@ export function NewAppointmentModal({
             Cancelar
           </Button>
           <Button onClick={handleSubmit} isLoading={loading}>
-            Crear Cita
+            {appointmentLabels.createButton}
           </Button>
         </>
       }
@@ -439,7 +443,7 @@ export function NewAppointmentModal({
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-red-800">Error al crear la cita</p>
+              <p className="text-sm font-medium text-red-800">{appointmentLabels.errorMessage}</p>
               <p className="text-sm text-red-600 mt-0.5">{error}</p>
             </div>
           </div>
@@ -758,7 +762,7 @@ export function NewAppointmentModal({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="Información adicional sobre la cita, síntomas, indicaciones especiales..."
+            placeholder={appointmentLabels.notesPlaceholder}
             className={cn(
               'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
               'focus:ring-2 focus:ring-gray-400 focus:border-transparent',
@@ -771,7 +775,7 @@ export function NewAppointmentModal({
         {/* Summary Card */}
         {(scheduledDate && scheduledTime) && (
           <div className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-xl space-y-3">
-            <h4 className="text-sm font-semibold text-gray-700">Resumen de la cita</h4>
+            <h4 className="text-sm font-semibold text-gray-700">{appointmentLabels.summaryTitle}</h4>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-gray-500">Fecha:</span>

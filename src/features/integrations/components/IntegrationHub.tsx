@@ -5,11 +5,12 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardHeader, CardContent, Badge, Modal } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
+import { useVerticalTerminology, type ExtendedTerminology } from '@/src/hooks/useVerticalTerminology';
 import type {
   IntegrationConnection,
   IntegrationType,
@@ -264,6 +265,24 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
 ];
 
 // ======================
+// DYNAMIC DESCRIPTION OVERRIDES
+// Maps connector types to dynamic descriptions based on vertical terminology
+// ======================
+
+function getConnectorCatalogWithTerminology(terminology: ExtendedTerminology): ConnectorDefinition[] {
+  return CONNECTOR_CATALOG.map(connector => {
+    // Override descriptions for calendar-related connectors
+    if (connector.type === 'google_calendar') {
+      return { ...connector, description: terminology.calendarSyncDescription };
+    }
+    if (connector.type === 'calendly') {
+      return { ...connector, description: terminology.schedulingDescription };
+    }
+    return connector;
+  });
+}
+
+// ======================
 // CATEGORY METADATA
 // ======================
 
@@ -460,6 +479,7 @@ interface ConfigModalProps {
 }
 
 function ConfigurationModal({ isOpen, onClose, connection, connector, onSave, isLoading }: ConfigModalProps) {
+  const { terminology } = useVerticalTerminology();
   const [formData, setFormData] = useState({
     connection_name: '',
     sync_direction: 'bidirectional' as 'inbound' | 'outbound' | 'bidirectional',
@@ -780,7 +800,7 @@ function ConfigurationModal({ isOpen, onClose, connection, connector, onSave, is
           <div className="grid grid-cols-2 gap-3">
             {[
               { key: 'sync_contacts', label: 'Contactos', available: connector?.sync_capabilities.contacts },
-              { key: 'sync_appointments', label: 'Citas', available: connector?.sync_capabilities.appointments },
+              { key: 'sync_appointments', label: terminology.syncAppointments, available: connector?.sync_capabilities.appointments },
               { key: 'sync_products', label: 'Productos', available: connector?.sync_capabilities.products },
               { key: 'sync_inventory', label: 'Inventario', available: connector?.sync_capabilities.inventory },
             ].map((option) => (
@@ -1133,6 +1153,7 @@ interface AddConnectorCardProps {
 }
 
 function AddConnectorCard({ connector, onClick, disabled }: AddConnectorCardProps) {
+  const { terminology } = useVerticalTerminology();
   const category = CATEGORY_METADATA[connector.category];
   const isDisabled = connector.coming_soon || disabled;
 
@@ -1200,7 +1221,7 @@ function AddConnectorCard({ connector, onClick, disabled }: AddConnectorCardProp
         )}
         {connector.sync_capabilities.appointments && (
           <span className="text-[11px] px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full font-medium">
-            Citas
+            {terminology.syncAppointments}
           </span>
         )}
         {connector.sync_capabilities.products && (
@@ -1229,6 +1250,7 @@ function AddConnectorCard({ connector, onClick, disabled }: AddConnectorCardProp
 
 export function IntegrationHub() {
   const { staff } = useAuthContext();
+  const { terminology } = useVerticalTerminology();
   const [connections, setConnections] = useState<IntegrationConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1240,6 +1262,12 @@ export function IntegrationHub() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<IntegrationConnection | null>(null);
   const [selectedConnector, setSelectedConnector] = useState<ConnectorDefinition | null>(null);
+
+  // Get connector catalog with dynamic terminology
+  const connectorCatalog = useMemo(
+    () => getConnectorCatalogWithTerminology(terminology),
+    [terminology]
+  );
 
   // Check permissions
   const isOwner = staff?.role === 'owner';
@@ -1299,15 +1327,17 @@ export function IntegrationHub() {
     };
   }, [staff?.tenant_id, getAuthHeaders]);
 
-  // Get connector definition for a connection
-  const getConnector = (type: IntegrationType): ConnectorDefinition | undefined => {
-    return CONNECTOR_CATALOG.find(c => c.type === type);
-  };
+  // Get connector definition for a connection (uses dynamic catalog)
+  const getConnector = useCallback((type: IntegrationType): ConnectorDefinition | undefined => {
+    return connectorCatalog.find(c => c.type === type);
+  }, [connectorCatalog]);
 
-  // Filter connectors by category
-  const filteredConnectors = selectedCategory === 'all'
-    ? CONNECTOR_CATALOG
-    : CONNECTOR_CATALOG.filter(c => c.category === selectedCategory);
+  // Filter connectors by category (uses dynamic catalog)
+  const filteredConnectors = useMemo(() => {
+    return selectedCategory === 'all'
+      ? connectorCatalog
+      : connectorCatalog.filter(c => c.category === selectedCategory);
+  }, [selectedCategory, connectorCatalog]);
 
   // Group available connectors (not yet connected)
   const connectedTypes = new Set(connections.map(c => c.integration_type));

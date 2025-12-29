@@ -62,6 +62,7 @@ import {
   BookIcon,
 } from '@/src/features/voice-agent/components';
 import { useTenant } from '@/src/hooks/useTenant';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 
 // ======================
 // TYPES
@@ -995,9 +996,12 @@ function PhoneNumbersTab({
 function CallHistoryTab({
   calls,
   onCallClick,
+  /** Dynamic label for appointment_booked outcome - use terminology.appointment from useVerticalTerminology */
+  appointmentLabel = 'Cita',
 }: {
   calls: VoiceCall[];
   onCallClick?: (call: VoiceCall) => void;
+  appointmentLabel?: string;
 }) {
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -1011,7 +1015,7 @@ function CallHistoryTab({
 
   const getOutcomeLabel = (outcome: string | null) => {
     const labels: Record<string, string> = {
-      appointment_booked: 'Cita agendada',
+      appointment_booked: `${appointmentLabel} agendada`,
       information_given: 'Información dada',
       escalated_human: 'Escalado',
       callback_requested: 'Callback',
@@ -1117,6 +1121,7 @@ function CallHistoryTab({
 export default function AIAgentVozPage() {
   const { session } = useAuth();
   const { tenant, branches } = useTenant();
+  const { terminology } = useVerticalTerminology();
   const [data, setData] = useState<VoiceAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1536,6 +1541,7 @@ export default function AIAgentVozPage() {
               <CallHistoryTab
                 calls={recentCalls}
                 onCallClick={(call) => setSelectedCall(call)}
+                appointmentLabel={terminology.appointment}
               />
             </motion.div>
           )}
@@ -1572,6 +1578,7 @@ export default function AIAgentVozPage() {
             isOpen={!!selectedCall}
             onClose={() => setSelectedCall(null)}
             accessToken={accessToken}
+            appointmentLabel={terminology.appointment}
           />
         )}
       </motion.div>
