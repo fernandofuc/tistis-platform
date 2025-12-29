@@ -45,7 +45,7 @@ const ACTION_TYPE_CONFIG: Record<ActionType, {
   },
   referral: {
     label: 'Referido',
-    description: 'Tokens por referir nuevos clientes',
+    description: 'Tokens por referir nuevos miembros',
     color: 'text-violet-600',
     bgColor: 'bg-violet-50',
     icon: (

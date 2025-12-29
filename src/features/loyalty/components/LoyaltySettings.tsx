@@ -5,9 +5,10 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { cn } from '@/shared/utils';
 import { useLoyaltyProgram, useMessageTemplates } from '../hooks/useLoyalty';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import type { LoyaltyProgram, MessageTemplate, TemplateType } from '../types';
 
 // ======================
@@ -24,17 +25,18 @@ interface TemplateConfig {
   priority: 'high' | 'medium' | 'low';
 }
 
-const CATEGORY_CONFIG = {
+// Category config is now generated dynamically with terminology
+const getCategoryConfig = (patientsLower: string) => ({
   engagement: {
     name: 'Engagement',
-    description: 'Mensajes para mantener a los pacientes activos',
+    description: `Mensajes para mantener a los ${patientsLower} activos`,
     color: 'bg-slate-700',
     bgColor: 'bg-slate-50',
     textColor: 'text-slate-700',
   },
   retention: {
     name: 'Retención',
-    description: 'Recuperar pacientes inactivos',
+    description: `Recuperar ${patientsLower} inactivos`,
     color: 'bg-slate-600',
     bgColor: 'bg-slate-50',
     textColor: 'text-slate-700',
@@ -53,7 +55,7 @@ const CATEGORY_CONFIG = {
     bgColor: 'bg-slate-50',
     textColor: 'text-slate-700',
   },
-};
+});
 
 const TEMPLATE_CONFIG: Record<TemplateType, TemplateConfig> = {
   welcome: {
@@ -327,6 +329,7 @@ interface ProgramSettingsProps {
 }
 
 function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
+  const { terminology } = useVerticalTerminology();
   const [formData, setFormData] = useState({
     program_name: program.program_name,
     tokens_name: program.tokens_name,
@@ -339,6 +342,7 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const patientLower = terminology.patient.toLowerCase();
 
   const handleSave = async () => {
     setSaving(true);
@@ -466,7 +470,7 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
       </div>
 
       <div className="border-t border-gray-100 pt-6">
-        <h4 className="font-medium text-gray-900 mb-4">Reactivación de Pacientes</h4>
+        <h4 className="font-medium text-gray-900 mb-4">Reactivación de Miembros</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Días de inactividad para reactivación</label>
@@ -477,7 +481,7 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
               min={30}
               className="w-full border border-gray-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
             />
-            <p className="text-xs text-gray-500 mt-1">Días sin visita para considerar paciente inactivo</p>
+            <p className="text-xs text-gray-500 mt-1">Días sin visita para considerar {patientLower} inactivo</p>
           </div>
         </div>
       </div>
@@ -511,8 +515,12 @@ function ProgramSettings({ program, onUpdate }: ProgramSettingsProps) {
 // ======================
 function MessageTemplatesSection() {
   const { templates, loading, createTemplate, updateTemplate } = useMessageTemplates();
+  const { terminology } = useVerticalTerminology();
   const [editingType, setEditingType] = useState<TemplateType | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Dynamic category config based on terminology
+  const CATEGORY_CONFIG = useMemo(() => getCategoryConfig(terminology.patients.toLowerCase()), [terminology]);
 
   const getTemplateForType = (type: TemplateType) => {
     return templates.find(t => t.template_type === type);
@@ -613,8 +621,8 @@ function MessageTemplatesSection() {
         <div>
           <h4 className="font-medium text-slate-900">Sistema de Mensajes Inteligente</h4>
           <p className="text-sm text-slate-600 mt-1">
-            Configura las plantillas que el AI usará para comunicarse automáticamente con tus pacientes.
-            Cada mensaje se personaliza con los datos del paciente en tiempo real.
+            Configura las plantillas que el AI usará para comunicarse automáticamente con tus {terminology.patients.toLowerCase()}.
+            Cada mensaje se personaliza con los datos del {terminology.patient.toLowerCase()} en tiempo real.
           </p>
         </div>
       </div>
@@ -730,6 +738,8 @@ interface TemplateEditModalProps {
 }
 
 function TemplateEditModal({ type, template, config, onSave, onClose }: TemplateEditModalProps) {
+  const { terminology } = useVerticalTerminology();
+  const CATEGORY_CONFIG = useMemo(() => getCategoryConfig(terminology.patients.toLowerCase()), [terminology]);
   const [formData, setFormData] = useState({
     message_template: template?.message_template || config.defaultMessage,
     whatsapp_template: template?.whatsapp_template || '',

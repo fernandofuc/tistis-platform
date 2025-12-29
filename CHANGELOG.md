@@ -7,7 +7,168 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
-## [4.3.0] - 2024-12-27
+## [4.6.0] - 2025-12-29
+
+### Resumen
+
+**Sistema de Terminologia Dinamica Multi-Vertical** que adapta toda la UI del dashboard segun el vertical del negocio. Soporta 6 verticales con terminologia especifica.
+
+### Terminologia Dinamica (Feature Principal)
+
+#### Concepto
+
+El sistema adapta automaticamente todos los textos de la UI segun el tipo de negocio (vertical) del tenant. Por ejemplo:
+- **Dental**: Paciente, Cita, Presupuesto
+- **Restaurant**: Cliente, Reservacion, Cotizacion
+- **Gym**: Miembro, Clase, Membresia
+- **Clinic/Veterinary**: Paciente, Consulta, Cotizacion
+- **Beauty**: Cliente, Cita, Cotizacion
+
+#### Archivos Nuevos Creados
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/hooks/useVerticalTerminology.ts` | Hook principal con terminologia extendida para 6 verticales |
+| `src/shared/utils/terminologyHelpers.ts` | Factory functions para constantes dinamicas |
+
+#### Hook useVerticalTerminology
+
+```typescript
+interface UseVerticalTerminologyReturn {
+  terminology: ExtendedTerminology;  // Todos los terminos
+  vertical: VerticalType;            // dental | restaurant | gym | clinic | beauty | veterinary
+  isLoading: boolean;
+  t: (key: keyof ExtendedTerminology) => string;  // Helper function
+  verticalIcon: string;
+  verticalColor: string;
+  verticalName: string;
+}
+```
+
+#### ExtendedTerminology (35+ campos)
+
+```typescript
+interface ExtendedTerminology {
+  // Base
+  patient, patients, appointment, appointments, quote, quotes
+  newPatient, newAppointment, newQuote
+
+  // Dashboard
+  dashboardTitle, dashboardSubtitle, calendarPageTitle
+  scheduleAction, viewAllAction, totalActiveLabel, todayScheduledLabel
+
+  // Empty states
+  noAppointmentsToday, noRecentActivity
+
+  // Lead status
+  appointmentScheduledStatus, newAppointmentNotification
+
+  // Appointment details
+  appointmentDetail, appointmentSummary, appointmentNotes, createAppointmentError
+
+  // Integrations
+  syncAppointments, calendarSyncDescription, schedulingDescription
+
+  // Search
+  searchPlaceholder
+}
+```
+
+#### Terminology Helpers (Factory Functions)
+
+| Funcion | Proposito |
+|---------|-----------|
+| `getLeadStatuses(terminology)` | Estados de leads con labels dinamicos |
+| `getNotificationTypes(terminology)` | Tipos de notificaciones con labels dinamicos |
+| `getBadgeConfigs(terminology)` | Configuraciones de badges para estados |
+| `getSyncCapabilities(terminology)` | Capacidades de sincronizacion para integraciones |
+| `getAppointmentLabels(terminology)` | Labels para modales y formularios de citas |
+
+#### Archivos Actualizados con Terminologia
+
+| Archivo | Cambios |
+|---------|---------|
+| `app/(dashboard)/dashboard/page.tsx` | Dashboard principal usa terminologia dinamica |
+| `app/(dashboard)/dashboard/calendario/page.tsx` | Calendario con labels de reservaciones/citas |
+| `app/(dashboard)/dashboard/patients/page.tsx` | Pagina de pacientes/clientes dinamica |
+| `app/(dashboard)/dashboard/lealtad/page.tsx` | Programa de lealtad con terminologia |
+| `app/(dashboard)/dashboard/ai-agent-voz/page.tsx` | Agente de voz con labels dinamicos |
+| `src/features/loyalty/components/TokensManagement.tsx` | Tokens con terminologia de vertical |
+| `src/features/voice-agent/components/CallDetailModal.tsx` | Modal de llamadas dinamico |
+| `src/features/dashboard/components/StatCard.tsx` | Stats cards con labels dinamicos |
+| `src/hooks/index.ts` | Barrel export actualizado con useVerticalTerminology |
+
+### Flujo Completo Discovery → Terminologia
+
+```
+1. Discovery API clasifica: dental | restaurant | otro
+2. Pricing muestra vertical seleccionable
+3. Checkout envia vertical al API
+4. Provisioning crea tenant con vertical
+5. useTenant lee vertical de base de datos
+6. useVerticalTerminology provee terminologia correcta
+```
+
+### Verticales Activos (Actualmente)
+
+| Vertical | Paciente | Cita | Quote |
+|----------|----------|------|-------|
+| `dental` | Paciente | Cita | Presupuesto |
+| `restaurant` | Cliente | Reservacion | Cotizacion |
+
+### Verticales Preparados (Futuro)
+
+| Vertical | Paciente | Cita | Quote |
+|----------|----------|------|-------|
+| `clinic` | Paciente | Consulta | Cotizacion |
+| `gym` | Miembro | Clase | Membresia |
+| `beauty` | Cliente | Cita | Cotizacion |
+| `veterinary` | Paciente | Consulta | Presupuesto |
+
+### Uso en Componentes
+
+```typescript
+import { useVerticalTerminology } from '@/src/hooks';
+
+function MyComponent() {
+  const { terminology, t, vertical } = useVerticalTerminology();
+
+  return (
+    <div>
+      <h1>{t('dashboardTitle')}</h1>
+      <button>{terminology.newAppointment}</button>
+      <span>Total de {terminology.patients}</span>
+    </div>
+  );
+}
+```
+
+### Uso de Helpers
+
+```typescript
+import { getLeadStatuses, getAppointmentLabels } from '@/src/shared/utils/terminologyHelpers';
+
+const { terminology } = useVerticalTerminology();
+
+const statuses = getLeadStatuses(terminology);
+// [{ value: 'appointment_scheduled', label: 'Reservacion Confirmada', ... }]
+
+const labels = getAppointmentLabels(terminology);
+// { title: 'Nueva Reservacion', createButton: 'Crear Reservacion', ... }
+```
+
+### Estadisticas de Cambios
+
+```
+11 archivos modificados/creados
++700 lineas agregadas
+6 verticales soportados
+35+ terminos por vertical
+```
+
+---
+
+## [4.3.0] - 2025-12-27
 
 ### Resumen
 
@@ -155,7 +316,7 @@ export async function GET(request: NextRequest) {
 
 ---
 
-## [4.1.0] - 2024-12-21
+## [4.1.0] - 2025-12-21
 
 ### Anadido - Integracion LangGraph con Configuraciones del Cliente
 
@@ -222,7 +383,7 @@ Solo disponible para planes **Essentials** y superiores.
 
 ---
 
-## [4.0.0] - 2024-12-21
+## [4.0.0] - 2025-12-21
 
 ### Anadido - Sistema de IA Multi-Agente con LangGraph
 
@@ -310,7 +471,7 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-## [3.1.0] - 2024-12-21
+## [3.1.0] - 2025-12-21
 
 ### Anadido - Mejoras Completas de Produccion
 
@@ -321,7 +482,7 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-## [2.3.0] - 2024-12-17
+## [2.3.0] - 2025-12-17
 
 ### Añadido - 6 Fixes Críticos en Stripe Webhook + Límites de Sucursales
 
@@ -365,7 +526,7 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-## [2.2.0] - 2024-12-10
+## [2.2.0] - 2025-12-10
 
 ### Añadido - Migración 011_master_correction.sql
 
@@ -435,7 +596,7 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-## [2.1.0] - 2024-12-08
+## [2.1.0] - 2025-12-08
 
 ### Añadido - Migración 009_critical_fixes.sql
 
@@ -489,7 +650,7 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-## [2.0.0] - 2024-11-25
+## [2.0.0] - 2025-11-25
 
 ### Añadido - Schema Base Multi-Tenant
 
@@ -525,7 +686,7 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-## [1.0.0] - 2024-10-15
+## [1.0.0] - 2025-10-15
 
 ### Añadido - Onboarding Flow
 
@@ -561,4 +722,4 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-**Ultima actualizacion:** 27 de Diciembre, 2024
+**Ultima actualizacion:** 29 de Diciembre, 2025

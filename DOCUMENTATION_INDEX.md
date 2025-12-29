@@ -1,7 +1,7 @@
 # Indice de Documentacion - TIS TIS Platform
 
-**Ultima actualizacion:** 21 de Diciembre, 2024
-**Version:** 4.0.0
+**Ultima actualizacion:** 29 de Diciembre, 2025
+**Version:** 4.6.0
 
 Este documento centraliza toda la documentacion del proyecto para facilitar su navegacion.
 
@@ -13,11 +13,12 @@ Este documento centraliza toda la documentacion del proyecto para facilitar su n
 
 | Archivo | Descripción | Última Actualización |
 |---------|-------------|----------------------|
-| **README.md** | Overview del proyecto, Quick Start, Tech Stack | 10 Dic 2024 |
-| **CHANGELOG.md** | Historial completo de cambios por versión | 10 Dic 2024 |
-| **STATUS_PROYECTO.md** | Estado detallado del desarrollo | 10 Dic 2024 |
-| **MIGRATION_011_SUMMARY.md** | Resumen ejecutivo de migración crítica | 10 Dic 2024 |
-| **DOCUMENTATION_INDEX.md** | Este archivo - Índice de toda la documentación | 10 Dic 2024 |
+| **README.md** | Overview del proyecto, Quick Start, Tech Stack | 29 Dic 2025 |
+| **CHANGELOG.md** | Historial completo de cambios por versión | 29 Dic 2025 |
+| **STATUS_PROYECTO.md** | Estado detallado del desarrollo | 29 Dic 2025 |
+| **CLAUDE.md** | Instrucciones para Claude Code (AI assistant) | 29 Dic 2025 |
+| **MIGRATION_011_SUMMARY.md** | Resumen ejecutivo de migración crítica | 10 Dic 2025 |
+| **DOCUMENTATION_INDEX.md** | Este archivo - Índice de toda la documentación | 29 Dic 2025 |
 
 ---
 
@@ -29,18 +30,19 @@ Este documento centraliza toda la documentacion del proyecto para facilitar su n
 
 | Archivo | Descripción | Fecha |
 |---------|-------------|-------|
-| **MIGRATION_NOTES.md** | Guía completa de migración 011 con instrucciones | 10 Dic 2024 |
-| **001_initial_schema.sql** | Schema base + discovery sessions | Oct 2024 |
-| **002_add_session_token.sql** | Token de sesión para onboarding | Oct 2024 |
-| **003_esva_schema_v2.sql** | Schema multi-tenant completo | Nov 2024 |
-| **004_esva_seed_data.sql** | Datos de ESVA (tenant inicial) | Nov 2024 |
-| **005_patients_module.sql** | Módulo de pacientes | Nov 2024 |
-| **006_quotes_module.sql** | Módulo de cotizaciones | Nov 2024 |
-| **007_files_storage_setup.sql** | Storage buckets configurados | Nov 2024 |
-| **008_notifications_module.sql** | Sistema de notificaciones | Nov 2024 |
-| **009_critical_fixes.sql** | Fixes de seguridad y performance | Dic 2024 |
-| **010_assembly_engine.sql** | Motor de ensamblaje de propuestas | Dic 2024 |
-| **011_master_correction.sql** | Corrección master crítica (NUEVO) | 10 Dic 2024 |
+| **MIGRATION_NOTES.md** | Guía completa de migración 011 con instrucciones | 10 Dic 2025 |
+| **001_initial_schema.sql** | Schema base + discovery sessions | Oct 2025 |
+| **002_add_session_token.sql** | Token de sesión para onboarding | Oct 2025 |
+| **003_esva_schema_v2.sql** | Schema multi-tenant completo | Nov 2025 |
+| **004_esva_seed_data.sql** | Datos de ESVA (tenant inicial) | Nov 2025 |
+| **005_patients_module.sql** | Módulo de pacientes | Nov 2025 |
+| **006_quotes_module.sql** | Módulo de cotizaciones | Nov 2025 |
+| **007_files_storage_setup.sql** | Storage buckets configurados | Nov 2025 |
+| **008_notifications_module.sql** | Sistema de notificaciones | Nov 2025 |
+| **009_critical_fixes.sql** | Fixes de seguridad y performance | Dic 2025 |
+| **010_assembly_engine.sql** | Motor de ensamblaje de propuestas | Dic 2025 |
+| **011_master_correction.sql** | Corrección master crítica | 10 Dic 2025 |
+| **078_INTEGRATION_HUB.sql** | Sistema de integraciones externas | 27 Dic 2025 |
 
 ### Schema Reference
 
@@ -477,12 +479,13 @@ npm run test             # Tests (cuando estén disponibles)
 
 | Version | Fecha | Cambios |
 |---------|-------|---------|
-| 1.0 | 10 Dic 2024 | Creacion inicial del indice |
-| 2.0 | 21 Dic 2024 | Actualizacion: Remover n8n, documentar sistema nativo de AI, anadir nuevos endpoints |
-| 3.0 | 21 Dic 2024 | Actualizacion: Documentar sistema LangGraph multi-agente, nuevos agentes especializados |
+| 1.0 | 10 Dic 2025 | Creacion inicial del indice |
+| 2.0 | 21 Dic 2025 | Actualizacion: Remover n8n, documentar sistema nativo de AI, anadir nuevos endpoints |
+| 3.0 | 21 Dic 2025 | Actualizacion: Documentar sistema LangGraph multi-agente, nuevos agentes especializados |
+| 4.0 | 29 Dic 2025 | Actualizacion: Sistema de terminología dinámica multi-vertical, nuevos hooks y helpers |
 
 ---
 
-**Ultima actualizacion:** 21 de Diciembre, 2024
+**Ultima actualizacion:** 29 de Diciembre, 2025
 **Mantenido por:** Claude Code
-**Version del proyecto:** 4.0.0
+**Version del proyecto:** 4.6.0

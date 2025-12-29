@@ -2,9 +2,9 @@
 
 Sistema completo de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API y automatizacion de procesos multi-canal.
 
-**Version:** 4.4.0
-**Estado:** Produccion - Integration Hub + External Systems Sync
-**Ultima actualizacion:** 27 de Diciembre, 2024
+**Version:** 4.6.0
+**Estado:** Produccion - Multi-Vertical Terminology + Integration Hub
+**Ultima actualizacion:** 29 de Diciembre, 2025
 
 ---
 
@@ -558,6 +558,107 @@ La migracion `064_LANGGRAPH_FEATURE_FLAG.sql` agrega:
 - Indice optimizado para busqueda rapida
 - Funcion helper `tenant_uses_langgraph(tenant_id)`
 
+## 🌐 Sistema de Terminologia Dinamica Multi-Vertical
+
+### Que es?
+
+El sistema de terminologia dinamica adapta automaticamente todos los textos de la UI segun el tipo de negocio (vertical) del tenant. Esto permite que la misma plataforma se sienta nativa para diferentes industrias.
+
+### Verticales Soportados
+
+| Vertical | Paciente | Cita | Quote | Dashboard Title |
+|----------|----------|------|-------|-----------------|
+| **dental** | Paciente | Cita | Presupuesto | "Centro de control de tu clinica" |
+| **restaurant** | Cliente | Reservacion | Cotizacion | "Centro de control de tu restaurante" |
+| **clinic** | Paciente | Consulta | Cotizacion | "Centro de control de tu clinica" |
+| **gym** | Miembro | Clase | Membresia | "Centro de control de tu gimnasio" |
+| **beauty** | Cliente | Cita | Cotizacion | "Centro de control de tu salon" |
+| **veterinary** | Paciente | Consulta | Presupuesto | "Centro de control de tu veterinaria" |
+
+### Arquitectura
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    DYNAMIC TERMINOLOGY SYSTEM                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────────┐    │
+│   │   TENANT    │    │  useTenant()    │    │  useVerticalTerminology │    │
+│   │  (vertical) │───►│  hook           │───►│  hook                   │    │
+│   └─────────────┘    └─────────────────┘    └───────────┬─────────────┘    │
+│                                                         │                   │
+│                                                         ▼                   │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                    EXTENDED TERMINOLOGY                             │  │
+│   │  ─────────────────────────────────────────────────────────────────  │  │
+│   │  35+ campos dinamicos por vertical:                                 │  │
+│   │  • patient, patients, appointment, appointments, quote, quotes      │  │
+│   │  • dashboardTitle, dashboardSubtitle, calendarPageTitle            │  │
+│   │  • scheduleAction, viewAllAction, searchPlaceholder                │  │
+│   │  • appointmentScheduledStatus, newAppointmentNotification          │  │
+│   │  • syncAppointments, calendarSyncDescription                       │  │
+│   └───────────────────────────────────────────────────────────────────┘  │
+│                                                         │                   │
+│                                                         ▼                   │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                    TERMINOLOGY HELPERS                              │  │
+│   │  ─────────────────────────────────────────────────────────────────  │  │
+│   │  Factory functions para constantes dinamicas:                       │  │
+│   │  • getLeadStatuses(terminology)       - Estados de leads            │  │
+│   │  • getNotificationTypes(terminology)  - Tipos de notificaciones     │  │
+│   │  • getBadgeConfigs(terminology)       - Configuraciones de badges   │  │
+│   │  • getSyncCapabilities(terminology)   - Capacidades de sync         │  │
+│   │  • getAppointmentLabels(terminology)  - Labels de citas             │  │
+│   └───────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Uso en Componentes
+
+```typescript
+import { useVerticalTerminology } from '@/src/hooks';
+
+function DashboardPage() {
+  const { terminology, t, vertical } = useVerticalTerminology();
+
+  return (
+    <div>
+      <h1>{t('dashboardTitle')}</h1>
+      <p>{t('dashboardSubtitle')}</p>
+
+      <Button>{terminology.newAppointment}</Button>
+      <span>Total de {terminology.patients}: 150</span>
+    </div>
+  );
+}
+```
+
+### Archivos del Sistema
+
+```
+src/hooks/
+├── useVerticalTerminology.ts    # Hook principal con 6 verticales
+├── useTenant.ts                 # Lee vertical del tenant
+└── index.ts                     # Barrel exports
+
+src/shared/utils/
+└── terminologyHelpers.ts        # Factory functions para constantes
+```
+
+### Flujo de Determinacion del Vertical
+
+```
+1. Discovery API analiza el negocio → clasifica como dental | restaurant | otro
+2. Pricing page muestra vertical → usuario puede ajustar
+3. Checkout envia vertical → se guarda en metadata de Stripe
+4. Provisioning crea tenant → vertical se almacena en DB
+5. useTenant hook → lee vertical de la base de datos
+6. useVerticalTerminology → provee terminologia correcta a toda la UI
+```
+
+---
+
 ## 🔌 Integration Hub (Sistema de Integraciones Externas)
 
 ### Que es?
@@ -805,6 +906,12 @@ tistis-platform/
 │       └── search/
 │
 ├── src/
+│   ├── hooks/                        # 🌐 Hooks globales (NUEVO)
+│   │   ├── useTenant.ts              # Lee tenant de DB
+│   │   ├── useVerticalTerminology.ts # Terminologia dinamica multi-vertical
+│   │   ├── useFeatureFlags.ts        # Feature flags
+│   │   └── index.ts                  # Barrel exports
+│   │
 │   ├── features/                     # Features por funcionalidad
 │   │   ├── auth/                     # Autenticacion
 │   │   ├── dashboard/                # Dashboard (con DashboardSkeleton)
@@ -833,7 +940,7 @@ tistis-platform/
 │   │   │   ├── services/
 │   │   │   ├── types/
 │   │   │   └── hooks/
-│   │   └── integrations/             # 🔌 Integration Hub Feature (NUEVO)
+│   │   └── integrations/             # 🔌 Integration Hub Feature
 │   │       ├── components/
 │   │       │   └── IntegrationHub.tsx # UI principal
 │   │       ├── types/
@@ -847,6 +954,7 @@ tistis-platform/
 │       ├── stores/                   # Zustand stores
 │       ├── lib/                      # Configuraciones (supabase, etc)
 │       ├── utils/
+│       │   └── terminologyHelpers.ts # 🌐 Factory functions para terminologia
 │       └── types/
 │
 ├── supabase/
@@ -886,7 +994,7 @@ tistis-platform/
 15. ... (migraciones 066-077) - Mejoras incrementales
 16. `078_INTEGRATION_HUB.sql` - **NUEVO** - Sistema de integraciones externas (CRM, POS, etc.)
 
-### Migración 011: Corrección Master (10 Dic 2024)
+### Migración 011: Corrección Master (10 Dic 2025)
 
 **CRÍTICO - Cambios de negocio y seguridad:**
 
@@ -1068,9 +1176,18 @@ npm run typecheck         # TypeScript check
 
 ## 📊 Estado del Proyecto
 
-### Version 4.4.0 - Integration Hub + External Systems Sync
+### Version 4.6.0 - Multi-Vertical Terminology + Integration Hub
 
-**Integration Hub (NUEVO v4.4.0):**
+**Sistema de Terminologia Dinamica (NUEVO v4.6.0):**
+- ✅ Hook `useVerticalTerminology` con 6 verticales soportados
+- ✅ 35+ campos de terminologia por vertical
+- ✅ Factory functions para constantes dinamicas (`terminologyHelpers.ts`)
+- ✅ Dashboard, Calendario, Pacientes, Lealtad, AI Agent Voz actualizados
+- ✅ Flujo completo Discovery → Checkout → Tenant → UI
+- ✅ Verticales activos: dental, restaurant
+- ✅ Verticales preparados: clinic, gym, beauty, veterinary
+
+**Integration Hub (v4.4.0):**
 - ✅ Sistema de integraciones externas (CRM, POS, dental software, calendarios)
 - ✅ 7 tablas nuevas para manejo de datos externos
 - ✅ Deduplicacion inteligente de contactos (phone/email matching)
@@ -1102,6 +1219,7 @@ npm run typecheck         # TypeScript check
 - ✅ API Routes (100%)
 - ✅ Mensajeria multi-canal (100%)
 - ✅ Integration Hub - CRM, POS, External Systems (100%)
+- ✅ Sistema de Terminologia Dinamica Multi-Vertical (100%)
 
 **Dashboard:**
 - ✅ Diseno premium actualizado

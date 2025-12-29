@@ -4,9 +4,9 @@
 
 TIS TIS Platform es un sistema SaaS multi-tenant de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API, y automatizacion de procesos multi-canal. Especializado en verticales como clinicas dentales, restaurantes, y consultorios medicos.
 
-**Version:** 4.4.0
+**Version:** 4.6.0
 **Estado:** Produccion
-**Ultima actualizacion:** 27 de Diciembre, 2024
+**Ultima actualizacion:** 29 de Diciembre, 2025
 
 ---
 
@@ -40,6 +40,12 @@ tistis-platform/
 │   └── globals.css               # Estilos globales TIS TIS
 │
 ├── src/
+│   ├── hooks/                    # Hooks globales
+│   │   ├── useTenant.ts          # Lee tenant de DB
+│   │   ├── useVerticalTerminology.ts # Terminologia dinamica multi-vertical
+│   │   ├── useFeatureFlags.ts    # Feature flags
+│   │   └── index.ts              # Barrel exports
+│   │
 │   ├── features/                 # Feature-First Architecture
 │   │   ├── ai/                   # LangGraph Multi-Agente
 │   │   │   ├── agents/           # Agentes especializados
@@ -50,7 +56,7 @@ tistis-platform/
 │   │   │   ├── state/            # BusinessContext, AgentState
 │   │   │   └── services/         # langgraph-ai.service.ts
 │   │   │
-│   │   ├── integrations/         # Integration Hub (NUEVO)
+│   │   ├── integrations/         # Integration Hub
 │   │   │   ├── components/       # IntegrationHub.tsx
 │   │   │   └── types/            # integration.types.ts
 │   │   │
@@ -104,9 +110,11 @@ tistis-platform/
 │   │   │   └── domain.ts         # Tipos de dominio
 │   │   │
 │   │   ├── stores/               # Estado global (Zustand)
-│   │   └── utils/                # Utilidades
+│   │   ├── utils/                # Utilidades
+│   │   │   └── terminologyHelpers.ts # Factory functions para terminologia
+│   │   └── config/
+│   │       └── verticals.ts      # Configuracion base de verticales
 │   │
-│   ├── hooks/                    # Hooks adicionales
 │   └── lib/                      # Librerias adicionales
 │
 ├── supabase/
@@ -184,7 +192,109 @@ interface BusinessContext {
 
 ---
 
-## Integration Hub (NUEVO en v4.4.0)
+## Sistema de Terminologia Dinamica Multi-Vertical (NUEVO en v4.6.0)
+
+### Descripcion
+
+Sistema que adapta automaticamente todos los textos de la UI segun el tipo de negocio (vertical) del tenant. Permite que la misma plataforma se sienta nativa para diferentes industrias.
+
+### Verticales Soportados
+
+| Vertical | Paciente | Cita | Quote |
+|----------|----------|------|-------|
+| `dental` | Paciente | Cita | Presupuesto |
+| `restaurant` | Cliente | Reservacion | Cotizacion |
+| `clinic` | Paciente | Consulta | Cotizacion |
+| `gym` | Miembro | Clase | Membresia |
+| `beauty` | Cliente | Cita | Cotizacion |
+| `veterinary` | Paciente | Consulta | Presupuesto |
+
+### Hook Principal: useVerticalTerminology
+
+```typescript
+import { useVerticalTerminology } from '@/src/hooks';
+
+function MyComponent() {
+  const { terminology, t, vertical, isLoading } = useVerticalTerminology();
+
+  return (
+    <div>
+      <h1>{t('dashboardTitle')}</h1>
+      <button>{terminology.newAppointment}</button>
+      <span>Total: {terminology.patients}</span>
+    </div>
+  );
+}
+```
+
+### Campos de ExtendedTerminology (35+)
+
+```typescript
+interface ExtendedTerminology {
+  // Base
+  patient, patients, appointment, appointments, quote, quotes
+  newPatient, newAppointment, newQuote, patientList, appointmentCalendar
+  todayAppointments, patientActive, patientInactive
+
+  // Dashboard
+  dashboardTitle, dashboardSubtitle, calendarPageTitle
+  newAppointmentButton, scheduleAction, viewAllAction
+  totalActiveLabel, todayScheduledLabel
+
+  // Empty states
+  noAppointmentsToday, noRecentActivity, upcomingLabel, pastLabel
+
+  // Lead/Notification labels
+  appointmentScheduledStatus, newAppointmentNotification
+
+  // Appointment details
+  appointmentDetail, appointmentSummary, appointmentNotes, createAppointmentError
+
+  // Integrations
+  syncAppointments, calendarSyncDescription, schedulingDescription
+
+  // Search
+  searchPlaceholder
+}
+```
+
+### Terminology Helpers (Factory Functions)
+
+```typescript
+import {
+  getLeadStatuses,
+  getNotificationTypes,
+  getBadgeConfigs,
+  getSyncCapabilities,
+  getAppointmentLabels
+} from '@/src/shared/utils/terminologyHelpers';
+
+// Uso
+const statuses = getLeadStatuses(terminology);
+// [{ value: 'appointment_scheduled', label: 'Reservacion Confirmada', color: 'purple' }]
+
+const labels = getAppointmentLabels(terminology);
+// { title: 'Nueva Reservacion', createButton: 'Crear Reservacion', ... }
+```
+
+### Archivos del Sistema
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/hooks/useVerticalTerminology.ts` | Hook principal con 6 verticales |
+| `src/shared/utils/terminologyHelpers.ts` | Factory functions |
+| `src/shared/config/verticals.ts` | Configuracion base |
+| `src/hooks/useTenant.ts` | Lee vertical del tenant |
+
+### Flujo de Determinacion
+
+```
+Discovery API → Pricing → Checkout → Provisioning → useTenant → useVerticalTerminology → UI
+```
+
+---
+
+## Integration Hub (v4.4.0)
 
 ### Descripcion
 

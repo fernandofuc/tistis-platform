@@ -314,7 +314,7 @@ export async function processExpiringMemberships(): Promise<{
         if (!typedLead?.id) continue;
 
         // Compute lead name from available fields
-        const leadName = typedLead.full_name || `${typedLead.first_name || ''} ${typedLead.last_name || ''}`.trim() || 'Paciente';
+        const leadName = typedLead.full_name || `${typedLead.first_name || ''} ${typedLead.last_name || ''}`.trim() || 'Miembro';
 
         // Check if already reminded
         const { data: existingLog } = await supabase
@@ -446,7 +446,7 @@ export async function processInactivePatients(): Promise<{
 
       for (const leadData of inactiveLeads) {
         // Compute lead name from available fields
-        const leadName = leadData.full_name || `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim() || 'Paciente';
+        const leadName = leadData.full_name || `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim() || 'Miembro';
         results.processed++;
 
         // Check if already sent reactivation (only send once)

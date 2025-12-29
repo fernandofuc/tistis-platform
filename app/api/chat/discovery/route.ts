@@ -104,7 +104,7 @@ async function saveSessionInBackground(
   }
 }
 
-// Tipos de negocio soportados
+// Tipos de negocio soportados (dental y restaurant son los verticales activos)
 type BusinessType = 'dental' | 'restaurant' | 'otro';
 
 // Interface para el análisis de la IA

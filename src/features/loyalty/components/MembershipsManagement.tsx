@@ -8,8 +8,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/shared/utils';
 import { useMembershipPlans } from '../hooks/useLoyalty';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import * as loyaltyService from '../services/loyalty.service';
 import type { MembershipPlan, Membership } from '../types';
+import type { ExtendedTerminology } from '@/src/hooks/useVerticalTerminology';
 
 // ======================
 // TYPES
@@ -26,7 +28,15 @@ interface Lead {
 // ======================
 // INFO BANNER COMPONENT
 // ======================
-function InfoBanner({ type }: { type: 'plans' | 'memberships' }) {
+interface InfoBannerProps {
+  type: 'plans' | 'memberships';
+  terminology: ExtendedTerminology;
+}
+
+function InfoBanner({ type, terminology }: InfoBannerProps) {
+  const patientLower = terminology.patient.toLowerCase();
+  const patientsLower = terminology.patients.toLowerCase();
+
   if (type === 'plans') {
     return (
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
@@ -39,9 +49,9 @@ function InfoBanner({ type }: { type: 'plans' | 'memberships' }) {
           <div>
             <h4 className="font-medium text-slate-900">¿Qué son los Planes de Membresía?</h4>
             <p className="text-sm text-slate-600 mt-1">
-              Los planes son <strong>plantillas</strong> que defines para ofrecer a tus pacientes.
+              Los planes son <strong>plantillas</strong> que defines para ofrecer a tus {patientsLower}.
               Por ejemplo: &ldquo;Plan Premium - $299/mes con 10% descuento&rdquo;.
-              Una vez creado un plan, puedes <strong>asignar pacientes</strong> a él en la pestaña &ldquo;Membresías Activas&rdquo;.
+              Una vez creado un plan, puedes <strong>asignar {patientsLower}</strong> a él en la pestaña &ldquo;Membresías Activas&rdquo;.
             </p>
           </div>
         </div>
@@ -58,10 +68,10 @@ function InfoBanner({ type }: { type: 'plans' | 'memberships' }) {
           </svg>
         </div>
         <div>
-          <h4 className="font-medium text-slate-900">Membresías de Pacientes</h4>
+          <h4 className="font-medium text-slate-900">Membresías de {terminology.patients}</h4>
           <p className="text-sm text-slate-600 mt-1">
-            Aquí verás los <strong>pacientes que están suscritos</strong> a tus planes de membresía.
-            Usa el botón &ldquo;+ Nueva Membresía&rdquo; para asignar un paciente a un plan.
+            Aquí verás los <strong>{patientsLower} que están suscritos</strong> a tus planes de membresía.
+            Usa el botón &ldquo;+ Nueva Membresía&rdquo; para asignar un {patientLower} a un plan.
           </p>
         </div>
       </div>
@@ -77,10 +87,11 @@ interface PlanCardProps {
   onEdit: (plan: MembershipPlan) => void;
   onToggle: (plan: MembershipPlan) => void;
   onDelete: (plan: MembershipPlan) => void;
-  onAssignPatient: (plan: MembershipPlan) => void;
+  onAssignMember: (plan: MembershipPlan) => void;
+  terminology: ExtendedTerminology;
 }
 
-function PlanCard({ plan, onEdit, onToggle, onDelete, onAssignPatient }: PlanCardProps) {
+function PlanCard({ plan, onEdit, onToggle, onDelete, onAssignMember, terminology }: PlanCardProps) {
   return (
     <div className={cn(
       'bg-white rounded-xl border p-6 transition-all relative',
@@ -194,16 +205,16 @@ function PlanCard({ plan, onEdit, onToggle, onDelete, onAssignPatient }: PlanCar
         )}
       </div>
 
-      {/* Assign Patient Button */}
+      {/* Assign Member Button */}
       {plan.is_active && (
         <button
-          onClick={() => onAssignPatient(plan)}
+          onClick={() => onAssignMember(plan)}
           className="w-full mt-4 px-4 py-2.5 bg-tis-coral/10 text-tis-coral font-medium rounded-lg hover:bg-tis-coral/20 transition-colors flex items-center justify-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
           </svg>
-          Asignar Paciente
+          Asignar {terminology.patient}
         </button>
       )}
     </div>
@@ -217,9 +228,10 @@ interface PlanFormProps {
   plan?: MembershipPlan | null;
   onSave: (data: Partial<MembershipPlan>) => Promise<void>;
   onClose: () => void;
+  terminology: ExtendedTerminology;
 }
 
-function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
+function PlanForm({ plan, onSave, onClose, terminology }: PlanFormProps) {
   const [formData, setFormData] = useState({
     plan_name: plan?.plan_name || '',
     plan_description: plan?.plan_description || '',
@@ -281,7 +293,7 @@ function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
             {plan ? 'Editar Plan' : 'Nuevo Plan de Membresía'}
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            {plan ? 'Modifica los detalles del plan' : 'Crea una plantilla de plan que podrás asignar a pacientes'}
+            {plan ? 'Modifica los detalles del plan' : `Crea una plantilla de plan que podrás asignar a ${terminology.patients.toLowerCase()}`}
           </p>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -432,9 +444,10 @@ interface AssignMembershipModalProps {
   plan: MembershipPlan;
   onAssign: (data: { lead_id: string; plan_id: string; billing_cycle: 'monthly' | 'annual'; payment_method: string; notes?: string }) => Promise<void>;
   onClose: () => void;
+  terminology: ExtendedTerminology;
 }
 
-function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModalProps) {
+function AssignMembershipModal({ plan, onAssign, onClose, terminology }: AssignMembershipModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(false);
@@ -498,7 +511,7 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedLead) {
-      setError('Selecciona un paciente');
+      setError(`Selecciona un ${terminology.patient.toLowerCase()}`);
       return;
     }
 
@@ -525,7 +538,7 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
             .single();
 
           if (patientError || !patient) {
-            throw new Error('No se pudo obtener la información del paciente');
+            throw new Error(`No se pudo obtener la información del ${terminology.patient.toLowerCase()}`);
           }
 
           // Create lead from patient data
@@ -546,7 +559,7 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
 
           if (leadError || !newLead) {
             console.error('Error creating lead:', leadError);
-            throw new Error('No se pudo crear el lead del paciente');
+            throw new Error(`No se pudo crear el lead del ${terminology.patient.toLowerCase()}`);
           }
 
           // Update patient with lead_id reference
@@ -596,7 +609,7 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Asignar Paciente</h2>
+                  <h2 className="text-xl font-bold text-gray-900">Asignar {terminology.patient}</h2>
                   <p className="text-sm text-gray-500 flex items-center gap-2 mt-0.5">
                     Plan:
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-tis-coral/10 text-tis-coral">
@@ -630,11 +643,11 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
             </div>
           )}
 
-          {/* Patient Search - Enhanced */}
+          {/* Member Search - Enhanced */}
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
               <span className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center text-xs">🔍</span>
-              Buscar Paciente
+              Buscar {terminology.patient}
             </label>
             {selectedLead ? (
               <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 animate-in fade-in duration-200">
@@ -717,7 +730,7 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
                             <p className="font-medium text-gray-900 text-sm">{lead.name}</p>
                             {lead.source === 'patient' && (
                               <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded-full font-medium">
-                                Paciente
+                                {terminology.patient}
                               </span>
                             )}
                           </div>
@@ -902,7 +915,13 @@ function AssignMembershipModal({ plan, onAssign, onClose }: AssignMembershipModa
 // ======================
 // MEMBERSHIPS LIST
 // ======================
-function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[]; onCreateMembership: () => void }) {
+interface MembershipsListProps {
+  plans: MembershipPlan[];
+  onCreateMembership: () => void;
+  terminology: ExtendedTerminology;
+}
+
+function MembershipsList({ plans, onCreateMembership, terminology }: MembershipsListProps) {
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'expired'>('all');
@@ -929,7 +948,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
   }, [loadMemberships]);
 
   const handleCancel = async (id: string) => {
-    if (confirm('¿Cancelar esta membresía? El paciente perderá los beneficios del plan.')) {
+    if (confirm(`¿Cancelar esta membresía? El ${terminology.patient.toLowerCase()} perderá los beneficios del plan.`)) {
       try {
         await loyaltyService.cancelMembership(id);
         loadMemberships();
@@ -944,7 +963,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
 
   return (
     <div className="space-y-6">
-      <InfoBanner type="memberships" />
+      <InfoBanner type="memberships" terminology={terminology} />
 
       {/* Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -991,7 +1010,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
           </div>
           <h3 className="font-semibold text-slate-900 mb-1">Primero crea un Plan</h3>
           <p className="text-sm text-slate-600">
-            Ve a la pestaña &ldquo;Planes de Membresía&rdquo; para crear tu primer plan antes de asignar pacientes.
+            Ve a la pestaña &ldquo;Planes de Membresía&rdquo; para crear tu primer plan antes de asignar {terminology.patients.toLowerCase()}.
           </p>
         </div>
       )}
@@ -999,7 +1018,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
       {/* Memberships List */}
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Membresías de Pacientes</h3>
+          <h3 className="font-semibold text-gray-900">Membresías de {terminology.patients}</h3>
           <div className="flex gap-2">
             {(['all', 'active', 'expired'] as const).map((f) => (
               <button
@@ -1031,7 +1050,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
             <p className="font-medium text-gray-900 mb-1">Sin membresías {filter !== 'all' ? `${filter === 'active' ? 'activas' : 'vencidas'}` : ''}</p>
             <p className="text-sm">
               {activePlans.length > 0
-                ? 'Asigna tu primer paciente a un plan usando el botón "Nueva Membresía"'
+                ? `Asigna tu primer ${terminology.patient.toLowerCase()} a un plan usando el botón "Nueva Membresía"`
                 : 'Crea un plan primero en la pestaña "Planes de Membresía"'}
             </p>
           </div>
@@ -1046,7 +1065,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
                     </span>
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">{m.leads?.name || 'Paciente desconocido'}</p>
+                    <p className="font-medium text-gray-900">{m.leads?.name || `${terminology.patient} desconocido`}</p>
                     <p className="text-sm text-gray-500">
                       {m.loyalty_membership_plans?.plan_name || 'Plan desconocido'} • {m.billing_cycle === 'monthly' ? 'Mensual' : 'Anual'}
                     </p>
@@ -1092,6 +1111,7 @@ function MembershipsList({ plans, onCreateMembership }: { plans: MembershipPlan[
 // ======================
 export function MembershipsManagement() {
   const { plans, loading, error, createPlan, updatePlan, deletePlan, refresh } = useMembershipPlans(true);
+  const { terminology } = useVerticalTerminology();
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<MembershipPlan | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<MembershipPlan | null>(null);
@@ -1180,19 +1200,19 @@ export function MembershipsManagement() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Membresías de Pacientes
+          Membresías de {terminology.patients}
         </button>
       </div>
 
       {activeSection === 'plans' ? (
         <>
-          <InfoBanner type="plans" />
+          <InfoBanner type="plans" terminology={terminology} />
 
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Planes de Membresía</h2>
-              <p className="text-sm text-gray-500">Configura los planes que ofrecerás a tus pacientes</p>
+              <p className="text-sm text-gray-500">Configura los planes que ofrecerás a tus {terminology.patients.toLowerCase()}</p>
             </div>
             <button
               onClick={() => { setEditingPlan(null); setShowPlanForm(true); }}
@@ -1219,7 +1239,7 @@ export function MembershipsManagement() {
                 </svg>
               </div>
               <h3 className="font-semibold text-gray-900 mb-1">Sin planes configurados</h3>
-              <p className="text-gray-500 text-sm mb-4">Crea tu primer plan de membresía para empezar a ofrecer beneficios a tus pacientes</p>
+              <p className="text-gray-500 text-sm mb-4">Crea tu primer plan de membresía para empezar a ofrecer beneficios a tus {terminology.patients.toLowerCase()}</p>
               <button
                 onClick={() => setShowPlanForm(true)}
                 className="text-tis-coral font-medium hover:underline"
@@ -1236,7 +1256,8 @@ export function MembershipsManagement() {
                   onEdit={(p) => { setEditingPlan(p); setShowPlanForm(true); }}
                   onToggle={handleTogglePlan}
                   onDelete={(p) => setDeleteConfirm(p)}
-                  onAssignPatient={(p) => setAssigningPlan(p)}
+                  onAssignMember={(p) => setAssigningPlan(p)}
+                  terminology={terminology}
                 />
               ))}
             </div>
@@ -1254,6 +1275,7 @@ export function MembershipsManagement() {
               setActiveSection('plans');
             }
           }}
+          terminology={terminology}
         />
       )}
 
@@ -1263,6 +1285,7 @@ export function MembershipsManagement() {
           plan={editingPlan}
           onSave={handleSavePlan}
           onClose={() => { setShowPlanForm(false); setEditingPlan(null); }}
+          terminology={terminology}
         />
       )}
 
@@ -1272,6 +1295,7 @@ export function MembershipsManagement() {
           plan={assigningPlan}
           onAssign={handleAssignMembership}
           onClose={() => setAssigningPlan(null)}
+          terminology={terminology}
         />
       )}
 
@@ -1281,7 +1305,7 @@ export function MembershipsManagement() {
           <div className="bg-white rounded-2xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Eliminar Plan</h3>
             <p className="text-gray-500 mb-6">
-              ¿Estás seguro de eliminar &ldquo;{deleteConfirm.plan_name}&rdquo;? Los pacientes con este plan mantendrán su membresía actual.
+              ¿Estás seguro de eliminar &ldquo;{deleteConfirm.plan_name}&rdquo;? Los {terminology.patients.toLowerCase()} con este plan mantendrán su membresía actual.
             </p>
             <div className="flex gap-3">
               <button

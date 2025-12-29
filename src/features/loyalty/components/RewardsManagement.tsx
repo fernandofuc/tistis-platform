@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/shared/utils';
 import { useRewards, useLoyaltyProgram } from '../hooks/useLoyalty';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import * as loyaltyService from '../services/loyalty.service';
 import type { LoyaltyReward, RewardType, Redemption } from '../types';
 
@@ -314,6 +315,8 @@ interface RewardFormProps {
 }
 
 function RewardForm({ reward, onSave, onClose }: RewardFormProps) {
+  const { terminology } = useVerticalTerminology();
+  const patientsLower = terminology.patients.toLowerCase();
   const [formData, setFormData] = useState({
     reward_name: reward?.reward_name || '',
     reward_description: reward?.reward_description || '',
@@ -364,7 +367,7 @@ function RewardForm({ reward, onSave, onClose }: RewardFormProps) {
                 {reward ? 'Editar Recompensa' : 'Nueva Recompensa'}
               </h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                {reward ? 'Modifica los detalles de la recompensa' : 'Crea una recompensa para tus pacientes'}
+                {reward ? 'Modifica los detalles de la recompensa' : `Crea una recompensa para tus ${patientsLower}`}
               </p>
             </div>
             <button
@@ -502,7 +505,7 @@ function RewardForm({ reward, onSave, onClose }: RewardFormProps) {
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div>
                 <p className="font-medium text-gray-900">Recompensa Activa</p>
-                <p className="text-sm text-gray-500">Disponible para canjear por los pacientes</p>
+                <p className="text-sm text-gray-500">Disponible para canjear por los {patientsLower}</p>
               </div>
               <button
                 type="button"
@@ -555,6 +558,8 @@ function RewardForm({ reward, onSave, onClose }: RewardFormProps) {
 // REDEMPTIONS LIST
 // ======================
 function RedemptionsList() {
+  const { terminology } = useVerticalTerminology();
+  const patientsLower = terminology.patients.toLowerCase();
   const [redemptions, setRedemptions] = useState<Redemption[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'used' | 'all'>('pending');
@@ -595,7 +600,7 @@ function RedemptionsList() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Canjes de Recompensas</h2>
-          <p className="text-gray-500 mt-1">Gestiona los canjes realizados por tus pacientes</p>
+          <p className="text-gray-500 mt-1">Gestiona los canjes realizados por tus {patientsLower}</p>
         </div>
       </div>
 
@@ -649,7 +654,7 @@ function RedemptionsList() {
                     </svg>
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900">{r.leads?.name || 'Paciente'}</p>
+                    <p className="font-semibold text-gray-900">{r.leads?.name || terminology.patient}</p>
                     <p className="text-sm text-gray-500">{r.loyalty_rewards?.reward_name || 'Recompensa'}</p>
                     <p className="text-xs text-gray-400 font-mono mt-1 bg-gray-100 px-2 py-0.5 rounded inline-block">
                       {r.redemption_code}
@@ -702,6 +707,8 @@ interface EmptyStateProps {
 }
 
 function EmptyState({ onCreate }: EmptyStateProps) {
+  const { terminology } = useVerticalTerminology();
+  const patientsLower = terminology.patients.toLowerCase();
   return (
     <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center">
       <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -711,7 +718,7 @@ function EmptyState({ onCreate }: EmptyStateProps) {
       </div>
       <h3 className="text-xl font-bold text-slate-900 mb-2">Crea tu Catálogo de Recompensas</h3>
       <p className="text-slate-500 max-w-md mx-auto mb-6">
-        Define las recompensas que tus pacientes pueden canjear con sus puntos acumulados.
+        Define las recompensas que tus {patientsLower} pueden canjear con sus puntos acumulados.
       </p>
       <button
         onClick={onCreate}
@@ -773,12 +780,14 @@ function DeleteModal({ reward, onConfirm, onCancel }: DeleteModalProps) {
 export function RewardsManagement() {
   const { rewards, loading, error, createReward, updateReward, deleteReward } = useRewards(true);
   const { program } = useLoyaltyProgram();
+  const { terminology } = useVerticalTerminology();
   const [showForm, setShowForm] = useState(false);
   const [editingReward, setEditingReward] = useState<LoyaltyReward | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<LoyaltyReward | null>(null);
   const [activeSection, setActiveSection] = useState<'catalog' | 'redemptions'>('catalog');
 
   const tokensName = program?.tokens_name_plural || 'Puntos';
+  const patientsLower = terminology.patients.toLowerCase();
 
   const handleSaveReward = async (data: Partial<LoyaltyReward>) => {
     if (editingReward) {
@@ -856,7 +865,7 @@ export function RewardsManagement() {
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Catálogo de Recompensas</h2>
-              <p className="text-gray-500 mt-1">Recompensas que tus pacientes pueden canjear con {tokensName.toLowerCase()}</p>
+              <p className="text-gray-500 mt-1">Recompensas que tus {patientsLower} pueden canjear con {tokensName.toLowerCase()}</p>
             </div>
             <button
               onClick={() => { setEditingReward(null); setShowForm(true); }}
