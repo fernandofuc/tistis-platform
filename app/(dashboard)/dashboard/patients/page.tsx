@@ -14,6 +14,7 @@ import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import { formatRelativeTime, formatPhone, cn } from '@/src/shared/utils';
 
 // ======================
@@ -172,6 +173,7 @@ const cardHoverVariants = {
 export default function PatientsPage() {
   const { tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
+  const { t, terminology, vertical } = useVerticalTerminology();
   const router = useRouter();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -359,17 +361,37 @@ export default function PatientsPage() {
     { key: 'archived', label: 'Archivados', emoji: '📁', color: 'text-slate-600', bgColor: 'bg-slate-200' },
   ];
 
+  // Dynamic content based on vertical
+  const heroContent = useMemo(() => {
+    if (vertical === 'restaurant') {
+      return {
+        title: '¿Quiénes son los Clientes?',
+        description: `Los clientes son personas que ya han realizado al menos una reservación en tu restaurante.
+          A diferencia de los leads (prospectos), los clientes tienen un historial de visitas y pueden hacer nuevas reservaciones.
+          Cuando un lead asiste a su primera reservación, se convierte automáticamente en cliente.`,
+        highlightText: 'lead asiste a su primera reservación',
+      };
+    }
+    return {
+      title: `¿Quiénes son los ${terminology.patients}?`,
+      description: `Los ${terminology.patients.toLowerCase()} son personas que ya han tenido al menos una ${terminology.appointment.toLowerCase()} en tu clínica.
+        A diferencia de los leads (prospectos), los ${terminology.patients.toLowerCase()} tienen un expediente clínico, historial de visitas y pueden agendar ${terminology.appointments.toLowerCase()} de seguimiento.
+        Cuando un lead asiste a su primera ${terminology.appointment.toLowerCase()}, se convierte automáticamente en ${terminology.patient.toLowerCase()}.`,
+      highlightText: `lead asiste a su primera ${terminology.appointment.toLowerCase()}`,
+    };
+  }, [vertical, terminology]);
+
   return (
     <PageWrapper
-      title="Pacientes"
-      subtitle={selectedBranch ? `Pacientes en ${selectedBranch.name}` : 'Gestión de pacientes'}
+      title={terminology.patients}
+      subtitle={selectedBranch ? `${terminology.patients} en ${selectedBranch.name}` : `Gestión de ${terminology.patients.toLowerCase()}`}
       actions={
         <Button leftIcon={icons.plus} onClick={() => setShowNewPatientModal(true)}>
-          Nuevo Paciente
+          {t('newPatient')}
         </Button>
       }
     >
-      {/* Hero Section - Explica qué son los Pacientes */}
+      {/* Hero Section - Explica qué son los Pacientes/Clientes */}
       <div className="mb-8 p-6 bg-gradient-to-br from-emerald-50 via-teal-50/30 to-cyan-50/50 rounded-2xl border border-emerald-200/60">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg shadow-emerald-500/20">
@@ -377,12 +399,10 @@ export default function PatientsPage() {
           </div>
           <div className="flex-1">
             <h2 className="text-lg font-semibold text-slate-800 mb-1">
-              ¿Quiénes son los Pacientes?
+              {heroContent.title}
             </h2>
             <p className="text-sm text-slate-600 leading-relaxed max-w-2xl">
-              Los pacientes son <span className="font-medium text-slate-700">personas que ya han tenido al menos una cita</span> en tu clínica.
-              A diferencia de los leads (prospectos), los pacientes tienen un expediente clínico, historial de visitas y pueden agendar citas de seguimiento.
-              Cuando un <span className="font-medium text-emerald-600">lead asiste a su primera cita</span>, se convierte automáticamente en paciente.
+              {heroContent.description}
             </p>
           </div>
         </div>
@@ -404,7 +424,7 @@ export default function PatientsPage() {
             <Badge variant="default" size="sm">Total</Badge>
           </div>
           <div className="text-2xl font-bold text-slate-800">{counts.all}</div>
-          <p className="text-xs text-slate-500 mt-1">Pacientes registrados</p>
+          <p className="text-xs text-slate-500 mt-1">{terminology.patients} registrados</p>
         </motion.div>
 
         {/* Active Patients */}
@@ -421,7 +441,7 @@ export default function PatientsPage() {
             <Badge variant="success" size="sm">Activos</Badge>
           </div>
           <div className="text-2xl font-bold text-emerald-700">{counts.active}</div>
-          <p className="text-xs text-emerald-600 mt-1">Con tratamiento activo</p>
+          <p className="text-xs text-emerald-600 mt-1">{vertical === 'restaurant' ? 'Clientes frecuentes' : 'Con tratamiento activo'}</p>
         </motion.div>
 
         {/* Inactive Patients */}
@@ -438,7 +458,7 @@ export default function PatientsPage() {
             <Badge variant="warning" size="sm">Inactivos</Badge>
           </div>
           <div className="text-2xl font-bold text-amber-700">{counts.inactive}</div>
-          <p className="text-xs text-amber-600 mt-1">Sin citas recientes</p>
+          <p className="text-xs text-amber-600 mt-1">Sin {terminology.appointments.toLowerCase()} recientes</p>
         </motion.div>
 
         {/* Archived Patients */}
@@ -489,7 +509,7 @@ export default function PatientsPage() {
       {/* Search */}
       <div className="mb-6">
         <SearchInput
-          placeholder="Buscar por nombre, teléfono o número de paciente..."
+          placeholder={`Buscar por nombre, teléfono o número de ${terminology.patient.toLowerCase()}...`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onClear={() => setSearch('')}
@@ -517,17 +537,17 @@ export default function PatientsPage() {
                 <span className="text-4xl">💚</span>
               </div>
               <h3 className="text-lg font-semibold text-slate-800 mb-2">
-                {search ? 'Sin resultados' : 'No hay pacientes registrados'}
+                {search ? 'Sin resultados' : `No hay ${terminology.patients.toLowerCase()} registrados`}
               </h3>
               <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
                 {search
-                  ? 'No se encontraron pacientes con esos criterios de búsqueda'
-                  : 'Los pacientes aparecerán aquí cuando un lead asista a su primera cita o los registres manualmente.'
+                  ? `No se encontraron ${terminology.patients.toLowerCase()} con esos criterios de búsqueda`
+                  : `Los ${terminology.patients.toLowerCase()} aparecerán aquí cuando un lead asista a su primera ${terminology.appointment.toLowerCase()} o los registres manualmente.`
                 }
               </p>
               {!search && (
                 <Button leftIcon={icons.plus} onClick={() => setShowNewPatientModal(true)}>
-                  Agregar Primer Paciente
+                  Agregar Primer {terminology.patient}
                 </Button>
               )}
             </div>
@@ -650,7 +670,7 @@ export default function PatientsPage() {
               {/* Header */}
               <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 z-10">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-900">Detalle del Paciente</h2>
+                  <h2 className="text-lg font-semibold text-slate-900">Detalle del {terminology.patient}</h2>
                   <button
                     onClick={() => {
                       setShowDetailPanel(false);
@@ -812,10 +832,10 @@ export default function PatientsPage() {
                 >
                   <h4 className="text-sm font-semibold text-emerald-700 flex items-center gap-2">
                     {icons.calendar}
-                    Historial de Citas
+                    Historial de {terminology.appointments}
                   </h4>
                   <p className="text-sm text-slate-500 italic">
-                    El historial de citas se mostrará aquí próximamente.
+                    El historial de {terminology.appointments.toLowerCase()} se mostrará aquí próximamente.
                   </p>
                 </motion.div>
               </div>
@@ -850,8 +870,8 @@ export default function PatientsPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-teal-50">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">Nuevo Paciente</h2>
-                    <p className="text-sm text-slate-500">Registra un nuevo paciente en el sistema</p>
+                    <h2 className="text-lg font-semibold text-slate-900">{t('newPatient')}</h2>
+                    <p className="text-sm text-slate-500">Registra un nuevo {terminology.patient.toLowerCase()} en el sistema</p>
                   </div>
                   <button
                     onClick={() => setShowNewPatientModal(false)}
@@ -1021,7 +1041,7 @@ export default function PatientsPage() {
                         <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Vista previa del paciente
+                        Vista previa del {terminology.patient.toLowerCase()}
                       </h4>
                       <div className="flex items-center gap-4">
                         <Avatar
@@ -1081,7 +1101,7 @@ export default function PatientsPage() {
                       ) : (
                         <span className="flex items-center gap-2">
                           {icons.check}
-                          Crear Paciente
+                          Crear {terminology.patient}
                         </span>
                       )}
                     </Button>

@@ -5,9 +5,10 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/shared/utils';
 import { useTokenRules, useLoyaltyProgram } from '../hooks/useLoyalty';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import type { TokenRule, ActionType, PeriodType } from '../types';
 
 // ======================
@@ -44,7 +45,7 @@ const ACTION_TYPE_CONFIG: Record<ActionType, {
   },
   referral: {
     label: 'Referido',
-    description: 'Tokens por referir pacientes',
+    description: 'Tokens por referir nuevos clientes',
     color: 'text-violet-600',
     bgColor: 'bg-violet-50',
     icon: (
@@ -172,13 +173,14 @@ function StatsHeader({ rules, tokensName }: StatsHeaderProps) {
 interface RuleCardProps {
   rule: TokenRule;
   tokensName: string;
+  getActionConfig: (actionType: ActionType) => typeof ACTION_TYPE_CONFIG[ActionType];
   onEdit: (rule: TokenRule) => void;
   onToggle: (rule: TokenRule) => void;
   onDelete: (rule: TokenRule) => void;
 }
 
-function RuleCard({ rule, tokensName, onEdit, onToggle, onDelete }: RuleCardProps) {
-  const config = ACTION_TYPE_CONFIG[rule.action_type];
+function RuleCard({ rule, tokensName, getActionConfig, onEdit, onToggle, onDelete }: RuleCardProps) {
+  const config = getActionConfig(rule.action_type);
 
   return (
     <div className={cn(
@@ -314,11 +316,13 @@ function RuleCard({ rule, tokensName, onEdit, onToggle, onDelete }: RuleCardProp
 // ======================
 interface RuleFormProps {
   rule?: TokenRule | null;
+  patientsName: string;
+  getActionConfig: (actionType: ActionType) => typeof ACTION_TYPE_CONFIG[ActionType];
   onSave: (data: Partial<TokenRule>) => Promise<void>;
   onClose: () => void;
 }
 
-function RuleForm({ rule, onSave, onClose }: RuleFormProps) {
+function RuleForm({ rule, patientsName, getActionConfig, onSave, onClose }: RuleFormProps) {
   const [formData, setFormData] = useState({
     action_type: rule?.action_type || 'appointment',
     action_name: rule?.action_name || '',
@@ -344,7 +348,7 @@ function RuleForm({ rule, onSave, onClose }: RuleFormProps) {
     }
   };
 
-  const selectedConfig = ACTION_TYPE_CONFIG[formData.action_type as ActionType];
+  const selectedConfig = getActionConfig(formData.action_type as ActionType);
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -357,7 +361,7 @@ function RuleForm({ rule, onSave, onClose }: RuleFormProps) {
                 {rule ? 'Editar Regla' : 'Nueva Regla de Puntos'}
               </h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                {rule ? 'Modifica los parámetros de la regla' : 'Define cómo tus pacientes ganan puntos'}
+                {rule ? 'Modifica los parámetros de la regla' : `Define cómo tus ${patientsName} ganan puntos`}
               </p>
             </div>
             <button
@@ -378,27 +382,30 @@ function RuleForm({ rule, onSave, onClose }: RuleFormProps) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Tipo de Acción</label>
               <div className="grid grid-cols-2 gap-2">
-                {Object.entries(ACTION_TYPE_CONFIG).map(([key, config]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, action_type: key as ActionType })}
-                    className={cn(
-                      'flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left',
-                      formData.action_type === key
-                        ? 'border-tis-coral bg-tis-coral/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    )}
-                  >
-                    <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', config.bgColor, config.color)}>
-                      {config.icon}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900 text-sm">{config.label}</p>
-                      <p className="text-xs text-gray-500">{config.description}</p>
-                    </div>
-                  </button>
-                ))}
+                {(Object.keys(ACTION_TYPE_CONFIG) as ActionType[]).map((key) => {
+                  const config = getActionConfig(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, action_type: key })}
+                      className={cn(
+                        'flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left',
+                        formData.action_type === key
+                          ? 'border-tis-coral bg-tis-coral/5'
+                          : 'border-gray-200 hover:border-gray-300'
+                      )}
+                    >
+                      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', config.bgColor, config.color)}>
+                        {config.icon}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">{config.label}</p>
+                        <p className="text-xs text-gray-500">{config.description}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -491,7 +498,7 @@ function RuleForm({ rule, onSave, onClose }: RuleFormProps) {
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div>
                 <p className="font-medium text-gray-900">Regla Activa</p>
-                <p className="text-sm text-gray-500">Los pacientes podrán ganar puntos con esta regla</p>
+                <p className="text-sm text-gray-500">Los {patientsName} podrán ganar puntos con esta regla</p>
               </div>
               <button
                 type="button"
@@ -545,10 +552,11 @@ function RuleForm({ rule, onSave, onClose }: RuleFormProps) {
 // ======================
 interface EmptyStateProps {
   tokensName: string;
+  patientsName: string;
   onCreate: () => void;
 }
 
-function EmptyState({ tokensName, onCreate }: EmptyStateProps) {
+function EmptyState({ tokensName, patientsName, onCreate }: EmptyStateProps) {
   return (
     <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center">
       <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -558,7 +566,7 @@ function EmptyState({ tokensName, onCreate }: EmptyStateProps) {
       </div>
       <h3 className="text-xl font-bold text-slate-900 mb-2">Configura tus Reglas de {tokensName}</h3>
       <p className="text-slate-500 max-w-md mx-auto mb-6">
-        Define cómo tus pacientes acumulan {tokensName.toLowerCase()}. Puedes otorgar puntos por citas, compras, referidos y más.
+        Define cómo tus {patientsName} acumulan {tokensName.toLowerCase()}. Puedes otorgar puntos por visitas, compras, referidos y más.
       </p>
       <button
         onClick={onCreate}
@@ -620,11 +628,28 @@ function DeleteModal({ rule, onConfirm, onCancel }: DeleteModalProps) {
 export function TokensManagement() {
   const { rules, loading, error, createRule, updateRule, deleteRule } = useTokenRules();
   const { program } = useLoyaltyProgram();
+  const { terminology } = useVerticalTerminology();
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<TokenRule | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<TokenRule | null>(null);
 
   const tokensName = program?.tokens_name_plural || 'Puntos';
+  const patientsLower = terminology.patients.toLowerCase();
+
+  // Dynamic labels for action types (only appointment changes by vertical)
+  const actionTypeLabels = useMemo(() => ({
+    appointment: {
+      label: terminology.appointment,
+      description: `Tokens por completar ${terminology.appointment.toLowerCase()}`,
+    },
+  }), [terminology]);
+
+  // Helper to get config with dynamic labels (memoized for stable reference)
+  const getActionConfig = useCallback((actionType: ActionType) => {
+    const baseConfig = ACTION_TYPE_CONFIG[actionType];
+    const dynamicLabels = actionTypeLabels[actionType as keyof typeof actionTypeLabels];
+    return dynamicLabels ? { ...baseConfig, ...dynamicLabels } : baseConfig;
+  }, [actionTypeLabels]);
 
   const handleSaveRule = async (data: Partial<TokenRule>) => {
     if (editingRule) {
@@ -664,7 +689,7 @@ export function TokensManagement() {
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Reglas de {tokensName}</h2>
-          <p className="text-gray-500 mt-1">Configura cómo los pacientes ganan {tokensName.toLowerCase()}</p>
+          <p className="text-gray-500 mt-1">Configura cómo los {patientsLower} ganan {tokensName.toLowerCase()}</p>
         </div>
         <button
           onClick={() => { setEditingRule(null); setShowForm(true); }}
@@ -692,7 +717,7 @@ export function TokensManagement() {
 
       {/* Content */}
       {rules.length === 0 ? (
-        <EmptyState tokensName={tokensName} onCreate={() => setShowForm(true)} />
+        <EmptyState tokensName={tokensName} patientsName={patientsLower} onCreate={() => setShowForm(true)} />
       ) : (
         <div className="space-y-3">
           {rules.map((rule) => (
@@ -700,6 +725,7 @@ export function TokensManagement() {
               key={rule.id}
               rule={rule}
               tokensName={tokensName}
+              getActionConfig={getActionConfig}
               onEdit={(r) => { setEditingRule(r); setShowForm(true); }}
               onToggle={handleToggleRule}
               onDelete={(r) => setDeleteConfirm(r)}
@@ -712,6 +738,8 @@ export function TokensManagement() {
       {showForm && (
         <RuleForm
           rule={editingRule}
+          patientsName={patientsLower}
+          getActionConfig={getActionConfig}
           onSave={handleSaveRule}
           onClose={() => { setShowForm(false); setEditingRule(null); }}
         />

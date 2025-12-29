@@ -12,6 +12,7 @@ import { NewAppointmentModal, AppointmentDetailPanel } from '@/src/features/appo
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import { formatDate, formatTime, cn } from '@/src/shared/utils';
 import { APPOINTMENT_STATUSES } from '@/src/shared/constants';
 import type { Appointment } from '@/src/shared/types';
@@ -122,6 +123,7 @@ function getMonthDays(year: number, month: number) {
 export default function CalendarPage() {
   const { tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
+  const { t, terminology } = useVerticalTerminology();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -245,11 +247,11 @@ export default function CalendarPage() {
 
   return (
     <PageWrapper
-      title="Calendario"
+      title={t('calendarPageTitle')}
       subtitle={selectedBranch ? `${MONTHS[month]} ${year} - ${selectedBranch.name}` : `${MONTHS[month]} ${year}`}
       actions={
         <Button leftIcon={icons.plus} onClick={() => setShowNewAppointmentModal(true)}>
-          Nueva Cita
+          {t('newAppointment')}
         </Button>
       }
     >
@@ -350,18 +352,18 @@ export default function CalendarPage() {
           <Card variant="bordered">
             <CardHeader
               title={selectedDate ? formatDate(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' }) : 'Selecciona un día'}
-              subtitle={selectedDate ? `${selectedDateAppointments.length} citas` : undefined}
+              subtitle={selectedDate ? `${selectedDateAppointments.length} ${terminology.appointments.toLowerCase()}` : undefined}
             />
             <CardContent>
               {!selectedDate ? (
                 <div className="text-center py-8 text-gray-500">
-                  <p>Selecciona un día para ver las citas</p>
+                  <p>Selecciona un día para ver las {terminology.appointments.toLowerCase()}</p>
                 </div>
               ) : selectedDateAppointments.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  <p className="mb-4">No hay citas para este día</p>
+                  <p className="mb-4">No hay {terminology.appointments.toLowerCase()} para este día</p>
                   <Button variant="outline" size="sm" leftIcon={icons.plus} onClick={() => setShowNewAppointmentModal(true)}>
-                    Agendar Cita
+                    {t('scheduleAction')}
                   </Button>
                 </div>
               ) : (

@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import { supabase } from '@/src/shared/lib/supabase';
 
 // Import tab components
@@ -138,7 +139,11 @@ const TABS: Tab[] = [
 // ======================
 // UPGRADE PROMPT COMPONENT - Professional Design
 // ======================
-function UpgradePrompt() {
+interface UpgradePromptProps {
+  patientsName: string;
+}
+
+function UpgradePrompt({ patientsName }: UpgradePromptProps) {
   const router = useRouter();
 
   return (
@@ -173,7 +178,7 @@ function UpgradePrompt() {
               Sistema de Lealtad
             </h2>
             <p className="text-slate-500 mb-6">
-              Fideliza a tus pacientes con tokens, membresías y recompensas personalizadas.
+              Fideliza a tus {patientsName} con tokens, membresías y recompensas personalizadas.
             </p>
 
             {/* Features List */}
@@ -184,7 +189,7 @@ function UpgradePrompt() {
                   'Membresías mensuales y anuales',
                   'Catálogo de recompensas canjeables',
                   'Mensajes automáticos con IA',
-                  'Reactivación de pacientes inactivos',
+                  `Reactivación de ${patientsName} inactivos`,
                 ].map((feature, i) => (
                   <li key={i} className="flex items-center gap-3 text-sm text-slate-600">
                     <svg className="w-5 h-5 text-tis-coral flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,6 +237,7 @@ export default function LealtadPage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const { tenant, isLoading: tenantLoading } = useTenant();
   const { isEnabled, flagsLoading } = useFeatureFlags();
+  const { terminology } = useVerticalTerminology();
 
   // Loyalty program state
   const [program, setProgram] = useState<LoyaltyProgramState | null>(null);
@@ -349,7 +355,7 @@ export default function LealtadPage() {
 
   // Show upgrade prompt for Starter plan users
   if (isStarterPlan || !loyaltyEnabled) {
-    return <UpgradePrompt />;
+    return <UpgradePrompt patientsName={terminology.patients.toLowerCase()} />;
   }
 
   // Filter tabs based on enabled features
@@ -391,7 +397,7 @@ export default function LealtadPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Programa de Lealtad</h1>
           <p className="text-slate-500 mt-1">
-            Gestiona tokens, membresías y recompensas para fidelizar a tus pacientes
+            Gestiona tokens, membresías y recompensas para fidelizar a tus {terminology.patients.toLowerCase()}
           </p>
         </div>
       </div>
@@ -400,7 +406,7 @@ export default function LealtadPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FeatureToggleCard
           title="Sistema de Tokens"
-          description="Otorga puntos por citas, compras y acciones de tus pacientes"
+          description={`Otorga puntos por ${terminology.appointments.toLowerCase()}, compras y acciones de tus ${terminology.patients.toLowerCase()}`}
           enabled={program?.tokens_enabled ?? true}
           onToggle={handleToggleTokens}
           loading={tokensToggleLoading}
@@ -442,9 +448,9 @@ export default function LealtadPage() {
               </p>
               <p className="text-sm text-slate-500 mt-0.5">
                 {!program?.tokens_enabled && !program?.membership_enabled
-                  ? 'El sistema de tokens y membresías están desactivados. Actívalos para gestionar la lealtad de tus pacientes.'
+                  ? `El sistema de tokens y membresías están desactivados. Actívalos para gestionar la lealtad de tus ${terminology.patients.toLowerCase()}.`
                   : !program?.tokens_enabled
-                    ? 'El sistema de tokens está desactivado. Actívalo para otorgar puntos a tus pacientes.'
+                    ? `El sistema de tokens está desactivado. Actívalo para otorgar puntos a tus ${terminology.patients.toLowerCase()}.`
                     : 'El sistema de membresías está desactivado. Actívalo para ofrecer planes de suscripción.'
                 }
               </p>

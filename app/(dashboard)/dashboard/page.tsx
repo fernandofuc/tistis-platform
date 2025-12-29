@@ -15,6 +15,7 @@ import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { useBranch } from '@/src/shared/stores';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import { formatRelativeTime, formatTime, cn } from '@/src/shared/utils';
 import type { Lead, Appointment } from '@/src/shared/types';
 
@@ -122,6 +123,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { staff, tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
+  const { t, vertical } = useVerticalTerminology();
   const [stats, setStats] = useState<DashboardStats>({
     totalLeads: 0,
     hotLeads: 0,
@@ -272,7 +274,7 @@ export default function DashboardPage() {
           leftIcon={icons.plus}
           onClick={() => router.push('/dashboard/calendario')}
         >
-          Nueva Cita
+          {t('newAppointment')}
         </Button>
       }
     >
@@ -354,7 +356,7 @@ export default function DashboardPage() {
           ) : (
             <>
               <div className="text-3xl font-bold text-emerald-700">{stats.todayAppointments}</div>
-              <p className="text-sm text-emerald-600 mt-1">Citas programadas</p>
+              <p className="text-sm text-emerald-600 mt-1">{t('todayScheduledLabel')}</p>
             </>
           )}
         </motion.div>
@@ -554,9 +556,9 @@ export default function DashboardPage() {
                 href: '/dashboard/leads',
               },
               {
-                label: 'Agendar Cita',
+                label: t('scheduleAction'),
                 icon: icons.calendar,
-                emoji: '📅',
+                emoji: vertical === 'restaurant' ? '🍽️' : '📅',
                 gradient: 'from-emerald-50 to-teal-50',
                 hoverGradient: 'hover:from-emerald-100 hover:to-teal-100',
                 border: 'border-emerald-200/60',
@@ -603,7 +605,7 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <Card variant="bordered" className="overflow-hidden">
             <CardHeader
-              title="Citas de Hoy"
+              title={t('todayAppointments')}
               subtitle={`${new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })}`}
               action={
                 <Link href="/dashboard/calendario">
@@ -631,7 +633,7 @@ export default function DashboardPage() {
                   <div className="w-14 h-14 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-2xl flex items-center justify-center">
                     <span className="text-2xl">📅</span>
                   </div>
-                  <h3 className="text-base font-semibold text-slate-800 mb-1">Sin citas hoy</h3>
+                  <h3 className="text-base font-semibold text-slate-800 mb-1">{t('noAppointmentsToday')}</h3>
                   <p className="text-sm text-slate-500 mb-4">
                     Tu agenda está libre
                   </p>
