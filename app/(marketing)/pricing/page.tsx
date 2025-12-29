@@ -487,6 +487,10 @@ function PricingContent() {
   const [branches, setBranches] = useState(1);
   const [selectedVertical, setSelectedVertical] = useState<VerticalType>('dental');
 
+  // Check if this is a new OAuth user
+  const isNewUser = searchParams.get('new_user') === 'true';
+  const userEmail = searchParams.get('email') || '';
+
   // Cargar plan recomendado desde URL o sessionStorage
   useEffect(() => {
     const urlPlan = searchParams.get('plan');
@@ -505,7 +509,12 @@ function PricingContent() {
         setSelectedPlanId('essentials');
       }
     }
-  }, [searchParams]);
+
+    // For new OAuth users, store email in session
+    if (isNewUser && userEmail) {
+      sessionStorage.setItem('oauth_user_email', userEmail);
+    }
+  }, [searchParams, isNewUser, userEmail]);
 
   const selectedPlan = PLANS_DISPLAY.find(p => p.id === selectedPlanId) || null;
 
@@ -543,8 +552,27 @@ function PricingContent() {
 
   return (
     <>
+      {/* New User Welcome Banner */}
+      {isNewUser && (
+        <motion.section
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="bg-gradient-to-r from-tis-coral to-tis-pink py-4 px-6"
+        >
+          <div className="max-w-4xl mx-auto flex items-center justify-center gap-3 text-white">
+            <Sparkles className="w-5 h-5" />
+            <span className="font-medium">
+              ¡Bienvenido a TIS TIS{userEmail ? `, ${userEmail.split('@')[0]}` : ''}!
+            </span>
+            <span className="hidden md:inline">
+              Selecciona tu plan para comenzar a automatizar tu negocio.
+            </span>
+          </div>
+        </motion.section>
+      )}
+
       {/* Hero Section - Estilo Apple */}
-      <section className="pt-24 pb-12 px-6">
+      <section className={`${isNewUser ? 'pt-16' : 'pt-24'} pb-12 px-6`}>
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
@@ -552,17 +580,30 @@ function PricingContent() {
             transition={{ duration: 0.5 }}
           >
             <span className="inline-block px-4 py-1.5 bg-tis-coral/10 text-tis-coral text-sm font-medium rounded-full mb-6">
-              Invierte en tiempo, no en tareas
+              {isNewUser ? 'Paso 2: Elige tu plan' : 'Invierte en tiempo, no en tareas'}
             </span>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 mb-6 leading-tight">
-              Tu competencia ya{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-tis-coral to-tis-pink">
-                automatizo.
-              </span>
+              {isNewUser ? (
+                <>
+                  Elige el plan perfecto para{' '}
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-tis-coral to-tis-pink">
+                    tu negocio.
+                  </span>
+                </>
+              ) : (
+                <>
+                  Tu competencia ya{' '}
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-tis-coral to-tis-pink">
+                    automatizo.
+                  </span>
+                </>
+              )}
             </h1>
             <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Cada dia sin automatizar son horas perdidas y clientes que no atiendes.
-              Empieza hoy. Sin contratos. Sin riesgos.
+              {isNewUser
+                ? 'Tu cuenta está lista. Solo falta elegir tu plan para activar tu asistente IA.'
+                : 'Cada dia sin automatizar son horas perdidas y clientes que no atiendes. Empieza hoy. Sin contratos. Sin riesgos.'
+              }
             </p>
           </motion.div>
         </div>

@@ -66,6 +66,7 @@ function CheckoutContent() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [isOAuthUser, setIsOAuthUser] = useState(false);
 
   // Field errors
   const [emailError, setEmailError] = useState<string | undefined>();
@@ -73,7 +74,7 @@ function CheckoutContent() {
 
   const cancelled = searchParams.get('cancelled');
 
-  // Cargar datos de sessionStorage
+  // Cargar datos de sessionStorage y detectar usuario OAuth
   useEffect(() => {
     const urlPlan = searchParams.get('plan');
     const savedPlan = urlPlan || sessionStorage.getItem('selected_plan') || 'essentials';
@@ -89,13 +90,27 @@ function CheckoutContent() {
       setVertical(savedVertical);
     }
 
+    // Check for OAuth user email (set by callback)
+    const oauthEmail = sessionStorage.getItem('oauth_user_email');
+    if (oauthEmail) {
+      setCustomerEmail(oauthEmail);
+      setIsOAuthUser(true);
+      // Extract name from email as a starting point
+      const namePart = oauthEmail.split('@')[0].replace(/[._]/g, ' ');
+      if (!customerName) {
+        setCustomerName(namePart.charAt(0).toUpperCase() + namePart.slice(1));
+      }
+    }
+
     // Cargar datos del cuestionario si existen
     const savedAnswers = sessionStorage.getItem('questionnaire_answers');
     if (savedAnswers) {
       try {
         const answers = JSON.parse(savedAnswers);
         if (answers.contact_info) {
-          setCustomerEmail(answers.contact_info.email || '');
+          if (!oauthEmail) {
+            setCustomerEmail(answers.contact_info.email || '');
+          }
           setCustomerName(answers.contact_info.name || '');
           setCustomerPhone(answers.contact_info.phone || '');
         }
@@ -103,7 +118,7 @@ function CheckoutContent() {
         console.error('Error parsing questionnaire answers:', e);
       }
     }
-  }, [searchParams]);
+  }, [searchParams, customerName]);
 
   // Datos del plan
   const plan = getPlanConfig(planId) || PLAN_CONFIG.essentials;
@@ -448,19 +463,31 @@ function CheckoutContent() {
                 )}
 
                 {/* Email */}
-                <Input
-                  label="Correo electrónico"
-                  type="email"
-                  value={customerEmail}
-                  onChange={(e) => {
-                    setCustomerEmail(e.target.value);
-                    if (emailError) setEmailError(undefined);
-                  }}
-                  onBlur={handleEmailBlur}
-                  placeholder="tu@email.com"
-                  error={emailError}
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    label="Correo electrónico"
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => {
+                      if (!isOAuthUser) {
+                        setCustomerEmail(e.target.value);
+                        if (emailError) setEmailError(undefined);
+                      }
+                    }}
+                    onBlur={handleEmailBlur}
+                    placeholder="tu@email.com"
+                    error={emailError}
+                    required
+                    disabled={isOAuthUser}
+                    className={isOAuthUser ? 'bg-green-50 border-green-200' : ''}
+                  />
+                  {isOAuthUser && (
+                    <div className="absolute right-3 top-9 flex items-center gap-1.5 text-green-600">
+                      <CheckCircle className="w-4 h-4" />
+                      <span className="text-xs font-medium">Verificado</span>
+                    </div>
+                  )}
+                </div>
 
                 {/* Nombre */}
                 <Input

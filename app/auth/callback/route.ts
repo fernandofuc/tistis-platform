@@ -1,7 +1,77 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+
+// ======================
+// HELPER: Check if user has a tenant/subscription
+// ======================
+async function checkUserHasTenant(userId: string): Promise<boolean> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.warn('⚠️ Missing service role key, cannot check tenant');
+    return true; // Assume has tenant to avoid blocking
+  }
+
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+  try {
+    // Check if user has a role assigned (which means they have a tenant)
+    const { data: userRole, error } = await supabaseAdmin
+      .from('user_roles')
+      .select('tenant_id, role')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      // PGRST116 = no rows found, user is new
+      if (error.code === 'PGRST116') {
+        console.log('🟡 User has no tenant assigned - new user');
+        return false;
+      }
+      console.warn('⚠️ Error checking user tenant:', error);
+      return true; // Assume has tenant on error
+    }
+
+    console.log('🟢 User has tenant:', userRole?.tenant_id);
+    return !!userRole?.tenant_id;
+  } catch (err) {
+    console.error('🔴 Exception checking user tenant:', err);
+    return true; // Assume has tenant on error
+  }
+}
+
+// ======================
+// HELPER: Set session cookies on response
+// ======================
+function setSessionCookies(
+  response: NextResponse,
+  accessToken: string | undefined,
+  refreshToken: string | undefined
+): void {
+  if (accessToken) {
+    response.cookies.set('sb-access-token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      path: '/',
+    });
+  }
+
+  if (refreshToken) {
+    response.cookies.set('sb-refresh-token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365 * 7, // 7 years
+      path: '/',
+    });
+  }
+}
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -27,7 +97,7 @@ export async function GET(request: NextRequest) {
 
     const errorMessage = error_description || error;
     return NextResponse.redirect(
-      new URL(`/?error=${encodeURIComponent(errorMessage)}&error_code=${encodeURIComponent(error)}`, request.url)
+      new URL(`/auth/login?error=${encodeURIComponent(errorMessage)}`, request.url)
     );
   }
 
@@ -45,7 +115,7 @@ export async function GET(request: NextRequest) {
           hasKey: !!supabaseAnonKey,
         });
         return NextResponse.redirect(
-          new URL('/?error=missing_credentials', request.url)
+          new URL('/auth/login?error=missing_credentials', request.url)
         );
       }
 
@@ -86,7 +156,7 @@ export async function GET(request: NextRequest) {
           timestamp: new Date().toISOString(),
         });
         return NextResponse.redirect(
-          new URL(`/?error=${encodeURIComponent(exchangeError.message)}`, request.url)
+          new URL(`/auth/login?error=${encodeURIComponent(exchangeError.message)}`, request.url)
         );
       }
 
@@ -97,36 +167,38 @@ export async function GET(request: NextRequest) {
           timestamp: new Date().toISOString(),
         });
 
-        // CRITICAL: Set response cookies to persist session
-        const response = NextResponse.redirect(new URL('/dashboard', request.url));
+        // Check if this is a new user (no tenant assigned)
+        const hasTenant = await checkUserHasTenant(data.session.user.id);
 
-        // Set session cookies in response headers
-        if (data.session.access_token) {
-          response.cookies.set('sb-access-token', data.session.access_token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 365, // 1 year
-            path: '/',
-          });
+        let redirectUrl: URL;
+
+        if (hasTenant) {
+          // Existing user with tenant - go to dashboard
+          console.log('🟢 Existing user - redirecting to dashboard');
+          redirectUrl = new URL('/dashboard', request.url);
+        } else {
+          // New user - redirect to onboarding/pricing flow
+          console.log('🟡 New user - redirecting to pricing for plan selection');
+          redirectUrl = new URL('/pricing', request.url);
+          redirectUrl.searchParams.set('new_user', 'true');
+          redirectUrl.searchParams.set('email', data.session.user.email || '');
         }
 
-        if (data.session.refresh_token) {
-          response.cookies.set('sb-refresh-token', data.session.refresh_token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 365 * 7, // 7 years
-            path: '/',
-          });
-        }
+        const response = NextResponse.redirect(redirectUrl);
+
+        // Set session cookies
+        setSessionCookies(
+          response,
+          data.session.access_token,
+          data.session.refresh_token
+        );
 
         return response;
       }
 
       console.warn('⚠️ No session returned from code exchange');
       return NextResponse.redirect(
-        new URL('/?error=no_session', request.url)
+        new URL('/auth/login?error=no_session', request.url)
       );
     } catch (error) {
       console.error('🔴 Callback Handler Exception:', {
@@ -135,12 +207,12 @@ export async function GET(request: NextRequest) {
         timestamp: new Date().toISOString(),
       });
       return NextResponse.redirect(
-        new URL('/?error=authentication_failed', request.url)
+        new URL('/auth/login?error=authentication_failed', request.url)
       );
     }
   }
 
   // No code provided
   console.warn('⚠️ No authorization code provided in callback URL');
-  return NextResponse.redirect(new URL('/?error=no_code', request.url));
+  return NextResponse.redirect(new URL('/auth/login?error=no_code', request.url));
 }
