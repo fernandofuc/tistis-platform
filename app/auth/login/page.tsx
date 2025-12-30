@@ -12,6 +12,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { loginSchema, type LoginFormData, sanitizeEmail } from '@/src/features/auth/utils/validation';
 import { rateLimiter, LOGIN_RATE_LIMIT, OAUTH_RATE_LIMIT, formatRetryTime, getUserIdentifier } from '@/src/features/auth/utils/rateLimiter';
+import { withTimeout, isNetworkError, getErrorMessage, isOnline } from '@/src/features/auth/utils/networkHelpers';
 
 // ======================
 // GOOGLE ICON COMPONENT
@@ -81,32 +82,42 @@ function LoginContent() {
     register,
     handleSubmit,
     formState: { errors },
-    watch,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
 
-  const emailValue = watch('email');
-
   // Check if already logged in
   useEffect(() => {
+    let mounted = true;
+
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
         console.log('🔍 [Login] Session check:', !!session);
 
         if (session) {
           console.log('✅ [Login] Already authenticated, redirecting to dashboard');
           setTimeout(() => {
-            window.location.replace('/dashboard');
+            if (mounted) {
+              window.location.replace('/dashboard');
+            }
           }, 50);
         }
       } catch (error) {
-        console.error('🔴 [Login] Session check error:', error);
+        if (mounted) {
+          console.error('🔴 [Login] Session check error:', error);
+        }
       }
     };
 
     checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Show OAuth errors if present
@@ -123,6 +134,15 @@ function LoginContent() {
   // OAUTH HANDLERS
   // ======================
   const handleGoogleAuth = async () => {
+    // Check if online
+    if (!isOnline()) {
+      setError({
+        message: 'Sin conexión a internet. Verifica tu conexión e intenta de nuevo.',
+        type: 'warning',
+      });
+      return;
+    }
+
     // Check rate limit
     const rateLimitKey = 'oauth:google';
     const rateLimitCheck = rateLimiter.check(rateLimitKey, OAUTH_RATE_LIMIT);
@@ -142,22 +162,26 @@ function LoginContent() {
     try {
       console.log('🔵 [OAuth] Initiating Google authentication');
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          // Redirect back to app after OAuth
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+      // Add timeout to OAuth request (10 seconds)
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            // Redirect back to app after OAuth
+            redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
 
-          // PKCE is enabled by default in client config
-          skipBrowserRedirect: false,
+            // PKCE is enabled by default in client config
+            skipBrowserRedirect: false,
 
-          // Google-specific query params
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
+            // Google-specific query params
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
           },
-        },
-      });
+        }),
+        10000 // 10 second timeout
+      );
 
       if (error) {
         console.error('🔴 [OAuth] Google authentication error:', error);
@@ -176,18 +200,29 @@ function LoginContent() {
       rateLimiter.success(rateLimitKey);
 
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al conectar con Google';
       console.error('🔴 [OAuth] Exception:', err);
+
+      // Use network helper to get user-friendly message
+      const errorMsg = getErrorMessage(err);
 
       setError({
         message: errorMsg,
-        type: 'error',
+        type: isNetworkError(err) ? 'warning' : 'error',
       });
       setOauthLoading(null);
     }
   };
 
   const handleGitHubAuth = async () => {
+    // Check if online
+    if (!isOnline()) {
+      setError({
+        message: 'Sin conexión a internet. Verifica tu conexión e intenta de nuevo.',
+        type: 'warning',
+      });
+      return;
+    }
+
     // Check rate limit
     const rateLimitKey = 'oauth:github';
     const rateLimitCheck = rateLimiter.check(rateLimitKey, OAUTH_RATE_LIMIT);
@@ -207,13 +242,17 @@ function LoginContent() {
     try {
       console.log('🔵 [OAuth] Initiating GitHub authentication');
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-          skipBrowserRedirect: false,
-        },
-      });
+      // Add timeout to OAuth request (10 seconds)
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: 'github',
+          options: {
+            redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+            skipBrowserRedirect: false,
+          },
+        }),
+        10000 // 10 second timeout
+      );
 
       if (error) {
         console.error('🔴 [OAuth] GitHub authentication error:', error);
@@ -232,12 +271,14 @@ function LoginContent() {
       rateLimiter.success(rateLimitKey);
 
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al conectar con GitHub';
       console.error('🔴 [OAuth] Exception:', err);
+
+      // Use network helper to get user-friendly message
+      const errorMsg = getErrorMessage(err);
 
       setError({
         message: errorMsg,
-        type: 'error',
+        type: isNetworkError(err) ? 'warning' : 'error',
       });
       setOauthLoading(null);
     }

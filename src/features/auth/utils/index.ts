@@ -44,6 +44,18 @@ export {
 } from './rateLimiter';
 
 // ======================
+// NETWORK HELPERS
+// ======================
+export {
+  withTimeout,
+  isNetworkError,
+  getErrorMessage,
+  retryWithBackoff,
+  isOnline,
+  waitForOnline,
+} from './networkHelpers';
+
+// ======================
 // RE-EXPORT TYPES
 // ======================
 export type { RateLimitConfig } from './rateLimiter';
