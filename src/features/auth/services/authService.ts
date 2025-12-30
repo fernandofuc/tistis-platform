@@ -6,16 +6,26 @@
 import { supabase } from '@/shared/lib/supabase';
 import type { Staff, Branch, Tenant } from '@/shared/types';
 import type { SignUpData, AuthResult } from '../types';
+import { withTimeout, getErrorMessage } from '../utils/networkHelpers';
+
+// ======================
+// CONSTANTS
+// ======================
+const AUTH_TIMEOUT = 15000; // 15 seconds
 
 // ======================
 // AUTH OPERATIONS
 // ======================
 export async function signIn(email: string, password: string): Promise<AuthResult> {
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // Add timeout to prevent hanging requests
+    const { data, error } = await withTimeout(
+      supabase.auth.signInWithPassword({
+        email,
+        password,
+      }),
+      AUTH_TIMEOUT
+    );
 
     if (error) {
       console.error('🔴 Sign in error:', error.message);
@@ -26,23 +36,28 @@ export async function signIn(email: string, password: string): Promise<AuthResul
     return { success: true, user: data.user ?? undefined };
   } catch (err) {
     console.error('🔴 Sign in exception:', err);
-    return { success: false, error: 'Error inesperado al iniciar sesión' };
+    // Use network helper for better error messages
+    return { success: false, error: getErrorMessage(err) };
   }
 }
 
 export async function signUp(data: SignUpData): Promise<AuthResult> {
   try {
-    const { data: authData, error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: {
-          first_name: data.firstName,
-          last_name: data.lastName,
-          phone: data.phone,
+    // Add timeout to prevent hanging requests
+    const { data: authData, error } = await withTimeout(
+      supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            first_name: data.firstName,
+            last_name: data.lastName,
+            phone: data.phone,
+          },
         },
-      },
-    });
+      }),
+      AUTH_TIMEOUT
+    );
 
     if (error) {
       console.error('🔴 Sign up error:', error.message);
@@ -53,45 +68,75 @@ export async function signUp(data: SignUpData): Promise<AuthResult> {
     return { success: true, user: authData.user ?? undefined };
   } catch (err) {
     console.error('🔴 Sign up exception:', err);
-    return { success: false, error: 'Error inesperado al registrarse' };
+    // Use network helper for better error messages
+    return { success: false, error: getErrorMessage(err) };
   }
 }
 
 export async function signOut(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
-  if (error) {
-    console.error('🔴 Sign out error:', error.message);
-    throw new Error(error.message);
+  try {
+    // Add timeout to prevent hanging requests
+    const { error } = await withTimeout(
+      supabase.auth.signOut(),
+      AUTH_TIMEOUT
+    );
+
+    if (error) {
+      console.error('🔴 Sign out error:', error.message);
+      throw new Error(error.message);
+    }
+
+    console.log('🟢 Sign out successful');
+  } catch (err) {
+    console.error('🔴 Sign out exception:', err);
+    throw new Error(getErrorMessage(err));
   }
-  console.log('🟢 Sign out successful');
 }
 
 export async function resetPassword(email: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/auth/reset-password`,
-  });
+  try {
+    // Add timeout to prevent hanging requests
+    const { error } = await withTimeout(
+      supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      }),
+      AUTH_TIMEOUT
+    );
 
-  if (error) {
-    console.error('🔴 Reset password error:', error.message);
-    return { error: error.message };
+    if (error) {
+      console.error('🔴 Reset password error:', error.message);
+      return { error: error.message };
+    }
+
+    // Reset password email sent
+    return { error: null };
+  } catch (err) {
+    console.error('🔴 Reset password exception:', err);
+    return { error: getErrorMessage(err) };
   }
-
-  // Reset password email sent
-  return { error: null };
 }
 
 export async function updatePassword(newPassword: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.auth.updateUser({
-    password: newPassword,
-  });
+  try {
+    // Add timeout to prevent hanging requests
+    const { error } = await withTimeout(
+      supabase.auth.updateUser({
+        password: newPassword,
+      }),
+      AUTH_TIMEOUT
+    );
 
-  if (error) {
-    console.error('🔴 Update password error:', error.message);
-    return { error: error.message };
+    if (error) {
+      console.error('🔴 Update password error:', error.message);
+      return { error: error.message };
+    }
+
+    // Password updated successfully
+    return { error: null };
+  } catch (err) {
+    console.error('🔴 Update password exception:', err);
+    return { error: getErrorMessage(err) };
   }
-
-  // Password updated successfully
-  return { error: null };
 }
 
 // ======================
