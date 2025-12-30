@@ -37,11 +37,25 @@ export async function POST(req: NextRequest) {
       customerPhone,
       branches = 1,
       addons = [],
-      vertical = 'dental', // Default vertical
+      vertical, // NO DEFAULT - must be explicitly provided
       proposalId,
       metadata: rawMetadata,
     } = body;
     const stripe = getStripeClient();
+
+    // ============================================
+    // CRITICAL FIX: Validate vertical is provided and valid
+    // This prevents the issue where vertical defaults to 'dental'
+    // when sessionStorage is cleared
+    // ============================================
+    const VALID_VERTICALS = ['dental', 'restaurant', 'pharmacy', 'retail', 'medical', 'services', 'other'];
+    if (!vertical || !VALID_VERTICALS.includes(vertical)) {
+      console.error('🚨 [Checkout] Invalid or missing vertical:', vertical);
+      return NextResponse.json(
+        { error: 'Vertical es requerido. Por favor vuelve a la página de precios y selecciona tu tipo de negocio.' },
+        { status: 400 }
+      );
+    }
 
     // Allowlist for metadata fields to prevent arbitrary data injection
     const ALLOWED_METADATA_KEYS = ['referralCode', 'campaignId', 'source', 'utm_source', 'utm_medium', 'utm_campaign'];
@@ -63,11 +77,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ============================================
+    // CRITICAL: Validate branches against plan limits
+    // This prevents users from requesting more branches than allowed
+    // ============================================
+    const branchCount = Math.max(1, Math.min(branches, 100)); // Clamp to 1-100
+    if (branchCount > planConfig.branchLimit) {
+      console.error('🚨 [Checkout] Branches exceed plan limit:', { requested: branchCount, limit: planConfig.branchLimit });
+      return NextResponse.json(
+        { error: `El plan ${planConfig.name} permite máximo ${planConfig.branchLimit} sucursales. Selecciona un plan superior o reduce las sucursales.` },
+        { status: 400 }
+      );
+    }
+
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_URL;
 
     // Calculate extra branch cost using centralized function
-    const extraBranches = Math.max(0, branches - 1);
-    const branchCost = calculateBranchCostCentavos(plan, branches);
+    const extraBranches = Math.max(0, branchCount - 1);
+    const branchCost = calculateBranchCostCentavos(plan, branchCount);
 
     // Build line items array
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
@@ -118,7 +145,7 @@ export async function POST(req: NextRequest) {
       subscription_data: {
         metadata: {
           plan,
-          branches: branches.toString(),
+          branches: branchCount.toString(),
           addons: JSON.stringify(addons),
           customerName: customerName || '',
           customerPhone: customerPhone || '',
@@ -131,7 +158,7 @@ export async function POST(req: NextRequest) {
       cancel_url: `${origin}/checkout?cancelled=true`,
       metadata: {
         plan,
-        branches: branches.toString(),
+        branches: branchCount.toString(),
         addons: JSON.stringify(addons),
         customerName: customerName || '',
         customerPhone: customerPhone || '',

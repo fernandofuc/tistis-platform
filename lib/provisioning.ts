@@ -10,10 +10,77 @@
  * - Configuración inicial según vertical
  *
  * Se ejecuta automáticamente después de que un cliente paga su suscripción.
+ *
+ * CRITICAL: This module includes rollback logic to clean up partial
+ * provisioning in case of failures. If provisioning fails, Stripe
+ * will retry the webhook and this module will attempt again.
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+
+// ============================================
+// ROLLBACK TRACKING
+// ============================================
+
+interface RollbackTracker {
+  tenant_id?: string;
+  branch_ids: string[];
+  user_id?: string;
+  staff_id?: string;
+  user_role_id?: string;
+  services_created: boolean;
+  faqs_created: boolean;
+}
+
+async function performRollback(supabase: SupabaseClient, tracker: RollbackTracker): Promise<void> {
+  console.log('🔄 [Provisioning] Starting rollback...');
+
+  try {
+    // Rollback in reverse order of creation
+    if (tracker.faqs_created && tracker.tenant_id) {
+      await supabase.from('faqs').delete().eq('tenant_id', tracker.tenant_id);
+      console.log('  ✓ FAQs deleted');
+    }
+
+    if (tracker.services_created && tracker.tenant_id) {
+      await supabase.from('services').delete().eq('tenant_id', tracker.tenant_id);
+      console.log('  ✓ Services deleted');
+    }
+
+    if (tracker.user_role_id) {
+      await supabase.from('user_roles').delete().eq('id', tracker.user_role_id);
+      console.log('  ✓ User role deleted');
+    }
+
+    if (tracker.staff_id) {
+      await supabase.from('staff_branches').delete().eq('staff_id', tracker.staff_id);
+      await supabase.from('staff').delete().eq('id', tracker.staff_id);
+      console.log('  ✓ Staff deleted');
+    }
+
+    // Delete all branches
+    for (const branchId of tracker.branch_ids) {
+      await supabase.from('branches').delete().eq('id', branchId);
+    }
+    if (tracker.branch_ids.length > 0) {
+      console.log(`  ✓ ${tracker.branch_ids.length} branches deleted`);
+    }
+
+    if (tracker.tenant_id) {
+      await supabase.from('tenants').delete().eq('id', tracker.tenant_id);
+      console.log('  ✓ Tenant deleted');
+    }
+
+    // NOTE: We don't delete auth.users because the user might already exist
+    // from a previous OAuth login. Only delete if we created a NEW user.
+
+    console.log('✅ [Provisioning] Rollback completed');
+  } catch (rollbackError) {
+    console.error('🚨 [Provisioning] Rollback failed:', rollbackError);
+    // Log for manual cleanup
+  }
+}
 
 // ============================================
 // TYPES
@@ -238,6 +305,13 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
   const supabase = getSupabaseAdmin();
   const startTime = Date.now();
 
+  // Initialize rollback tracker
+  const rollback: RollbackTracker = {
+    branch_ids: [],
+    services_created: false,
+    faqs_created: false,
+  };
+
   console.log('🚀 [Provisioning] Starting tenant provisioning...');
   console.log('📋 [Provisioning] Params:', {
     client_id: params.client_id,
@@ -248,6 +322,43 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
   });
 
   try {
+    // ============================================
+    // STEP 0: Validate required parameters
+    // ============================================
+    if (!params.client_id) {
+      return {
+        success: false,
+        error: 'client_id is required',
+      };
+    }
+
+    if (!params.customer_email) {
+      return {
+        success: false,
+        error: 'customer_email is required',
+      };
+    }
+
+    // Validate vertical
+    const VALID_VERTICALS = ['dental', 'restaurant', 'pharmacy', 'retail', 'medical', 'services', 'other'];
+    if (!params.vertical || !VALID_VERTICALS.includes(params.vertical)) {
+      console.error('🚨 [Provisioning] Invalid vertical:', params.vertical);
+      return {
+        success: false,
+        error: `Invalid vertical: ${params.vertical}. Must be one of: ${VALID_VERTICALS.join(', ')}`,
+      };
+    }
+
+    // Validate plan
+    const VALID_PLANS = ['starter', 'essentials', 'growth'];
+    if (!params.plan || !VALID_PLANS.includes(params.plan)) {
+      console.error('🚨 [Provisioning] Invalid plan:', params.plan);
+      return {
+        success: false,
+        error: `Invalid plan: ${params.plan}. Must be one of: ${VALID_PLANS.join(', ')}`,
+      };
+    }
+
     // ============================================
     // STEP 1: Verificar que el client existe
     // ============================================
@@ -338,6 +449,8 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       };
     }
 
+    // Track for rollback
+    rollback.tenant_id = tenant.id;
     console.log('✅ [Provisioning] Tenant created:', tenant.id);
 
     // ============================================
@@ -379,13 +492,16 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
 
     if (hqError || !hqBranch) {
       console.error('❌ [Provisioning] Failed to create HQ branch:', hqError);
-      await supabase.from('tenants').delete().eq('id', tenant.id);
+      await performRollback(supabase, rollback);
       return {
         success: false,
         error: 'Failed to create headquarters branch',
         details: { error: hqError?.message },
       };
     }
+
+    // Track for rollback
+    rollback.branch_ids.push(hqBranch.id);
 
     createdBranches.push({
       id: hqBranch.id,
@@ -423,6 +539,9 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
           console.warn(`⚠️ [Provisioning] Failed to create branch ${i}:`, additionalError);
           // Continuamos con las demás, no hacemos rollback completo
         } else if (additionalBranch) {
+          // Track for rollback
+          rollback.branch_ids.push(additionalBranch.id);
+
           createdBranches.push({
             id: additionalBranch.id,
             name: additionalBranch.name,
@@ -483,11 +602,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
 
       if (authError || !authData.user) {
         console.error('❌ [Provisioning] Failed to create auth user:', authError);
-
-        // Rollback
-        await supabase.from('branches').delete().eq('id', branch.id);
-        await supabase.from('tenants').delete().eq('id', tenant.id);
-
+        await performRollback(supabase, rollback);
         return {
           success: false,
           error: 'Failed to create auth user',
@@ -512,9 +627,18 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     });
 
     if (!staffResult.success) {
-      console.error('❌ [Provisioning] Failed to create staff/role');
-      // No hacer rollback completo, el usuario ya existe
+      console.error('❌ [Provisioning] Failed to create staff/role - doing rollback');
+      await performRollback(supabase, rollback);
+      return {
+        success: false,
+        error: 'Failed to create staff and user role',
+        details: { step: 'staff_and_role' },
+      };
     }
+
+    // Track for rollback
+    rollback.staff_id = staffResult.staff_id;
+    rollback.user_role_id = staffResult.role_id;
 
     console.log('✅ [Provisioning] Staff and role created');
 
@@ -552,8 +676,14 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         currency: 'MXN',
       }));
 
-      await supabase.from('services').insert(services);
-      console.log('✅ [Provisioning] Default services created:', services.length);
+      const { error: servicesError } = await supabase.from('services').insert(services);
+      if (servicesError) {
+        console.error('⚠️ [Provisioning] Failed to create services:', servicesError);
+        // Non-critical, continue
+      } else {
+        rollback.services_created = true;
+        console.log('✅ [Provisioning] Default services created:', services.length);
+      }
     }
 
     // ============================================
@@ -570,8 +700,14 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         language: 'es',
       }));
 
-      await supabase.from('faqs').insert(faqs);
-      console.log('✅ [Provisioning] Default FAQs created:', faqs.length);
+      const { error: faqsError } = await supabase.from('faqs').insert(faqs);
+      if (faqsError) {
+        console.error('⚠️ [Provisioning] Failed to create FAQs:', faqsError);
+        // Non-critical, continue
+      } else {
+        rollback.faqs_created = true;
+        console.log('✅ [Provisioning] Default FAQs created:', faqs.length);
+      }
     }
 
     // ============================================
@@ -623,9 +759,19 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     };
   } catch (error) {
     console.error('💥 [Provisioning] Unexpected error:', error);
+
+    // Attempt rollback on unexpected errors
+    if (rollback.tenant_id || rollback.branch_ids.length > 0) {
+      console.log('🔄 [Provisioning] Attempting rollback due to unexpected error...');
+      await performRollback(supabase, rollback);
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unexpected error during provisioning',
+      details: {
+        rollback_attempted: rollback.tenant_id !== undefined || rollback.branch_ids.length > 0,
+      },
     };
   }
 }

@@ -106,6 +106,63 @@ export async function POST(request: NextRequest) {
 
     const stripe = getStripeClient();
 
+    // ============================================
+    // CRITICAL FIX: Validate Stripe subscription exists before cancelling
+    // ============================================
+    if (!subscription.stripe_subscription_id?.startsWith('sub_')) {
+      console.error('[Cancel] Invalid stripe_subscription_id:', subscription.stripe_subscription_id);
+      return NextResponse.json(
+        { error: 'Suscripción no vinculada a Stripe. Contacta a soporte.' },
+        { status: 400 }
+      );
+    }
+
+    // Verify subscription exists in Stripe
+    let stripeSubscription: Stripe.Subscription;
+    try {
+      stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+
+      // Check if already cancelled
+      if (stripeSubscription.status === 'canceled') {
+        console.log('[Cancel] Subscription already cancelled in Stripe');
+
+        // Update local DB to match
+        await supabaseAdmin
+          .from('subscriptions')
+          .update({
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', subscription.id);
+
+        return NextResponse.json({
+          success: true,
+          message: 'La suscripción ya estaba cancelada',
+          already_cancelled: true,
+        });
+      }
+    } catch (stripeError: any) {
+      console.error('[Cancel] Stripe subscription not found:', stripeError.message);
+
+      // Mark local subscription as cancelled anyway (sync fix)
+      await supabaseAdmin
+        .from('subscriptions')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: 'stripe_not_found',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', subscription.id);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Suscripción cancelada (no encontrada en Stripe)',
+        stripe_not_found: true,
+      });
+    }
+
     // Cancel Stripe subscription at period end (gives them remaining time)
     const cancelledSubscription = await stripe.subscriptions.update(
       subscription.stripe_subscription_id,

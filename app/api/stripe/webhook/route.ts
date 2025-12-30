@@ -31,16 +31,20 @@ function getSupabaseClient() {
 }
 
 // ============================================
-// IDEMPOTENCY: Check if event was already processed
+// IDEMPOTENCY: Check if event was already processed SUCCESSFULLY
+// CRITICAL FIX: Only skip events that SUCCEEDED, allow retry of FAILED events
 // ============================================
-async function isEventProcessed(eventId: string): Promise<boolean> {
+async function isEventProcessedSuccessfully(eventId: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   const { data } = await supabase
     .from('webhook_events')
-    .select('id')
+    .select('id, status')
     .eq('event_id', eventId)
     .single();
-  return !!data;
+
+  // Only skip if event was processed SUCCESSFULLY
+  // Allow retry for failed events
+  return data?.status === 'success';
 }
 
 async function markEventProcessed(eventId: string, eventType: string, status: 'success' | 'failed', errorMessage?: string): Promise<void> {
@@ -51,7 +55,28 @@ async function markEventProcessed(eventId: string, eventType: string, status: 's
     status,
     error_message: errorMessage,
     processed_at: new Date().toISOString(),
+    retry_count: status === 'failed' ? 1 : 0,
   }, { onConflict: 'event_id' });
+}
+
+// Track retry attempts for failed events
+async function incrementRetryCount(eventId: string): Promise<number> {
+  const supabase = getSupabaseClient();
+  const { data } = await supabase
+    .from('webhook_events')
+    .select('retry_count')
+    .eq('event_id', eventId)
+    .single();
+
+  const currentCount = data?.retry_count || 0;
+  const newCount = currentCount + 1;
+
+  await supabase
+    .from('webhook_events')
+    .update({ retry_count: newCount, processed_at: new Date().toISOString() })
+    .eq('event_id', eventId);
+
+  return newCount;
 }
 
 export async function POST(req: NextRequest) {
@@ -94,11 +119,18 @@ export async function POST(req: NextRequest) {
   }
 
   // ============================================
-  // FIX 6: Idempotency check - Skip already processed events
+  // FIX 6: Idempotency check - Skip only SUCCESSFULLY processed events
+  // CRITICAL: Allow retry of FAILED events so provisioning can complete
   // ============================================
-  if (await isEventProcessed(event.id)) {
-    console.log(`⏭️ [Webhook] Event already processed, skipping: ${event.id}`);
+  if (await isEventProcessedSuccessfully(event.id)) {
+    console.log(`⏭️ [Webhook] Event already processed successfully, skipping: ${event.id}`);
     return NextResponse.json({ received: true, skipped: true });
+  }
+
+  // Track retry attempts for previously failed events
+  const retryCount = await incrementRetryCount(event.id);
+  if (retryCount > 1) {
+    console.log(`🔄 [Webhook] Retry attempt ${retryCount} for event: ${event.id}`);
   }
 
   console.log('📨 Stripe webhook received:', event.type);
@@ -679,19 +711,42 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   console.log('🔄 Subscription updated:', subscription.id);
+  const stripe = getStripeClient();
   const supabase = getSupabaseClient();
+
+  // ============================================
+  // CRITICAL: Fetch fresh subscription from Stripe to ensure accurate data
+  // The webhook payload may not include all fields (especially period dates)
+  // ============================================
+  let periodStart = (subscription as any).current_period_start;
+  let periodEnd = (subscription as any).current_period_end;
+
+  // If period dates are missing, fetch fresh from Stripe
+  if (!periodStart || !periodEnd) {
+    try {
+      console.log('📅 [SubscriptionUpdated] Fetching fresh data from Stripe...');
+      const freshSubscription = await stripe.subscriptions.retrieve(subscription.id);
+      periodStart = (freshSubscription as any).current_period_start || periodStart;
+      periodEnd = (freshSubscription as any).current_period_end || periodEnd;
+      console.log('✅ [SubscriptionUpdated] Got fresh period dates:', {
+        periodStart: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+        periodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+      });
+    } catch (err) {
+      console.error('⚠️ [SubscriptionUpdated] Could not fetch fresh data from Stripe:', err);
+    }
+  }
 
   const status = subscription.status === 'active' ? 'active' :
                  subscription.status === 'past_due' ? 'past_due' :
                  subscription.status === 'canceled' ? 'cancelled' : 'pending';
 
-  // Cast to any to access current_period_start/end which exist at runtime but have type issues
-  const periodStart = (subscription as any).current_period_start;
-  const periodEnd = (subscription as any).current_period_end;
-
   // Get branches count from metadata (set by update-subscription endpoint)
   const metadataBranches = subscription.metadata?.branches;
   const branchesCount = metadataBranches ? parseInt(metadataBranches) : undefined;
+
+  // Get plan from metadata if changed
+  const metadataPlan = subscription.metadata?.plan;
 
   // Calculate total monthly amount from all line items
   let totalMonthlyAmount = 0;
@@ -716,18 +771,60 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     console.log(`📊 Branches count updated to: ${branchesCount}`);
   }
 
+  // Update plan if changed
+  if (metadataPlan && isValidPlan(metadataPlan)) {
+    updateData.plan = metadataPlan;
+    console.log(`📋 Plan updated to: ${metadataPlan}`);
+  }
+
   // Update monthly amount if changed
   if (totalMonthlyAmount > 0) {
     updateData.monthly_amount = totalMonthlyAmount / 100;
     console.log(`💰 Monthly amount updated to: ${totalMonthlyAmount / 100} MXN`);
   }
 
-  await supabase
+  const { error } = await supabase
     .from('subscriptions')
     .update(updateData)
     .eq('stripe_subscription_id', subscription.id);
 
-  console.log('✅ Subscription record updated');
+  if (error) {
+    console.error('🚨 [SubscriptionUpdated] Error updating subscription:', error);
+    throw new Error(`Failed to update subscription: ${error.message}`);
+  }
+
+  console.log('✅ Subscription record updated:', {
+    status,
+    periodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+  });
+
+  // ============================================
+  // Also update tenant plan if plan changed
+  // ============================================
+  if (metadataPlan && isValidPlan(metadataPlan)) {
+    // Get tenant_id from the subscription's client
+    const { data: subData } = await supabase
+      .from('subscriptions')
+      .select('client_id')
+      .eq('stripe_subscription_id', subscription.id)
+      .single();
+
+    if (subData?.client_id) {
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('tenant_id')
+        .eq('id', subData.client_id)
+        .single();
+
+      if (clientData?.tenant_id) {
+        await supabase
+          .from('tenants')
+          .update({ plan: metadataPlan, updated_at: new Date().toISOString() })
+          .eq('id', clientData.tenant_id);
+        console.log('✅ [SubscriptionUpdated] Tenant plan updated to:', metadataPlan);
+      }
+    }
+  }
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
@@ -895,23 +992,74 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   // Get subscription details if exists
   let planName = 'Suscripción';
   const subscriptionId = (invoice as any).subscription;
-  if (subscriptionId) {
-    const { data: sub } = await supabase
-      .from('subscriptions')
-      .select('plan')
-      .eq('stripe_subscription_id', subscriptionId as string)
-      .single();
+  let nextBillingDate: string | undefined;
 
-    if (sub?.plan) {
-      planName = getPlanDisplayName(sub.plan);
+  // ============================================
+  // CRITICAL FIX: Update subscription billing dates on payment success
+  // This ensures current_period_end is always in sync with Stripe
+  // ============================================
+  if (subscriptionId) {
+    try {
+      // Fetch fresh subscription data from Stripe
+      const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId as string);
+      const periodStart = (stripeSubscription as any).current_period_start;
+      const periodEnd = (stripeSubscription as any).current_period_end;
+
+      console.log('📅 [Invoice] Syncing billing dates from Stripe subscription:', {
+        subscriptionId,
+        periodStart: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+        periodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+      });
+
+      // Update subscription in database with fresh dates
+      const { data: sub, error: updateError } = await supabase
+        .from('subscriptions')
+        .update({
+          current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+          current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+          status: 'active', // Payment succeeded means subscription is active
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_subscription_id', subscriptionId as string)
+        .select('plan')
+        .single();
+
+      if (updateError) {
+        console.error('🚨 [Invoice] Error updating subscription dates:', updateError);
+      } else {
+        console.log('✅ [Invoice] Subscription billing dates synced successfully');
+        if (sub?.plan) {
+          planName = getPlanDisplayName(sub.plan);
+        }
+      }
+
+      // Set next billing date from the period end
+      if (periodEnd) {
+        nextBillingDate = new Date(periodEnd * 1000).toISOString();
+      }
+    } catch (err) {
+      console.error('⚠️ [Invoice] Error fetching Stripe subscription:', err);
+
+      // Fallback: try to get plan from database without updating dates
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('plan')
+        .eq('stripe_subscription_id', subscriptionId as string)
+        .single();
+
+      if (sub?.plan) {
+        planName = getPlanDisplayName(sub.plan);
+      }
     }
   }
 
-  // Calculate next billing date
-  const nextPaymentAttempt = (invoice as any).next_payment_attempt;
-  const nextBillingDate = nextPaymentAttempt
-    ? new Date(nextPaymentAttempt * 1000).toISOString()
-    : undefined;
+  // Fallback for next billing date from invoice
+  if (!nextBillingDate) {
+    const nextPaymentAttempt = (invoice as any).next_payment_attempt;
+    nextBillingDate = nextPaymentAttempt
+      ? new Date(nextPaymentAttempt * 1000).toISOString()
+      : undefined;
+  }
 
   // 📧 Send Payment Confirmed Email
   try {
@@ -962,14 +1110,48 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   let planName = 'Suscripción';
   const failedSubscriptionId = (invoice as any).subscription;
   if (failedSubscriptionId) {
-    const { data: sub } = await supabase
+    // ============================================
+    // CRITICAL FIX: Update subscription status to past_due on payment failure
+    // This prevents free access while payment is failing
+    // ============================================
+    const { data: sub, error: updateError } = await supabase
       .from('subscriptions')
-      .select('plan')
+      .update({
+        status: 'past_due',
+        updated_at: new Date().toISOString(),
+      })
       .eq('stripe_subscription_id', failedSubscriptionId as string)
+      .select('plan, client_id')
       .single();
+
+    if (updateError) {
+      console.error('🚨 [PaymentFailed] Error updating subscription status:', updateError);
+    } else {
+      console.log('⚠️ [PaymentFailed] Subscription marked as past_due:', failedSubscriptionId);
+    }
 
     if (sub?.plan) {
       planName = getPlanDisplayName(sub.plan);
+    }
+
+    // Also update tenant status if we have client_id
+    if (sub?.client_id) {
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('tenant_id')
+        .eq('id', sub.client_id)
+        .single();
+
+      if (clientData?.tenant_id) {
+        await supabase
+          .from('tenants')
+          .update({
+            status: 'past_due',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', clientData.tenant_id);
+        console.log('⚠️ [PaymentFailed] Tenant marked as past_due:', clientData.tenant_id);
+      }
     }
   }
 

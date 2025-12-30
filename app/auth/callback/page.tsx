@@ -121,14 +121,19 @@ export default function AuthCallbackPage() {
           .maybeSingle();
 
         if (error) {
-          console.warn('⚠️ [Callback Page] Error checking tenant:', error);
-          return true; // Assume has tenant to avoid blocking
+          // ============================================
+          // CRITICAL FIX: On error, assume NO tenant to redirect to pricing
+          // This prevents new users from hitting dashboard errors
+          // If user actually has tenant, dashboard will work anyway
+          // ============================================
+          console.warn('⚠️ [Callback Page] Error checking tenant, assuming new user:', error);
+          return false; // Assume NO tenant - safer to redirect to pricing
         }
 
         return !!userRole?.tenant_id;
       } catch (err) {
         console.error('🔴 [Callback Page] Exception checking tenant:', err);
-        return true; // Assume has tenant to avoid blocking
+        return false; // Assume NO tenant - safer to redirect to pricing
       }
     };
 

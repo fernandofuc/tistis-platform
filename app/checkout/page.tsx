@@ -60,7 +60,8 @@ function CheckoutContent() {
   const [error, setError] = useState<string | null>(null);
   const [planId, setPlanId] = useState('essentials');
   const [branches, setBranches] = useState(1);
-  const [vertical, setVertical] = useState('dental');
+  const [vertical, setVertical] = useState<string | null>(null); // Start as null to detect missing vertical
+  const [verticalMissing, setVerticalMissing] = useState(false);
 
   // Form fields
   const [customerEmail, setCustomerEmail] = useState('');
@@ -85,9 +86,20 @@ function CheckoutContent() {
       setBranches(parseInt(savedBranches, 10) || 1);
     }
 
+    // CRITICAL: Check for vertical in sessionStorage
+    // Also check URL params as backup (for page refresh scenarios)
+    const urlVertical = searchParams.get('vertical');
     const savedVertical = sessionStorage.getItem('selected_vertical');
-    if (savedVertical) {
-      setVertical(savedVertical);
+    const finalVertical = urlVertical || savedVertical;
+
+    if (finalVertical) {
+      setVertical(finalVertical);
+      setVerticalMissing(false);
+    } else {
+      // No vertical found - this is a critical error
+      // User must go back to pricing to select their business type
+      setVerticalMissing(true);
+      console.error('🚨 [Checkout] No vertical found in sessionStorage or URL');
     }
 
     // Check for OAuth user email (set by pricing page after OAuth redirect)
@@ -131,7 +143,7 @@ function CheckoutContent() {
 
   // Determinar si es trial gratuito
   const isFreeTrial = planId === 'starter';
-  const verticalInfo = VERTICALS_DISPLAY[vertical] || VERTICALS_DISPLAY.dental;
+  const verticalInfo = vertical ? VERTICALS_DISPLAY[vertical] : VERTICALS_DISPLAY.dental;
 
   // Validar email en blur
   const handleEmailBlur = () => {
@@ -144,6 +156,12 @@ function CheckoutContent() {
 
   // Manejar checkout
   const handleCheckout = async () => {
+    // CRITICAL: Check vertical before proceeding
+    if (!vertical || verticalMissing) {
+      setError('No se detectó el tipo de negocio. Por favor vuelve a la página de precios y selecciona tu vertical.');
+      return;
+    }
+
     // Validación
     let hasErrors = false;
 
@@ -277,8 +295,42 @@ function CheckoutContent() {
           </p>
         </motion.div>
 
+        {/* CRITICAL: Block checkout if vertical is missing */}
+        {verticalMissing && (
+          <motion.div
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="mb-6 p-6 bg-red-50 border border-red-200 rounded-xl"
+          >
+            <div className="flex items-start gap-4">
+              <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-red-800 mb-2">
+                  Falta información importante
+                </h3>
+                <p className="text-red-700 mb-4">
+                  No detectamos el tipo de negocio seleccionado. Esto puede ocurrir si:
+                </p>
+                <ul className="text-red-700 text-sm mb-4 list-disc list-inside space-y-1">
+                  <li>Refrescaste la página</li>
+                  <li>Usas navegación privada</li>
+                  <li>Llegaste directamente a esta página sin pasar por precios</li>
+                </ul>
+                <Button
+                  variant="primary"
+                  onClick={() => router.push('/pricing')}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Ir a Seleccionar Plan
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Alertas */}
-        {cancelled && (
+        {cancelled && !verticalMissing && (
           <motion.div
             initial={{ y: -10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -291,7 +343,7 @@ function CheckoutContent() {
           </motion.div>
         )}
 
-        {error && (
+        {error && !verticalMissing && (
           <motion.div
             initial={{ y: -10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -302,7 +354,8 @@ function CheckoutContent() {
           </motion.div>
         )}
 
-        {/* Grid principal */}
+        {/* Grid principal - only show if vertical is present */}
+        {!verticalMissing && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
           {/* COLUMNA IZQUIERDA: Resumen del pedido */}
@@ -566,6 +619,7 @@ function CheckoutContent() {
             </Card>
           </motion.div>
         </div>
+        )}
 
         {/* Footer link */}
         <motion.div
