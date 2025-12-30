@@ -9,6 +9,7 @@ import type { User, Session } from '@supabase/supabase-js';
 import type { Staff, Branch, Tenant } from '@/shared/types';
 import type { AuthState, SignUpData, AuthResult, UpdateStaffData } from '../types';
 import * as authService from '../services/authService';
+import { withTimeout } from '../utils/networkHelpers';
 
 // ======================
 // INITIAL STATE
@@ -29,13 +30,17 @@ const initialState: AuthState = {
 // ======================
 async function syncTenantMetadata(accessToken: string): Promise<void> {
   try {
-    const response = await fetch('/api/admin/sync-tenant-metadata', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
+    // Add timeout to prevent hanging background request (10 seconds)
+    const response = await withTimeout(
+      fetch('/api/admin/sync-tenant-metadata', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }),
+      10000 // 10 second timeout for background operation
+    );
 
     if (response.ok) {
       const result = await response.json();
