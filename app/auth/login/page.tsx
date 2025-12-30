@@ -369,16 +369,21 @@ function LoginContent() {
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
             {/* Error Message */}
             {error && (
-              <div className={`mb-6 p-4 rounded-xl text-sm border ${
-                error.type === 'rate_limit'
-                  ? 'bg-orange-50 border-orange-200 text-orange-800'
-                  : error.type === 'warning'
-                    ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
-                    : 'bg-red-50 border-red-200 text-red-700'
-              }`}>
+              <div
+                role="alert"
+                aria-live="polite"
+                aria-atomic="true"
+                className={`mb-6 p-4 rounded-xl text-sm border ${
+                  error.type === 'rate_limit'
+                    ? 'bg-orange-50 border-orange-200 text-orange-800'
+                    : error.type === 'warning'
+                      ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                      : 'bg-red-50 border-red-200 text-red-700'
+                }`}
+              >
                 <div className="flex items-start gap-3">
-                  {error.type === 'rate_limit' && <Shield className="w-5 h-5 flex-shrink-0 mt-0.5" />}
-                  {error.type === 'warning' && <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                  {error.type === 'rate_limit' && <Shield className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />}
+                  {error.type === 'warning' && <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />}
                   <div className="flex-1">
                     <p className="font-medium">{error.message}</p>
                     {error.type === 'rate_limit' && (
@@ -396,12 +401,15 @@ function LoginContent() {
               <>
                 {/* Google Button */}
                 <button
+                  type="button"
                   onClick={handleGoogleAuth}
                   disabled={isAnyLoading}
+                  aria-label="Iniciar sesión con Google"
+                  aria-busy={oauthLoading === 'google'}
                   className="w-full h-12 flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all mb-3 relative disabled:opacity-50 disabled:cursor-not-allowed group"
                 >
                   {oauthLoading === 'google' ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                    <Loader2 className="w-5 h-5 animate-spin text-gray-500" aria-hidden="true" />
                   ) : (
                     <GoogleIcon />
                   )}
@@ -412,12 +420,15 @@ function LoginContent() {
 
                 {/* GitHub Button */}
                 <button
+                  type="button"
                   onClick={handleGitHubAuth}
                   disabled={isAnyLoading}
+                  aria-label="Iniciar sesión con GitHub"
+                  aria-busy={oauthLoading === 'github'}
                   className="w-full h-12 flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all mb-6 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {oauthLoading === 'github' ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                    <Loader2 className="w-5 h-5 animate-spin text-gray-500" aria-hidden="true" />
                   ) : (
                     <GitHubIcon className="text-gray-900" />
                   )}
@@ -440,11 +451,13 @@ function LoginContent() {
 
                 {/* Email Button */}
                 <button
+                  type="button"
                   onClick={() => setAuthView('email')}
                   disabled={isAnyLoading}
+                  aria-label="Iniciar sesión con email"
                   className="w-full h-12 flex items-center justify-center gap-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors text-[15px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Mail className="w-5 h-5" />
+                  <Mail className="w-5 h-5" aria-hidden="true" />
                   Continuar con email
                 </button>
               </>
@@ -453,11 +466,13 @@ function LoginContent() {
               <>
                 {/* Back to social options */}
                 <button
+                  type="button"
                   onClick={() => setAuthView('social')}
                   disabled={isAnyLoading}
+                  aria-label="Volver a opciones de inicio de sesión"
                   className="mb-6 text-sm text-tis-text-secondary hover:text-tis-text-primary transition-colors flex items-center gap-1"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                   Otras opciones de inicio
                 </button>
 
@@ -501,6 +516,8 @@ function LoginContent() {
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
+                        id="remember-me"
+                        name="remember"
                         className="rounded border-gray-300 text-tis-coral focus:ring-tis-coral"
                       />
                       <span className="ml-2 text-sm text-tis-text-secondary">Recordarme</span>
@@ -508,7 +525,7 @@ function LoginContent() {
 
                     <Link
                       href="/auth/forgot-password"
-                      className="text-sm text-tis-coral hover:text-tis-coral/80 transition-colors"
+                      className="text-sm text-tis-coral hover:text-tis-coral/80 transition-colors focus:outline-none focus:ring-2 focus:ring-tis-coral focus:ring-offset-2 rounded"
                     >
                       ¿Olvidaste tu contraseña?
                     </Link>

@@ -8,7 +8,7 @@
  * but provides good UX and reduces unnecessary API calls
  */
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
   maxAttempts: number;
   windowMs: number; // Time window in milliseconds
   blockDurationMs: number; // How long to block after max attempts
