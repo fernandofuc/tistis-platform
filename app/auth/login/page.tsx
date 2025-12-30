@@ -6,19 +6,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Loader2, ArrowLeft, CheckCircle, Mail } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle, Mail, AlertTriangle, Shield } from 'lucide-react';
 import { supabase } from '@/lib/auth';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-
-// Validation schema
-const loginSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
-});
-
-type LoginFormData = z.infer<typeof loginSchema>;
+import { loginSchema, type LoginFormData, sanitizeEmail } from '@/src/features/auth/utils/validation';
+import { rateLimiter, LOGIN_RATE_LIMIT, OAUTH_RATE_LIMIT, formatRetryTime, getUserIdentifier } from '@/src/features/auth/utils/rateLimiter';
 
 // ======================
 // GOOGLE ICON COMPONENT
@@ -62,9 +55,18 @@ function GitHubIcon({ className }: { className?: string }) {
 // ======================
 type AuthView = 'social' | 'email';
 
+// ======================
+// ERROR TYPES
+// ======================
+interface AuthError {
+  message: string;
+  type: 'error' | 'warning' | 'rate_limit';
+  retryAfter?: number;
+}
+
 function LoginContent() {
   const searchParams = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthError | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<'google' | 'github' | null>(null);
   const [authView, setAuthView] = useState<AuthView>('social');
@@ -79,33 +81,41 @@ function LoginContent() {
     register,
     handleSubmit,
     formState: { errors },
+    watch,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
+
+  const emailValue = watch('email');
 
   // Check if already logged in
   useEffect(() => {
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        console.log('🔍 Login page - session check:', !!session);
+        console.log('🔍 [Login] Session check:', !!session);
+
         if (session) {
-          console.log('✅ Already logged in, redirecting to dashboard...');
+          console.log('✅ [Login] Already authenticated, redirecting to dashboard');
           setTimeout(() => {
             window.location.replace('/dashboard');
           }, 50);
         }
       } catch (error) {
-        console.error('Error checking session:', error);
+        console.error('🔴 [Login] Session check error:', error);
       }
     };
+
     checkSession();
   }, []);
 
   // Show OAuth errors if present
   useEffect(() => {
     if (oauthError) {
-      setError(decodeURIComponent(oauthError));
+      setError({
+        message: decodeURIComponent(oauthError),
+        type: 'error',
+      });
     }
   }, [oauthError]);
 
@@ -113,6 +123,19 @@ function LoginContent() {
   // OAUTH HANDLERS
   // ======================
   const handleGoogleAuth = async () => {
+    // Check rate limit
+    const rateLimitKey = 'oauth:google';
+    const rateLimitCheck = rateLimiter.check(rateLimitKey, OAUTH_RATE_LIMIT);
+
+    if (!rateLimitCheck.allowed) {
+      setError({
+        message: `Demasiados intentos. Intenta de nuevo en ${formatRetryTime(rateLimitCheck.retryAfter || 0)}.`,
+        type: 'rate_limit',
+        retryAfter: rateLimitCheck.retryAfter,
+      });
+      return;
+    }
+
     setOauthLoading('google');
     setError(null);
 
@@ -138,20 +161,46 @@ function LoginContent() {
 
       if (error) {
         console.error('🔴 [OAuth] Google authentication error:', error);
-        throw error;
+
+        setError({
+          message: error.message || 'Error al conectar con Google',
+          type: 'error',
+        });
+        setOauthLoading(null);
+        return;
       }
 
       console.log('✅ [OAuth] Redirecting to Google...', { url: data?.url });
-      // Browser will redirect automatically
+
+      // Mark as success (will redirect, so won't reach here on success)
+      rateLimiter.success(rateLimitKey);
+
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Error al conectar con Google';
       console.error('🔴 [OAuth] Exception:', err);
-      setError(errorMsg);
+
+      setError({
+        message: errorMsg,
+        type: 'error',
+      });
       setOauthLoading(null);
     }
   };
 
   const handleGitHubAuth = async () => {
+    // Check rate limit
+    const rateLimitKey = 'oauth:github';
+    const rateLimitCheck = rateLimiter.check(rateLimitKey, OAUTH_RATE_LIMIT);
+
+    if (!rateLimitCheck.allowed) {
+      setError({
+        message: `Demasiados intentos. Intenta de nuevo en ${formatRetryTime(rateLimitCheck.retryAfter || 0)}.`,
+        type: 'rate_limit',
+        retryAfter: rateLimitCheck.retryAfter,
+      });
+      return;
+    }
+
     setOauthLoading('github');
     setError(null);
 
@@ -168,15 +217,28 @@ function LoginContent() {
 
       if (error) {
         console.error('🔴 [OAuth] GitHub authentication error:', error);
-        throw error;
+
+        setError({
+          message: error.message || 'Error al conectar con GitHub',
+          type: 'error',
+        });
+        setOauthLoading(null);
+        return;
       }
 
       console.log('✅ [OAuth] Redirecting to GitHub...', { url: data?.url });
-      // Browser will redirect automatically
+
+      // Mark as success
+      rateLimiter.success(rateLimitKey);
+
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Error al conectar con GitHub';
       console.error('🔴 [OAuth] Exception:', err);
-      setError(errorMsg);
+
+      setError({
+        message: errorMsg,
+        type: 'error',
+      });
       setOauthLoading(null);
     }
   };
@@ -185,33 +247,71 @@ function LoginContent() {
   // EMAIL/PASSWORD HANDLER
   // ======================
   const onSubmit = async (data: LoginFormData) => {
+    const sanitizedEmail = sanitizeEmail(data.email);
+
+    // Check rate limit
+    const rateLimitKey = getUserIdentifier(sanitizedEmail);
+    const rateLimitCheck = rateLimiter.check(rateLimitKey, LOGIN_RATE_LIMIT);
+
+    if (!rateLimitCheck.allowed) {
+      setError({
+        message: `Demasiados intentos fallidos. Por seguridad, intenta de nuevo en ${formatRetryTime(rateLimitCheck.retryAfter || 0)}.`,
+        type: 'rate_limit',
+        retryAfter: rateLimitCheck.retryAfter,
+      });
+      return;
+    }
+
     setError(null);
     setIsLoading(true);
 
     try {
+      console.log('🔵 [Login] Attempting login with email:', sanitizedEmail);
+
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: data.email,
+        email: sanitizedEmail,
         password: data.password,
       });
 
       if (authError) {
+        console.error('🔴 [Login] Authentication error:', authError);
+
+        // User-friendly error messages
+        let errorMessage = authError.message;
+
         if (authError.message.includes('Invalid login credentials')) {
-          setError('Email o contraseña incorrectos');
-        } else {
-          setError(authError.message);
+          errorMessage = 'Email o contraseña incorrectos';
+        } else if (authError.message.includes('Email not confirmed')) {
+          errorMessage = 'Por favor verifica tu email antes de iniciar sesión';
+        } else if (authError.message.includes('Too many requests')) {
+          errorMessage = 'Demasiados intentos. Intenta de nuevo más tarde';
         }
+
+        setError({
+          message: errorMessage,
+          type: 'error',
+        });
         setIsLoading(false);
         return;
       }
 
       if (authData.session) {
-        console.log('✅ Login successful, redirecting to dashboard...');
+        console.log('✅ [Login] Login successful, redirecting to dashboard');
+
+        // Mark as success
+        rateLimiter.success(rateLimitKey);
+
         setTimeout(() => {
           window.location.replace('/dashboard');
         }, 50);
       }
     } catch (err) {
-      setError('Error al iniciar sesión. Intenta de nuevo.');
+      console.error('🔴 [Login] Exception:', err);
+
+      setError({
+        message: 'Error al iniciar sesión. Intenta de nuevo.',
+        type: 'error',
+      });
       setIsLoading(false);
     }
   };
@@ -269,8 +369,25 @@ function LoginContent() {
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
             {/* Error Message */}
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                {error}
+              <div className={`mb-6 p-4 rounded-xl text-sm border ${
+                error.type === 'rate_limit'
+                  ? 'bg-orange-50 border-orange-200 text-orange-800'
+                  : error.type === 'warning'
+                    ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                    : 'bg-red-50 border-red-200 text-red-700'
+              }`}>
+                <div className="flex items-start gap-3">
+                  {error.type === 'rate_limit' && <Shield className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                  {error.type === 'warning' && <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                  <div className="flex-1">
+                    <p className="font-medium">{error.message}</p>
+                    {error.type === 'rate_limit' && (
+                      <p className="text-xs mt-1 opacity-80">
+                        Esta medida de seguridad protege tu cuenta contra accesos no autorizados.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -353,6 +470,7 @@ function LoginContent() {
                     <Input
                       type="email"
                       placeholder="tu@email.com"
+                      autoComplete="email"
                       {...register('email')}
                       className={errors.email ? 'border-red-500' : ''}
                       disabled={isAnyLoading}
@@ -369,6 +487,7 @@ function LoginContent() {
                     <Input
                       type="password"
                       placeholder="••••••••"
+                      autoComplete="current-password"
                       {...register('password')}
                       className={errors.password ? 'border-red-500' : ''}
                       disabled={isAnyLoading}
