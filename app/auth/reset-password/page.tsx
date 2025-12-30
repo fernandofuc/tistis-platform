@@ -9,6 +9,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/src/shared/lib/supabase';
+import { updatePasswordSchema } from '@/src/features/auth/utils/validation';
+import { withTimeout, isNetworkError, getErrorMessage, isOnline } from '@/src/features/auth/utils/networkHelpers';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -22,80 +24,91 @@ export default function ResetPasswordPage() {
 
   // Check if we have a valid recovery session
   useEffect(() => {
+    let mounted = true;
+
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
 
-      // If there's a session with a recovery type, it's valid
-      if (session) {
-        setIsValidSession(true);
-      } else {
-        // Check if we have hash params (Supabase sends them in URL fragment)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const type = hashParams.get('type');
+        if (!mounted) return;
 
-        if (accessToken && type === 'recovery') {
-          // Set the session from the recovery token
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: hashParams.get('refresh_token') || '',
-          });
+        // If there's a session with a recovery type, it's valid
+        if (session) {
+          setIsValidSession(true);
+        } else {
+          // Check if we have hash params (Supabase sends them in URL fragment)
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          const type = hashParams.get('type');
 
-          if (!sessionError) {
-            setIsValidSession(true);
+          if (accessToken && type === 'recovery') {
+            // Set the session from the recovery token
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: hashParams.get('refresh_token') || '',
+            });
+
+            if (!mounted) return;
+
+            if (!sessionError) {
+              setIsValidSession(true);
+            } else {
+              setIsValidSession(false);
+              setError('El enlace de recuperación ha expirado o es inválido');
+            }
           } else {
             setIsValidSession(false);
-            setError('El enlace de recuperación ha expirado o es inválido');
+            setError('No se encontró un enlace de recuperación válido');
           }
-        } else {
+        }
+      } catch (err) {
+        if (mounted) {
+          console.error('[ResetPassword] Session check error:', err);
           setIsValidSession(false);
-          setError('No se encontró un enlace de recuperación válido');
+          setError('Error al verificar el enlace de recuperación');
         }
       }
     };
 
     checkSession();
-  }, []);
 
-  // Password validation
-  const validatePassword = (password: string): string | null => {
-    if (password.length < 8) {
-      return 'La contraseña debe tener al menos 8 caracteres';
-    }
-    if (!/[A-Z]/.test(password)) {
-      return 'La contraseña debe contener al menos una mayúscula';
-    }
-    if (!/[a-z]/.test(password)) {
-      return 'La contraseña debe contener al menos una minúscula';
-    }
-    if (!/\d/.test(password)) {
-      return 'La contraseña debe contener al menos un número';
-    }
-    return null;
-  };
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Validate
-    if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
+    // Check if online
+    if (!isOnline()) {
+      setError('Sin conexión a internet. Verifica tu conexión e intenta de nuevo.');
       return;
     }
 
-    const validationError = validatePassword(newPassword);
-    if (validationError) {
-      setError(validationError);
+    // Validate with Zod schema
+    const validation = updatePasswordSchema.safeParse({
+      password: newPassword,
+      confirmPassword,
+    });
+
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      setError(firstError.message);
       return;
     }
 
     setLoading(true);
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+      // Add timeout (15 seconds)
+      const { error: updateError } = await withTimeout(
+        supabase.auth.updateUser({
+          password: newPassword,
+        }),
+        15000
+      );
 
       if (updateError) {
         throw updateError;
@@ -109,7 +122,10 @@ export default function ResetPasswordPage() {
       }, 3000);
 
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Error al actualizar la contraseña';
+      console.error('[ResetPassword] Update error:', err);
+
+      // Use network helper for better error messages
+      const errorMessage = getErrorMessage(err);
       setError(errorMessage);
     } finally {
       setLoading(false);

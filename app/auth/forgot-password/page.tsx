@@ -10,18 +10,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Loader2, Mail, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/auth';
+import { sanitizeEmail, isDisposableEmail } from '@/src/features/auth/utils/validation';
+import { rateLimiter, RESET_PASSWORD_RATE_LIMIT, formatRetryTime, getUserIdentifier } from '@/src/features/auth/utils/rateLimiter';
+import { withTimeout, isNetworkError, getErrorMessage, isOnline } from '@/src/features/auth/utils/networkHelpers';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  // Email validation
-  const isValidEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,28 +30,61 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    if (!isValidEmail(email)) {
-      setError('Por favor ingresa un correo electrónico válido');
+    // Check if online
+    if (!isOnline()) {
+      setError('Sin conexión a internet. Verifica tu conexión e intenta de nuevo.');
+      return;
+    }
+
+    const sanitizedEmail = sanitizeEmail(email);
+
+    // Warn about disposable emails (but don't block)
+    if (isDisposableEmail(sanitizedEmail)) {
+      setError('Email temporal detectado. Si tienes problemas, usa un email permanente.');
+      // Continue anyway - user might have actually registered with this
+    }
+
+    // Check rate limit
+    const rateLimitKey = getUserIdentifier(sanitizedEmail);
+    const rateLimitCheck = rateLimiter.check(rateLimitKey, RESET_PASSWORD_RATE_LIMIT);
+
+    if (!rateLimitCheck.allowed) {
+      setError(`Demasiados intentos. Por seguridad, intenta de nuevo en ${formatRetryTime(rateLimitCheck.retryAfter || 0)}.`);
       return;
     }
 
     setLoading(true);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
+      // Add timeout (15 seconds)
+      const { error: resetError } = await withTimeout(
+        supabase.auth.resetPasswordForEmail(sanitizedEmail, {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
+        }),
+        15000
+      );
 
       if (resetError) {
         // Don't reveal if email exists or not for security
         console.error('[ForgotPassword] Error:', resetError.message);
       }
 
+      // Mark as success for rate limiting
+      rateLimiter.success(rateLimitKey);
+
       // Always show success to prevent email enumeration attacks
       setSuccess(true);
 
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('[ForgotPassword] Exception:', err);
+
+      // If network error, show it to user. Otherwise still show success.
+      if (isNetworkError(err)) {
+        setError(getErrorMessage(err));
+        setLoading(false);
+        return;
+      }
+
       // Still show success to prevent email enumeration
       setSuccess(true);
     } finally {
