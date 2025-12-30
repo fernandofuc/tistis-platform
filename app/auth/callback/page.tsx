@@ -113,19 +113,22 @@ export default function AuthCallbackPage() {
 
     const checkUserHasTenant = async (userId: string): Promise<boolean> => {
       try {
+        // ============================================
+        // CRITICAL FIX: Query must require tenant_id IS NOT NULL
+        // This prevents matching corrupted records with NULL tenant_id
+        // ============================================
         const { data: userRole, error } = await supabase
           .from('user_roles')
           .select('tenant_id')
           .eq('user_id', userId)
           .eq('is_active', true)
+          .not('tenant_id', 'is', null)
           .maybeSingle();
 
         if (error) {
-          // ============================================
-          // CRITICAL FIX: On error, assume NO tenant to redirect to pricing
+          // On error, assume NO tenant to redirect to pricing
           // This prevents new users from hitting dashboard errors
           // If user actually has tenant, dashboard will work anyway
-          // ============================================
           console.warn('⚠️ [Callback Page] Error checking tenant, assuming new user:', error);
           return false; // Assume NO tenant - safer to redirect to pricing
         }
