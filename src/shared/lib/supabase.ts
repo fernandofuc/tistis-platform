@@ -28,8 +28,9 @@ export const supabase = createClient(
       autoRefreshToken: true,
       detectSessionInUrl: true,
 
-      // PKCE flow (more secure for SPAs)
-      flowType: 'pkce',
+      // Implicit flow - more compatible with OAuth redirects through Supabase
+      // PKCE can cause issues when the code_verifier is lost during redirect chain
+      flowType: 'implicit',
 
       // Storage key (ensures unique sessions per subdomain)
       storageKey: 'tistis-auth-token',
