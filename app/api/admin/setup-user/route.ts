@@ -72,11 +72,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { email, vertical = 'dental' } = body;
+    const { email, vertical = 'dental', plan = 'essentials' } = body;
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
+
+    // Validate plan
+    const validPlans = ['starter', 'essentials', 'growth'];
+    const validatedPlan = validPlans.includes(plan) ? plan : 'essentials';
 
     // Log user ID instead of email for privacy
     if (process.env.NODE_ENV === 'development') {
@@ -141,7 +145,7 @@ export async function POST(req: NextRequest) {
           name: `Negocio de ${email.split('@')[0]}`,
           slug: `${slug}-${Date.now()}`,
           vertical: vertical,
-          plan: 'essentials',
+          plan: validatedPlan,
           primary_contact_email: email,
           status: 'active',
           plan_started_at: new Date().toISOString(),
@@ -236,6 +240,46 @@ export async function POST(req: NextRequest) {
       console.log('✅ [SetupUser] Staff already exists');
     }
 
+    // 7.5. Create or update user_roles (CRITICAL for dashboard access)
+    const { data: existingRole } = await supabase
+      .from('user_roles')
+      .select('id')
+      .eq('user_id', authUser.id)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (!existingRole) {
+      // Get staff_id for the role
+      const { data: staffRecord } = await supabase
+        .from('staff')
+        .select('id')
+        .eq('email', email)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { error: roleError } = await supabase.from('user_roles').insert({
+        user_id: authUser.id,
+        tenant_id: tenantId,
+        role: 'admin',
+        staff_id: staffRecord?.id || null,
+        is_active: true,
+        permissions: { all: true },
+      });
+
+      if (roleError) {
+        console.error('❌ [SetupUser] User role creation error:', roleError);
+      } else {
+        console.log('✅ [SetupUser] Created user_role record');
+      }
+    } else {
+      // Update existing role to ensure it's active
+      await supabase
+        .from('user_roles')
+        .update({ is_active: true, role: 'admin', permissions: { all: true } })
+        .eq('id', existingRole.id);
+      console.log('✅ [SetupUser] Updated existing user_role');
+    }
+
     // 8. Update user metadata with tenant_id
     const { error: updateError } = await supabase.auth.admin.updateUserById(authUser.id, {
       user_metadata: {
@@ -262,10 +306,13 @@ export async function POST(req: NextRequest) {
       user_id: authUser.id,
       tenant_id: tenantId,
       tenant_name: tenantName,
+      vertical: vertical,
+      plan: validatedPlan,
       next_steps: [
-        '1. Cierra sesión completamente',
-        '2. Vuelve a iniciar sesión',
-        '3. Ve al dashboard - ahora debería cargar correctamente',
+        '1. Cierra sesión completamente (logout)',
+        '2. Limpia localStorage del navegador (DevTools → Application → Clear site data)',
+        '3. Vuelve a iniciar sesión con tu cuenta',
+        '4. Ve al dashboard - ahora debería cargar correctamente',
       ],
     });
   } catch (error) {
