@@ -117,12 +117,18 @@ function LoginContent() {
     setError(null);
 
     try {
-      console.log('🔵 Initiating Google OAuth flow with PKCE');
+      console.log('🔵 [OAuth] Initiating Google authentication');
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
+          // Redirect back to app after OAuth
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+
+          // PKCE is enabled by default in client config
           skipBrowserRedirect: false,
+
+          // Google-specific query params
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -131,14 +137,15 @@ function LoginContent() {
       });
 
       if (error) {
-        console.error('🔴 Google OAuth Error:', error);
+        console.error('🔴 [OAuth] Google authentication error:', error);
         throw error;
       }
 
-      console.log('🟡 Google OAuth initiated - redirecting to provider');
+      console.log('✅ [OAuth] Redirecting to Google...', { url: data?.url });
+      // Browser will redirect automatically
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Error al conectar con Google';
-      console.error('🔴 Google Auth Exception:', errorMsg);
+      console.error('🔴 [OAuth] Exception:', err);
       setError(errorMsg);
       setOauthLoading(null);
     }
@@ -149,24 +156,26 @@ function LoginContent() {
     setError(null);
 
     try {
-      console.log('🔵 Initiating GitHub OAuth flow with PKCE');
+      console.log('🔵 [OAuth] Initiating GitHub authentication');
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
           skipBrowserRedirect: false,
         },
       });
 
       if (error) {
-        console.error('🔴 GitHub OAuth Error:', error);
+        console.error('🔴 [OAuth] GitHub authentication error:', error);
         throw error;
       }
 
-      console.log('🟡 GitHub OAuth initiated - redirecting to provider');
+      console.log('✅ [OAuth] Redirecting to GitHub...', { url: data?.url });
+      // Browser will redirect automatically
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Error al conectar con GitHub';
-      console.error('🔴 GitHub Auth Exception:', errorMsg);
+      console.error('🔴 [OAuth] Exception:', err);
       setError(errorMsg);
       setOauthLoading(null);
     }

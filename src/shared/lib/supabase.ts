@@ -23,9 +23,19 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder-key',
   {
     auth: {
+      // Session management
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+
+      // PKCE flow (more secure for SPAs)
+      flowType: 'pkce',
+
+      // Storage key (ensures unique sessions per subdomain)
+      storageKey: 'tistis-auth-token',
+
+      // Storage adapter (uses localStorage by default)
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     },
     realtime: {
       params: {
