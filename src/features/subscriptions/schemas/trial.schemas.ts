@@ -138,7 +138,8 @@ export const ActivateTrialCheckoutRequestSchema = z.object({
   customerEmail: z.string().email('Email inválido'),
   customerName: z.string().min(1, 'Nombre es requerido').max(100, 'Nombre demasiado largo'),
   customerPhone: z.string().optional(),
-  vertical: z.enum(['dental', 'restaurant', 'retail', 'services'], {
+  // Currently active verticals: dental, restaurant (more will be added later)
+  vertical: z.enum(['dental', 'restaurant'], {
     errorMap: () => ({ message: 'Vertical inválida' }),
   }).optional(),
 });

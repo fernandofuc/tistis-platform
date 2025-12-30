@@ -91,7 +91,8 @@ export interface ProvisionTenantParams {
   customer_email: string;
   customer_name: string;
   customer_phone?: string;
-  vertical: 'dental' | 'restaurant' | 'pharmacy' | 'retail' | 'medical' | 'services' | 'other';
+  // Currently active verticals (more will be added later)
+  vertical: 'dental' | 'restaurant';
   plan: 'starter' | 'essentials' | 'growth';
   branches_count?: number;
   subscription_id?: string;
@@ -174,6 +175,7 @@ function generateTempPassword(): string {
 
 /**
  * Obtiene la configuración por defecto para un vertical
+ * Currently active: dental, restaurant (more will be added later)
  */
 function getVerticalDefaults(vertical: string): VerticalConfig {
   const configs: Record<string, VerticalConfig> = {
@@ -246,49 +248,9 @@ function getVerticalDefaults(vertical: string): VerticalConfig {
         },
       ],
     },
-    medical: {
-      display_name: 'Clínica Médica',
-      default_services: ['Consulta General', 'Especialidades', 'Laboratorio', 'Rayos X', 'Urgencias'],
-      sidebar_config: [
-        { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard' },
-        { id: 'patients', label: 'Pacientes', icon: 'Users', href: '/dashboard/patients' },
-        { id: 'calendario', label: 'Citas', icon: 'Calendar', href: '/dashboard/calendario' },
-        { id: 'inbox', label: 'Mensajes', icon: 'MessageSquare', href: '/dashboard/inbox' },
-        { id: 'analytics', label: 'Analytics', icon: 'BarChart3', href: '/dashboard/analytics' },
-        { id: 'settings', label: 'Configuración', icon: 'Settings', href: '/dashboard/settings' },
-      ],
-      default_faqs: [
-        {
-          question: '¿Necesito cita previa?',
-          answer:
-            'Para consultas generales se recomienda agendar cita. Para urgencias, atendemos sin cita previa.',
-          category: 'general',
-        },
-      ],
-    },
-    services: {
-      display_name: 'Servicios Generales',
-      default_services: ['Consultoría', 'Asesoría', 'Servicio a Domicilio', 'Cotizaciones'],
-      sidebar_config: [
-        { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard' },
-        { id: 'leads', label: 'Leads', icon: 'Users', href: '/dashboard/leads' },
-        { id: 'calendario', label: 'Citas', icon: 'Calendar', href: '/dashboard/calendario' },
-        { id: 'inbox', label: 'Inbox', icon: 'MessageSquare', href: '/dashboard/inbox' },
-        { id: 'quotes', label: 'Cotizaciones', icon: 'FileText', href: '/dashboard/quotes' },
-        { id: 'analytics', label: 'Analytics', icon: 'BarChart3', href: '/dashboard/analytics' },
-        { id: 'settings', label: 'Configuración', icon: 'Settings', href: '/dashboard/settings' },
-      ],
-      default_faqs: [
-        {
-          question: '¿Cómo puedo solicitar una cotización?',
-          answer: 'Puedes solicitar una cotización por WhatsApp describiendo lo que necesitas y te responderemos a la brevedad.',
-          category: 'cotizaciones',
-        },
-      ],
-    },
   };
 
-  return configs[vertical] || configs.services;
+  return configs[vertical] || configs.dental;
 }
 
 // ============================================
@@ -339,8 +301,8 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       };
     }
 
-    // Validate vertical
-    const VALID_VERTICALS = ['dental', 'restaurant', 'pharmacy', 'retail', 'medical', 'services', 'other'];
+    // Validate vertical - Currently active verticals (more will be added later)
+    const VALID_VERTICALS = ['dental', 'restaurant'];
     if (!params.vertical || !VALID_VERTICALS.includes(params.vertical)) {
       console.error('🚨 [Provisioning] Invalid vertical:', params.vertical);
       return {

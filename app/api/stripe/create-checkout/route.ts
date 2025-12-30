@@ -48,7 +48,9 @@ export async function POST(req: NextRequest) {
     // This prevents the issue where vertical defaults to 'dental'
     // when sessionStorage is cleared
     // ============================================
-    const VALID_VERTICALS = ['dental', 'restaurant', 'pharmacy', 'retail', 'medical', 'services', 'other'];
+    // Currently active verticals (more will be added later)
+    // Discovery flow sends 'otro' to /enterprise, not here
+    const VALID_VERTICALS = ['dental', 'restaurant'];
     if (!vertical || !VALID_VERTICALS.includes(vertical)) {
       console.error('🚨 [Checkout] Invalid or missing vertical:', vertical);
       return NextResponse.json(

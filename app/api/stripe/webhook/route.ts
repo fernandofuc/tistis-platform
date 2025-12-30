@@ -618,7 +618,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     customer_email: customerEmail,
     customer_name: customerName || 'Nuevo Cliente',
     customer_phone: customerPhone || undefined,
-    vertical: (vertical as 'dental' | 'restaurant' | 'pharmacy' | 'retail' | 'medical' | 'services' | 'other') || 'services',
+    // Currently active verticals: dental, restaurant (more will be added later)
+    vertical: (vertical as 'dental' | 'restaurant') || 'dental',
     plan: validatedPlan, // Use validated plan
     branches_count: branches ? parseInt(branches) : 1,
     subscription_id: newSubscription?.id,

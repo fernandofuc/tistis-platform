@@ -513,7 +513,8 @@ function PricingContent() {
     }
 
     // Cargar vertical desde URL o sessionStorage
-    const validVerticals: VerticalType[] = ['dental', 'clinic', 'restaurant', 'gym', 'beauty', 'veterinary'];
+    // Currently active verticals (more will be added later)
+    const validVerticals: VerticalType[] = ['dental', 'restaurant'];
     if (urlVertical && validVerticals.includes(urlVertical as VerticalType)) {
       setSelectedVertical(urlVertical as VerticalType);
     } else if (storedAnalysis) {
