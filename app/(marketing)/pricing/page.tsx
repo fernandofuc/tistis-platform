@@ -547,7 +547,9 @@ function PricingContent() {
     sessionStorage.setItem('pricing_addons', JSON.stringify([])); // Sin add-ons
     sessionStorage.setItem('selected_vertical', selectedVertical); // Guardar vertical
 
-    router.push(`/checkout?plan=${selectedPlanId}`);
+    // CRITICAL: Pass vertical in URL as well for redundancy
+    // This prevents issues when sessionStorage is cleared (private browsing, refresh, etc.)
+    router.push(`/checkout?plan=${selectedPlanId}&vertical=${selectedVertical}`);
   };
 
   return (
