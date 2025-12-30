@@ -456,8 +456,8 @@ export default function DiscoveryPage() {
             // Redirigir a Enterprise/Consultoría
             router.push('/enterprise');
           } else {
-            // Redirigir a Pricing con el plan recomendado
-            router.push(`/pricing?plan=${analysisResult.recommended_plan}`);
+            // Redirigir a Pricing con el plan recomendado Y el vertical
+            router.push(`/pricing?plan=${analysisResult.recommended_plan}&vertical=${analysisResult.business_type}`);
           }
         }, 4000);
       }

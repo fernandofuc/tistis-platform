@@ -491,11 +491,13 @@ function PricingContent() {
   const isNewUser = searchParams.get('new_user') === 'true';
   const userEmail = searchParams.get('email') || '';
 
-  // Cargar plan recomendado desde URL o sessionStorage
+  // Cargar plan y vertical desde URL o sessionStorage
   useEffect(() => {
     const urlPlan = searchParams.get('plan');
+    const urlVertical = searchParams.get('vertical');
     const storedAnalysis = sessionStorage.getItem('discovery_analysis');
 
+    // Cargar plan desde URL o sessionStorage
     if (urlPlan && PLANS_DISPLAY.find(p => p.id === urlPlan)) {
       setSelectedPlanId(urlPlan);
     } else if (storedAnalysis) {
@@ -507,6 +509,21 @@ function PricingContent() {
       } catch {
         // Default to essentials
         setSelectedPlanId('essentials');
+      }
+    }
+
+    // Cargar vertical desde URL o sessionStorage
+    const validVerticals: VerticalType[] = ['dental', 'clinic', 'restaurant', 'gym', 'beauty', 'veterinary'];
+    if (urlVertical && validVerticals.includes(urlVertical as VerticalType)) {
+      setSelectedVertical(urlVertical as VerticalType);
+    } else if (storedAnalysis) {
+      try {
+        const analysis = JSON.parse(storedAnalysis);
+        if (analysis.business_type && validVerticals.includes(analysis.business_type)) {
+          setSelectedVertical(analysis.business_type as VerticalType);
+        }
+      } catch {
+        // Keep default
       }
     }
 
