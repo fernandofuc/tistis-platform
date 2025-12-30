@@ -117,17 +117,16 @@ function LoginContent() {
     setError(null);
 
     try {
-      // IMPORTANT: Use Supabase's native callback URL
-      // This ensures Google redirects to Supabase first, then Supabase redirects to our app
-      const appUrl = window.location.origin;
-      console.log('🔵 Initiating Google OAuth flow');
-      console.log('App URL:', appUrl);
+      console.log('🔵 Initiating Google OAuth flow with PKCE');
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          // Supabase will handle the OAuth callback and then redirect to our dashboard
-          redirectTo: `${appUrl}/dashboard`,
+          skipBrowserRedirect: false,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
 
@@ -150,16 +149,12 @@ function LoginContent() {
     setError(null);
 
     try {
-      // IMPORTANT: Use Supabase's native callback URL (same as Google)
-      const appUrl = window.location.origin;
-      console.log('🔵 Initiating GitHub OAuth flow');
-      console.log('App URL:', appUrl);
+      console.log('🔵 Initiating GitHub OAuth flow with PKCE');
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          // Supabase will handle the OAuth callback and then redirect to our dashboard
-          redirectTo: `${appUrl}/dashboard`,
+          skipBrowserRedirect: false,
         },
       });
 
