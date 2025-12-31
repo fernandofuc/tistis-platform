@@ -31,11 +31,11 @@ import { supabase } from '@/src/shared/lib/supabase';
 // CONSTANTES
 // ============================================================
 
+// Currently active verticals (must match VALID_VERTICALS in APIs)
+// More verticals will be added: clinic, gym, beauty, veterinary
 const VERTICALS_DISPLAY: Record<string, { name: string; icon: string }> = {
   dental: { name: 'Clínica Dental', icon: '🦷' },
   restaurant: { name: 'Restaurante', icon: '🍽️' },
-  retail: { name: 'Retail', icon: '🛍️' },
-  services: { name: 'Servicios', icon: '🔧' },
 };
 
 const PLAN_ICONS: Record<string, React.ReactNode> = {
