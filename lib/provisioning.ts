@@ -531,6 +531,9 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     const perPage = 100;
     let hasMore = true;
 
+    // Normalize email for case-insensitive comparison
+    const normalizedEmail = params.customer_email.toLowerCase();
+
     while (hasMore && !authUser) {
       const { data: usersPage } = await supabase.auth.admin.listUsers({
         page,
@@ -540,7 +543,8 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       if (!usersPage?.users || usersPage.users.length === 0) {
         hasMore = false;
       } else {
-        authUser = usersPage.users.find((u) => u.email === params.customer_email);
+        // Case-insensitive email comparison
+        authUser = usersPage.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
         if (!authUser && usersPage.users.length === perPage) {
           page++;
         } else {
@@ -548,6 +552,8 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         }
       }
     }
+
+    console.log(`[Provisioning] User search completed: ${authUser ? 'FOUND' : 'NOT FOUND'} (searched ${page} pages)`);
 
     let tempPassword: string | undefined = undefined;
 

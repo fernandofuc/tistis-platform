@@ -66,18 +66,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize email to lowercase for consistent comparison
+    const normalizedEmail = customerEmail.toLowerCase();
+
     console.log('[ActivateTrialWithCard] Processing setup session:', {
       sessionId,
-      customerEmail,
+      customerEmail: normalizedEmail,
       stripeCustomerId,
       vertical,
     });
 
-    // 3. Check if client already exists (by contact_email - correct column name)
+    // 3. Check if client already exists (by contact_email - case-insensitive)
     const { data: existingClient } = await supabase
       .from('clients')
       .select('id, user_id')
-      .eq('contact_email', customerEmail)
+      .ilike('contact_email', normalizedEmail)
       .maybeSingle();
 
     if (existingClient) {
@@ -92,10 +95,11 @@ export async function POST(request: NextRequest) {
 
     // 4. Create new client with Stripe customer ID
     // Using correct column names from clients table schema
+    // IMPORTANT: Use normalized (lowercase) email for consistency
     const { data: newClient, error: createError } = await supabase
       .from('clients')
       .insert({
-        contact_email: customerEmail,
+        contact_email: normalizedEmail,
         contact_name: customerName || 'Cliente',
         contact_phone: customerPhone || null,
         business_name: customerName || 'Mi Negocio', // Required field
@@ -148,7 +152,7 @@ export async function POST(request: NextRequest) {
 
     const provisionResult = await provisionTenant({
       client_id: clientId,
-      customer_email: customerEmail,
+      customer_email: normalizedEmail, // Use normalized email for user lookup
       customer_name: customerName || 'Cliente',
       customer_phone: customerPhone || undefined,
       vertical: (vertical as 'dental' | 'restaurant') || 'dental',

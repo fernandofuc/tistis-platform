@@ -73,12 +73,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if client already exists in our DB
+    // Normalize email for case-insensitive operations
+    const normalizedEmail = customerEmail.toLowerCase();
+
+    // Check if client already exists in our DB (case-insensitive)
     const supabase = getSupabaseAdmin();
     const { data: existingClient } = await supabase
       .from('clients')
       .select('id')
-      .eq('contact_email', customerEmail)
+      .ilike('contact_email', normalizedEmail)
       .maybeSingle();
 
     if (existingClient) {
@@ -94,10 +97,10 @@ export async function POST(req: NextRequest) {
     const stripe = getStripeClient();
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_URL;
 
-    // Create or find Stripe customer
+    // Create or find Stripe customer (use normalized email)
     let customerId: string;
     const existingCustomers = await stripe.customers.list({
-      email: customerEmail,
+      email: normalizedEmail,
       limit: 1,
     });
 
@@ -106,7 +109,7 @@ export async function POST(req: NextRequest) {
       console.log('[SetupTrialCard] Found existing customer:', customerId);
     } else {
       const customer = await stripe.customers.create({
-        email: customerEmail,
+        email: normalizedEmail,
         name: customerName,
         phone: customerPhone || undefined,
         metadata: {
@@ -120,6 +123,7 @@ export async function POST(req: NextRequest) {
 
     // Create Stripe Checkout Session in SETUP mode
     // This collects card details without charging
+    // IMPORTANT: Store normalized email in metadata for consistency
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'setup', // CRITICAL: Setup mode = no charge, just save card
@@ -130,7 +134,7 @@ export async function POST(req: NextRequest) {
         plan: 'starter',
         customerName: customerName || '',
         customerPhone: customerPhone || '',
-        customerEmail,
+        customerEmail: normalizedEmail, // Store normalized email
         vertical,
         flow: 'trial_with_card',
       },
