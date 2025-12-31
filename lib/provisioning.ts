@@ -564,11 +564,12 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       console.log('✅ [Provisioning] Using existing user account:', authUser.id);
 
       // Actualizar metadata del usuario existente con info del tenant
+      // NOTE: The first user provisioned is the OWNER (business owner)
       await supabase.auth.admin.updateUserById(authUser.id, {
         user_metadata: {
           ...authUser.user_metadata,
           tenant_id: tenant.id,
-          role: 'admin',
+          role: 'owner',
           vertical: params.vertical,
           name: params.customer_name,
           phone: params.customer_phone || authUser.user_metadata?.phone,
@@ -579,6 +580,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       console.log('⚠️ [Provisioning] User not found, creating new account...');
       tempPassword = generateTempPassword();
 
+      // NOTE: The first user provisioned is the OWNER (business owner)
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: normalizedEmail, // Use normalized email for consistency
         password: tempPassword,
@@ -587,7 +589,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
           name: params.customer_name,
           phone: params.customer_phone,
           tenant_id: tenant.id,
-          role: 'admin',
+          role: 'owner',
           vertical: params.vertical,
         },
       });
@@ -810,6 +812,8 @@ async function createStaffAndRole(
 
     if (existingStaff) {
       // Update existing staff
+      // NOTE: The first user provisioned for a tenant is the OWNER (business owner)
+      // They have full control including subscription management
       console.log('📝 [Provisioning] Staff exists, updating:', existingStaff.id);
       const { data: updatedStaff, error: updateError } = await supabase
         .from('staff')
@@ -819,8 +823,8 @@ async function createStaffAndRole(
           last_name: lastName,
           display_name: params.name,
           phone: params.phone || null,
-          role: 'admin',
-          role_title: 'Administrador',
+          role: 'owner',
+          role_title: 'Propietario',
           is_active: true,
         })
         .eq('id', existingStaff.id)
@@ -834,6 +838,8 @@ async function createStaffAndRole(
       staff = updatedStaff;
     } else {
       // Insert new staff
+      // NOTE: The first user provisioned for a tenant is the OWNER (business owner)
+      // They have full control including subscription management
       const { data: newStaff, error: insertError } = await supabase
         .from('staff')
         .insert({
@@ -844,8 +850,8 @@ async function createStaffAndRole(
           display_name: params.name,
           email: params.email,
           phone: params.phone || null,
-          role: 'admin',
-          role_title: 'Administrador',
+          role: 'owner',
+          role_title: 'Propietario',
           is_active: true,
           notification_preferences: {
             email: true,
@@ -908,11 +914,12 @@ async function createStaffAndRole(
 
     if (existingRole) {
       // Update existing role
+      // NOTE: The first user provisioned is the OWNER with full permissions
       console.log('📝 [Provisioning] User role exists, updating:', existingRole.id);
       const { data: updatedRole, error: updateRoleError } = await supabase
         .from('user_roles')
         .update({
-          role: 'admin',
+          role: 'owner',
           staff_id: staff.id,
           is_active: true,
           permissions: { all: true },
@@ -928,12 +935,13 @@ async function createStaffAndRole(
       role = updatedRole;
     } else {
       // Insert new role
+      // NOTE: The first user provisioned is the OWNER with full permissions
       const { data: newRole, error: insertRoleError } = await supabase
         .from('user_roles')
         .insert({
           user_id: params.user_id,
           tenant_id: params.tenant_id,
-          role: 'admin',
+          role: 'owner',
           staff_id: staff.id,
           is_active: true,
           permissions: { all: true },
