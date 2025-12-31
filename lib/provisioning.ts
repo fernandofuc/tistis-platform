@@ -795,26 +795,33 @@ async function createStaffAndRole(
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(' ') || '';
 
-    // Crear Staff
+    // Crear Staff (use upsert to handle retries gracefully)
+    // If staff already exists for this tenant+email, update it
     const { data: staff, error: staffError } = await supabase
       .from('staff')
-      .insert({
-        tenant_id: params.tenant_id,
-        user_id: params.user_id,
-        first_name: firstName,
-        last_name: lastName,
-        display_name: params.name,
-        email: params.email,
-        phone: params.phone || null,
-        role: 'admin',
-        role_title: 'Administrador',
-        is_active: true,
-        notification_preferences: {
-          email: true,
-          whatsapp: true,
-          sms: false,
+      .upsert(
+        {
+          tenant_id: params.tenant_id,
+          user_id: params.user_id,
+          first_name: firstName,
+          last_name: lastName,
+          display_name: params.name,
+          email: params.email,
+          phone: params.phone || null,
+          role: 'admin',
+          role_title: 'Administrador',
+          is_active: true,
+          notification_preferences: {
+            email: true,
+            whatsapp: true,
+            sms: false,
+          },
         },
-      })
+        {
+          onConflict: 'tenant_id,email',
+          ignoreDuplicates: false, // Update existing record
+        }
+      )
       .select()
       .single();
 
@@ -823,26 +830,39 @@ async function createStaffAndRole(
       return { success: false };
     }
 
-    // Asignar staff a branch
-    await supabase.from('staff_branches').insert({
-      staff_id: staff.id,
-      branch_id: params.branch_id,
-      is_primary: true,
-    });
+    // Asignar staff a branch (use upsert to handle retries)
+    await supabase.from('staff_branches').upsert(
+      {
+        staff_id: staff.id,
+        branch_id: params.branch_id,
+        is_primary: true,
+      },
+      {
+        onConflict: 'staff_id,branch_id',
+        ignoreDuplicates: false,
+      }
+    );
 
-    // Crear User Role
+    // Crear User Role (use upsert to handle retries gracefully)
+    // If a user_role already exists for this user+tenant, update it
     const { data: role, error: roleError } = await supabase
       .from('user_roles')
-      .insert({
-        user_id: params.user_id,
-        tenant_id: params.tenant_id,
-        role: 'admin',
-        staff_id: staff.id,
-        is_active: true,
-        permissions: {
-          all: true,
+      .upsert(
+        {
+          user_id: params.user_id,
+          tenant_id: params.tenant_id,
+          role: 'admin',
+          staff_id: staff.id,
+          is_active: true,
+          permissions: {
+            all: true,
+          },
         },
-      })
+        {
+          onConflict: 'user_id,tenant_id',
+          ignoreDuplicates: false, // Update existing record
+        }
+      )
       .select()
       .single();
 
