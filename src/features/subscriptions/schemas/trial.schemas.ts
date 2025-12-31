@@ -33,7 +33,7 @@ export const TimestampSchema = z.string().refine(
  * Schema para plan
  * Values must match database CHECK constraint in 003_esva_schema_v2.sql
  */
-export const PlanSchema = z.enum(['starter', 'essentials', 'growth', 'scale'], {
+export const PlanSchema = z.enum(['starter', 'essentials', 'growth'], {
   errorMap: () => ({ message: 'Plan inválido' }),
 });
 
