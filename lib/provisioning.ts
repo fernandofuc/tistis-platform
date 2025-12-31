@@ -174,6 +174,66 @@ function generateTempPassword(): string {
 }
 
 /**
+ * Full dental service catalog matching migration 042
+ * These are the real dental services with categories, pricing and lead priority
+ */
+const DENTAL_SERVICES_CATALOG = [
+  // DIAGNÓSTICO (COLD) - Entry point services
+  { name: 'Consulta de Valoración', slug: 'consulta-valoracion', category: 'Diagnóstico', display_order: 1, duration_minutes: 30, price_min: 0, price_max: 500, lead_priority: 'cold', description: 'Evaluación inicial completa del estado de salud bucal' },
+  { name: 'Radiografía Panorámica', slug: 'radiografia-panoramica', category: 'Diagnóstico', display_order: 2, duration_minutes: 15, price_min: 300, price_max: 500, lead_priority: 'cold', description: 'Imagen completa de ambas arcadas dentales' },
+  { name: 'Radiografía Periapical', slug: 'radiografia-periapical', category: 'Diagnóstico', display_order: 3, duration_minutes: 10, price_min: 100, price_max: 200, lead_priority: 'cold', description: 'Radiografía de una pieza dental específica' },
+
+  // PREVENCIÓN (COLD) - Basic maintenance
+  { name: 'Limpieza Dental Básica', slug: 'limpieza-basica', category: 'Prevención', display_order: 4, duration_minutes: 45, price_min: 400, price_max: 800, lead_priority: 'cold', description: 'Profilaxis dental con ultrasonido y pulido' },
+  { name: 'Limpieza Profunda', slug: 'limpieza-profunda', category: 'Prevención', display_order: 5, duration_minutes: 60, price_min: 800, price_max: 1500, lead_priority: 'warm', description: 'Raspado y alisado radicular por cuadrante' },
+  { name: 'Aplicación de Flúor', slug: 'aplicacion-fluor', category: 'Prevención', display_order: 6, duration_minutes: 15, price_min: 200, price_max: 400, lead_priority: 'cold', description: 'Tratamiento preventivo con flúor tópico' },
+  { name: 'Selladores Dentales', slug: 'selladores-dentales', category: 'Prevención', display_order: 7, duration_minutes: 30, price_min: 300, price_max: 500, lead_priority: 'cold', description: 'Sellado de fisuras en molares (por pieza)' },
+
+  // RESTAURATIVA (WARM) - Fillings and restorations
+  { name: 'Resina Dental Simple', slug: 'resina-simple', category: 'Restaurativa', display_order: 8, duration_minutes: 45, price_min: 600, price_max: 1000, lead_priority: 'warm', description: 'Restauración con resina de una superficie' },
+  { name: 'Resina Dental Compuesta', slug: 'resina-compuesta', category: 'Restaurativa', display_order: 9, duration_minutes: 60, price_min: 800, price_max: 1500, lead_priority: 'warm', description: 'Restauración con resina de múltiples superficies' },
+  { name: 'Incrustación Dental', slug: 'incrustacion-dental', category: 'Restaurativa', display_order: 10, duration_minutes: 90, price_min: 2500, price_max: 4000, lead_priority: 'warm', description: 'Inlay/Onlay en porcelana o resina' },
+  { name: 'Corona Dental Porcelana', slug: 'corona-porcelana', category: 'Restaurativa', display_order: 11, duration_minutes: 90, price_min: 4000, price_max: 7000, lead_priority: 'warm', description: 'Corona de porcelana libre de metal' },
+  { name: 'Corona Dental Zirconia', slug: 'corona-zirconia', category: 'Restaurativa', display_order: 12, duration_minutes: 90, price_min: 5000, price_max: 8000, lead_priority: 'hot', description: 'Corona de zirconia alta estética' },
+  { name: 'Puente Dental', slug: 'puente-dental', category: 'Restaurativa', display_order: 13, duration_minutes: 120, price_min: 12000, price_max: 20000, lead_priority: 'hot', description: 'Puente fijo de 3 o más unidades' },
+
+  // ENDODONCIA (WARM) - Root canals
+  { name: 'Endodoncia Anterior', slug: 'endodoncia-anterior', category: 'Endodoncia', display_order: 14, duration_minutes: 60, price_min: 2500, price_max: 4000, lead_priority: 'warm', description: 'Tratamiento de conductos en diente anterior' },
+  { name: 'Endodoncia Premolar', slug: 'endodoncia-premolar', category: 'Endodoncia', display_order: 15, duration_minutes: 90, price_min: 3000, price_max: 5000, lead_priority: 'warm', description: 'Tratamiento de conductos en premolar' },
+  { name: 'Endodoncia Molar', slug: 'endodoncia-molar', category: 'Endodoncia', display_order: 16, duration_minutes: 120, price_min: 4000, price_max: 6500, lead_priority: 'warm', description: 'Tratamiento de conductos en molar' },
+  { name: 'Retratamiento de Conductos', slug: 'retratamiento-conductos', category: 'Endodoncia', display_order: 17, duration_minutes: 120, price_min: 5000, price_max: 8000, lead_priority: 'warm', description: 'Reendodoncia de tratamiento previo fallido' },
+
+  // CIRUGÍA (HOT) - Surgical procedures
+  { name: 'Extracción Simple', slug: 'extraccion-simple', category: 'Cirugía', display_order: 18, duration_minutes: 30, price_min: 800, price_max: 1500, lead_priority: 'warm', description: 'Extracción de pieza dental erupcionada' },
+  { name: 'Extracción de Muela del Juicio', slug: 'extraccion-tercer-molar', category: 'Cirugía', display_order: 19, duration_minutes: 60, price_min: 2500, price_max: 5000, lead_priority: 'hot', description: 'Extracción quirúrgica de tercer molar' },
+  { name: 'Cirugía de Encías', slug: 'cirugia-encias', category: 'Cirugía', display_order: 20, duration_minutes: 90, price_min: 5000, price_max: 10000, lead_priority: 'hot', description: 'Cirugía periodontal por sextante' },
+  { name: 'Injerto de Hueso', slug: 'injerto-hueso', category: 'Cirugía', display_order: 21, duration_minutes: 90, price_min: 8000, price_max: 15000, lead_priority: 'hot', description: 'Regeneración ósea guiada' },
+
+  // IMPLANTES (HOT) - High value treatments
+  { name: 'Implante Dental Unitario', slug: 'implante-unitario', category: 'Implantes', display_order: 22, duration_minutes: 90, price_min: 15000, price_max: 25000, lead_priority: 'hot', description: 'Implante de titanio + corona de porcelana' },
+  { name: 'Implante con Carga Inmediata', slug: 'implante-carga-inmediata', category: 'Implantes', display_order: 23, duration_minutes: 120, price_min: 20000, price_max: 35000, lead_priority: 'hot', description: 'Implante con corona provisional el mismo día' },
+  { name: 'All-on-4', slug: 'all-on-4', category: 'Implantes', display_order: 24, duration_minutes: 240, price_min: 120000, price_max: 200000, lead_priority: 'hot', description: 'Rehabilitación completa sobre 4 implantes' },
+  { name: 'All-on-6', slug: 'all-on-6', category: 'Implantes', display_order: 25, duration_minutes: 300, price_min: 150000, price_max: 250000, lead_priority: 'hot', description: 'Rehabilitación completa sobre 6 implantes' },
+
+  // ORTODONCIA (HOT) - Alignment treatments
+  { name: 'Ortodoncia Brackets Metálicos', slug: 'ortodoncia-metalica', category: 'Ortodoncia', display_order: 26, duration_minutes: 60, price_min: 25000, price_max: 40000, lead_priority: 'hot', description: 'Tratamiento completo con brackets metálicos' },
+  { name: 'Ortodoncia Brackets Estéticos', slug: 'ortodoncia-estetica', category: 'Ortodoncia', display_order: 27, duration_minutes: 60, price_min: 35000, price_max: 55000, lead_priority: 'hot', description: 'Tratamiento con brackets de zafiro o cerámica' },
+  { name: 'Invisalign / Alineadores', slug: 'invisalign', category: 'Ortodoncia', display_order: 28, duration_minutes: 45, price_min: 45000, price_max: 80000, lead_priority: 'hot', description: 'Tratamiento con alineadores transparentes' },
+  { name: 'Retenedores de Ortodoncia', slug: 'retenedores', category: 'Ortodoncia', display_order: 29, duration_minutes: 30, price_min: 2000, price_max: 5000, lead_priority: 'warm', description: 'Retenedores fijos o removibles post-tratamiento' },
+
+  // ESTÉTICA (HOT) - Cosmetic dentistry
+  { name: 'Blanqueamiento en Consultorio', slug: 'blanqueamiento-consultorio', category: 'Estética', display_order: 30, duration_minutes: 90, price_min: 3000, price_max: 6000, lead_priority: 'warm', description: 'Blanqueamiento profesional con lámpara LED' },
+  { name: 'Blanqueamiento Casero', slug: 'blanqueamiento-casero', category: 'Estética', display_order: 31, duration_minutes: 30, price_min: 2000, price_max: 4000, lead_priority: 'warm', description: 'Kit de blanqueamiento con guardas personalizadas' },
+  { name: 'Carilla de Porcelana', slug: 'carilla-porcelana', category: 'Estética', display_order: 32, duration_minutes: 90, price_min: 8000, price_max: 15000, lead_priority: 'hot', description: 'Carilla dental de porcelana (por pieza)' },
+  { name: 'Carilla de Resina', slug: 'carilla-resina', category: 'Estética', display_order: 33, duration_minutes: 60, price_min: 3000, price_max: 6000, lead_priority: 'warm', description: 'Carilla de resina compuesta (por pieza)' },
+  { name: 'Diseño de Sonrisa', slug: 'diseno-sonrisa', category: 'Estética', display_order: 34, duration_minutes: 180, price_min: 80000, price_max: 150000, lead_priority: 'hot', description: 'Rehabilitación estética completa con carillas' },
+
+  // URGENCIAS (HOT) - Emergency services
+  { name: 'Urgencia Dental', slug: 'urgencia-dental', category: 'Urgencias', display_order: 35, duration_minutes: 30, price_min: 500, price_max: 1500, lead_priority: 'hot', description: 'Atención de emergencia por dolor o trauma' },
+  { name: 'Ajuste de Emergencia', slug: 'ajuste-emergencia', category: 'Urgencias', display_order: 36, duration_minutes: 20, price_min: 300, price_max: 800, lead_priority: 'warm', description: 'Ajuste de prótesis, aparato u ortodoncia' },
+];
+
+/**
  * Obtiene la configuración por defecto para un vertical
  * Currently active: dental, restaurant (more will be added later)
  */
@@ -181,15 +241,9 @@ function getVerticalDefaults(vertical: string): VerticalConfig {
   const configs: Record<string, VerticalConfig> = {
     dental: {
       display_name: 'Clínica Dental',
-      default_services: [
-        'Limpieza Dental',
-        'Consulta General',
-        'Blanqueamiento',
-        'Ortodoncia',
-        'Implantes',
-        'Endodoncia',
-        'Extracción',
-      ],
+      // This list is only used for simple service names in the config
+      // The actual services are inserted from DENTAL_SERVICES_CATALOG
+      default_services: [],
       sidebar_config: [
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard' },
         { id: 'leads', label: 'Leads', icon: 'Users', href: '/dashboard/leads' },
@@ -658,8 +712,37 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
 
     // ============================================
     // STEP 8: Crear servicios por defecto
+    // For dental vertical, use the full 36-service catalog
+    // For other verticals, use simple default services
     // ============================================
-    if (verticalConfig.default_services.length > 0) {
+    if (params.vertical === 'dental') {
+      // Use full dental catalog (36 services with categories, pricing, lead priority)
+      const services = DENTAL_SERVICES_CATALOG.map((svc) => ({
+        tenant_id: tenant.id,
+        name: svc.name,
+        slug: svc.slug,
+        category: svc.category,
+        is_active: true,
+        display_order: svc.display_order,
+        duration_minutes: svc.duration_minutes,
+        price_min: svc.price_min,
+        price_max: svc.price_max,
+        price_unit: 'per_service',
+        currency: 'MXN',
+        lead_priority: svc.lead_priority,
+        description: svc.description,
+      }));
+
+      const { error: servicesError } = await supabase.from('services').insert(services);
+      if (servicesError) {
+        console.error('⚠️ [Provisioning] Failed to create dental services:', servicesError);
+        // Non-critical, continue
+      } else {
+        rollback.services_created = true;
+        console.log('✅ [Provisioning] Full dental catalog created:', services.length, 'services');
+      }
+    } else if (verticalConfig.default_services.length > 0) {
+      // For other verticals, use simple service list
       const services = verticalConfig.default_services.map((name, index) => ({
         tenant_id: tenant.id,
         name: name,
@@ -667,7 +750,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         category: 'General',
         is_active: true,
         display_order: index,
-        duration_minutes: 30,  // Duración por defecto
+        duration_minutes: 30,
         price_min: 0,
         price_max: 0,
         price_unit: 'per_service',
@@ -747,7 +830,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         duration_ms: totalDuration,
         vertical: params.vertical,
         plan: params.plan,
-        services_created: verticalConfig.default_services.length,
+        services_created: params.vertical === 'dental' ? DENTAL_SERVICES_CATALOG.length : verticalConfig.default_services.length,
         faqs_created: verticalConfig.default_faqs.length,
         branches_created: createdBranches.length,
         branches_requested: branchesCount,
