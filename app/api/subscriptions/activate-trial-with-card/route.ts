@@ -129,6 +129,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // CRITICAL: Check if there's an orphan subscription from previous failed attempt
+      // If so, delete it so we can create a fresh one
+      const { data: orphanSubscription } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('client_id', existingClient.id)
+        .maybeSingle();
+
+      if (orphanSubscription) {
+        console.log('[ActivateTrialWithCard] Found orphan subscription, deleting:', orphanSubscription.id);
+        await supabase.from('subscriptions').delete().eq('id', orphanSubscription.id);
+      }
+
       console.log('[ActivateTrialWithCard] Retrying provisioning for client with failed previous attempt:', existingClient.id);
       clientId = existingClient.id;
     } else if (existingClient) {

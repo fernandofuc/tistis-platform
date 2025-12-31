@@ -795,12 +795,48 @@ async function createStaffAndRole(
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(' ') || '';
 
-    // Crear Staff (use upsert to handle retries gracefully)
-    // If staff already exists for this tenant+email, update it
-    const { data: staff, error: staffError } = await supabase
+    // ============================================
+    // STAFF: Check if exists, then insert or update
+    // ============================================
+    // First check if staff already exists for this tenant+email (case-insensitive)
+    const { data: existingStaff } = await supabase
       .from('staff')
-      .upsert(
-        {
+      .select('id')
+      .eq('tenant_id', params.tenant_id)
+      .ilike('email', params.email)
+      .maybeSingle();
+
+    let staff: { id: string } | null = null;
+
+    if (existingStaff) {
+      // Update existing staff
+      console.log('📝 [Provisioning] Staff exists, updating:', existingStaff.id);
+      const { data: updatedStaff, error: updateError } = await supabase
+        .from('staff')
+        .update({
+          user_id: params.user_id,
+          first_name: firstName,
+          last_name: lastName,
+          display_name: params.name,
+          phone: params.phone || null,
+          role: 'admin',
+          role_title: 'Administrador',
+          is_active: true,
+        })
+        .eq('id', existingStaff.id)
+        .select('id')
+        .single();
+
+      if (updateError) {
+        console.error('❌ [Provisioning] Staff update error:', updateError);
+        return { success: false };
+      }
+      staff = updatedStaff;
+    } else {
+      // Insert new staff
+      const { data: newStaff, error: insertError } = await supabase
+        .from('staff')
+        .insert({
           tenant_id: params.tenant_id,
           user_id: params.user_id,
           first_name: firstName,
@@ -816,58 +852,104 @@ async function createStaffAndRole(
             whatsapp: true,
             sms: false,
           },
-        },
-        {
-          onConflict: 'tenant_id,email',
-          ignoreDuplicates: false, // Update existing record
-        }
-      )
-      .select()
-      .single();
+        })
+        .select('id')
+        .single();
 
-    if (staffError) {
-      console.error('❌ [Provisioning] Staff creation error:', staffError);
+      if (insertError) {
+        console.error('❌ [Provisioning] Staff creation error:', insertError);
+        return { success: false };
+      }
+      staff = newStaff;
+    }
+
+    if (!staff) {
+      console.error('❌ [Provisioning] Staff is null after insert/update');
       return { success: false };
     }
 
-    // Asignar staff a branch (use upsert to handle retries)
-    await supabase.from('staff_branches').upsert(
-      {
+    // ============================================
+    // STAFF_BRANCHES: Check if exists, then insert or update
+    // ============================================
+    const { data: existingStaffBranch } = await supabase
+      .from('staff_branches')
+      .select('id')
+      .eq('staff_id', staff.id)
+      .eq('branch_id', params.branch_id)
+      .maybeSingle();
+
+    if (existingStaffBranch) {
+      // Update existing
+      await supabase
+        .from('staff_branches')
+        .update({ is_primary: true })
+        .eq('id', existingStaffBranch.id);
+    } else {
+      // Insert new
+      await supabase.from('staff_branches').insert({
         staff_id: staff.id,
         branch_id: params.branch_id,
         is_primary: true,
-      },
-      {
-        onConflict: 'staff_id,branch_id',
-        ignoreDuplicates: false,
-      }
-    );
+      });
+    }
 
-    // Crear User Role (use upsert to handle retries gracefully)
-    // If a user_role already exists for this user+tenant, update it
-    const { data: role, error: roleError } = await supabase
+    // ============================================
+    // USER_ROLES: Check if exists, then insert or update
+    // This table DOES have unique constraint on (user_id, tenant_id)
+    // ============================================
+    const { data: existingRole } = await supabase
       .from('user_roles')
-      .upsert(
-        {
+      .select('id')
+      .eq('user_id', params.user_id)
+      .eq('tenant_id', params.tenant_id)
+      .maybeSingle();
+
+    let role: { id: string } | null = null;
+
+    if (existingRole) {
+      // Update existing role
+      console.log('📝 [Provisioning] User role exists, updating:', existingRole.id);
+      const { data: updatedRole, error: updateRoleError } = await supabase
+        .from('user_roles')
+        .update({
+          role: 'admin',
+          staff_id: staff.id,
+          is_active: true,
+          permissions: { all: true },
+        })
+        .eq('id', existingRole.id)
+        .select('id')
+        .single();
+
+      if (updateRoleError) {
+        console.error('❌ [Provisioning] User role update error:', updateRoleError);
+        return { success: false, staff_id: staff.id };
+      }
+      role = updatedRole;
+    } else {
+      // Insert new role
+      const { data: newRole, error: insertRoleError } = await supabase
+        .from('user_roles')
+        .insert({
           user_id: params.user_id,
           tenant_id: params.tenant_id,
           role: 'admin',
           staff_id: staff.id,
           is_active: true,
-          permissions: {
-            all: true,
-          },
-        },
-        {
-          onConflict: 'user_id,tenant_id',
-          ignoreDuplicates: false, // Update existing record
-        }
-      )
-      .select()
-      .single();
+          permissions: { all: true },
+        })
+        .select('id')
+        .single();
 
-    if (roleError) {
-      console.error('❌ [Provisioning] User role creation error:', roleError);
+      if (insertRoleError) {
+        console.error('❌ [Provisioning] User role creation error:', insertRoleError);
+        return { success: false, staff_id: staff.id };
+      }
+      role = newRole;
+    }
+
+    if (!role) {
+      console.error('❌ [Provisioning] Role is null after insert/update');
       return { success: false, staff_id: staff.id };
     }
 
