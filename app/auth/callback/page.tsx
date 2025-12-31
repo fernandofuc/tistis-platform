@@ -172,11 +172,11 @@ export default function AuthCallbackPage() {
             setStatusMessage('Preparando configuracion de pago...');
           }
 
-          // First check if user already has an account
+          // First check if user already has an account (case-insensitive)
           const { data: existingClient } = await supabase
             .from('clients')
             .select('id')
-            .eq('contact_email', session.user.email)
+            .ilike('contact_email', session.user.email || '')
             .maybeSingle();
 
           if (existingClient) {

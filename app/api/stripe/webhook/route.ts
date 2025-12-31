@@ -199,7 +199,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const supabase = getSupabaseClient();
 
   const { plan, customerName, proposalId, branches, addons, client_id, tenant_id, previous_subscription_id } = session.metadata || {};
-  const customerEmail = session.customer_email || session.customer_details?.email;
+  // Normalize email to lowercase for consistent storage and comparison
+  const rawEmail = session.customer_email || session.customer_details?.email;
+  const customerEmail = rawEmail?.toLowerCase();
 
   // ============================================
   // PLAN CHANGE FLOW: Handle upgrade/downgrade from existing subscription
@@ -334,12 +336,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   console.log('📋 Checkout metadata:', { plan: validatedPlan, customerName, branches, addons, proposalId });
 
-  // Find or create client
+  // Find or create client (case-insensitive email match)
   let { data: existingClient } = await supabase
     .from('clients')
     .select('id, user_id')
-    .eq('contact_email', customerEmail)
-    .single();
+    .ilike('contact_email', customerEmail)
+    .maybeSingle();
 
   let clientId: string | null = existingClient?.id || null;
 
@@ -448,9 +450,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   // Log without exposing PII
   console.log('📋 Subscription metadata:', { plan, branches, addons, hasCustomerPhone: !!customerPhone });
 
-  // Get customer email from Stripe
+  // Get customer email from Stripe (normalize to lowercase)
   const customer = await stripe.customers.retrieve(customerId);
-  const customerEmail = (customer as Stripe.Customer).email;
+  const rawCustomerEmail = (customer as Stripe.Customer).email;
+  const customerEmail = rawCustomerEmail?.toLowerCase();
 
   // ============================================
   // FIX 1: Email obligatorio - BLOQUEAR si falta
@@ -476,8 +479,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   let { data: client } = await supabase
     .from('clients')
     .select('id, metadata')
-    .eq('contact_email', customerEmail)
-    .single();
+    .ilike('contact_email', customerEmail)
+    .maybeSingle();
 
   if (!client) {
     console.warn('⚠️ [Subscription] Client not found, creating now (race condition fallback)');

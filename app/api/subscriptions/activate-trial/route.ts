@@ -10,6 +10,7 @@ import { validateActivateTrialCheckoutRequest } from '@/src/features/subscriptio
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { rateLimit, RATE_LIMIT_PRESETS, createRateLimitResponse, getClientIdentifier } from '@/src/shared/lib/rate-limiter';
 import { provisionTenant } from '@/lib/provisioning';
+import { emailService } from '@/src/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +51,10 @@ export async function POST(request: NextRequest) {
       throw validationError;
     }
 
-    const { plan, customerEmail, customerName, customerPhone, vertical } = validatedData;
+    const { plan, customerEmail: rawEmail, customerName, customerPhone, vertical } = validatedData;
+
+    // Normalize email to lowercase for consistent comparison
+    const customerEmail = rawEmail.toLowerCase();
 
     // 3. Autenticación (opcional para trial - permite signup sin login)
     const supabase = createServerClient();
@@ -98,11 +102,11 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Usuario NO autenticado - permitir trial sin login
-      // Verificar si ya existe un cliente con ese email
+      // Verificar si ya existe un cliente con ese email (case-insensitive)
       const { data: existingClient } = await supabase
         .from('clients')
         .select('id, user_id')
-        .eq('contact_email', customerEmail)
+        .ilike('contact_email', customerEmail)
         .maybeSingle();
 
       if (existingClient) {
@@ -169,15 +173,16 @@ export async function POST(request: NextRequest) {
 
     if (!provisionResult.success) {
       console.error('[API] Tenant provisioning failed:', provisionResult.error);
-      // Trial was created but provisioning failed
-      // Return partial success with warning
-      return NextResponse.json({
-        success: true,
-        subscription: result.subscription,
-        daysRemaining: result.daysRemaining,
-        warning: 'Trial activado pero hubo un error configurando tu cuenta. Contacta soporte.',
-        provisioningError: provisionResult.error,
-      });
+      // CRITICAL: Return error, not success with warning
+      // Without proper provisioning, user cannot access dashboard
+      return NextResponse.json(
+        {
+          error: 'Error al configurar tu cuenta. Por favor contacta soporte.',
+          details: provisionResult.error,
+          subscription_created: true,
+        },
+        { status: 500 }
+      );
     }
 
     console.log('[API] Tenant provisioned successfully:', {
@@ -193,7 +198,29 @@ export async function POST(request: NextRequest) {
         .eq('id', clientId);
     }
 
-    // 7. Retornar éxito
+    // 7. Send credentials email if new user was created
+    if (provisionResult.temp_password) {
+      try {
+        const dashboardUrl = `${process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com'}/dashboard`;
+
+        await emailService.sendCredentials(customerEmail, {
+          customerName: customerName || 'Cliente',
+          dashboardUrl,
+          email: customerEmail,
+          tempPassword: provisionResult.temp_password,
+          tenantSlug: provisionResult.tenant_slug || '',
+        });
+
+        console.log('[API] Credentials email sent successfully');
+      } catch (emailError) {
+        // Non-critical - log but don't fail the request
+        console.error('[API] Error sending credentials email:', emailError);
+      }
+    } else {
+      console.log('[API] User has existing account - no credentials email needed');
+    }
+
+    // 8. Retornar éxito
     return NextResponse.json({
       success: true,
       subscription: result.subscription,

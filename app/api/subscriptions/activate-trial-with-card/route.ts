@@ -10,6 +10,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { activateFreeTrial } from '@/src/features/subscriptions/services/trial.service';
 import { provisionTenant } from '@/lib/provisioning';
+import { emailService } from '@/src/lib/email';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -163,13 +164,16 @@ export async function POST(request: NextRequest) {
 
     if (!provisionResult.success) {
       console.error('[ActivateTrialWithCard] Tenant provisioning failed:', provisionResult.error);
-      return NextResponse.json({
-        success: true,
-        subscription: result.subscription,
-        daysRemaining: result.daysRemaining,
-        warning: 'Trial activado pero hubo un error configurando tu cuenta. Contacta soporte.',
-        provisioningError: provisionResult.error,
-      });
+      // CRITICAL: Return error, not success with warning
+      // Without proper provisioning, user cannot access dashboard
+      return NextResponse.json(
+        {
+          error: 'Error al configurar tu cuenta. Por favor contacta soporte.',
+          details: provisionResult.error,
+          subscription_created: true, // Let support know trial was created
+        },
+        { status: 500 }
+      );
     }
 
     console.log('[ActivateTrialWithCard] Tenant provisioned:', {
@@ -185,7 +189,30 @@ export async function POST(request: NextRequest) {
         .eq('id', clientId);
     }
 
-    // 9. Return success
+    // 9. Send credentials email if new user was created (has temp_password)
+    // Users with existing OAuth accounts don't need credentials
+    if (provisionResult.temp_password) {
+      try {
+        const dashboardUrl = `${process.env.NEXT_PUBLIC_URL || 'https://app.tistis.com'}/dashboard`;
+
+        await emailService.sendCredentials(normalizedEmail, {
+          customerName: customerName || 'Cliente',
+          dashboardUrl,
+          email: normalizedEmail,
+          tempPassword: provisionResult.temp_password,
+          tenantSlug: provisionResult.tenant_slug || '',
+        });
+
+        console.log('[ActivateTrialWithCard] Credentials email sent successfully');
+      } catch (emailError) {
+        // Non-critical - log but don't fail the request
+        console.error('[ActivateTrialWithCard] Error sending credentials email:', emailError);
+      }
+    } else {
+      console.log('[ActivateTrialWithCard] User has existing account - no credentials email needed');
+    }
+
+    // 10. Return success
     return NextResponse.json({
       success: true,
       subscription: result.subscription,

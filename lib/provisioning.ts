@@ -301,6 +301,9 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       };
     }
 
+    // Normalize email to lowercase early for consistent storage
+    const normalizedEmail = params.customer_email.toLowerCase();
+
     // Validate vertical - Currently active verticals (more will be added later)
     const VALID_VERTICALS = ['dental', 'restaurant'];
     if (!params.vertical || !VALID_VERTICALS.includes(params.vertical)) {
@@ -387,7 +390,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         vertical: params.vertical,
         plan: params.plan,
         primary_contact_name: params.customer_name || client.contact_name,
-        primary_contact_email: params.customer_email,
+        primary_contact_email: normalizedEmail, // Use normalized email
         primary_contact_phone: client.contact_phone,
         status: 'active',
         plan_started_at: new Date().toISOString(),
@@ -531,8 +534,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     const perPage = 100;
     let hasMore = true;
 
-    // Normalize email for case-insensitive comparison
-    const normalizedEmail = params.customer_email.toLowerCase();
+    // normalizedEmail already defined at top of function
 
     while (hasMore && !authUser) {
       const { data: usersPage } = await supabase.auth.admin.listUsers({
@@ -578,7 +580,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       tempPassword = generateTempPassword();
 
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: params.customer_email,
+        email: normalizedEmail, // Use normalized email for consistency
         password: tempPassword,
         email_confirm: true,
         user_metadata: {
@@ -615,7 +617,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       tenant_id: tenant.id,
       branch_id: branch.id,
       user_id: authUser!.id,
-      email: params.customer_email,
+      email: normalizedEmail, // Use normalized email for consistency
       name: params.customer_name,
       phone: params.customer_phone,
     });

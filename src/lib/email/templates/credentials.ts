@@ -72,7 +72,7 @@ export const credentialsEmailTemplate = (data: CredentialsEmailData): string => 
 
       <div style="margin-bottom: 20px;">
         <p style="color: #666; font-size: 12px; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 0.5px;">
-          Contraseña temporal
+          Contraseña
         </p>
         <p style="
           color: #1a1a1a;

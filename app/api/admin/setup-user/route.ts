@@ -120,11 +120,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Check if tenant already exists for this user (by client)
+    // 3. Check if tenant already exists for this user (by client - case-insensitive)
     const { data: existingClient } = await supabase
       .from('clients')
       .select('*, tenants(*)')
-      .eq('contact_email', email)
+      .ilike('contact_email', email)
       .single();
 
     let tenantId: string;
