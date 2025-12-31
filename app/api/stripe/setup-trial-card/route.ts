@@ -80,11 +80,14 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     const { data: existingClient } = await supabase
       .from('clients')
-      .select('id')
+      .select('id, tenant_id, stripe_customer_id')
       .ilike('contact_email', normalizedEmail)
       .maybeSingle();
 
-    if (existingClient) {
+    // If client exists WITH tenant_id, they already have an account - reject
+    // If client exists WITHOUT tenant_id (created by auth trigger), allow to continue
+    // The activate-trial-with-card endpoint will update this client instead of creating new
+    if (existingClient && existingClient.tenant_id) {
       return NextResponse.json(
         {
           error: 'Este email ya tiene una cuenta. Por favor inicia sesion.',
@@ -92,6 +95,11 @@ export async function POST(req: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // Log if we're reusing a client created by the auth trigger
+    if (existingClient && !existingClient.tenant_id) {
+      console.log('[SetupTrialCard] Found incomplete client from auth trigger, will reuse:', existingClient.id);
     }
 
     const stripe = getStripeClient();

@@ -172,24 +172,28 @@ export default function AuthCallbackPage() {
             setStatusMessage('Preparando configuracion de pago...');
           }
 
-          // First check if user already has an account (case-insensitive)
+          // First check if user already has a COMPLETE account (with tenant_id)
           const { data: existingClient } = await supabase
             .from('clients')
-            .select('id')
+            .select('id, tenant_id')
             .ilike('contact_email', session.user.email || '')
             .maybeSingle();
 
-          if (existingClient) {
-            console.log('🔄 [Callback Page] User already exists, checking tenant...');
-            const hasTenant = await checkUserHasTenant(session.user.id);
-            if (hasTenant) {
-              if (mounted) {
-                setStatus('success');
-                setStatusMessage('Cuenta existente detectada');
-                router.replace('/dashboard');
-              }
-              return;
+          // Only redirect to dashboard if client has a tenant (complete account)
+          // Clients created by auth trigger have tenant_id = null and should continue to trial setup
+          if (existingClient && existingClient.tenant_id) {
+            console.log('🔄 [Callback Page] User has complete account, redirecting to dashboard');
+            if (mounted) {
+              setStatus('success');
+              setStatusMessage('Cuenta existente detectada');
+              router.replace('/dashboard');
             }
+            return;
+          }
+
+          // Log if we found an incomplete client (from auth trigger)
+          if (existingClient && !existingClient.tenant_id) {
+            console.log('🔄 [Callback Page] Found incomplete client (no tenant), continuing to trial setup');
           }
 
           // Create Stripe setup session to collect card (no charge)

@@ -80,47 +80,79 @@ export async function POST(request: NextRequest) {
     // 3. Check if client already exists (by contact_email - case-insensitive)
     const { data: existingClient } = await supabase
       .from('clients')
-      .select('id, user_id')
+      .select('id, user_id, tenant_id, stripe_customer_id')
       .ilike('contact_email', normalizedEmail)
       .maybeSingle();
 
+    let clientId: string;
+
     if (existingClient) {
-      return NextResponse.json(
-        {
-          error: 'Este email ya tiene una cuenta. Por favor inicia sesion.',
-          code: 'EMAIL_ALREADY_EXISTS',
-        },
-        { status: 400 }
-      );
+      // Client exists - check if it's a complete account or just from auth trigger
+      if (existingClient.tenant_id && existingClient.stripe_customer_id) {
+        // Fully provisioned account - reject
+        return NextResponse.json(
+          {
+            error: 'Este email ya tiene una cuenta. Por favor inicia sesion.',
+            code: 'EMAIL_ALREADY_EXISTS',
+          },
+          { status: 400 }
+        );
+      }
+
+      // Client exists but incomplete (created by auth trigger) - update it
+      console.log('[ActivateTrialWithCard] Updating incomplete client from auth trigger:', existingClient.id);
+
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({
+          contact_name: customerName || 'Cliente',
+          contact_phone: customerPhone || null,
+          business_name: customerName || 'Mi Negocio',
+          vertical: vertical || 'dental',
+          status: 'active',
+          stripe_customer_id: stripeCustomerId,
+        })
+        .eq('id', existingClient.id);
+
+      if (updateError) {
+        console.error('[ActivateTrialWithCard] Error updating client:', updateError);
+        return NextResponse.json(
+          { error: 'Error al actualizar cliente' },
+          { status: 500 }
+        );
+      }
+
+      clientId = existingClient.id;
+      console.log('[ActivateTrialWithCard] Client updated:', clientId);
+    } else {
+      // 4. Create new client with Stripe customer ID
+      // Using correct column names from clients table schema
+      // IMPORTANT: Use normalized (lowercase) email for consistency
+      const { data: newClient, error: createError } = await supabase
+        .from('clients')
+        .insert({
+          contact_email: normalizedEmail,
+          contact_name: customerName || 'Cliente',
+          contact_phone: customerPhone || null,
+          business_name: customerName || 'Mi Negocio', // Required field
+          vertical: vertical || 'dental',
+          status: 'active',
+          stripe_customer_id: stripeCustomerId, // CRITICAL: Save Stripe customer ID for later billing
+        })
+        .select('id')
+        .single();
+
+      if (createError || !newClient) {
+        console.error('[ActivateTrialWithCard] Error creating client:', createError);
+        return NextResponse.json(
+          { error: 'Error al crear cliente' },
+          { status: 500 }
+        );
+      }
+
+      clientId = newClient.id;
+      console.log('[ActivateTrialWithCard] Client created:', clientId);
     }
-
-    // 4. Create new client with Stripe customer ID
-    // Using correct column names from clients table schema
-    // IMPORTANT: Use normalized (lowercase) email for consistency
-    const { data: newClient, error: createError } = await supabase
-      .from('clients')
-      .insert({
-        contact_email: normalizedEmail,
-        contact_name: customerName || 'Cliente',
-        contact_phone: customerPhone || null,
-        business_name: customerName || 'Mi Negocio', // Required field
-        vertical: vertical || 'dental',
-        status: 'active',
-        stripe_customer_id: stripeCustomerId, // CRITICAL: Save Stripe customer ID for later billing
-      })
-      .select('id')
-      .single();
-
-    if (createError || !newClient) {
-      console.error('[ActivateTrialWithCard] Error creating client:', createError);
-      return NextResponse.json(
-        { error: 'Error al crear cliente' },
-        { status: 500 }
-      );
-    }
-
-    const clientId = newClient.id;
-    console.log('[ActivateTrialWithCard] Client created:', clientId);
 
     // 5. Activate trial
     const result = await activateFreeTrial(clientId, 'starter');
