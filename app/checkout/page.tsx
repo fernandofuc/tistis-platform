@@ -340,6 +340,15 @@ function CheckoutContent() {
           throw new Error(data.error || 'Error al configurar la prueba gratuita');
         }
 
+        // Check if customer already has a valid payment method
+        // In this case, we redirect directly to activate the trial
+        if (data.hasExistingCard) {
+          console.log('[Checkout] Customer already has card, redirecting to login...');
+          // Redirect to login since they already have an account
+          window.location.href = '/login?message=Ya tienes una cuenta. Por favor inicia sesion.';
+          return;
+        }
+
         // Redirigir a Stripe Checkout (modo setup)
         if (data.url) {
           window.location.href = data.url;

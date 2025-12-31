@@ -77,6 +77,39 @@ export async function POST(request: NextRequest) {
       vertical,
     });
 
+    // CLEANUP: Remove duplicate payment methods, keeping only the most recent one
+    // This prevents accumulation of cards from multiple setup attempts
+    try {
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: stripeCustomerId,
+        type: 'card',
+      });
+
+      if (paymentMethods.data.length > 1) {
+        console.log(`[ActivateTrialWithCard] Found ${paymentMethods.data.length} payment methods, cleaning up duplicates...`);
+
+        // Sort by created date, keep the most recent one
+        const sortedMethods = [...paymentMethods.data].sort((a, b) => b.created - a.created);
+        const methodToKeep = sortedMethods[0];
+        const methodsToRemove = sortedMethods.slice(1);
+
+        // Detach duplicate payment methods
+        for (const method of methodsToRemove) {
+          try {
+            await stripe.paymentMethods.detach(method.id);
+            console.log(`[ActivateTrialWithCard] Detached duplicate payment method: ${method.id}`);
+          } catch (detachError) {
+            console.error(`[ActivateTrialWithCard] Error detaching payment method ${method.id}:`, detachError);
+          }
+        }
+
+        console.log(`[ActivateTrialWithCard] Kept most recent payment method: ${methodToKeep.id}`);
+      }
+    } catch (cleanupError) {
+      // Non-critical error - log but continue
+      console.error('[ActivateTrialWithCard] Error cleaning up payment methods:', cleanupError);
+    }
+
     // 3. Check if client already exists (by contact_email - case-insensitive)
     const { data: existingClient } = await supabase
       .from('clients')

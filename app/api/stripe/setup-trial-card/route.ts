@@ -125,6 +125,48 @@ export async function POST(req: NextRequest) {
     if (existingCustomers.data.length > 0) {
       customerId = existingCustomers.data[0].id;
       console.log('[SetupTrialCard] Found existing customer:', customerId);
+
+      // Check if customer already has payment methods
+      // If so, clean up duplicates keeping only the most recent one
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: customerId,
+        type: 'card',
+      });
+
+      if (paymentMethods.data.length > 0) {
+        console.log(`[SetupTrialCard] Customer has ${paymentMethods.data.length} existing payment method(s)`);
+
+        // If there are duplicates (more than 1), clean them up
+        if (paymentMethods.data.length > 1) {
+          console.log('[SetupTrialCard] Cleaning up duplicate payment methods...');
+
+          // Sort by created date, keep the most recent one
+          const sortedMethods = [...paymentMethods.data].sort((a, b) => b.created - a.created);
+          const methodToKeep = sortedMethods[0];
+          const methodsToRemove = sortedMethods.slice(1);
+
+          // Detach duplicate payment methods
+          for (const method of methodsToRemove) {
+            try {
+              await stripe.paymentMethods.detach(method.id);
+              console.log(`[SetupTrialCard] Detached duplicate payment method: ${method.id}`);
+            } catch (detachError) {
+              console.error(`[SetupTrialCard] Error detaching payment method ${method.id}:`, detachError);
+            }
+          }
+
+          console.log(`[SetupTrialCard] Kept payment method: ${methodToKeep.id}`);
+        }
+
+        // Customer already has a valid card - no need for new setup
+        // Return success without creating new session
+        console.log('[SetupTrialCard] Customer already has a valid payment method, skipping setup');
+        return NextResponse.json({
+          hasExistingCard: true,
+          customerId,
+          message: 'Ya tienes un método de pago registrado.',
+        });
+      }
     } else {
       const customer = await stripe.customers.create({
         email: normalizedEmail,
