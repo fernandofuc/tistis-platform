@@ -3,7 +3,10 @@
 -- Adds stripe_customer_id to get_trials_expiring_today for faster billing
 -- =====================================================
 
--- Update function to return stripe_customer_id from subscriptions
+-- Drop existing function first (required when changing return type)
+DROP FUNCTION IF EXISTS public.get_trials_expiring_today();
+
+-- Recreate function with stripe_customer_id in return type
 -- This allows the cron job to use the existing Stripe customer directly
 -- instead of searching by email every time
 CREATE OR REPLACE FUNCTION public.get_trials_expiring_today()
