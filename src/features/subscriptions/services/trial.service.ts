@@ -79,7 +79,10 @@ export async function activateFreeTrial(
     const validation = safeValidateTrialSubscription(data);
 
     if (!validation.success) {
-      console.error('[TrialService] Invalid trial data from DB:', validation.error);
+      console.error('[TrialService] Invalid trial data from DB:', {
+        error: validation.error.format(),
+        rawData: data,
+      });
       return {
         success: false,
         error: 'Datos de suscripción inválidos recibidos de la base de datos',
