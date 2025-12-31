@@ -22,9 +22,10 @@ export const TimestampSchema = z.string().datetime({
 });
 
 /**
- * Schema para plan (solo starter permite trial)
+ * Schema para plan
+ * Values must match database CHECK constraint in 003_esva_schema_v2.sql
  */
-export const PlanSchema = z.enum(['starter', 'professional', 'enterprise'], {
+export const PlanSchema = z.enum(['starter', 'essentials', 'growth', 'scale'], {
   errorMap: () => ({ message: 'Plan inválido' }),
 });
 
