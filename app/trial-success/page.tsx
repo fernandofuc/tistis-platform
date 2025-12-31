@@ -23,11 +23,11 @@ import { PLAN_CONFIG, getPlanConfig } from '@/src/shared/config/plans';
 // CONSTANTES
 // ============================================================
 
+// Currently active verticals (must match VALID_VERTICALS in APIs)
+// More verticals will be added: clinic, gym, beauty, veterinary
 const VERTICALS_DISPLAY: Record<string, { name: string; icon: string }> = {
   dental: { name: 'Clínica Dental', icon: '🦷' },
   restaurant: { name: 'Restaurante', icon: '🍽️' },
-  retail: { name: 'Retail', icon: '🛍️' },
-  services: { name: 'Servicios', icon: '🔧' },
 };
 
 // Solo starter tiene trial gratuito
