@@ -76,10 +76,12 @@ export async function POST(request: NextRequest) {
           .from('clients')
           .insert({
             user_id: user.id,
-            email: customerEmail,
-            name: customerName,
-            phone: customerPhone || null,
+            contact_email: customerEmail,
+            contact_name: customerName,
+            contact_phone: customerPhone || null,
+            business_name: customerName || 'Mi Negocio',
             vertical: vertical || 'dental',
+            status: 'active',
           })
           .select('id')
           .single();
@@ -100,14 +102,14 @@ export async function POST(request: NextRequest) {
       const { data: existingClient } = await supabase
         .from('clients')
         .select('id, user_id')
-        .eq('email', customerEmail)
+        .eq('contact_email', customerEmail)
         .maybeSingle();
 
       if (existingClient) {
         // Cliente ya existe - no permitir otro trial
         return NextResponse.json(
           {
-            error: 'Este email ya tiene una cuenta. Por favor inicia sesión.',
+            error: 'Este email ya tiene una cuenta. Por favor inicia sesion.',
             code: 'EMAIL_ALREADY_EXISTS',
           },
           { status: 400 }
@@ -118,10 +120,12 @@ export async function POST(request: NextRequest) {
       const { data: newClient, error: createError } = await supabase
         .from('clients')
         .insert({
-          email: customerEmail,
-          name: customerName,
-          phone: customerPhone || null,
+          contact_email: customerEmail,
+          contact_name: customerName,
+          contact_phone: customerPhone || null,
+          business_name: customerName || 'Mi Negocio',
           vertical: vertical || 'dental',
+          status: 'active',
         })
         .select('id')
         .single();

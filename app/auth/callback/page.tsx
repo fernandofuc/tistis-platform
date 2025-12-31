@@ -165,17 +165,38 @@ export default function AuthCallbackPage() {
 
         if (plan === 'starter') {
           // ============================================================
-          // TRIAL FLOW - Activate free trial via API
+          // TRIAL FLOW - Redirect to Stripe Setup to collect card
+          // Trial will be activated after card is saved
           // ============================================================
           if (mounted) {
-            setStatusMessage('Activando tu prueba gratuita...');
+            setStatusMessage('Preparando configuracion de pago...');
           }
 
-          const response = await fetch('/api/subscriptions/activate-trial', {
+          // First check if user already has an account
+          const { data: existingClient } = await supabase
+            .from('clients')
+            .select('id')
+            .eq('contact_email', session.user.email)
+            .maybeSingle();
+
+          if (existingClient) {
+            console.log('🔄 [Callback Page] User already exists, checking tenant...');
+            const hasTenant = await checkUserHasTenant(session.user.id);
+            if (hasTenant) {
+              if (mounted) {
+                setStatus('success');
+                setStatusMessage('Cuenta existente detectada');
+                router.replace('/dashboard');
+              }
+              return;
+            }
+          }
+
+          // Create Stripe setup session to collect card (no charge)
+          const response = await fetch('/api/stripe/setup-trial-card', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              plan: 'starter',
               customerEmail: session.user.email,
               customerName: customerName || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario',
               customerPhone,
@@ -186,38 +207,22 @@ export default function AuthCallbackPage() {
           const data = await response.json();
 
           if (!response.ok) {
-            // Check if email already exists (user might already have account)
             if (data.code === 'EMAIL_ALREADY_EXISTS') {
-              console.log('🔄 [Callback Page] User already exists, checking tenant...');
-              const hasTenant = await checkUserHasTenant(session.user.id);
-              if (hasTenant) {
-                if (mounted) {
-                  setStatus('success');
-                  setStatusMessage('Cuenta existente detectada');
-                  router.replace('/dashboard');
-                }
-                return;
-              }
+              // User has client but no tenant - show error
+              throw new Error('Esta cuenta ya existe. Por favor inicia sesion.');
             }
-            throw new Error(data.error || 'Error al activar la prueba gratuita');
+            throw new Error(data.error || 'Error al configurar la prueba gratuita');
           }
 
-          console.log('✅ [Callback Page] Trial activated successfully:', data);
+          console.log('✅ [Callback Page] Redirecting to Stripe for card setup...');
 
-          if (mounted) {
-            setStatus('success');
-            setStatusMessage('¡Prueba gratuita activada!');
-
-            // Redirect to trial success page
-            const successParams = new URLSearchParams({
-              daysRemaining: String(data.daysRemaining || 10),
-              plan: 'starter',
-              vertical,
-            });
-            setTimeout(() => {
-              router.replace('/trial-success?' + successParams.toString());
-            }, 500);
+          // Redirect to Stripe Checkout (setup mode - no charge)
+          if (data.url) {
+            window.location.href = data.url;
+          } else {
+            throw new Error('No se recibio URL de configuracion');
           }
+          return; // Stop execution here, user is being redirected
 
         } else {
           // ============================================================

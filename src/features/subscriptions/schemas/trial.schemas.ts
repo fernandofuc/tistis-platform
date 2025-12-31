@@ -103,6 +103,7 @@ export const TrialSubscriptionSchema = z.object({
 
 /**
  * Schema para TrialExpiringToday (response de get_trials_expiring_today)
+ * NOTE: stripe_customer_id added in migration 082 for optimized billing
  */
 export const TrialExpiringTodaySchema = z.object({
   subscription_id: UUIDSchema,
@@ -111,6 +112,7 @@ export const TrialExpiringTodaySchema = z.object({
   will_convert_to_paid: z.boolean(),
   client_email: z.string().email('Email de cliente inválido'),
   client_name: z.string().min(1, 'Nombre de cliente no puede estar vacío'),
+  stripe_customer_id: z.string().nullable().optional(), // Added in migration 082
 });
 
 // ======================

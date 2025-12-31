@@ -75,12 +75,14 @@ interface ProcessResult {
 }
 
 /**
- * Crea suscripción en Stripe y cobra el primer mes
+ * Crea suscripcion en Stripe y cobra el primer mes
+ * @param existingStripeCustomerId - If provided, use this customer directly (faster)
  */
 async function createStripeSubscription(
-  subscriptionId: string, // CRÍTICO: Para idempotency key
+  subscriptionId: string, // CRITICO: Para idempotency key
   clientEmail: string,
-  clientName: string
+  clientName: string,
+  existingStripeCustomerId?: string | null
 ): Promise<{
   success: boolean;
   stripeSubscriptionId?: string;
@@ -90,25 +92,48 @@ async function createStripeSubscription(
   try {
     const stripe = getStripeClient();
 
-    // 1. Buscar o crear customer en Stripe
-    const customers = await stripe.customers.list({
-      email: clientEmail,
-      limit: 1,
-    });
+    let customerId: string | undefined;
 
-    let customerId: string;
+    // Optimization: Use existing customer ID if available (from trial setup)
+    if (existingStripeCustomerId) {
+      // Verify customer exists in Stripe
+      try {
+        await stripe.customers.retrieve(existingStripeCustomerId);
+        customerId = existingStripeCustomerId;
+        console.log('[Process Trials] Using existing Stripe customer:', customerId);
+      } catch {
+        console.warn('[Process Trials] Stored customer ID invalid, searching by email');
+        // customerId remains undefined, will search by email below
+      }
+    }
 
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-    } else {
-      const customer = await stripe.customers.create({
+    // Fallback: Search by email if no valid customer ID
+    if (!customerId) {
+      const customers = await stripe.customers.list({
         email: clientEmail,
-        name: clientName,
-        metadata: {
-          source: 'tistis_trial_conversion',
-        },
+        limit: 1,
       });
-      customerId = customer.id;
+
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+      } else {
+        const customer = await stripe.customers.create({
+          email: clientEmail,
+          name: clientName,
+          metadata: {
+            source: 'tistis_trial_conversion',
+          },
+        });
+        customerId = customer.id;
+      }
+    }
+
+    // At this point customerId is guaranteed to be set
+    if (!customerId) {
+      return {
+        success: false,
+        error: 'Could not find or create Stripe customer',
+      };
     }
 
     // 2. Validar que customer tiene payment method
@@ -251,17 +276,19 @@ async function processSingleTrial(trial: {
   will_convert_to_paid: boolean;
   client_email: string;
   client_name: string;
+  stripe_customer_id?: string | null;  // NEW: Pre-existing Stripe customer
 }): Promise<ProcessResult> {
   try {
     if (trial.will_convert_to_paid) {
-      // CASO 1: Usuario NO canceló → Cobrar y convertir a suscripción paga
+      // CASO 1: Usuario NO cancelo -> Cobrar y convertir a suscripcion paga
       console.log(`[Process Trials] Converting trial to paid: ${trial.subscription_id}`);
 
-      // 1. Crear suscripción en Stripe y cobrar
+      // 1. Crear suscripcion en Stripe y cobrar (use existing customer if available)
       const stripeResult = await createStripeSubscription(
-        trial.subscription_id, // CRÍTICO: Para idempotency key
+        trial.subscription_id, // CRITICO: Para idempotency key
         trial.client_email,
-        trial.client_name
+        trial.client_name,
+        trial.stripe_customer_id  // Pass existing customer ID for optimization
       );
 
       // EDGE CASE FIX #4: Si Stripe falla (sin payment method, tarjeta expirada, etc.)

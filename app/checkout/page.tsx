@@ -317,19 +317,15 @@ function CheckoutContent() {
 
     try {
       if (isFreeTrial) {
-        // FLUJO TRIAL: Activar prueba gratuita
-        const response = await fetch('/api/subscriptions/activate-trial', {
+        // FLUJO TRIAL: Redirigir a Stripe Setup para guardar tarjeta (sin cobrar)
+        const response = await fetch('/api/stripe/setup-trial-card', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            plan: planId,
             customerEmail,
             customerName,
             customerPhone,
             vertical,
-            metadata: {
-              proposalId: sessionStorage.getItem('proposal_id') || '',
-            },
           }),
         });
 
@@ -337,19 +333,19 @@ function CheckoutContent() {
 
         if (!response.ok) {
           if (data.code === 'EMAIL_ALREADY_EXISTS') {
-            setEmailError('Este email ya está registrado. Inicia sesión o usa otro email.');
+            setEmailError('Este email ya esta registrado. Inicia sesion o usa otro email.');
             setLoading(false);
             return;
           }
-          throw new Error(data.error || 'Error al activar la prueba gratuita');
+          throw new Error(data.error || 'Error al configurar la prueba gratuita');
         }
 
-        const successParams = new URLSearchParams({
-          daysRemaining: String(data.daysRemaining || 10),
-          plan: planId,
-          ...(vertical && { vertical }),
-        });
-        router.push('/trial-success?' + successParams.toString());
+        // Redirigir a Stripe Checkout (modo setup)
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error('No se recibio URL de configuracion');
+        }
       } else {
         // FLUJO PAGO: Stripe checkout
         const response = await fetch('/api/stripe/create-checkout', {
@@ -417,7 +413,7 @@ function CheckoutContent() {
           </h1>
           <p className="text-lg text-slate-600">
             {isFreeTrial
-              ? '10 días gratis. Sin tarjeta. Sin compromiso.'
+              ? '10 dias gratis. Se cobra automaticamente al finalizar si no cancelas.'
               : 'Completa tus datos para continuar con el pago seguro.'
             }
           </p>
@@ -569,9 +565,9 @@ function CheckoutContent() {
                     <div className="flex items-start gap-2">
                       <Shield className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
-                        <p className="text-green-800 font-medium">Sin tarjeta de crédito</p>
+                        <p className="text-green-800 font-medium">10 dias gratis, luego se cobra automaticamente</p>
                         <p className="text-green-700 text-xs mt-0.5">
-                          Puedes cancelar en cualquier momento
+                          Puedes cancelar en cualquier momento sin cargos
                         </p>
                       </div>
                     </div>
