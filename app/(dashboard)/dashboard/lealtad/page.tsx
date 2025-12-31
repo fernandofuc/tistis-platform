@@ -203,7 +203,7 @@ function UpgradePrompt({ patientsName }: UpgradePromptProps) {
 
             {/* Upgrade Button */}
             <button
-              onClick={() => router.push('/dashboard/settings?tab=billing')}
+              onClick={() => router.push('/dashboard/settings/subscription')}
               className="w-full bg-slate-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"
             >
               Actualizar a Essentials

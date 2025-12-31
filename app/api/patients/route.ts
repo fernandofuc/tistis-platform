@@ -102,8 +102,11 @@ export async function GET(request: NextRequest) {
     const branchId = searchParams.get('branch_id');
     const dentistId = searchParams.get('dentist_id');
     const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100); // Max 100
+    // Parse with NaN protection
+    const parsedPage = parseInt(searchParams.get('page') || '1', 10);
+    const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+    const parsedLimit = parseInt(searchParams.get('limit') || '20', 10);
+    const limit = Math.min(isNaN(parsedLimit) || parsedLimit < 1 ? 20 : parsedLimit, 100); // Max 100
     const offset = (page - 1) * limit;
 
     // Get authenticated context

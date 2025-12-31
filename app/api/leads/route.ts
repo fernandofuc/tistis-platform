@@ -65,9 +65,11 @@ export async function GET(request: NextRequest) {
     const { client: supabase, tenantId } = authContext;
     const { searchParams } = new URL(request.url);
 
-    // Parse query params with security limits
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = Math.min(parseInt(searchParams.get('pageSize') || '20'), 100); // Max 100
+    // Parse query params with security limits and NaN protection
+    const parsedPage = parseInt(searchParams.get('page') || '1', 10);
+    const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+    const parsedPageSize = parseInt(searchParams.get('pageSize') || '20', 10);
+    const pageSize = Math.min(isNaN(parsedPageSize) || parsedPageSize < 1 ? 20 : parsedPageSize, 100); // Max 100
     const classification = searchParams.get('classification');
     const status = searchParams.get('status');
     const search = searchParams.get('search');

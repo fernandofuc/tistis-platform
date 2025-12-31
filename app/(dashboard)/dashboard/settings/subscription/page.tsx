@@ -107,6 +107,11 @@ export default function SubscriptionPage() {
   const [newPlanFromUrl, setNewPlanFromUrl] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Trial information state
+  const [isTrialing, setIsTrialing] = useState(false);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null);
+  const [willConvertToPaid, setWillConvertToPaid] = useState(true);
+
   // Fetch subscription billing date via client linked to tenant
   useEffect(() => {
     const fetchBillingDate = async () => {
@@ -125,18 +130,40 @@ export default function SubscriptionPage() {
           return;
         }
 
-        // Then get the active subscription for this client
+        // Get the subscription (active OR trialing)
         const { data: subscription } = await supabase
           .from('subscriptions')
-          .select('current_period_end')
+          .select('current_period_end, trial_end, trial_status, status, will_convert_to_paid')
           .eq('client_id', client.id)
-          .eq('status', 'active')
+          .in('status', ['active', 'trialing'])
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
 
-        if (subscription?.current_period_end) {
-          setNextBillingDate(subscription.current_period_end);
+        if (subscription) {
+          // Check if in trial
+          if (subscription.status === 'trialing' && subscription.trial_status === 'active') {
+            setIsTrialing(true);
+            setWillConvertToPaid(subscription.will_convert_to_paid ?? true);
+
+            // Use trial_end for trialing subscriptions
+            if (subscription.trial_end) {
+              setNextBillingDate(subscription.trial_end);
+
+              // Calculate days remaining
+              const trialEnd = new Date(subscription.trial_end);
+              const now = new Date();
+              const diffTime = trialEnd.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              setTrialDaysRemaining(Math.max(0, diffDays));
+            }
+          } else {
+            // Active subscription
+            setIsTrialing(false);
+            if (subscription.current_period_end) {
+              setNextBillingDate(subscription.current_period_end);
+            }
+          }
         }
       } catch (err) {
         console.log('[Subscription] Error fetching billing date:', err);
@@ -372,16 +399,45 @@ export default function SubscriptionPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-600 mb-1">Proximo cobro</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {nextBillingDate
-                      ? new Date(nextBillingDate).toLocaleDateString('es-MX', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })
-                      : 'Sin fecha'}
-                  </p>
+                  {isTrialing ? (
+                    <>
+                      <div className="flex items-center gap-2 justify-end mb-1">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          Prueba gratuita
+                        </span>
+                      </div>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {trialDaysRemaining !== null
+                          ? trialDaysRemaining === 0
+                            ? 'Termina hoy'
+                            : trialDaysRemaining === 1
+                              ? '1 día restante'
+                              : `${trialDaysRemaining} días restantes`
+                          : 'Calculando...'}
+                      </p>
+                      {nextBillingDate && willConvertToPaid && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Se cobrará el {new Date(nextBillingDate).toLocaleDateString('es-MX', {
+                            day: 'numeric',
+                            month: 'long',
+                          })}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-600 mb-1">Próximo cobro</p>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {nextBillingDate
+                          ? new Date(nextBillingDate).toLocaleDateString('es-MX', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric',
+                            })
+                          : 'Sin fecha'}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>

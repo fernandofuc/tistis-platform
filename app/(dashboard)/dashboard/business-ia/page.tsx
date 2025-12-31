@@ -419,7 +419,7 @@ function BlockedState() {
             </CardContent>
           </Card>
 
-          <Link href="/dashboard/configuracion">
+          <Link href="/dashboard/settings/subscription">
             <Button className="bg-gradient-coral hover:opacity-90 text-white shadow-coral">
               Actualizar Plan
               <span className="ml-2">{icons.arrowRight}</span>
