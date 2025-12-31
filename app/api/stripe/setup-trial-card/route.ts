@@ -84,10 +84,16 @@ export async function POST(req: NextRequest) {
       .ilike('contact_email', normalizedEmail)
       .maybeSingle();
 
-    // If client exists WITH tenant_id, they already have an account - reject
-    // If client exists WITHOUT tenant_id (created by auth trigger), allow to continue
-    // The activate-trial-with-card endpoint will update this client instead of creating new
-    if (existingClient && existingClient.tenant_id) {
+    // Determine if this is a complete account that should be rejected
+    // A complete account has BOTH tenant_id AND stripe_customer_id
+    // - If only tenant_id exists: incomplete provisioning, allow retry
+    // - If only stripe_customer_id exists: incomplete trial setup, allow retry
+    // - If both exist: fully provisioned account, reject
+    // - If neither exists: new account from auth trigger, allow
+    const isCompleteAccount = existingClient?.tenant_id && existingClient?.stripe_customer_id;
+
+    if (isCompleteAccount) {
+      console.log('[SetupTrialCard] Rejecting - complete account exists:', existingClient.id);
       return NextResponse.json(
         {
           error: 'Este email ya tiene una cuenta. Por favor inicia sesion.',
@@ -97,9 +103,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Log if we're reusing a client created by the auth trigger
-    if (existingClient && !existingClient.tenant_id) {
-      console.log('[SetupTrialCard] Found incomplete client from auth trigger, will reuse:', existingClient.id);
+    // Log the state of any existing client for debugging
+    if (existingClient) {
+      console.log('[SetupTrialCard] Found incomplete client, will reuse:', {
+        id: existingClient.id,
+        has_tenant_id: !!existingClient.tenant_id,
+        has_stripe_customer_id: !!existingClient.stripe_customer_id,
+      });
     }
 
     const stripe = getStripeClient();

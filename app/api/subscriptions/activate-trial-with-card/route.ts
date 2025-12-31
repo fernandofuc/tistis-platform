@@ -86,21 +86,58 @@ export async function POST(request: NextRequest) {
 
     let clientId: string;
 
-    if (existingClient) {
-      // Client exists - check if it's a complete account or just from auth trigger
-      if (existingClient.tenant_id && existingClient.stripe_customer_id) {
-        // Fully provisioned account - reject
+    // Determine account state and appropriate action
+    const isCompleteAccount = existingClient?.tenant_id && existingClient?.stripe_customer_id;
+    const hasOnlyStripeId = existingClient?.stripe_customer_id && !existingClient?.tenant_id;
+
+    if (isCompleteAccount) {
+      // Fully provisioned account - this could be a duplicate request
+      // Check if the stripe_customer_id matches (same session being retried)
+      if (existingClient.stripe_customer_id === stripeCustomerId) {
+        console.log('[ActivateTrialWithCard] Session already processed, returning existing data');
+        // Return success with existing data - idempotent response
+        return NextResponse.json({
+          success: true,
+          message: 'Cuenta ya configurada correctamente.',
+          tenant_id: existingClient.tenant_id,
+          already_processed: true,
+        });
+      }
+
+      // Different Stripe customer - actual duplicate account attempt
+      console.log('[ActivateTrialWithCard] Rejecting - complete account exists with different Stripe customer');
+      return NextResponse.json(
+        {
+          error: 'Este email ya tiene una cuenta. Por favor inicia sesion.',
+          code: 'EMAIL_ALREADY_EXISTS',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (hasOnlyStripeId) {
+      // Client has stripe_customer_id but no tenant - previous provisioning failed
+      // Verify it's the same Stripe customer before continuing
+      if (existingClient.stripe_customer_id !== stripeCustomerId) {
+        console.error('[ActivateTrialWithCard] Stripe customer ID mismatch:', {
+          existing: existingClient.stripe_customer_id,
+          new: stripeCustomerId,
+        });
         return NextResponse.json(
-          {
-            error: 'Este email ya tiene una cuenta. Por favor inicia sesion.',
-            code: 'EMAIL_ALREADY_EXISTS',
-          },
+          { error: 'Error de configuración. Por favor contacta soporte.' },
           { status: 400 }
         );
       }
 
+      console.log('[ActivateTrialWithCard] Retrying provisioning for client with failed previous attempt:', existingClient.id);
+      clientId = existingClient.id;
+    } else if (existingClient) {
       // Client exists but incomplete (created by auth trigger) - update it
-      console.log('[ActivateTrialWithCard] Updating incomplete client from auth trigger:', existingClient.id);
+      console.log('[ActivateTrialWithCard] Updating incomplete client:', {
+        id: existingClient.id,
+        has_tenant_id: !!existingClient.tenant_id,
+        has_stripe_customer_id: !!existingClient.stripe_customer_id,
+      });
 
       const { error: updateError } = await supabase
         .from('clients')
@@ -126,18 +163,19 @@ export async function POST(request: NextRequest) {
       console.log('[ActivateTrialWithCard] Client updated:', clientId);
     } else {
       // 4. Create new client with Stripe customer ID
-      // Using correct column names from clients table schema
-      // IMPORTANT: Use normalized (lowercase) email for consistency
+      // This case is rare - usually auth trigger creates the client first
+      console.log('[ActivateTrialWithCard] Creating new client (no existing record found)');
+
       const { data: newClient, error: createError } = await supabase
         .from('clients')
         .insert({
           contact_email: normalizedEmail,
           contact_name: customerName || 'Cliente',
           contact_phone: customerPhone || null,
-          business_name: customerName || 'Mi Negocio', // Required field
+          business_name: customerName || 'Mi Negocio',
           vertical: vertical || 'dental',
           status: 'active',
-          stripe_customer_id: stripeCustomerId, // CRITICAL: Save Stripe customer ID for later billing
+          stripe_customer_id: stripeCustomerId,
         })
         .select('id')
         .single();
