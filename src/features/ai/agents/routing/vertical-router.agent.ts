@@ -13,7 +13,9 @@ import {
 // TYPES
 // ======================
 
-type Vertical = 'dental' | 'restaurant' | 'medical' | 'services' | 'retail' | 'general';
+// IMPORTANT: Only 'dental' and 'restaurant' are currently active in production
+// Other verticals will be added as the platform expands
+type Vertical = 'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary' | 'general';
 
 interface VerticalConfig {
   /** Agentes disponibles para este vertical */
@@ -31,6 +33,9 @@ interface VerticalConfig {
 // ======================
 
 const VERTICAL_CONFIGS: Record<Vertical, VerticalConfig> = {
+  // =====================================================
+  // ACTIVE VERTICALS (Currently in Production)
+  // =====================================================
   dental: {
     agents: ['greeting', 'pricing', 'booking_dental', 'faq', 'location', 'urgent_care', 'escalation'],
     intent_prompts: {
@@ -54,7 +59,11 @@ const VERTICAL_CONFIGS: Record<Vertical, VerticalConfig> = {
     keywords: ['reserva', 'mesa', 'menu', 'carta', 'comida', 'cena', 'almuerzo', 'evento', 'privado', 'terraza', 'servicio', 'platillo'],
     booking_priority: 'high',
   },
-  medical: {
+
+  // =====================================================
+  // PLANNED VERTICALS (Coming Soon)
+  // =====================================================
+  clinic: {
     agents: ['greeting', 'pricing', 'booking_medical', 'faq', 'location', 'urgent_care', 'triage', 'escalation'],
     intent_prompts: {
       GREETING: 'Saluda profesionalmente y pregunta en qué especialidad puede ayudar.',
@@ -66,28 +75,44 @@ const VERTICAL_CONFIGS: Record<Vertical, VerticalConfig> = {
     keywords: ['doctor', 'consulta', 'especialista', 'medicina', 'salud', 'síntoma', 'tratamiento', 'estudio', 'laboratorio', 'radiografía', 'ultrasonido'],
     booking_priority: 'high',
   },
-  services: {
-    agents: ['greeting', 'pricing', 'booking_services', 'faq', 'location', 'escalation'],
+  gym: {
+    agents: ['greeting', 'pricing', 'booking_gym', 'faq', 'location', 'membership', 'escalation'],
     intent_prompts: {
-      GREETING: 'Saluda y pregunta qué servicio le interesa.',
-      PRICE_INQUIRY: 'Proporciona cotización del servicio solicitado.',
-      BOOK_APPOINTMENT: 'Ayuda a agendar cita para el servicio.',
-      LOCATION: 'Informa si el servicio es a domicilio o en establecimiento.',
+      GREETING: 'Saluda con energía y pregunta sobre sus objetivos de fitness.',
+      PRICE_INQUIRY: 'Proporciona precios de membresías y paquetes. Menciona promociones.',
+      BOOK_APPOINTMENT: 'Ayuda a agendar clase o sesión con entrenador.',
+      LOCATION: 'Proporciona ubicación y horarios del gimnasio.',
     },
-    keywords: ['servicio', 'cotización', 'presupuesto', 'trabajo', 'proyecto', 'reparación', 'instalación', 'mantenimiento'],
+    keywords: ['gym', 'gimnasio', 'membresía', 'clase', 'entrenador', 'fitness', 'ejercicio', 'pesas', 'cardio', 'spinning'],
     booking_priority: 'medium',
   },
-  retail: {
-    agents: ['greeting', 'pricing', 'catalog', 'faq', 'location', 'order', 'escalation'],
+  beauty: {
+    agents: ['greeting', 'pricing', 'booking_beauty', 'faq', 'location', 'escalation'],
     intent_prompts: {
-      GREETING: 'Da la bienvenida y menciona ofertas o novedades.',
-      PRICE_INQUIRY: 'Proporciona precios y disponibilidad de productos.',
-      BOOK_APPOINTMENT: 'Ayuda a apartar productos o agendar entrega.',
-      LOCATION: 'Informa sobre tiendas físicas y opciones de envío.',
+      GREETING: 'Saluda calurosamente y pregunta qué tratamiento le interesa.',
+      PRICE_INQUIRY: 'Proporciona precios de servicios de belleza. Menciona paquetes.',
+      BOOK_APPOINTMENT: 'Ayuda a agendar cita de belleza. Pregunta por estilista preferido.',
+      LOCATION: 'Proporciona ubicación del salón.',
     },
-    keywords: ['producto', 'comprar', 'precio', 'disponibilidad', 'envío', 'tienda', 'pedido', 'apartado'],
-    booking_priority: 'low',
+    keywords: ['corte', 'color', 'manicure', 'pedicure', 'facial', 'masaje', 'spa', 'cabello', 'uñas', 'tratamiento'],
+    booking_priority: 'high',
   },
+  veterinary: {
+    agents: ['greeting', 'pricing', 'booking_vet', 'faq', 'location', 'urgent_care', 'escalation'],
+    intent_prompts: {
+      GREETING: 'Saluda con cariño y pregunta sobre la mascota.',
+      PRICE_INQUIRY: 'Proporciona precios de consultas y servicios veterinarios.',
+      BOOK_APPOINTMENT: 'Ayuda a agendar cita veterinaria. Pregunta por especie y síntomas.',
+      PAIN_URGENT: 'Expresa preocupación por la mascota. Ofrece cita urgente.',
+      LOCATION: 'Proporciona ubicación de la clínica veterinaria.',
+    },
+    keywords: ['perro', 'gato', 'mascota', 'veterinario', 'vacuna', 'desparasitar', 'consulta', 'emergencia', 'cirugía'],
+    booking_priority: 'high',
+  },
+
+  // =====================================================
+  // FALLBACK
+  // =====================================================
   general: {
     agents: ['greeting', 'pricing', 'booking', 'faq', 'location', 'escalation'],
     intent_prompts: {

@@ -17,7 +17,9 @@ import type { AIIntent, AISignal } from '@/src/shared/types/whatsapp';
 export interface TenantInfo {
   tenant_id: string;
   tenant_name: string;
-  vertical: 'dental' | 'restaurant' | 'medical' | 'services' | 'retail' | 'general';
+  // IMPORTANT: Only 'dental' and 'restaurant' are currently active
+  // Other verticals are planned for future releases
+  vertical: 'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary';
   timezone: string;
   ai_config: {
     system_prompt: string;
@@ -393,9 +395,10 @@ export const TISTISAgentState = Annotation.Root({
   }),
 
   /** Vertical del negocio para routing especializado */
-  vertical: Annotation<'dental' | 'restaurant' | 'medical' | 'services' | 'retail' | 'general'>({
+  // IMPORTANT: Only 'dental' and 'restaurant' are currently active
+  vertical: Annotation<'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary'>({
     reducer: (_, next) => next,
-    default: () => 'general',
+    default: () => 'dental',
   }),
 
   /** Razón del routing (para debugging y trazabilidad) */
@@ -514,7 +517,7 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
     extracted_data: {},
     current_agent: 'supervisor',
     next_agent: null,
-    vertical: 'general',
+    vertical: 'dental', // Default to dental (active vertical)
     routing_reason: '',
     booking_result: null,
     score_change: 0,

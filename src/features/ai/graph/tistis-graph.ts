@@ -434,7 +434,7 @@ export async function executeGraph(
       business_context: input.business_context,
       current_message: input.current_message,
       channel: input.channel,
-      vertical: input.tenant_context?.vertical || 'general',
+      vertical: input.tenant_context?.vertical || 'dental', // Default to dental (active vertical)
     };
 
     // Ejecutar el grafo

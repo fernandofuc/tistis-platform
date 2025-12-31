@@ -18,11 +18,19 @@ import { Loader2 } from 'lucide-react';
  * 3. Supabase client detects tokens in URL fragment
  * 4. Session is established automatically
  * 5. We check if user has tenant and redirect accordingly
+ *
+ * CHECKOUT FLOW (New):
+ * If sessionStorage has 'checkout_pending' = 'true':
+ * 1. Get checkout context from sessionStorage
+ * 2. If plan is 'starter' (trial) - call activate-trial API
+ * 3. If plan is 'essentials'/'growth' - redirect to Stripe checkout
+ * 4. Clean up sessionStorage
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'error' | 'success'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('Verificando tu cuenta...');
 
   useEffect(() => {
     let mounted = true;
@@ -92,6 +100,21 @@ export default function AuthCallbackPage() {
         provider: session.user.app_metadata?.provider,
       });
 
+      // ============================================================
+      // CHECK FOR PENDING CHECKOUT (from checkout page OAuth flow)
+      // ============================================================
+      const checkoutPending = sessionStorage.getItem('checkout_pending');
+
+      if (checkoutPending === 'true') {
+        console.log('🛒 [Callback Page] Pending checkout detected, processing...');
+        await handlePendingCheckout(session);
+        return;
+      }
+
+      // ============================================================
+      // NORMAL OAUTH FLOW (from login page)
+      // ============================================================
+
       // Check if user has a tenant
       const hasTenant = await checkUserHasTenant(session.user.id);
 
@@ -108,6 +131,141 @@ export default function AuthCallbackPage() {
             router.replace(`/pricing?new_user=true&email=${encodeURIComponent(session.user.email || '')}`);
           }
         }, 500);
+      }
+    };
+
+    /**
+     * Handle pending checkout from OAuth flow
+     * Reads context from sessionStorage and continues checkout process
+     */
+    const handlePendingCheckout = async (session: NonNullable<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>) => {
+      try {
+        // Get checkout context from sessionStorage
+        const plan = sessionStorage.getItem('checkout_plan') || 'starter';
+        const vertical = sessionStorage.getItem('checkout_vertical') || 'dental';
+        const branches = parseInt(sessionStorage.getItem('checkout_branches') || '1', 10);
+        const customerName = sessionStorage.getItem('checkout_name') || '';
+        const customerPhone = sessionStorage.getItem('checkout_phone') || '';
+
+        // Clean up sessionStorage immediately to prevent loops
+        sessionStorage.removeItem('checkout_pending');
+        sessionStorage.removeItem('checkout_plan');
+        sessionStorage.removeItem('checkout_vertical');
+        sessionStorage.removeItem('checkout_branches');
+        sessionStorage.removeItem('checkout_name');
+        sessionStorage.removeItem('checkout_phone');
+
+        console.log('🛒 [Callback Page] Checkout context:', {
+          plan,
+          vertical,
+          branches,
+          email: session.user.email,
+          customerName,
+        });
+
+        if (plan === 'starter') {
+          // ============================================================
+          // TRIAL FLOW - Activate free trial via API
+          // ============================================================
+          if (mounted) {
+            setStatusMessage('Activando tu prueba gratuita...');
+          }
+
+          const response = await fetch('/api/subscriptions/activate-trial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              plan: 'starter',
+              customerEmail: session.user.email,
+              customerName: customerName || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario',
+              customerPhone,
+              vertical,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            // Check if email already exists (user might already have account)
+            if (data.code === 'EMAIL_ALREADY_EXISTS') {
+              console.log('🔄 [Callback Page] User already exists, checking tenant...');
+              const hasTenant = await checkUserHasTenant(session.user.id);
+              if (hasTenant) {
+                if (mounted) {
+                  setStatus('success');
+                  setStatusMessage('Cuenta existente detectada');
+                  router.replace('/dashboard');
+                }
+                return;
+              }
+            }
+            throw new Error(data.error || 'Error al activar la prueba gratuita');
+          }
+
+          console.log('✅ [Callback Page] Trial activated successfully:', data);
+
+          if (mounted) {
+            setStatus('success');
+            setStatusMessage('¡Prueba gratuita activada!');
+
+            // Redirect to trial success page
+            const successParams = new URLSearchParams({
+              daysRemaining: String(data.daysRemaining || 10),
+              plan: 'starter',
+              vertical,
+            });
+            setTimeout(() => {
+              router.replace('/trial-success?' + successParams.toString());
+            }, 500);
+          }
+
+        } else {
+          // ============================================================
+          // PAID FLOW - Create Stripe checkout session
+          // ============================================================
+          if (mounted) {
+            setStatusMessage('Preparando el pago...');
+          }
+
+          const response = await fetch('/api/stripe/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              plan,
+              customerEmail: session.user.email,
+              customerName: customerName || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario',
+              customerPhone,
+              branches,
+              addons: [],
+              vertical,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Error al crear sesión de pago');
+          }
+
+          if (data.url) {
+            console.log('✅ [Callback Page] Stripe session created, redirecting...');
+            if (mounted) {
+              setStatus('success');
+              setStatusMessage('Redirigiendo al pago...');
+            }
+            // Redirect to Stripe
+            window.location.href = data.url;
+          } else {
+            throw new Error('No se recibió URL de checkout');
+          }
+        }
+
+      } catch (err) {
+        console.error('🔴 [Callback Page] Checkout error:', err);
+        if (mounted) {
+          setStatus('error');
+          setErrorMessage(err instanceof Error ? err.message : 'Error al procesar el checkout');
+        }
       }
     };
 
@@ -164,7 +322,7 @@ export default function AuthCallbackPage() {
           <>
             <Loader2 className="w-12 h-12 text-tis-coral animate-spin mx-auto mb-4" />
             <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              Verificando tu cuenta...
+              {statusMessage}
             </h1>
             <p className="text-gray-500">
               Por favor espera un momento
@@ -180,7 +338,7 @@ export default function AuthCallbackPage() {
               </svg>
             </div>
             <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              ¡Autenticación exitosa!
+              {statusMessage}
             </h1>
             <p className="text-gray-500">
               Redirigiendo...

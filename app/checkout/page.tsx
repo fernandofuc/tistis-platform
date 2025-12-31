@@ -13,6 +13,8 @@ import {
   Zap,
   Sparkles,
   Shield,
+  Loader2,
+  Mail,
 } from 'lucide-react';
 import Container from '@/components/layout/Container';
 import Button from '@/components/ui/Button';
@@ -23,6 +25,7 @@ import {
   getPlanConfig,
   calculateBranchCostPesos,
 } from '@/src/shared/config/plans';
+import { supabase } from '@/src/shared/lib/supabase';
 
 // ============================================================
 // CONSTANTES
@@ -48,6 +51,44 @@ const isValidEmail = (email: string): boolean => {
 };
 
 // ============================================================
+// OAUTH ICONS
+// ============================================================
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+    </svg>
+  );
+}
+
+// Auth mode type
+type AuthMode = 'oauth' | 'email';
+
+// ============================================================
 // COMPONENTE PRINCIPAL
 // ============================================================
 
@@ -68,6 +109,10 @@ function CheckoutContent() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [isOAuthUser, setIsOAuthUser] = useState(false);
+
+  // OAuth states
+  const [authMode, setAuthMode] = useState<AuthMode>('oauth');
+  const [oauthLoading, setOauthLoading] = useState<'google' | 'github' | null>(null);
 
   // Field errors
   const [emailError, setEmailError] = useState<string | undefined>();
@@ -144,6 +189,89 @@ function CheckoutContent() {
   // Determinar si es trial gratuito
   const isFreeTrial = planId === 'starter';
   const verticalInfo = vertical ? VERTICALS_DISPLAY[vertical] : VERTICALS_DISPLAY.dental;
+
+  // ============================================================
+  // OAUTH HANDLERS
+  // ============================================================
+
+  /**
+   * Guarda el contexto del checkout en sessionStorage antes de OAuth
+   * Para que el callback pueda continuar el proceso
+   */
+  const saveCheckoutContext = () => {
+    sessionStorage.setItem('checkout_pending', 'true');
+    sessionStorage.setItem('checkout_plan', planId);
+    sessionStorage.setItem('checkout_vertical', vertical || '');
+    sessionStorage.setItem('checkout_branches', String(branches));
+    sessionStorage.setItem('checkout_name', customerName);
+    sessionStorage.setItem('checkout_phone', customerPhone);
+    console.log('[Checkout] Saved checkout context for OAuth redirect');
+  };
+
+  /**
+   * Handler genérico para OAuth (Google/GitHub)
+   */
+  const handleOAuthProvider = async (provider: 'google' | 'github') => {
+    // Validar que tengamos vertical antes de OAuth
+    if (!vertical || verticalMissing) {
+      setError('Por favor selecciona tu tipo de negocio antes de continuar.');
+      return;
+    }
+
+    setOauthLoading(provider);
+    setError(null);
+
+    try {
+      console.log(`[Checkout] Initiating ${provider} OAuth for checkout...`);
+
+      // Guardar contexto del checkout
+      saveCheckoutContext();
+
+      // Configurar OAuth
+      const providerOptions = provider === 'google'
+        ? {
+            redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+            skipBrowserRedirect: false,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          }
+        : {
+            redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+            skipBrowserRedirect: false,
+          };
+
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: providerOptions,
+      });
+
+      if (oauthError) {
+        console.error(`[Checkout] ${provider} OAuth error:`, oauthError);
+        setError(oauthError.message || `Error al conectar con ${provider === 'google' ? 'Google' : 'GitHub'}`);
+        setOauthLoading(null);
+        // Limpiar contexto de checkout en caso de error
+        sessionStorage.removeItem('checkout_pending');
+        return;
+      }
+
+      console.log(`[Checkout] Redirecting to ${provider}...`, { url: data?.url });
+      // El redirect sucede automáticamente
+
+    } catch (err: unknown) {
+      console.error(`[Checkout] ${provider} OAuth exception:`, err);
+      setError(err instanceof Error ? err.message : 'Error de conexión');
+      setOauthLoading(null);
+      // Limpiar contexto de checkout en caso de error
+      sessionStorage.removeItem('checkout_pending');
+    }
+  };
+
+  const handleGoogleAuth = () => handleOAuthProvider('google');
+  const handleGitHubAuth = () => handleOAuthProvider('github');
+
+  const isAnyLoading = loading || oauthLoading !== null;
 
   // Validar email en blur
   const handleEmailBlur = () => {
@@ -518,77 +646,167 @@ function CheckoutContent() {
                   </div>
                 )}
 
-                {/* Email */}
-                <div className="relative">
-                  <Input
-                    label="Correo electrónico"
-                    type="email"
-                    value={customerEmail}
-                    onChange={(e) => {
-                      if (!isOAuthUser) {
-                        setCustomerEmail(e.target.value);
-                        if (emailError) setEmailError(undefined);
-                      }
-                    }}
-                    onBlur={handleEmailBlur}
-                    placeholder="tu@email.com"
-                    error={emailError}
-                    required
-                    disabled={isOAuthUser}
-                    className={isOAuthUser ? 'bg-green-50 border-green-200' : ''}
-                  />
-                  {isOAuthUser && (
-                    <div className="absolute right-3 top-9 flex items-center gap-1.5 text-green-600">
-                      <CheckCircle className="w-4 h-4" />
-                      <span className="text-xs font-medium">Verificado</span>
+                {/* ============================================================ */}
+                {/* OAUTH BUTTONS - Mostrar solo si no es usuario OAuth existente */}
+                {/* ============================================================ */}
+                {!isOAuthUser && authMode === 'oauth' && (
+                  <>
+                    {/* Google Button */}
+                    <button
+                      type="button"
+                      onClick={handleGoogleAuth}
+                      disabled={isAnyLoading}
+                      aria-label="Continuar con Google"
+                      aria-busy={oauthLoading === 'google'}
+                      className="w-full h-12 flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {oauthLoading === 'google' ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-gray-500" aria-hidden="true" />
+                      ) : (
+                        <GoogleIcon />
+                      )}
+                      <span className="text-[15px] font-medium text-gray-900">
+                        Continuar con Google
+                      </span>
+                    </button>
+
+                    {/* GitHub Button */}
+                    <button
+                      type="button"
+                      onClick={handleGitHubAuth}
+                      disabled={isAnyLoading}
+                      aria-label="Continuar con GitHub"
+                      aria-busy={oauthLoading === 'github'}
+                      className="w-full h-12 flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {oauthLoading === 'github' ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-gray-500" aria-hidden="true" />
+                      ) : (
+                        <GitHubIcon className="text-gray-900" />
+                      )}
+                      <span className="text-[15px] font-medium text-gray-900">
+                        Continuar con GitHub
+                      </span>
+                    </button>
+
+                    {/* Divider */}
+                    <div className="relative my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-200" />
+                      </div>
+                      <div className="relative flex justify-center">
+                        <span className="bg-white px-4 text-[13px] font-medium text-gray-400">
+                          O
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Nombre */}
-                <Input
-                  label="Nombre completo"
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => {
-                    setCustomerName(e.target.value);
-                    if (nameError) setNameError(undefined);
-                  }}
-                  placeholder="Tu nombre"
-                  error={nameError}
-                  required
-                />
+                    {/* Switch to Email Button */}
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('email')}
+                      disabled={isAnyLoading}
+                      className="w-full h-12 flex items-center justify-center gap-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors text-[15px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Mail className="w-5 h-5" aria-hidden="true" />
+                      Continuar con email
+                    </button>
+                  </>
+                )}
 
-                {/* Teléfono */}
-                <Input
-                  label="Teléfono (opcional)"
-                  type="tel"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="+52 123 456 7890"
-                  helperText="Te contactaremos para ayudarte en tu setup"
-                />
-
-                {/* CTA Button */}
-                <div className="pt-2">
-                  <Button
-                    size="xl"
-                    variant="primary"
-                    className={`w-full ${isFreeTrial ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : ''}`}
-                    onClick={handleCheckout}
-                    loading={loading}
-                    disabled={loading || !customerEmail || !customerName}
-                  >
-                    {loading ? (
-                      isFreeTrial ? 'Activando...' : 'Redirigiendo...'
-                    ) : (
-                      <>
-                        {isFreeTrial ? 'Comenzar Prueba Gratuita' : 'Continuar al Pago'}
-                        <ArrowRight className="ml-2 w-5 h-5" />
-                      </>
+                {/* ============================================================ */}
+                {/* EMAIL FORM - Mostrar si es modo email o usuario OAuth existente */}
+                {/* ============================================================ */}
+                {(authMode === 'email' || isOAuthUser) && (
+                  <>
+                    {/* Back to OAuth options (solo si no es usuario OAuth) */}
+                    {!isOAuthUser && (
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode('oauth')}
+                        disabled={isAnyLoading}
+                        className="mb-2 text-sm text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1"
+                      >
+                        <ArrowRight className="w-4 h-4 rotate-180" aria-hidden="true" />
+                        Otras opciones de registro
+                      </button>
                     )}
-                  </Button>
-                </div>
+
+                    {/* Email */}
+                    <div className="relative">
+                      <Input
+                        label="Correo electrónico"
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => {
+                          if (!isOAuthUser) {
+                            setCustomerEmail(e.target.value);
+                            if (emailError) setEmailError(undefined);
+                          }
+                        }}
+                        onBlur={handleEmailBlur}
+                        placeholder="tu@email.com"
+                        error={emailError}
+                        required
+                        disabled={isOAuthUser || isAnyLoading}
+                        className={isOAuthUser ? 'bg-green-50 border-green-200' : ''}
+                      />
+                      {isOAuthUser && (
+                        <div className="absolute right-3 top-9 flex items-center gap-1.5 text-green-600">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="text-xs font-medium">Verificado</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Nombre */}
+                    <Input
+                      label="Nombre completo"
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => {
+                        setCustomerName(e.target.value);
+                        if (nameError) setNameError(undefined);
+                      }}
+                      placeholder="Tu nombre"
+                      error={nameError}
+                      required
+                      disabled={isAnyLoading}
+                    />
+
+                    {/* Teléfono */}
+                    <Input
+                      label="Teléfono (opcional)"
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="+52 123 456 7890"
+                      helperText="Te contactaremos para ayudarte en tu setup"
+                      disabled={isAnyLoading}
+                    />
+
+                    {/* CTA Button */}
+                    <div className="pt-2">
+                      <Button
+                        size="xl"
+                        variant="primary"
+                        className={`w-full ${isFreeTrial ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' : ''}`}
+                        onClick={handleCheckout}
+                        loading={loading}
+                        disabled={isAnyLoading || !customerEmail || !customerName}
+                      >
+                        {loading ? (
+                          isFreeTrial ? 'Activando...' : 'Redirigiendo...'
+                        ) : (
+                          <>
+                            {isFreeTrial ? 'Comenzar Prueba Gratuita' : 'Continuar al Pago'}
+                            <ArrowRight className="ml-2 w-5 h-5" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
 
                 {/* Términos */}
                 <p className="text-xs text-slate-500 text-center leading-relaxed">
@@ -602,8 +820,8 @@ function CheckoutContent() {
                   </a>
                 </p>
 
-                {/* Métodos de pago (solo para pago) */}
-                {!isFreeTrial && (
+                {/* Métodos de pago (solo para pago y modo email) */}
+                {!isFreeTrial && (authMode === 'email' || isOAuthUser) && (
                   <div className="flex items-center justify-center gap-3 pt-4 border-t border-slate-100">
                     <span className="text-xs text-slate-400">Aceptamos:</span>
                     <div className="flex gap-2">
