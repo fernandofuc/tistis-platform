@@ -16,10 +16,18 @@ export const UUIDSchema = z.string().uuid('Debe ser un UUID válido');
 
 /**
  * Schema para timestamp ISO 8601
+ * Accepts both formats:
+ * - With Z suffix: 2025-12-31T07:26:12.273Z
+ * - With timezone offset: 2025-12-31T07:26:12.273116+00:00
  */
-export const TimestampSchema = z.string().datetime({
-  message: 'Debe ser un timestamp ISO 8601 válido',
-});
+export const TimestampSchema = z.string().refine(
+  (val) => {
+    // Accept ISO 8601 with Z or with timezone offset (+00:00, -05:00, etc.)
+    const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+    return iso8601Regex.test(val);
+  },
+  { message: 'Debe ser un timestamp ISO 8601 válido' }
+);
 
 /**
  * Schema para plan
