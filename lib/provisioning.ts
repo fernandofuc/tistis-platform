@@ -524,9 +524,31 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     // PRIORIDAD: Usar cuenta existente de TIS TIS (no crear contraseña temporal)
     // ============================================
 
-    // Primero buscar si el usuario ya existe
-    const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    let authUser = existingUsers?.users?.find((u) => u.email === params.customer_email);
+    // Buscar usuario existente por email usando paginación
+    // NOTE: Supabase listUsers no soporta filtro por email, debemos buscar manualmente
+    let authUser: { id: string; email?: string; user_metadata?: Record<string, unknown> } | undefined = undefined;
+    let page = 1;
+    const perPage = 100;
+    let hasMore = true;
+
+    while (hasMore && !authUser) {
+      const { data: usersPage } = await supabase.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+
+      if (!usersPage?.users || usersPage.users.length === 0) {
+        hasMore = false;
+      } else {
+        authUser = usersPage.users.find((u) => u.email === params.customer_email);
+        if (!authUser && usersPage.users.length === perPage) {
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+    }
+
     let tempPassword: string | undefined = undefined;
 
     if (authUser) {
@@ -572,7 +594,11 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
         };
       }
 
-      authUser = authData.user;
+      authUser = {
+        id: authData.user.id,
+        email: authData.user.email,
+        user_metadata: authData.user.user_metadata,
+      };
       console.log('✅ [Provisioning] New auth user created:', authUser.id);
     }
 
@@ -582,7 +608,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     const staffResult = await createStaffAndRole(supabase, {
       tenant_id: tenant.id,
       branch_id: branch.id,
-      user_id: authUser.id,
+      user_id: authUser!.id,
       email: params.customer_email,
       name: params.customer_name,
       phone: params.customer_phone,
@@ -611,7 +637,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       .from('clients')
       .update({
         tenant_id: tenant.id,
-        user_id: authUser.id,
+        user_id: authUser!.id,
         status: 'active',
         onboarding_completed: false,
         updated_at: new Date().toISOString(),
@@ -678,7 +704,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
     await supabase.from('audit_logs').insert({
       client_id: params.client_id,
       tenant_id: tenant.id,
-      user_id: authUser.id,
+      user_id: authUser!.id,
       action: 'tenant_provisioned',
       entity_type: 'tenant',
       entity_id: tenant.id,
@@ -704,7 +730,7 @@ export async function provisionTenant(params: ProvisionTenantParams): Promise<Pr
       tenant_id: tenant.id,
       tenant_slug: slug,
       branch_id: branch.id,
-      user_id: authUser.id,
+      user_id: authUser!.id,
       staff_id: staffResult.staff_id,
       temp_password: tempPassword, // undefined si usamos cuenta existente
       details: {
