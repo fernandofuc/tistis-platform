@@ -173,13 +173,24 @@ export async function POST(request: NextRequest) {
 
     if (!provisionResult.success) {
       console.error('[API] Tenant provisioning failed:', provisionResult.error);
-      // CRITICAL: Return error, not success with warning
-      // Without proper provisioning, user cannot access dashboard
+
+      // ROLLBACK: Delete subscription so user can retry cleanly
+      // Without this, the unique constraint prevents retry
+      if (result.subscription?.id) {
+        console.log('[API] Rolling back subscription:', result.subscription.id);
+        await supabase
+          .from('subscriptions')
+          .delete()
+          .eq('id', result.subscription.id);
+      }
+
+      console.log('[API] Rollback complete - user can retry');
+
       return NextResponse.json(
         {
-          error: 'Error al configurar tu cuenta. Por favor contacta soporte.',
+          error: 'Error al configurar tu cuenta. Por favor intenta de nuevo.',
           details: provisionResult.error,
-          subscription_created: true,
+          can_retry: true,
         },
         { status: 500 }
       );
