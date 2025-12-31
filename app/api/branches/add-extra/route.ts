@@ -80,11 +80,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 2: Get subscription for this client
+    // Include 'trialing' status so users in trial can also add branches
     const { data: subscriptionData, error: subError } = await supabaseAdmin
       .from('subscriptions')
       .select('id, plan, max_branches, current_branches, branch_unit_price, client_id')
       .eq('client_id', clientData.id)
-      .eq('status', 'active')
+      .in('status', ['active', 'trialing'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
     if (subError || !subscriptionData) {
@@ -314,11 +317,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Step 2: Get subscription for this client
+    // Include 'trialing' status so users in trial can also add branches
     const { data: subscriptionData } = await supabaseAdmin
       .from('subscriptions')
       .select('id, plan, max_branches, current_branches, branch_unit_price')
       .eq('client_id', clientData.id)
-      .eq('status', 'active')
+      .in('status', ['active', 'trialing'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
     if (!subscriptionData) {

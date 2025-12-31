@@ -47,10 +47,11 @@ function getAccessToken(request: NextRequest): string | null {
 }
 
 // Plan price IDs from Stripe (set these in your .env or Stripe dashboard)
+// Uses the same naming convention as .env.example for consistency
 const PLAN_PRICE_IDS: Record<string, string> = {
-  starter: process.env.STRIPE_PRICE_STARTER || '',
-  essentials: process.env.STRIPE_PRICE_ESSENTIALS || '',
-  growth: process.env.STRIPE_PRICE_GROWTH || '',
+  starter: process.env.STRIPE_STARTER_PLAN_PRICE_ID || '',
+  essentials: process.env.STRIPE_ESSENTIALS_PLAN_PRICE_ID || '',
+  growth: process.env.STRIPE_GROWTH_PLAN_PRICE_ID || '',
 };
 
 // Helper to get or create a price for a plan
@@ -251,17 +252,20 @@ export async function POST(request: NextRequest) {
       console.log('[Change Plan] Stripe customer created:', stripeCustomer.id);
     }
 
-    // Get active subscription
+    // Get active or trialing subscription
+    // IMPORTANT: Include 'trialing' status so users in trial period can change plans
     const { data: subscription } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
       .eq('client_id', client.id)
-      .eq('status', 'active')
+      .in('status', ['active', 'trialing'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
     // If no subscription exists, create a checkout session for the new plan
     if (!subscription) {
-      console.log('[Change Plan] No active subscription, creating checkout session');
+      console.log('[Change Plan] No active/trialing subscription, creating checkout session');
 
       const stripe = getStripeClient();
 

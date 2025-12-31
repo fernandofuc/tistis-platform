@@ -89,12 +89,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
     }
 
-    // Get active subscription
+    // Get active or trialing subscription
+    // Users in trial period should also be able to cancel
     const { data: subscription } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
       .eq('client_id', client.id)
-      .eq('status', 'active')
+      .in('status', ['active', 'trialing'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
     if (!subscription) {
