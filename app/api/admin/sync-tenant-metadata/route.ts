@@ -183,11 +183,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Found tenant via staff
+      // Found tenant via staff - assign owner role
       await supabase.from('user_roles').insert({
         user_id: user.id,
         tenant_id: staffRecord.tenant_id,
-        role: 'admin',
+        role: 'owner',
         is_active: true,
       });
 

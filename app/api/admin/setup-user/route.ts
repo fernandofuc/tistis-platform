@@ -219,6 +219,7 @@ export async function POST(req: NextRequest) {
       const firstName = nameParts[0]?.charAt(0).toUpperCase() + nameParts[0]?.slice(1) || 'Admin';
       const lastName = nameParts[1]?.charAt(0).toUpperCase() + nameParts[1]?.slice(1) || '';
 
+      // NOTE: The first user provisioned is the OWNER (business owner)
       const { error: staffError } = await supabase.from('staff').insert({
         tenant_id: tenantId,
         user_id: authUser.id,
@@ -226,8 +227,8 @@ export async function POST(req: NextRequest) {
         first_name: firstName,
         last_name: lastName,
         display_name: `${firstName} ${lastName}`.trim(),
-        role: 'admin',
-        role_title: 'Administrador',
+        role: 'owner',
+        role_title: 'Propietario',
         is_active: true,
       });
 
@@ -257,10 +258,11 @@ export async function POST(req: NextRequest) {
         .eq('tenant_id', tenantId)
         .single();
 
+      // NOTE: The first user provisioned is the OWNER (business owner)
       const { error: roleError } = await supabase.from('user_roles').insert({
         user_id: authUser.id,
         tenant_id: tenantId,
-        role: 'admin',
+        role: 'owner',
         staff_id: staffRecord?.id || null,
         is_active: true,
         permissions: { all: true },
@@ -272,20 +274,21 @@ export async function POST(req: NextRequest) {
         console.log('✅ [SetupUser] Created user_role record');
       }
     } else {
-      // Update existing role to ensure it's active
+      // Update existing role to ensure it's active and has owner privileges
       await supabase
         .from('user_roles')
-        .update({ is_active: true, role: 'admin', permissions: { all: true } })
+        .update({ is_active: true, role: 'owner', permissions: { all: true } })
         .eq('id', existingRole.id);
       console.log('✅ [SetupUser] Updated existing user_role');
     }
 
     // 8. Update user metadata with tenant_id
+    // NOTE: The first user provisioned is the OWNER (business owner)
     const { error: updateError } = await supabase.auth.admin.updateUserById(authUser.id, {
       user_metadata: {
         ...authUser.user_metadata,
         tenant_id: tenantId,
-        role: 'admin',
+        role: 'owner',
         vertical: vertical,
       },
     });
