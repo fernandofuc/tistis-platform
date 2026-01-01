@@ -254,12 +254,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       }
 
       // Update the existing subscription record with the new Stripe subscription
+      // CRITICAL: When changing from trial to paid plan, we must also update:
+      // - status: 'active' (no longer trialing)
+      // - trial_status: 'converted' (trial was converted to paid)
+      // This is required because the validate_trial_data trigger blocks
+      // non-starter plans from having active trials
       const { error: updateError } = await supabase
         .from('subscriptions')
         .update({
           plan: validatedPlan,
           stripe_subscription_id: stripeSubscriptionId,
           status: 'active',
+          // CRITICAL: End the trial when upgrading to a paid plan
+          trial_status: 'converted',
           updated_at: new Date().toISOString(),
           // Update max_branches based on new plan
           max_branches: getPlanConfig(validatedPlan)?.branchLimit || 5,
