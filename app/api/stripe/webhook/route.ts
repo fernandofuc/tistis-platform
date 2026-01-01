@@ -450,6 +450,39 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   // Log without exposing PII
   console.log('📋 Subscription metadata:', { plan, branches, addons, hasCustomerPhone: !!customerPhone });
 
+  // ============================================
+  // FIX: Detect PLAN CHANGE scenario
+  // When a plan change happens via checkout, both checkout.session.completed
+  // and customer.subscription.created fire. The checkout handler already
+  // updates the existing subscription, so we need to skip creating a duplicate.
+  // ============================================
+
+  // Check if this subscription was created as part of a plan change
+  // by looking for recent checkout sessions with previous_subscription_id
+  try {
+    const recentSessions = await stripe.checkout.sessions.list({
+      subscription: subscription.id,
+      limit: 1,
+    });
+
+    const checkoutSession = recentSessions.data[0];
+    if (checkoutSession?.metadata?.previous_subscription_id) {
+      console.log('⏭️ [Subscription] This is a plan change subscription - skipping (handled by checkout.session.completed)');
+      console.log('   Previous subscription ID:', checkoutSession.metadata.previous_subscription_id);
+      console.log('   New Stripe subscription ID:', subscription.id);
+
+      // The checkout.session.completed handler already:
+      // 1. Updated the existing subscription with the new stripe_subscription_id
+      // 2. Updated the tenant.plan
+      // So we just need to exit here to prevent duplicate processing
+      return;
+    }
+  } catch (sessionError) {
+    // If we can't find the checkout session, continue with normal flow
+    // This happens for subscriptions created directly (not via checkout)
+    console.log('📋 [Subscription] No checkout session found, proceeding with normal flow');
+  }
+
   // Get customer email from Stripe (normalize to lowercase)
   const customer = await stripe.customers.retrieve(customerId);
   const rawCustomerEmail = (customer as Stripe.Customer).email;

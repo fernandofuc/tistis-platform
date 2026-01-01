@@ -245,13 +245,19 @@ export function useAuth() {
   );
 
   // ======================
-  // REFETCH STAFF
+  // REFETCH STAFF (and tenant - critical for plan updates)
   // ======================
   const refetchStaff = useCallback(async (): Promise<void> => {
     if (!state.user?.email) return;
 
-    const staff = await authService.fetchStaffByEmail(state.user.email);
-    setState((prev) => ({ ...prev, staff }));
+    // Refetch both staff AND tenant in parallel
+    // This is critical because plan changes update tenant.plan, not staff
+    const [staff, tenant] = await Promise.all([
+      authService.fetchStaffByEmail(state.user.email),
+      authService.fetchTenant(),
+    ]);
+
+    setState((prev) => ({ ...prev, staff, tenant }));
   }, [state.user?.email]);
 
   // ======================

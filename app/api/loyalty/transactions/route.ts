@@ -109,7 +109,9 @@ export async function GET(request: NextRequest) {
           lead_id,
           leads (
             id,
-            name,
+            full_name,
+            first_name,
+            last_name,
             email
           )
         )

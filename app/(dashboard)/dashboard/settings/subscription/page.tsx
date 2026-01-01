@@ -187,8 +187,9 @@ export default function SubscriptionPage() {
 
       // Give webhook time to process, then refresh data
       const refreshData = async () => {
-        // Wait for webhook to complete processing
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Wait for webhook to complete processing (5 seconds for safety)
+        // Webhooks may be queued, especially during high traffic
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Refetch staff which also refreshes tenant data
         await refetchStaff();
