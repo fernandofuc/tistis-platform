@@ -255,6 +255,11 @@ export function AIConfiguration() {
   const [deletingStaff, setDeletingStaff] = useState<Staff | null>(null);
   const [deletingStaffLoading, setDeletingStaffLoading] = useState(false);
 
+  // Extra Branch Modal States
+  const [showExtraBranchModal, setShowExtraBranchModal] = useState(false);
+  const [extraBranchLoading, setExtraBranchLoading] = useState(false);
+  const [extraBranchError, setExtraBranchError] = useState<string | null>(null);
+
   // Business Identity Edit State
   const [isEditingIdentity, setIsEditingIdentity] = useState(false);
   const [savingIdentity, setSavingIdentity] = useState(false);
@@ -454,6 +459,73 @@ export function AIConfiguration() {
       alert('Error al guardar la sucursal');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Handle adding extra branch with billing
+  const handleAddExtraBranch = async () => {
+    setExtraBranchLoading(true);
+    setExtraBranchError(null);
+
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/branches/add-extra', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: `Sucursal ${branches.length + 1}`,
+          confirmBilling: true,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setExtraBranchError(result.message || result.error || 'Error al agregar sucursal');
+        return;
+      }
+
+      // Success - reload branches
+      const reloadResponse = await fetch('/api/settings/branches', { headers });
+      const reloadResult = await reloadResponse.json();
+      if (reloadResult.data) {
+        setBranches(reloadResult.data.filter((b: Branch) => b.is_active));
+      }
+
+      // Reload subscription info
+      const subRes = await fetch('/api/branches/add-extra', { headers });
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        const plan = subData.plan || 'starter';
+        const contractedBranches = subData.contracted_branches || subData.max_branches || 1;
+        const planLimit = subData.plan_limit || 1;
+        const currentBranches = subData.current_branches || 1;
+
+        setSubscriptionInfo({
+          plan: plan,
+          max_branches: contractedBranches,
+          current_branches: currentBranches,
+          plan_limit: planLimit,
+          can_add_branch: currentBranches < contractedBranches,
+          can_add_extra: subData.can_add_extra,
+          next_branch_price: subData.extra_branch_price || 0,
+          currency: subData.currency || 'MXN',
+        });
+      }
+
+      setShowExtraBranchModal(false);
+
+      // Show success message
+      if (result.billing?.message) {
+        alert(result.billing.message);
+      } else {
+        alert('Sucursal agregada exitosamente');
+      }
+    } catch (error) {
+      console.error('Error adding extra branch:', error);
+      setExtraBranchError('Error al agregar sucursal');
+    } finally {
+      setExtraBranchLoading(false);
     }
   };
 
@@ -1059,14 +1131,12 @@ export function AIConfiguration() {
                           <> Para agregar una sucursal extra, el costo es de ${subscriptionInfo.next_branch_price.toLocaleString()} MXN/mes.</>
                         )}
                       </p>
-                      {subscriptionInfo.next_branch_price > 0 && (
+                      {subscriptionInfo.next_branch_price > 0 && subscriptionInfo.can_add_extra && (
                         <Button
                           variant="outline"
                           size="sm"
                           className="mt-3 border-amber-300 text-amber-800 hover:bg-amber-100"
-                          onClick={() => {
-                            window.location.href = '/dashboard/settings/subscription';
-                          }}
+                          onClick={() => setShowExtraBranchModal(true)}
                         >
                           Agregar Sucursal Extra (+${subscriptionInfo.next_branch_price.toLocaleString()}/mes)
                         </Button>
@@ -1557,6 +1627,57 @@ export function AIConfiguration() {
           onSave={saveBranch}
           saving={saving}
         />
+      )}
+
+      {/* Extra Branch Confirmation Modal */}
+      {showExtraBranchModal && subscriptionInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              Agregar Sucursal Extra
+            </h3>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <p className="text-amber-800">
+                Se agregará un cargo mensual de{' '}
+                <span className="font-bold">${subscriptionInfo.next_branch_price.toLocaleString()} MXN</span>{' '}
+                a tu suscripción por la sucursal adicional.
+              </p>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Actualmente tienes {subscriptionInfo.current_branches} de {subscriptionInfo.plan_limit} sucursales
+              permitidas en tu plan {subscriptionInfo.plan?.toUpperCase()}.
+            </p>
+
+            {extraBranchError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+                <p className="text-red-700 text-sm">{extraBranchError}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowExtraBranchModal(false);
+                  setExtraBranchError(null);
+                }}
+                disabled={extraBranchLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={handleAddExtraBranch}
+                disabled={extraBranchLoading}
+              >
+                {extraBranchLoading ? 'Procesando...' : `Confirmar (+$${subscriptionInfo.next_branch_price.toLocaleString()}/mes)`}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Staff Modal */}
