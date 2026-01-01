@@ -259,6 +259,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       // - trial_status: 'converted' (trial was converted to paid)
       // This is required because the validate_trial_data trigger blocks
       // non-starter plans from having active trials
+      //
+      // IMPORTANT: We do NOT update max_branches here!
+      // max_branches = contracted branches (what customer pays for)
+      // branchLimit = plan's maximum capacity (what they CAN have if they pay)
+      // If customer had 1 branch on Starter and upgrades to Essentials,
+      // they still only have 1 contracted branch. To add more, they must
+      // use /api/branches/add-extra and pay for each extra branch.
       const { error: updateError } = await supabase
         .from('subscriptions')
         .update({
@@ -268,8 +275,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           // CRITICAL: End the trial when upgrading to a paid plan
           trial_status: 'converted',
           updated_at: new Date().toISOString(),
-          // Update max_branches based on new plan
-          max_branches: getPlanConfig(validatedPlan)?.branchLimit || 5,
+          // NOTE: max_branches is NOT updated - it represents contracted branches,
+          // not the plan limit. User must pay to add more branches.
           // IMPORTANT: Update billing date
           current_period_end: currentPeriodEnd,
         })

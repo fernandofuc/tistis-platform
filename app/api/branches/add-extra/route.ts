@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserFromRequest } from '@/src/shared/lib/supabase-server';
+import { getPlanConfig, getNextBranchPrice } from '@/src/shared/config/plans';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -17,13 +18,8 @@ function getSupabaseAdmin() {
   );
 }
 
-// Pricing per extra branch by plan (in MXN)
-// Nota: Ahora es $1,500/mes para todas las sucursales extra
-const EXTRA_BRANCH_PRICING: Record<string, number> = {
-  starter: 0, // Starter doesn't allow extra branches
-  essentials: 1500,
-  growth: 1500,
-};
+// NOTE: Pricing is now centralized in src/shared/config/plans.ts
+// Use getNextBranchPrice() for progressive pricing
 
 // ======================
 // POST - Add extra branch with billing
@@ -99,7 +95,9 @@ export async function POST(request: NextRequest) {
     }
 
     const plan = subscriptionData.plan?.toLowerCase() || 'starter';
-    const maxBranches = subscriptionData.max_branches || 1;
+    const planConfig = getPlanConfig(plan);
+    const planLimit = planConfig?.branchLimit || 1;
+    const contractedBranches = subscriptionData.max_branches || 1;
     const currentBranches = subscriptionData.current_branches || 1;
 
     // Check if Starter plan (no extra branches allowed)
@@ -111,20 +109,34 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    // Get extra branch price
-    const extraBranchPrice = EXTRA_BRANCH_PRICING[plan] || 0;
-
-    // If not at limit, redirect to normal branch creation
-    if (currentBranches < maxBranches) {
+    // Check if at the plan's absolute limit
+    if (currentBranches >= planLimit) {
       return NextResponse.json({
-        error: 'not_at_limit',
-        message: 'Aún tienes sucursales disponibles en tu plan. Usa la creación normal.',
+        error: 'plan_limit_reached',
+        message: `El plan ${plan} permite máximo ${planLimit} sucursales. Mejora tu plan para agregar más.`,
         current: currentBranches,
-        max: maxBranches,
+        plan_limit: planLimit,
+        upgrade_required: true,
+      }, { status: 403 });
+    }
+
+    // Get progressive pricing for the next branch
+    const extraBranchPrice = getNextBranchPrice(plan, currentBranches);
+
+    // If still has contracted branches available, redirect to normal creation
+    // This shouldn't happen if the UI is correct, but handle it gracefully
+    if (currentBranches < contractedBranches) {
+      return NextResponse.json({
+        error: 'not_at_contracted_limit',
+        message: 'Aún tienes sucursales contratadas disponibles. Usa la creación normal.',
+        current: currentBranches,
+        contracted: contractedBranches,
+        use_endpoint: '/api/branches',
       }, { status: 400 });
     }
 
-    // If at limit and user hasn't confirmed billing, return pricing info
+    // At contracted limit - need to pay for extra branch
+    // If user hasn't confirmed billing, return pricing info
     if (!confirmBilling) {
       return NextResponse.json({
         requires_confirmation: true,
@@ -133,7 +145,8 @@ export async function POST(request: NextRequest) {
           currency: 'MXN',
           billing_period: 'mensual',
           current_branches: currentBranches,
-          max_branches: maxBranches,
+          contracted_branches: contractedBranches,
+          plan_limit: planLimit,
           new_total_branches: currentBranches + 1,
           plan: plan,
         },
@@ -199,11 +212,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Update subscription max_branches (the trigger will update current_branches)
+    // 2. Update subscription max_branches (contracted branches - the trigger will update current_branches)
     const { error: updateError } = await supabaseAdmin
       .from('subscriptions')
       .update({
-        max_branches: maxBranches + 1,
+        max_branches: contractedBranches + 1, // Increase contracted branches by 1
         branch_unit_price: extraBranchPrice,
         updated_at: new Date().toISOString(),
       })
@@ -221,8 +234,8 @@ export async function POST(request: NextRequest) {
         tenant_id: tenantId,
         client_id: subscriptionData.client_id,
         change_type: 'branch_added',
-        previous_value: { max_branches: maxBranches, current_branches: currentBranches },
-        new_value: { max_branches: maxBranches + 1, current_branches: currentBranches + 1 },
+        previous_value: { max_branches: contractedBranches, current_branches: currentBranches },
+        new_value: { max_branches: contractedBranches + 1, current_branches: currentBranches + 1 },
         price_impact: extraBranchPrice,
         reason: `Sucursal extra agregada: ${newBranch.name}`,
         metadata: {
@@ -261,7 +274,7 @@ export async function POST(request: NextRequest) {
       data: newBranch,
       billing: {
         extra_cost_added: extraBranchPrice,
-        new_max_branches: maxBranches + 1,
+        new_contracted_branches: contractedBranches + 1,
         message: `Sucursal creada exitosamente. Se agregó $${extraBranchPrice.toLocaleString()} MXN/mes a tu facturación.`,
       },
     });
@@ -335,17 +348,25 @@ export async function GET(request: NextRequest) {
     }
 
     const plan = subscriptionData.plan?.toLowerCase() || 'starter';
-    const extraBranchPrice = EXTRA_BRANCH_PRICING[plan] || 0;
-    const canAddExtra = plan !== 'starter';
+    const planConfig = getPlanConfig(plan);
+    const planLimit = planConfig?.branchLimit || 1;
+    const contractedBranches = subscriptionData.max_branches || 1;
+    const currentBranches = subscriptionData.current_branches || 1;
+
+    // Use progressive pricing from plans.ts
+    const nextBranchPrice = getNextBranchPrice(plan, currentBranches);
+    const canAddExtra = plan !== 'starter' && currentBranches < planLimit;
 
     return NextResponse.json({
       plan,
-      current_branches: subscriptionData.current_branches || 1,
-      max_branches: subscriptionData.max_branches || 1,
+      current_branches: currentBranches,
+      contracted_branches: contractedBranches, // Sucursales pagadas
+      plan_limit: planLimit, // Límite máximo del plan
       can_add_extra: canAddExtra,
-      extra_branch_price: extraBranchPrice,
+      extra_branch_price: nextBranchPrice, // Precio de la siguiente sucursal
       currency: 'MXN',
-      pricing_table: EXTRA_BRANCH_PRICING,
+      // For backwards compatibility, also include max_branches (now means contracted)
+      max_branches: contractedBranches,
     });
 
   } catch (error) {

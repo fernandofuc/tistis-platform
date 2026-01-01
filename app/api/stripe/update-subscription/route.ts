@@ -10,6 +10,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
+import { getPlanConfig, getNextBranchPrice } from '@/src/shared/config/plans';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -22,34 +23,15 @@ function getSupabaseAdmin() {
   );
 }
 
-// Progressive pricing for extra branches (matches create-checkout)
-const PLAN_BRANCH_PRICING: Record<string, { base: number; progressive: { qty: number; price: number }[] }> = {
-  essentials: {
-    base: 199000, // $1,990 MXN (in centavos)
-    progressive: [
-      { qty: 2, price: 199000 },
-      { qty: 3, price: 179000 },
-      { qty: 4, price: 159000 },
-      { qty: 5, price: 149000 },
-    ],
-  },
-  growth: {
-    base: 299000,
-    progressive: [
-      { qty: 2, price: 299000 },
-      { qty: 3, price: 269000 },
-      { qty: 4, price: 239000 },
-    ],
-  },
-};
+// NOTE: Pricing is now centralized in src/shared/config/plans.ts
+// Use getNextBranchPrice() for progressive pricing (returns pesos)
+// Multiply by 100 for Stripe (which uses centavos)
 
-// Get price for additional branch based on plan and quantity
-function getBranchPrice(plan: string, branchNumber: number): number {
-  const pricing = PLAN_BRANCH_PRICING[plan];
-  if (!pricing) return 0;
-
-  const progressive = pricing.progressive.find((p) => p.qty === branchNumber);
-  return progressive ? progressive.price : pricing.base;
+// Get price for additional branch based on plan and current count
+// Returns price in CENTAVOS for Stripe API
+function getBranchPrice(plan: string, currentBranches: number): number {
+  const priceInPesos = getNextBranchPrice(plan, currentBranches - 1); // -1 because we're adding TO this count
+  return priceInPesos * 100; // Convert to centavos for Stripe
 }
 
 export async function POST(request: NextRequest) {
@@ -142,6 +124,21 @@ export async function POST(request: NextRequest) {
     // ============================================
     if (action === 'add_branch') {
       const newBranchCount = currentBranches + 1;
+
+      // SECURITY: Check plan limit before adding
+      const planConfig = getPlanConfig(subscription.plan);
+      const planLimit = planConfig?.branchLimit || 1;
+
+      if (newBranchCount > planLimit) {
+        return NextResponse.json({
+          error: 'plan_limit_reached',
+          message: `El plan ${subscription.plan} permite máximo ${planLimit} sucursales. Mejora tu plan para agregar más.`,
+          current: currentBranches,
+          plan_limit: planLimit,
+          upgrade_required: true,
+        }, { status: 403 });
+      }
+
       const branchPrice = getBranchPrice(subscription.plan, newBranchCount);
 
       if (branchPrice === 0) {

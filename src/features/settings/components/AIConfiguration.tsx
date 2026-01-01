@@ -343,24 +343,20 @@ export function AIConfiguration() {
         });
         if (subRes.ok) {
           const subData = await subRes.json();
-          // Límites por plan
-          const planLimits: Record<string, number> = {
-            starter: 1,
-            essentials: 5,
-            growth: 8,
-            scale: 15,
-          };
+          // API now returns plan_limit correctly from plans.ts
           const plan = subData.plan || 'starter';
-          const planLimit = planLimits[plan] || 1;
+          const contractedBranches = subData.contracted_branches || subData.max_branches || 1;
+          const planLimit = subData.plan_limit || 1;
+          const currentBranches = subData.current_branches || 1;
 
           // Map the response to SubscriptionInfo format
           setSubscriptionInfo({
             plan: plan,
-            max_branches: subData.max_branches || 1,       // Lo que tiene contratado
-            current_branches: subData.current_branches || 1, // Sucursales contratadas
-            plan_limit: planLimit,                           // Límite máximo del plan
-            can_add_branch: subData.current_branches < subData.max_branches, // Dentro del contrato
-            can_add_extra: subData.can_add_extra && subData.max_branches < planLimit, // Puede comprar extra
+            max_branches: contractedBranches,              // Lo que tiene contratado/pagado
+            current_branches: currentBranches,              // Sucursales actuales
+            plan_limit: planLimit,                          // Límite máximo del plan (de plans.ts)
+            can_add_branch: currentBranches < contractedBranches, // Dentro de lo contratado
+            can_add_extra: subData.can_add_extra,           // Puede comprar extra (plan != starter && < plan_limit)
             next_branch_price: subData.extra_branch_price || 0,
             currency: subData.currency || 'MXN',
           });

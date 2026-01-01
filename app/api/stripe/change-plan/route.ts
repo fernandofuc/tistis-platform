@@ -460,13 +460,17 @@ export async function POST(request: NextRequest) {
     console.log('[Change Plan] current_period_end:', currentPeriodEnd);
 
     // Update local subscription record
+    // IMPORTANT: We do NOT update max_branches here!
+    // max_branches = contracted branches (what customer pays for)
+    // branchLimit = plan's maximum capacity (what they CAN have if they pay)
+    // The user keeps their current contracted branches; to add more they must pay.
     await supabaseAdmin
       .from('subscriptions')
       .update({
         plan: newPlan,
         updated_at: new Date().toISOString(),
-        // Update max_branches based on centralized plan config
-        max_branches: newPlanCfg?.branchLimit || 1,
+        // NOTE: max_branches is NOT updated - it represents contracted branches,
+        // not the plan limit. User must pay to add more branches via /api/branches/add-extra
         // IMPORTANT: Update billing date from Stripe
         current_period_end: currentPeriodEnd,
       })

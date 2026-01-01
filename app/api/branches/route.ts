@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserFromRequest } from '@/src/shared/lib/supabase-server';
+import { getPlanConfig } from '@/src/shared/config/plans';
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -139,30 +140,89 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check branch limit using the database function
+    // Check branch limits using the subscription data
     const supabaseAdmin = getSupabaseAdmin();
-    const { data: limitCheck, error: limitError } = await supabaseAdmin
-      .rpc('check_branch_limit', { p_tenant_id: tenantId });
 
-    if (limitError) {
-      console.error('Error checking branch limit:', limitError);
+    // Step 1: Get client_id for this tenant
+    const { data: clientData, error: clientError } = await supabaseAdmin
+      .from('clients')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (clientError || !clientData) {
+      console.error('Error fetching client:', clientError);
       return NextResponse.json(
-        { error: 'Error al verificar límite de sucursales' },
-        { status: 500 }
+        { error: 'No se encontró cliente asociado al tenant' },
+        { status: 404 }
       );
     }
 
-    const limit = limitCheck?.[0];
-    if (!limit?.can_create) {
+    // Step 2: Get subscription for this client
+    const { data: subscriptionData, error: subError } = await supabaseAdmin
+      .from('subscriptions')
+      .select('id, plan, max_branches, current_branches')
+      .eq('client_id', clientData.id)
+      .in('status', ['active', 'trialing'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (subError || !subscriptionData) {
+      console.error('Error fetching subscription:', subError);
+      return NextResponse.json(
+        { error: 'No se encontró una suscripción activa' },
+        { status: 404 }
+      );
+    }
+
+    const plan = subscriptionData.plan?.toLowerCase() || 'starter';
+    const planConfig = getPlanConfig(plan);
+    const planLimit = planConfig?.branchLimit || 1;
+    const contractedBranches = subscriptionData.max_branches || 1;
+    const currentBranches = subscriptionData.current_branches || 1;
+
+    // Check 1: If at the plan's absolute limit, cannot add more
+    if (currentBranches >= planLimit) {
       return NextResponse.json({
-        error: 'branch_limit_reached',
-        message: limit?.message || 'Has alcanzado el límite de sucursales de tu plan',
-        current: limit?.current_count || 0,
-        max: limit?.max_allowed || 1,
-        plan: limit?.subscription_plan,
+        error: 'plan_limit_reached',
+        message: `El plan ${plan} permite máximo ${planLimit} sucursales. Mejora tu plan para agregar más.`,
+        current: currentBranches,
+        max: planLimit,
+        plan: plan,
         upgrade_required: true,
       }, { status: 403 });
     }
+
+    // Check 2: If at contracted limit, need to pay for extra branch
+    // This means user has used all branches they've paid for
+    if (currentBranches >= contractedBranches) {
+      // Starter plan cannot add extra branches at all
+      if (plan === 'starter') {
+        return NextResponse.json({
+          error: 'plan_not_allowed',
+          message: 'El plan Starter solo permite 1 sucursal. Mejora tu plan para agregar más.',
+          current: currentBranches,
+          max: contractedBranches,
+          plan: plan,
+          upgrade_required: true,
+        }, { status: 403 });
+      }
+
+      // Other plans: redirect to add-extra endpoint for billing
+      return NextResponse.json({
+        error: 'extra_branch_required',
+        message: 'Has usado todas las sucursales contratadas. Para agregar más, se requiere un cobro adicional.',
+        current: currentBranches,
+        contracted: contractedBranches,
+        plan_limit: planLimit,
+        plan: plan,
+        use_endpoint: '/api/branches/add-extra',
+        requires_payment: true,
+      }, { status: 402 }); // 402 Payment Required
+    }
+
+    // Can create: still have contracted branches available
 
     // Generate unique slug
     const baseSlug = (body.name || 'sucursal')

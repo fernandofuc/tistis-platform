@@ -90,10 +90,10 @@ interface Branch {
 
 interface SubscriptionInfo {
   plan: string;
-  max_branches: number;
+  contracted_branches: number; // Sucursales pagadas
+  plan_limit: number; // Límite máximo del plan
   current_branches: number;
-  can_add_branch: boolean;
-  can_remove_branch: boolean;
+  can_add_extra: boolean;
   next_branch_price: number;
   currency: string;
 }
@@ -103,7 +103,9 @@ interface ExtraBranchPricing {
   currency: string;
   billing_period: string;
   current_branches: number;
-  max_branches: number;
+  contracted_branches?: number;
+  max_branches?: number; // Backwards compatibility
+  plan_limit?: number;
   new_total_branches: number;
   plan: string;
 }
@@ -152,10 +154,10 @@ export function BranchManagement() {
         const pricingData = await pricingRes.json();
         setSubscriptionInfo({
           plan: pricingData.plan,
-          max_branches: pricingData.max_branches,
+          contracted_branches: pricingData.contracted_branches || pricingData.max_branches || 1,
+          plan_limit: pricingData.plan_limit || pricingData.max_branches || 1,
           current_branches: pricingData.current_branches,
-          can_add_branch: pricingData.current_branches < pricingData.max_branches,
-          can_remove_branch: true,
+          can_add_extra: pricingData.can_add_extra,
           next_branch_price: pricingData.extra_branch_price,
           currency: pricingData.currency,
         });
@@ -192,10 +194,13 @@ export function BranchManagement() {
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.error === 'branch_limit_reached') {
+        if (data.error === 'branch_limit_reached' || data.error === 'extra_branch_required') {
           // At limit - show extra branch pricing
           setShowAddModal(false);
           await checkExtraBranchPricing();
+        } else if (data.error === 'plan_limit_reached' || data.error === 'plan_not_allowed') {
+          // Cannot add more branches at all
+          setError(data.message || 'No puedes agregar más sucursales con tu plan actual.');
         } else {
           setError(data.message || data.error || 'Error al crear sucursal');
         }
@@ -284,12 +289,18 @@ export function BranchManagement() {
     setFormData({ name: '', city: '', state: '', address: '', phone: '', whatsapp_number: '' });
     setError(null);
 
-    // Check if at limit
-    if (subscriptionInfo && subscriptionInfo.current_branches >= subscriptionInfo.max_branches) {
-      // At limit - show pricing confirmation first
-      checkExtraBranchPricing();
+    // Check if at contracted limit (need to pay for more)
+    if (subscriptionInfo && subscriptionInfo.current_branches >= subscriptionInfo.contracted_branches) {
+      // Check if can still add (within plan limit)
+      if (subscriptionInfo.can_add_extra) {
+        // At contracted limit but can still add - show pricing confirmation
+        checkExtraBranchPricing();
+      } else {
+        // At plan limit - show upgrade message
+        setError('Has alcanzado el límite de sucursales de tu plan. Mejora tu plan para agregar más.');
+      }
     } else {
-      // Not at limit - show normal add modal
+      // Not at contracted limit - show normal add modal
       setShowAddModal(true);
     }
   };
@@ -369,9 +380,13 @@ export function BranchManagement() {
     });
   };
 
-  // Check if at branch limit
-  const isAtLimit = subscriptionInfo &&
-    subscriptionInfo.current_branches >= subscriptionInfo.max_branches;
+  // Check if at contracted branch limit (need to pay for more)
+  const isAtContractedLimit = subscriptionInfo &&
+    subscriptionInfo.current_branches >= subscriptionInfo.contracted_branches;
+
+  // Check if at absolute plan limit (cannot add more at all)
+  const isAtPlanLimit = subscriptionInfo &&
+    subscriptionInfo.current_branches >= subscriptionInfo.plan_limit;
 
   // Format price
   const formatPrice = (price: number) => {
@@ -389,7 +404,7 @@ export function BranchManagement() {
         <CardHeader
           title="Sucursales"
           subtitle={subscriptionInfo
-            ? `${subscriptionInfo.current_branches} de ${subscriptionInfo.max_branches} sucursales contratadas`
+            ? `${subscriptionInfo.current_branches} de ${subscriptionInfo.contracted_branches} sucursales contratadas (máx. ${subscriptionInfo.plan_limit} en tu plan)`
             : 'Gestiona las ubicaciones de tu negocio'
           }
           action={
@@ -405,7 +420,7 @@ export function BranchManagement() {
         />
         <CardContent>
           {/* Branch Limit Info Banner */}
-          {isAtLimit && subscriptionInfo?.next_branch_price > 0 && (
+          {isAtContractedLimit && !isAtPlanLimit && subscriptionInfo?.next_branch_price > 0 && (
             <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
               <span className="text-blue-600">{icons.money}</span>
               <div className="flex-1">
@@ -413,9 +428,35 @@ export function BranchManagement() {
                   Has usado todas tus sucursales contratadas
                 </p>
                 <p className="text-sm text-blue-700 mt-1">
-                  Tu plan <span className="font-semibold uppercase">{subscriptionInfo?.plan}</span> incluye {subscriptionInfo?.max_branches} sucursal{subscriptionInfo?.max_branches !== 1 ? 'es' : ''}.
-                  Puedes agregar sucursales adicionales por {formatPrice(subscriptionInfo.next_branch_price)}/mes cada una.
+                  Tienes {subscriptionInfo?.contracted_branches} sucursal{subscriptionInfo?.contracted_branches !== 1 ? 'es' : ''} contratada{subscriptionInfo?.contracted_branches !== 1 ? 's' : ''}.
+                  Puedes agregar hasta {subscriptionInfo.plan_limit - subscriptionInfo.current_branches} sucursales más por {formatPrice(subscriptionInfo.next_branch_price)}/mes cada una.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Plan Limit Reached Banner */}
+          {isAtPlanLimit && subscriptionInfo?.plan !== 'starter' && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <span className="text-amber-600">{icons.alert}</span>
+              <div className="flex-1">
+                <p className="font-medium text-amber-900">
+                  Has alcanzado el límite de tu plan
+                </p>
+                <p className="text-sm text-amber-700 mt-1">
+                  El plan <span className="font-semibold uppercase">{subscriptionInfo?.plan}</span> permite máximo {subscriptionInfo?.plan_limit} sucursales.
+                  Mejora tu plan para agregar más.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => {
+                    window.location.href = '/dashboard/settings/subscription';
+                  }}
+                >
+                  Ver Planes
+                </Button>
               </div>
             </div>
           )}
@@ -704,7 +745,7 @@ export function BranchManagement() {
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-gray-600">Sucursales actuales:</span>
-                  <span className="font-semibold">{extraBranchPricing.current_branches} de {extraBranchPricing.max_branches}</span>
+                  <span className="font-semibold">{extraBranchPricing.current_branches} de {extraBranchPricing.contracted_branches || extraBranchPricing.max_branches} contratadas</span>
                 </div>
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-gray-600">Nueva sucursal:</span>
