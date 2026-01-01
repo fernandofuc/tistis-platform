@@ -23,10 +23,21 @@ function getStripeClient() {
 }
 
 // Create Supabase client lazily to avoid build-time errors
+// CRITICAL: Must use SERVICE_ROLE_KEY to bypass RLS policies
+// Webhooks run server-to-server without user auth context
 function getSupabaseClient() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!serviceRoleKey) {
+    console.error('🚨 CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured!');
+    console.error('   Webhook will fail to update database due to RLS policies.');
+    console.error('   Please add SUPABASE_SERVICE_ROLE_KEY to Vercel environment variables.');
+    // Still try with anon key but log the warning
+  }
+
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 }
 
@@ -134,6 +145,10 @@ export async function POST(req: NextRequest) {
   }
 
   console.log('📨 Stripe webhook received:', event.type);
+
+  // Log which Supabase key is being used (for debugging)
+  const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  console.log(`🔑 [Webhook] Using ${hasServiceRole ? 'SERVICE_ROLE_KEY' : 'ANON_KEY (⚠️ WARNING: May fail due to RLS)'}`);
 
   try {
     switch (event.type) {
