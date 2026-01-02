@@ -95,7 +95,6 @@ const icons = {
 interface Patient {
   id: string;
   tenant_id: string;
-  patient_number: string;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -268,8 +267,7 @@ export default function PatientsPage() {
       p.first_name.toLowerCase().includes(searchLower) ||
       p.last_name.toLowerCase().includes(searchLower) ||
       p.phone.includes(search) ||
-      p.email?.toLowerCase().includes(searchLower) ||
-      p.patient_number.toLowerCase().includes(searchLower)
+      p.email?.toLowerCase().includes(searchLower)
     );
   }, [patients, search]);
 
@@ -601,9 +599,7 @@ export default function PatientsPage() {
                       <h3 className="font-medium text-slate-900 truncate">
                         {patient.first_name} {patient.last_name}
                       </h3>
-                      <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">
-                        #{patient.patient_number}
-                      </span>
+                      <Badge size="sm" variant="success">Paciente</Badge>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-slate-500">
                       <span>{formatPhone(patient.phone)}</span>
@@ -729,7 +725,7 @@ export default function PatientsPage() {
                     <h3 className="text-xl font-semibold text-slate-900">
                       {selectedPatient.first_name} {selectedPatient.last_name}
                     </h3>
-                    <p className="text-slate-500 font-mono text-sm">#{selectedPatient.patient_number}</p>
+                    <p className="text-slate-500 text-sm">{selectedPatient.phone}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <Badge
                         variant={

@@ -32,7 +32,6 @@ interface Patient {
   last_name: string;
   phone: string;
   email?: string | null;
-  patient_number?: string;
   lead_id?: string; // Reference to original lead
 }
 
@@ -44,7 +43,6 @@ interface UnifiedClient {
   email?: string | null;
   type: 'lead' | 'patient';
   classification?: string;
-  patient_number?: string;
   lead_id?: string; // For patients, reference to original lead
   patient_id?: string; // For leads, reference to converted patient
 }
@@ -207,7 +205,7 @@ export function NewAppointmentModal({
           .order('full_name'),
         supabase
           .from('patients')
-          .select('id, first_name, last_name, phone, email, patient_number, lead_id')
+          .select('id, first_name, last_name, phone, email, lead_id')
           .eq('tenant_id', tenant.id)
           .eq('status', 'active')
           .order('first_name'),
@@ -258,7 +256,6 @@ export function NewAppointmentModal({
             phone: patient.phone,
             email: patient.email,
             type: 'patient',
-            patient_number: patient.patient_number,
             lead_id: patient.lead_id,
           });
         }
@@ -327,8 +324,7 @@ export function NewAppointmentModal({
       (client) =>
         client.name?.toLowerCase().includes(search) ||
         client.phone?.includes(search) ||
-        client.email?.toLowerCase().includes(search) ||
-        client.patient_number?.toLowerCase().includes(search)
+        client.email?.toLowerCase().includes(search)
     );
   }, [unifiedClients, leadSearch]);
 
@@ -640,7 +636,6 @@ export function NewAppointmentModal({
                         </p>
                         <p className="text-xs text-gray-500 truncate">
                           {client.phone}
-                          {client.patient_number && ` • #${client.patient_number}`}
                         </p>
                       </div>
                       {/* Type badge: Patient or Lead */}
@@ -691,7 +686,6 @@ export function NewAppointmentModal({
                 </div>
                 <p className="text-sm text-gray-500">
                   {selectedClient.phone}
-                  {selectedClient.patient_number && ` • #${selectedClient.patient_number}`}
                 </p>
               </div>
               <div className="text-green-500">{icons.check}</div>
