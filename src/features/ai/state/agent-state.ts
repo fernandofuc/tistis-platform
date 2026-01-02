@@ -95,6 +95,12 @@ export interface ExtractedData {
   symptoms?: string[];
   pain_level?: 1 | 2 | 3 | 4 | 5;
   duration?: string;
+
+  // Datos de restaurante
+  party_size?: number;
+  occasion?: string;
+  special_requests?: string;
+  table_preference?: string;
 }
 
 /**

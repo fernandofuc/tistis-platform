@@ -268,6 +268,132 @@ class BookingRestaurantAgentClass extends BookingAgentClass {
 5. Preferencias de ubicación (terraza, privado, etc.)`
     );
   }
+
+  async execute(state: TISTISAgentStateType): Promise<AgentResult> {
+    const tenant = state.tenant;
+    const lead = state.lead;
+    const extracted = state.extracted_data;
+
+    const servicesContext = formatServicesForPrompt(state.business_context);
+    const branchesContext = formatBranchesForPrompt(state.business_context);
+
+    // Extract booking data including restaurant-specific fields
+    const bookingData = extractBookingData(state.current_message);
+
+    const preferredDate = extracted.preferred_date || bookingData.date;
+    const preferredTime = extracted.preferred_time || bookingData.time;
+    const isFlexible = extracted.is_flexible_schedule || bookingData.is_flexible;
+
+    // Determine branch
+    let branchId: string | undefined;
+    const branches = state.business_context?.branches || [];
+
+    if (lead?.preferred_branch_id) {
+      branchId = lead.preferred_branch_id;
+    } else if (extracted.preferred_branch) {
+      const branch = branches.find((b) =>
+        b.name.toLowerCase().includes(extracted.preferred_branch!.toLowerCase())
+      );
+      branchId = branch?.id;
+    } else if (branches.length === 1) {
+      branchId = branches[0].id;
+    }
+
+    // For restaurant, check if we have party_size (required)
+    const partySize = bookingData.party_size || extracted.party_size;
+    const occasion = bookingData.occasion || extracted.occasion;
+    const specialRequests = bookingData.special_requests;
+
+    // Verify we have enough info for restaurant reservation
+    const hasEnoughInfo = preferredDate && (preferredTime || isFlexible) && branchId && partySize;
+
+    if (hasEnoughInfo && tenant) {
+      const bookingRequest: BookingRequest = {
+        tenant_id: tenant.tenant_id,
+        lead_id: lead?.lead_id || '',
+        conversation_id: state.conversation?.conversation_id || '',
+        branch_id: branchId,
+        requested_date: preferredDate,
+        requested_time: preferredTime,
+        // Restaurant-specific fields
+        party_size: partySize,
+        occasion_type: occasion,
+        special_requests: specialRequests,
+        vertical: 'restaurant',
+      };
+
+      const bookingResult = await createBooking(bookingRequest);
+
+      if (bookingResult.success) {
+        const confirmationMessage = generateBookingConfirmation(bookingResult);
+        return {
+          response: confirmationMessage,
+          tokens_used: 0,
+        };
+      } else {
+        let alternativeContext = `\n\nNOTA: No se pudo crear la reservación. Razón: ${bookingResult.error}`;
+        if (bookingResult.suggestion) {
+          alternativeContext += `\nSugerencia: ${bookingResult.suggestion}`;
+        }
+
+        if (branchId && tenant) {
+          const slots = await getAvailableSlots(tenant.tenant_id, branchId, undefined, undefined, undefined, 5);
+          if (slots.length > 0) {
+            alternativeContext += `\n\nHorarios disponibles próximos:`;
+            for (const slot of slots) {
+              const date = new Date(slot.date + 'T12:00:00');
+              const dateStr = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+              alternativeContext += `\n- ${dateStr} a las ${slot.time}`;
+            }
+          }
+        }
+
+        const { response, tokens } = await this.callLLM(
+          state,
+          `${servicesContext}\n${branchesContext}${alternativeContext}\n\nOfrece alternativas de horario al cliente.`
+        );
+
+        return { response, tokens_used: tokens };
+      }
+    } else {
+      // Not enough info, ask for what's missing
+      let missingInfo: string[] = [];
+
+      if (!branchId && branches.length > 1) {
+        missingInfo.push('sucursal preferida');
+      }
+      if (!preferredDate) {
+        missingInfo.push('fecha de la reserva');
+      }
+      if (!preferredTime && !isFlexible) {
+        missingInfo.push('hora deseada');
+      }
+      if (!partySize) {
+        missingInfo.push('número de personas');
+      }
+
+      let additionalContext = `${servicesContext}\n${branchesContext}`;
+
+      if (tenant && branchId) {
+        const slots = await getAvailableSlots(tenant.tenant_id, branchId, undefined, undefined, undefined, 5);
+        if (slots.length > 0) {
+          additionalContext += `\n\n# PRÓXIMOS HORARIOS DISPONIBLES\n`;
+          for (const slot of slots) {
+            const date = new Date(slot.date + 'T12:00:00');
+            const dateStr = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+            additionalContext += `- ${dateStr} a las ${slot.time}\n`;
+          }
+        }
+      }
+
+      if (missingInfo.length > 0) {
+        additionalContext += `\n\nNOTA: Falta información para reservar: ${missingInfo.join(', ')}. Pregunta de manera natural.`;
+      }
+
+      const { response, tokens } = await this.callLLM(state, additionalContext);
+      return { response, tokens_used: tokens };
+    }
+  }
 }
 
 /**
