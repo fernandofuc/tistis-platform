@@ -495,13 +495,15 @@ BEGIN
         FROM appointments a
         JOIN appointment_restaurant_details ard ON ard.appointment_id = a.id
         WHERE ard.table_id = t.id
-        AND a.appointment_date = p_date
+        AND a.scheduled_at::DATE = p_date
         AND a.status NOT IN ('CANCELLED', 'NO_SHOW')
         AND a.deleted_at IS NULL
         AND (
-            (a.appointment_time <= p_time AND a.end_time > p_time)
-            OR (a.appointment_time < p_time + (p_duration_minutes || ' minutes')::INTERVAL
-                AND a.appointment_time >= p_time)
+            -- Check time overlap using scheduled_at and duration_minutes
+            (a.scheduled_at::TIME <= p_time
+             AND (a.scheduled_at + (COALESCE(a.duration_minutes, 60) || ' minutes')::INTERVAL)::TIME > p_time)
+            OR (a.scheduled_at::TIME < p_time + (p_duration_minutes || ' minutes')::INTERVAL
+                AND a.scheduled_at::TIME >= p_time)
         )
     )
     ORDER BY
@@ -817,24 +819,8 @@ BEGIN
 END $$;
 
 -- Agregar campo scheduled_at si no existe (timestamp completo)
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
-
--- Trigger para sincronizar scheduled_at con appointment_date + appointment_time
-CREATE OR REPLACE FUNCTION public.sync_appointment_scheduled_at()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    NEW.scheduled_at := (NEW.appointment_date + NEW.appointment_time)::TIMESTAMPTZ;
-    RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trigger_sync_scheduled_at ON appointments;
-CREATE TRIGGER trigger_sync_scheduled_at
-    BEFORE INSERT OR UPDATE OF appointment_date, appointment_time ON appointments
-    FOR EACH ROW EXECUTE FUNCTION sync_appointment_scheduled_at();
+-- NOTE: scheduled_at column already exists in appointments table
+-- No sync trigger needed - the app uses scheduled_at directly
 
 
 -- =====================================================
@@ -844,7 +830,15 @@ CREATE TRIGGER trigger_sync_scheduled_at
 -- Vista de reservaciones de hoy
 CREATE OR REPLACE VIEW public.v_today_reservations AS
 SELECT
-    a.*,
+    a.id,
+    a.tenant_id,
+    a.branch_id,
+    a.lead_id,
+    a.scheduled_at,
+    a.duration_minutes,
+    a.status,
+    a.notes,
+    a.party_size as appointment_party_size,
     ard.party_size,
     ard.table_id,
     ard.occasion_type,
@@ -866,10 +860,10 @@ LEFT JOIN restaurant_tables rt ON rt.id = ard.table_id
 LEFT JOIN leads l ON a.lead_id = l.id
 LEFT JOIN lead_restaurant_profile lrp ON lrp.lead_id = l.id
 LEFT JOIN branches b ON a.branch_id = b.id
-WHERE a.appointment_date = CURRENT_DATE
-AND a.status NOT IN ('CANCELLED')
+WHERE a.scheduled_at::DATE = CURRENT_DATE
+AND a.status NOT IN ('cancelled')
 AND a.deleted_at IS NULL
-ORDER BY a.appointment_time;
+ORDER BY a.scheduled_at;
 
 
 -- Vista de disponibilidad de mesas
@@ -886,20 +880,20 @@ SELECT
     b.name as branch_name,
     (
         SELECT json_agg(json_build_object(
-            'date', a.appointment_date,
-            'time', a.appointment_time,
-            'end_time', a.end_time,
+            'date', a.scheduled_at::DATE,
+            'time', a.scheduled_at::TIME,
+            'end_time', (a.scheduled_at + (COALESCE(a.duration_minutes, 60) || ' minutes')::INTERVAL)::TIME,
             'guest_name', l.full_name,
             'party_size', ard.party_size,
             'status', a.status
-        ) ORDER BY a.appointment_time)
+        ) ORDER BY a.scheduled_at)
         FROM appointments a
         JOIN appointment_restaurant_details ard ON ard.appointment_id = a.id
         LEFT JOIN leads l ON a.lead_id = l.id
         WHERE ard.table_id = rt.id
-        AND a.appointment_date >= CURRENT_DATE
-        AND a.appointment_date <= CURRENT_DATE + INTERVAL '7 days'
-        AND a.status NOT IN ('CANCELLED', 'NO_SHOW')
+        AND a.scheduled_at::DATE >= CURRENT_DATE
+        AND a.scheduled_at::DATE <= CURRENT_DATE + INTERVAL '7 days'
+        AND a.status NOT IN ('cancelled', 'no_show')
         AND a.deleted_at IS NULL
     ) as upcoming_reservations
 FROM restaurant_tables rt
@@ -927,12 +921,12 @@ SELECT
     lrp.favorite_dishes,
     t.name as tenant_name,
     (
-        SELECT a.appointment_date
+        SELECT a.scheduled_at::DATE
         FROM appointments a
         WHERE a.lead_id = l.id
-        AND a.appointment_date > CURRENT_DATE
-        AND a.status NOT IN ('CANCELLED', 'NO_SHOW')
-        ORDER BY a.appointment_date
+        AND a.scheduled_at::DATE > CURRENT_DATE
+        AND a.status NOT IN ('cancelled', 'no_show')
+        ORDER BY a.scheduled_at
         LIMIT 1
     ) as next_reservation
 FROM leads l
