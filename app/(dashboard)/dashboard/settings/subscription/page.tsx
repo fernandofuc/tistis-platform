@@ -17,7 +17,7 @@ import { cn } from '@/src/shared/utils';
 import { ArrowRight, Shield, Check, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 // Import centralized plan config - SINGLE SOURCE OF TRUTH
-import { PLAN_CONFIG } from '@/src/shared/config/plans';
+import { PLAN_CONFIG, getPlanConfig, calculateBranchCostPesos } from '@/src/shared/config/plans';
 
 // ==============================================
 // PLAN DISPLAY CONFIG - Features for dashboard
@@ -112,6 +112,14 @@ export default function SubscriptionPage() {
   const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null);
   const [willConvertToPaid, setWillConvertToPaid] = useState(true);
 
+  // Billing breakdown state
+  const [billingInfo, setBillingInfo] = useState<{
+    planPrice: number;
+    contractedBranches: number;
+    extraBranchesCost: number;
+    totalAmount: number;
+  } | null>(null);
+
   // Fetch subscription billing date via client linked to tenant
   useEffect(() => {
     const fetchBillingDate = async () => {
@@ -130,10 +138,10 @@ export default function SubscriptionPage() {
           return;
         }
 
-        // Get the subscription (active OR trialing)
+        // Get the subscription (active OR trialing) with billing breakdown info
         const { data: subscription } = await supabase
           .from('subscriptions')
-          .select('current_period_end, trial_end, trial_status, status, will_convert_to_paid')
+          .select('current_period_end, trial_end, trial_status, status, will_convert_to_paid, plan, max_branches, monthly_amount')
           .eq('client_id', client.id)
           .in('status', ['active', 'trialing'])
           .order('created_at', { ascending: false })
@@ -163,6 +171,24 @@ export default function SubscriptionPage() {
             if (subscription.current_period_end) {
               setNextBillingDate(subscription.current_period_end);
             }
+          }
+
+          // Calculate billing breakdown
+          const subPlan = subscription.plan?.toLowerCase() || 'starter';
+          const planConfig = getPlanConfig(subPlan);
+          const contractedBranches = subscription.max_branches || 1;
+
+          if (planConfig) {
+            const planPrice = planConfig.monthlyPricePesos;
+            const extraBranchesCost = calculateBranchCostPesos(subPlan, contractedBranches);
+            const totalAmount = planPrice + extraBranchesCost;
+
+            setBillingInfo({
+              planPrice,
+              contractedBranches,
+              extraBranchesCost,
+              totalAmount,
+            });
           }
         }
       } catch (err) {
@@ -380,67 +406,195 @@ export default function SubscriptionPage() {
   return (
     <PageWrapper title="Gestion de Suscripcion" subtitle="Cambia tu plan o gestiona tu facturacion">
       <div className="space-y-8">
-        {/* Current Plan Summary */}
+        {/* Current Plan Summary with Billing Breakdown */}
         {currentPlan && (
-          <Card variant="bordered" className="bg-gradient-to-r from-[#7C5CFC]/5 to-[#C23350]/5">
-            <CardContent className="py-6">
+          <Card variant="bordered" className="overflow-hidden">
+            {/* Header con gradiente */}
+            <div className="bg-gradient-to-r from-[#7C5CFC] to-[#9F7AEA] px-6 py-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Tu plan actual</p>
+                  <p className="text-sm text-white/80 mb-1">Tu plan actual</p>
                   <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-bold text-gray-900 capitalize">
+                    <h2 className="text-2xl font-bold text-white capitalize">
                       {currentPlan}
                     </h2>
-                    <Badge variant={tenantStatus === 'active' ? 'success' : 'warning'}>
+                    <Badge className={cn(
+                      "text-xs font-medium",
+                      tenantStatus === 'active'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-amber-400/20 text-amber-100 border-amber-400/30'
+                    )}>
                       {tenantStatus === 'active' ? 'Activo' : tenantStatus}
                     </Badge>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {activeBranches} de {totalBranches || 1} sucursales en uso
-                  </p>
                 </div>
-                <div className="text-right">
-                  {isTrialing ? (
-                    <>
-                      <div className="flex items-center gap-2 justify-end mb-1">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          Prueba gratuita
+                {isTrialing && (
+                  <div className="text-right">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-400 text-amber-900">
+                      Prueba gratuita
+                    </span>
+                    <p className="text-lg font-semibold text-white mt-1">
+                      {trialDaysRemaining !== null
+                        ? trialDaysRemaining === 0
+                          ? 'Termina hoy'
+                          : trialDaysRemaining === 1
+                            ? '1 día restante'
+                            : `${trialDaysRemaining} días restantes`
+                        : 'Calculando...'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Desglose de Facturación */}
+            <CardContent className="py-6">
+              {!isTrialing && billingInfo && (
+                <div className="space-y-4">
+                  {/* Líneas de desglose */}
+                  <div className="space-y-3">
+                    {/* Plan base */}
+                    <div className="flex items-center justify-between py-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-[#7C5CFC]/10 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-[#7C5CFC]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Plan {currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</p>
+                          <p className="text-xs text-gray-500">Suscripción mensual</p>
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {formatPrice(billingInfo.planPrice)}
+                      </span>
+                    </div>
+
+                    {/* Sucursales extra (solo si hay) */}
+                    {billingInfo.extraBranchesCost > 0 && (
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">Sucursales Extra</p>
+                            <p className="text-xs text-gray-500">{billingInfo.contractedBranches - 1} sucursal{billingInfo.contractedBranches - 1 !== 1 ? 'es' : ''} adicional{billingInfo.contractedBranches - 1 !== 1 ? 'es' : ''}</p>
+                          </div>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">
+                          +{formatPrice(billingInfo.extraBranchesCost)}
                         </span>
                       </div>
-                      <p className="text-lg font-semibold text-gray-900">
-                        {trialDaysRemaining !== null
-                          ? trialDaysRemaining === 0
-                            ? 'Termina hoy'
-                            : trialDaysRemaining === 1
-                              ? '1 día restante'
-                              : `${trialDaysRemaining} días restantes`
-                          : 'Calculando...'}
-                      </p>
-                      {nextBillingDate && willConvertToPaid && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Se cobrará el {new Date(nextBillingDate).toLocaleDateString('es-MX', {
-                            day: 'numeric',
-                            month: 'long',
-                          })}
+                    )}
+
+                    {/* Sucursales en uso (informativo) */}
+                    <div className="flex items-center justify-between py-2 border-t border-gray-100 pt-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Sucursales activas</p>
+                        </div>
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {activeBranches} de {billingInfo.contractedBranches} contratadas
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Separador */}
+                  <div className="border-t border-dashed border-gray-200 my-4"></div>
+
+                  {/* Total y fecha de cobro */}
+                  <div className="bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Próximo cobro</p>
+                        <p className="text-sm font-medium text-gray-700">
+                          {nextBillingDate
+                            ? new Date(nextBillingDate).toLocaleDateString('es-MX', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                              })
+                            : 'Sin fecha programada'}
                         </p>
-                      )}
-                    </>
-                  ) : (
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Total mensual</p>
+                        <p className="text-2xl font-bold bg-gradient-to-r from-[#7C5CFC] to-[#9F7AEA] bg-clip-text text-transparent">
+                          {formatPrice(billingInfo.totalAmount)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Vista para trial */}
+              {isTrialing && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Período de prueba</p>
+                        <p className="text-xs text-gray-500">Sin costo durante la prueba</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold text-emerald-600">
+                      Gratis
+                    </span>
+                  </div>
+
+                  {willConvertToPaid && billingInfo && (
                     <>
-                      <p className="text-sm text-gray-600 mb-1">Próximo cobro</p>
-                      <p className="text-lg font-semibold text-gray-900">
-                        {nextBillingDate
-                          ? new Date(nextBillingDate).toLocaleDateString('es-MX', {
-                              day: 'numeric',
-                              month: 'long',
-                              year: 'numeric',
-                            })
-                          : 'Sin fecha'}
-                      </p>
+                      <div className="border-t border-dashed border-gray-200 my-4"></div>
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-amber-700 uppercase tracking-wide font-medium mb-1">Al terminar prueba</p>
+                            <p className="text-sm font-medium text-amber-800">
+                              {nextBillingDate
+                                ? new Date(nextBillingDate).toLocaleDateString('es-MX', {
+                                    day: 'numeric',
+                                    month: 'long',
+                                    year: 'numeric',
+                                  })
+                                : 'Sin fecha'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-amber-700 uppercase tracking-wide font-medium mb-1">Se cobrará</p>
+                            <p className="text-2xl font-bold text-amber-900">
+                              {formatPrice(billingInfo.totalAmount)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>
-              </div>
+              )}
+
+              {/* Fallback cuando no hay billing info (edge case) */}
+              {!billingInfo && !isTrialing && (
+                <div className="flex items-center justify-between py-2">
+                  <p className="text-sm text-gray-500">Cargando información de facturación...</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
