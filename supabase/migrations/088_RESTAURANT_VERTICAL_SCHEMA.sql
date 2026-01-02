@@ -496,8 +496,7 @@ BEGIN
         JOIN appointment_restaurant_details ard ON ard.appointment_id = a.id
         WHERE ard.table_id = t.id
         AND a.scheduled_at::DATE = p_date
-        AND a.status NOT IN ('CANCELLED', 'NO_SHOW')
-        AND a.deleted_at IS NULL
+        AND a.status NOT IN ('cancelled', 'no_show')
         AND (
             -- Check time overlap using scheduled_at and duration_minutes
             (a.scheduled_at::TIME <= p_time
@@ -862,7 +861,6 @@ LEFT JOIN lead_restaurant_profile lrp ON lrp.lead_id = l.id
 LEFT JOIN branches b ON a.branch_id = b.id
 WHERE a.scheduled_at::DATE = CURRENT_DATE
 AND a.status NOT IN ('cancelled')
-AND a.deleted_at IS NULL
 ORDER BY a.scheduled_at;
 
 
@@ -894,7 +892,6 @@ SELECT
         AND a.scheduled_at::DATE >= CURRENT_DATE
         AND a.scheduled_at::DATE <= CURRENT_DATE + INTERVAL '7 days'
         AND a.status NOT IN ('cancelled', 'no_show')
-        AND a.deleted_at IS NULL
     ) as upcoming_reservations
 FROM restaurant_tables rt
 JOIN branches b ON b.id = rt.branch_id
