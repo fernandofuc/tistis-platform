@@ -259,6 +259,9 @@ export function AIConfiguration() {
   const [showExtraBranchModal, setShowExtraBranchModal] = useState(false);
   const [extraBranchLoading, setExtraBranchLoading] = useState(false);
   const [extraBranchError, setExtraBranchError] = useState<string | null>(null);
+  const [extraBranchForm, setExtraBranchForm] = useState({ name: '', city: '', state: '' });
+  const [showExtraBranchSuccess, setShowExtraBranchSuccess] = useState(false);
+  const [extraBranchSuccessData, setExtraBranchSuccessData] = useState<{ name: string; price: number } | null>(null);
 
   // Business Identity Edit State
   const [isEditingIdentity, setIsEditingIdentity] = useState(false);
@@ -464,6 +467,12 @@ export function AIConfiguration() {
 
   // Handle adding extra branch with billing
   const handleAddExtraBranch = async () => {
+    // Validate form
+    if (!extraBranchForm.name.trim()) {
+      setExtraBranchError('Por favor ingresa un nombre para la sucursal');
+      return;
+    }
+
     setExtraBranchLoading(true);
     setExtraBranchError(null);
 
@@ -473,7 +482,9 @@ export function AIConfiguration() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          name: `Sucursal ${branches.length + 1}`,
+          name: extraBranchForm.name.trim(),
+          city: extraBranchForm.city.trim() || undefined,
+          state: extraBranchForm.state.trim() || undefined,
           confirmBilling: true,
         }),
       });
@@ -513,17 +524,19 @@ export function AIConfiguration() {
         });
       }
 
+      // Close modal and show success
       setShowExtraBranchModal(false);
+      setExtraBranchSuccessData({
+        name: extraBranchForm.name.trim(),
+        price: subscriptionInfo?.next_branch_price || 0,
+      });
+      setShowExtraBranchSuccess(true);
 
-      // Show success message
-      if (result.billing?.message) {
-        alert(result.billing.message);
-      } else {
-        alert('Sucursal agregada exitosamente');
-      }
+      // Reset form
+      setExtraBranchForm({ name: '', city: '', state: '' });
     } catch (error) {
       console.error('Error adding extra branch:', error);
-      setExtraBranchError('Error al agregar sucursal');
+      setExtraBranchError('Error al agregar sucursal. Por favor intenta de nuevo.');
     } finally {
       setExtraBranchLoading(false);
     }
@@ -1631,50 +1644,198 @@ export function AIConfiguration() {
 
       {/* Extra Branch Confirmation Modal */}
       {showExtraBranchModal && subscriptionInfo && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">
-              Agregar Sucursal Extra
-            </h3>
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            onClick={() => {
+              if (!extraBranchLoading) {
+                setShowExtraBranchModal(false);
+                setExtraBranchError(null);
+                setExtraBranchForm({ name: '', city: '', state: '' });
+              }
+            }}
+          />
 
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-              <p className="text-amber-800">
-                Se agregará un cargo mensual de{' '}
-                <span className="font-bold">${subscriptionInfo.next_branch_price.toLocaleString()} MXN</span>{' '}
-                a tu suscripción por la sucursal adicional.
-              </p>
-            </div>
-
-            <p className="text-gray-600 mb-6">
-              Actualmente tienes {subscriptionInfo.current_branches} de {subscriptionInfo.plan_limit} sucursales
-              permitidas en tu plan {subscriptionInfo.plan?.toUpperCase()}.
-            </p>
-
-            {extraBranchError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
-                <p className="text-red-700 text-sm">{extraBranchError}</p>
+          {/* Modal */}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl transform transition-all">
+              {/* Header */}
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Agregar Sucursal Extra
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      Se agregará un cobro mensual adicional a tu suscripción
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!extraBranchLoading) {
+                        setShowExtraBranchModal(false);
+                        setExtraBranchError(null);
+                        setExtraBranchForm({ name: '', city: '', state: '' });
+                      }
+                    }}
+                    disabled={extraBranchLoading}
+                    className="p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            )}
 
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowExtraBranchModal(false);
-                  setExtraBranchError(null);
-                }}
-                disabled={extraBranchLoading}
-              >
-                Cancelar
-              </Button>
-              <Button
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
-                onClick={handleAddExtraBranch}
-                disabled={extraBranchLoading}
-              >
-                {extraBranchLoading ? 'Procesando...' : `Confirmar (+$${subscriptionInfo.next_branch_price.toLocaleString()}/mes)`}
-              </Button>
+              {/* Content */}
+              <div className="p-6 space-y-5">
+                {/* Pricing Summary */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-gray-600 text-sm">Sucursales actuales</span>
+                    <span className="font-semibold text-gray-900">
+                      {subscriptionInfo.current_branches} de {subscriptionInfo.max_branches} contratadas
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-gray-600 text-sm">Límite del plan {subscriptionInfo.plan?.toUpperCase()}</span>
+                    <span className="font-semibold text-gray-900">{subscriptionInfo.plan_limit} sucursales</span>
+                  </div>
+                  <div className="border-t border-blue-200 pt-3 mt-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-900 font-medium">Costo mensual adicional</span>
+                      <span className="text-2xl font-bold text-blue-600">
+                        ${subscriptionInfo.next_branch_price.toLocaleString()}<span className="text-sm font-normal text-gray-500">/mes</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form */}
+                <div className="space-y-4">
+                  <Input
+                    label="Nombre de la Sucursal"
+                    placeholder="Ej: Sucursal Centro, Sucursal Norte..."
+                    value={extraBranchForm.name}
+                    onChange={(e) => setExtraBranchForm({ ...extraBranchForm, name: e.target.value })}
+                    disabled={extraBranchLoading}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Ciudad (opcional)"
+                      placeholder="Ej: Monterrey"
+                      value={extraBranchForm.city}
+                      onChange={(e) => setExtraBranchForm({ ...extraBranchForm, city: e.target.value })}
+                      disabled={extraBranchLoading}
+                    />
+                    <Input
+                      label="Estado (opcional)"
+                      placeholder="Ej: Nuevo León"
+                      value={extraBranchForm.state}
+                      onChange={(e) => setExtraBranchForm({ ...extraBranchForm, state: e.target.value })}
+                      disabled={extraBranchLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* Notice */}
+                <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-amber-800">
+                    El cobro de <strong>${subscriptionInfo.next_branch_price.toLocaleString()} MXN/mes</strong> se agregará a tu próxima factura y se mantendrá mientras la sucursal esté activa.
+                  </p>
+                </div>
+
+                {/* Error */}
+                {extraBranchError && (
+                  <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+                    <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm text-red-700">{extraBranchError}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowExtraBranchModal(false);
+                    setExtraBranchError(null);
+                    setExtraBranchForm({ name: '', city: '', state: '' });
+                  }}
+                  disabled={extraBranchLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleAddExtraBranch}
+                  disabled={extraBranchLoading || !extraBranchForm.name.trim()}
+                  isLoading={extraBranchLoading}
+                >
+                  {extraBranchLoading ? 'Procesando...' : `Confirmar (+$${subscriptionInfo.next_branch_price.toLocaleString()}/mes)`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extra Branch Success Modal */}
+      {showExtraBranchSuccess && extraBranchSuccessData && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            onClick={() => setShowExtraBranchSuccess(false)}
+          />
+
+          {/* Modal */}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl transform transition-all text-center">
+              <div className="p-8">
+                {/* Success Icon */}
+                <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-green-500/30">
+                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  ¡Sucursal Creada!
+                </h3>
+                <p className="text-gray-600 mb-1">
+                  <strong>{extraBranchSuccessData.name}</strong> ha sido agregada exitosamente.
+                </p>
+                <p className="text-sm text-gray-500 mb-6">
+                  Se agregó <strong className="text-blue-600">${extraBranchSuccessData.price.toLocaleString()} MXN/mes</strong> a tu facturación.
+                </p>
+
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => {
+                    setShowExtraBranchSuccess(false);
+                    setExtraBranchSuccessData(null);
+                  }}
+                >
+                  Entendido
+                </Button>
+              </div>
             </div>
           </div>
         </div>
