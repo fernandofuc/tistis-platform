@@ -19,6 +19,12 @@ export interface BookingRequest {
   requested_date?: string; // ISO date string
   requested_time?: string; // HH:MM format
   notes?: string;
+  // Restaurant-specific fields
+  party_size?: number;
+  table_id?: string;
+  occasion_type?: string;
+  special_requests?: string;
+  vertical?: 'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary' | 'general';
 }
 
 export interface BookingResult {
@@ -31,6 +37,11 @@ export interface BookingResult {
   duration_minutes?: number;
   error?: string;
   suggestion?: string; // Alternative time suggestion if requested slot unavailable
+  // Restaurant-specific result fields
+  party_size?: number;
+  table_name?: string;
+  occasion_type?: string;
+  vertical?: 'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary' | 'general';
 }
 
 export interface AvailableSlot {
@@ -49,6 +60,10 @@ export interface ExtractedBookingData {
   branch_name?: string;
   staff_name?: string;
   is_flexible?: boolean; // "cualquier día", "cuando tengan"
+  // Restaurant-specific extracted data
+  party_size?: number;
+  occasion?: string;
+  special_requests?: string;
 }
 
 // ======================
@@ -145,6 +160,56 @@ export function extractBookingData(message: string): ExtractedBookingData {
     }
 
     result.time = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  }
+
+  // Extract party size (restaurant-specific)
+  // "mesa para 4", "somos 6", "para 8 personas", "reserva para 2"
+  const partySizeMatch = messageLower.match(/(?:mesa\s+)?(?:para|somos|de)\s+(\d{1,2})(?:\s+personas?)?/i);
+  if (partySizeMatch) {
+    result.party_size = parseInt(partySizeMatch[1]);
+  }
+
+  // Extract occasion (restaurant-specific)
+  const occasionPatterns: Record<string, string> = {
+    'cumpleaños': 'birthday',
+    'cumple': 'birthday',
+    'aniversario': 'anniversary',
+    'negocios': 'business',
+    'trabajo': 'business',
+    'romántic': 'date_night',
+    'cita': 'date_night',
+    'familiar': 'family_gathering',
+    'familia': 'family_gathering',
+    'celebración': 'celebration',
+    'celebrar': 'celebration',
+    'graduación': 'graduation',
+    'propuesta': 'proposal',
+    'compromiso': 'proposal',
+  };
+
+  for (const [keyword, occasion] of Object.entries(occasionPatterns)) {
+    if (messageLower.includes(keyword)) {
+      result.occasion = occasion;
+      break;
+    }
+  }
+
+  // Extract special requests (restaurant-specific)
+  // "vegetariano", "sin gluten", "alergia", "silla de bebé", "terraza", "privado"
+  const specialRequestsPatterns = [
+    'vegetariano', 'vegano', 'sin gluten', 'celiaco', 'alergia',
+    'silla de bebé', 'silla alta', 'terraza', 'interior', 'privado',
+    'ventana', 'tranquilo', 'vista',
+  ];
+
+  const foundRequests: string[] = [];
+  for (const pattern of specialRequestsPatterns) {
+    if (messageLower.includes(pattern)) {
+      foundRequests.push(pattern);
+    }
+  }
+  if (foundRequests.length > 0) {
+    result.special_requests = foundRequests.join(', ');
   }
 
   return result;
@@ -538,22 +603,31 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
     }
 
     // 6. Crear la cita
+    const isRestaurant = request.vertical === 'restaurant';
+    const appointmentData: Record<string, any> = {
+      tenant_id: request.tenant_id,
+      lead_id: request.lead_id,
+      branch_id: request.branch_id,
+      service_id: request.service_id || null,
+      staff_id: request.staff_id || null,
+      scheduled_at: scheduledAt.toISOString(),
+      duration_minutes: isRestaurant ? 120 : durationMinutes, // Default 2 hours for restaurant
+      status: 'scheduled',
+      source: 'ai_booking',
+      notes: request.notes || (isRestaurant ? 'Reservación agendada por asistente AI' : 'Cita agendada por asistente AI'),
+      reminder_sent: false,
+      confirmation_sent: false,
+    };
+
+    // Add restaurant-specific fields to appointments table
+    if (isRestaurant && request.party_size) {
+      appointmentData.party_size = request.party_size;
+      appointmentData.reservation_type = request.occasion_type || 'regular';
+    }
+
     const { data: appointment, error } = await supabase
       .from('appointments')
-      .insert({
-        tenant_id: request.tenant_id,
-        lead_id: request.lead_id,
-        branch_id: request.branch_id,
-        service_id: request.service_id || null,
-        staff_id: request.staff_id || null,
-        scheduled_at: scheduledAt.toISOString(),
-        duration_minutes: durationMinutes,
-        status: 'scheduled',
-        source: 'ai_booking',
-        notes: request.notes || 'Cita agendada por asistente AI',
-        reminder_sent: false,
-        confirmation_sent: false,
-      })
+      .insert(appointmentData)
       .select(`
         id,
         scheduled_at,
@@ -566,7 +640,27 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
 
     if (error) {
       console.error('[Booking Service] Error creating appointment:', error);
-      return { success: false, error: 'Error al crear la cita' };
+      return { success: false, error: isRestaurant ? 'Error al crear la reservación' : 'Error al crear la cita' };
+    }
+
+    // 6b. Create restaurant details record if applicable
+    if (isRestaurant && appointment?.id) {
+      const restaurantDetails = {
+        appointment_id: appointment.id,
+        party_size: request.party_size || 2,
+        table_id: request.table_id || null,
+        occasion_type: request.occasion_type || 'regular',
+        special_requests: request.special_requests || null,
+      };
+
+      const { error: detailsError } = await supabase
+        .from('appointment_restaurant_details')
+        .insert(restaurantDetails);
+
+      if (detailsError) {
+        console.error('[Booking Service] Error creating restaurant details:', detailsError);
+        // Don't fail the whole operation, just log
+      }
     }
 
     // 7. Actualizar lead status
@@ -595,19 +689,32 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
       `${staffData?.first_name || ''} ${staffData?.last_name || ''}`.trim() ||
       'Por asignar';
 
-    return {
+    const result: BookingResult = {
       success: true,
       appointment_id: appointment.id,
       scheduled_at: scheduledAt.toISOString(),
       branch_name: (appointment.branch as any)?.name || '',
       service_name: (appointment.service as any)?.name || serviceName,
       staff_name: staffName,
-      duration_minutes: durationMinutes,
+      duration_minutes: isRestaurant ? 120 : durationMinutes,
+      vertical: request.vertical,
     };
+
+    // Add restaurant-specific fields to result
+    if (isRestaurant) {
+      result.party_size = request.party_size;
+      result.occasion_type = request.occasion_type;
+      // Note: table_name would need to be fetched if table_id was provided
+    }
+
+    return result;
 
   } catch (error) {
     console.error('[Booking Service] Unexpected error:', error);
-    return { success: false, error: 'Error inesperado al crear la cita' };
+    const errorMsg = request.vertical === 'restaurant'
+      ? 'Error inesperado al crear la reservación'
+      : 'Error inesperado al crear la cita';
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -629,14 +736,15 @@ function formatDate(dateStr: string): string {
 }
 
 /**
- * Genera mensaje de confirmación de cita
+ * Genera mensaje de confirmación de cita/reservación
+ * Adapta el mensaje según el vertical (dental, restaurant, etc.)
  */
 export function generateBookingConfirmation(result: BookingResult): string {
   if (!result.success) {
     if (result.suggestion) {
       return `${result.error}. ${result.suggestion}`;
     }
-    return result.error || 'No fue posible agendar la cita.';
+    return result.error || 'No fue posible agendar.';
   }
 
   const date = new Date(result.scheduled_at!);
@@ -651,6 +759,47 @@ export function generateBookingConfirmation(result: BookingResult): string {
     hour12: true,
   });
 
+  const isRestaurant = result.vertical === 'restaurant';
+
+  if (isRestaurant) {
+    // Restaurant-specific confirmation message
+    let message = `¡Perfecto! Tu reservación ha sido confirmada:\n\n`;
+    message += `📅 ${dateStr}\n`;
+    message += `⏰ ${timeStr}\n`;
+    message += `📍 ${result.branch_name}\n`;
+
+    if (result.party_size) {
+      message += `👥 ${result.party_size} persona${result.party_size > 1 ? 's' : ''}\n`;
+    }
+
+    if (result.table_name) {
+      message += `🪑 ${result.table_name}\n`;
+    }
+
+    if (result.occasion_type && result.occasion_type !== 'regular') {
+      const occasionLabels: Record<string, string> = {
+        birthday: '🎂 Cumpleaños',
+        anniversary: '💑 Aniversario',
+        business: '💼 Reunión de negocios',
+        date_night: '💕 Cita romántica',
+        family_gathering: '👨‍👩‍👧‍👦 Reunión familiar',
+        celebration: '🎉 Celebración',
+        graduation: '🎓 Graduación',
+        proposal: '💍 Propuesta',
+      };
+      const label = occasionLabels[result.occasion_type];
+      if (label) {
+        message += `${label}\n`;
+      }
+    }
+
+    message += `\n¡Te esperamos! Por favor llega a tiempo.`;
+    message += `\n\nSi necesitas modificar o cancelar tu reservación, avísanos con al menos 2 horas de anticipación.`;
+
+    return message;
+  }
+
+  // Default (dental/clinic) confirmation message
   let message = `¡Perfecto! Tu cita ha sido agendada:\n\n`;
   message += `📅 ${dateStr}\n`;
   message += `⏰ ${timeStr}\n`;
