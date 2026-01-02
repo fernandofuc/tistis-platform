@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { getUserFromRequest } from '@/src/shared/lib/supabase-server';
-import { getPlanConfig, getNextBranchPrice } from '@/src/shared/config/plans';
+import { getPlanConfig, getNextBranchPrice, calculateBranchCostPesos } from '@/src/shared/config/plans';
 
 // Stripe client
 function getStripeClient() {
@@ -292,12 +292,19 @@ export async function POST(request: NextRequest) {
       console.warn('⚠️ No stripe_subscription_id found - billing not updated');
     }
 
-    // 3. Update local subscription max_branches (contracted branches)
+    // 3. Update local subscription max_branches and monthly_amount
+    // Calculate new total monthly amount: plan price + all extra branches cost
+    const newContractedBranches = contractedBranches + 1;
+    const planBasePrice = planConfig?.monthlyPricePesos || 0;
+    const totalExtraBranchesCost = calculateBranchCostPesos(plan, newContractedBranches);
+    const newMonthlyAmount = planBasePrice + totalExtraBranchesCost;
+
     const { error: updateError } = await supabaseAdmin
       .from('subscriptions')
       .update({
-        max_branches: contractedBranches + 1, // Increase contracted branches by 1
+        max_branches: newContractedBranches, // Increase contracted branches by 1
         branch_unit_price: extraBranchPrice,
+        monthly_amount: newMonthlyAmount, // Update total monthly amount
         updated_at: new Date().toISOString(),
       })
       .eq('id', subscriptionData.id);
@@ -324,6 +331,7 @@ export async function POST(request: NextRequest) {
           plan: plan,
           stripe_updated: stripeUpdateSuccess,
           stripe_subscription_id: subscriptionData.stripe_subscription_id,
+          new_monthly_amount: newMonthlyAmount,
         },
         created_by: user.id,
       });

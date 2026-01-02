@@ -10,7 +10,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
-import { getPlanConfig, getNextBranchPrice } from '@/src/shared/config/plans';
+import { getPlanConfig, getNextBranchPrice, calculateBranchCostPesos } from '@/src/shared/config/plans';
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -192,12 +192,18 @@ export async function POST(request: NextRequest) {
         }
       );
 
+      // Calculate new monthly amount
+      const planBasePrice = planConfig?.monthlyPricePesos || 0;
+      const totalExtraBranchesCost = calculateBranchCostPesos(subscription.plan, newBranchCount);
+      const newMonthlyAmount = planBasePrice + totalExtraBranchesCost;
+
       // Update local subscription
       await supabaseAdmin
         .from('subscriptions')
         .update({
           max_branches: newBranchCount,
           branches: newBranchCount,
+          monthly_amount: newMonthlyAmount,
           updated_at: new Date().toISOString(),
         })
         .eq('id', subscription.id);
@@ -281,12 +287,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Calculate new monthly amount after removing branch
+      const planConfigRemove = getPlanConfig(subscription.plan);
+      const planBasePriceRemove = planConfigRemove?.monthlyPricePesos || 0;
+      const totalExtraBranchesCostRemove = calculateBranchCostPesos(subscription.plan, newBranchCount);
+      const newMonthlyAmountRemove = planBasePriceRemove + totalExtraBranchesCostRemove;
+
       // Update local subscription
       await supabaseAdmin
         .from('subscriptions')
         .update({
           max_branches: newBranchCount,
           branches: newBranchCount,
+          monthly_amount: newMonthlyAmountRemove,
           updated_at: new Date().toISOString(),
         })
         .eq('id', subscription.id);
