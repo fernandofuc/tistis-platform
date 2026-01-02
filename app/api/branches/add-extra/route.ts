@@ -6,9 +6,15 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { getUserFromRequest } from '@/src/shared/lib/supabase-server';
 import { getPlanConfig, getNextBranchPrice } from '@/src/shared/config/plans';
+
+// Stripe client
+function getStripeClient() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!);
+}
 
 // Service role client for admin operations
 function getSupabaseAdmin() {
@@ -79,7 +85,7 @@ export async function POST(request: NextRequest) {
     // Include 'trialing' status so users in trial can also add branches
     const { data: subscriptionData, error: subError } = await supabaseAdmin
       .from('subscriptions')
-      .select('id, plan, max_branches, current_branches, branch_unit_price, client_id')
+      .select('id, plan, max_branches, current_branches, branch_unit_price, client_id, stripe_subscription_id')
       .eq('client_id', clientData.id)
       .in('status', ['active', 'trialing'])
       .order('created_at', { ascending: false })
@@ -212,7 +218,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Update subscription max_branches (contracted branches - the trigger will update current_branches)
+    // 2. Update Stripe subscription with the new branch item
+    // This ensures the customer is charged for the extra branch
+    const stripe = getStripeClient();
+    let stripeUpdateSuccess = false;
+
+    if (subscriptionData.stripe_subscription_id) {
+      try {
+        console.log(`💳 Updating Stripe subscription: ${subscriptionData.stripe_subscription_id}`);
+
+        // Get the current Stripe subscription
+        const stripeSubscription = await stripe.subscriptions.retrieve(
+          subscriptionData.stripe_subscription_id
+        );
+
+        // Create price for the extra branch (price in centavos for Stripe)
+        const branchPriceCentavos = extraBranchPrice * 100;
+
+        const priceData = {
+          currency: 'mxn',
+          product_data: {
+            name: `Sucursal Extra #${currentBranches + 1} - Plan ${plan}`,
+          },
+          unit_amount: branchPriceCentavos,
+          recurring: {
+            interval: 'month' as const,
+          },
+        };
+
+        // Create the price in Stripe
+        const stripePrice = await stripe.prices.create(priceData);
+
+        // Add the new item to subscription (with proration)
+        await stripe.subscriptions.update(
+          subscriptionData.stripe_subscription_id,
+          {
+            items: [
+              ...stripeSubscription.items.data.map((item) => ({
+                id: item.id,
+              })),
+              {
+                price: stripePrice.id,
+                quantity: 1,
+              },
+            ],
+            proration_behavior: 'create_prorations',
+            metadata: {
+              ...stripeSubscription.metadata,
+              branches: String(currentBranches + 1),
+            },
+          }
+        );
+
+        stripeUpdateSuccess = true;
+        console.log(`✅ Stripe subscription updated: +$${extraBranchPrice}/mes`);
+
+      } catch (stripeError) {
+        console.error('❌ Error updating Stripe subscription:', stripeError);
+        // If Stripe fails, we should NOT proceed with creating the branch
+        // Delete the branch we just created
+        await supabaseAdmin
+          .from('branches')
+          .delete()
+          .eq('id', newBranch.id);
+
+        return NextResponse.json({
+          error: 'stripe_error',
+          message: 'Error al procesar el pago. Por favor intenta de nuevo.',
+          details: stripeError instanceof Error ? stripeError.message : 'Unknown error',
+        }, { status: 500 });
+      }
+    } else {
+      console.warn('⚠️ No stripe_subscription_id found - billing not updated');
+    }
+
+    // 3. Update local subscription max_branches (contracted branches)
     const { error: updateError } = await supabaseAdmin
       .from('subscriptions')
       .update({
@@ -227,7 +307,7 @@ export async function POST(request: NextRequest) {
       // Branch was created but subscription update failed - log but don't fail
     }
 
-    // 3. Log the subscription change (ignore errors - non-critical)
+    // 4. Log the subscription change (ignore errors - non-critical)
     try {
       await supabaseAdmin.from('subscription_changes').insert({
         subscription_id: subscriptionData.id,
@@ -242,6 +322,8 @@ export async function POST(request: NextRequest) {
           branch_id: newBranch.id,
           branch_name: newBranch.name,
           plan: plan,
+          stripe_updated: stripeUpdateSuccess,
+          stripe_subscription_id: subscriptionData.stripe_subscription_id,
         },
         created_by: user.id,
       });
@@ -249,7 +331,7 @@ export async function POST(request: NextRequest) {
       console.error('Error logging subscription change:', logError);
     }
 
-    // 4. Log audit (ignore errors - non-critical)
+    // 5. Log audit (ignore errors - non-critical)
     try {
       await supabaseAdmin.from('audit_logs').insert({
         tenant_id: tenantId,
@@ -267,7 +349,7 @@ export async function POST(request: NextRequest) {
       console.error('Error logging audit:', auditError);
     }
 
-    console.log('✅ Extra branch created:', newBranch.id, newBranch.name, `+$${extraBranchPrice}/mes`);
+    console.log('✅ Extra branch created:', newBranch.id, newBranch.name, `+$${extraBranchPrice}/mes`, stripeUpdateSuccess ? '(Stripe updated)' : '(No Stripe)');
 
     return NextResponse.json({
       success: true,
@@ -275,7 +357,10 @@ export async function POST(request: NextRequest) {
       billing: {
         extra_cost_added: extraBranchPrice,
         new_contracted_branches: contractedBranches + 1,
-        message: `Sucursal creada exitosamente. Se agregó $${extraBranchPrice.toLocaleString()} MXN/mes a tu facturación.`,
+        stripe_updated: stripeUpdateSuccess,
+        message: stripeUpdateSuccess
+          ? `Sucursal creada exitosamente. Se agregó $${extraBranchPrice.toLocaleString()} MXN/mes a tu facturación.`
+          : `Sucursal creada exitosamente. El cobro se reflejará en tu próxima factura.`,
       },
     });
 
