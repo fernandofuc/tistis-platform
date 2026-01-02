@@ -931,7 +931,8 @@ JOIN lead_restaurant_profile lrp ON lrp.lead_id = l.id
 JOIN tenants t ON t.id = l.tenant_id
 WHERE t.vertical = 'restaurant'
 AND lrp.loyalty_tier IN ('gold', 'platinum', 'vip')
-AND l.deleted_at IS NULL
+-- leads table doesn't have deleted_at, using tenant status check instead
+AND t.status = 'active'
 ORDER BY lrp.total_spent DESC;
 
 
