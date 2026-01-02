@@ -81,6 +81,28 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
     </svg>
   ),
+  // Restaurant-specific icons
+  tables: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+    </svg>
+  ),
+  menu: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  ),
+  kitchen: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+    </svg>
+  ),
+  inventory: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </svg>
+  ),
 };
 
 // ======================
@@ -91,6 +113,8 @@ interface NavItemWithFlag extends NavItem {
   featureFlag?: string; // Feature flag key required to show this item
   alwaysShow?: boolean; // Always show regardless of flags
   section?: string; // Section grouping for visual organization
+  verticals?: string[]; // Only show for these verticals (empty = all)
+  excludeVerticals?: string[]; // Hide for these verticals
 }
 
 // ======================
@@ -123,7 +147,7 @@ const navItemsConfig: NavItemWithFlag[] = [
     alwaysShow: true,
     section: NAV_SECTIONS.MAIN,
   },
-  // === OPERATIONS ===
+  // === OPERATIONS (Common) ===
   {
     name: 'Calendario',
     href: '/dashboard/calendario',
@@ -144,6 +168,48 @@ const navItemsConfig: NavItemWithFlag[] = [
     icon: icons.patients,
     alwaysShow: true,
     section: NAV_SECTIONS.OPERATIONS,
+    excludeVerticals: ['restaurant'], // Restaurant usa "Clientes" separado
+  },
+  // === RESTAURANT-SPECIFIC OPERATIONS ===
+  {
+    name: 'Clientes',
+    href: '/dashboard/patients',
+    icon: icons.patients,
+    alwaysShow: true,
+    section: NAV_SECTIONS.OPERATIONS,
+    verticals: ['restaurant'],
+  },
+  {
+    name: 'Mesas',
+    href: '/dashboard/mesas',
+    icon: icons.tables,
+    featureFlag: 'tables_enabled',
+    section: NAV_SECTIONS.OPERATIONS,
+    verticals: ['restaurant'],
+  },
+  {
+    name: 'Menú',
+    href: '/dashboard/menu',
+    icon: icons.menu,
+    featureFlag: 'menu_enabled',
+    section: NAV_SECTIONS.OPERATIONS,
+    verticals: ['restaurant'],
+  },
+  {
+    name: 'Inventario',
+    href: '/dashboard/inventario',
+    icon: icons.inventory,
+    featureFlag: 'inventory_enabled',
+    section: NAV_SECTIONS.OPERATIONS,
+    verticals: ['restaurant'],
+  },
+  {
+    name: 'Cocina',
+    href: '/dashboard/cocina',
+    icon: icons.kitchen,
+    featureFlag: 'kitchen_display_enabled',
+    section: NAV_SECTIONS.OPERATIONS,
+    verticals: ['restaurant'],
   },
   // === COMMUNICATION ===
   {
@@ -181,7 +247,7 @@ const navItemsConfig: NavItemWithFlag[] = [
     name: 'Lealtad',
     href: '/dashboard/lealtad',
     icon: icons.loyalty,
-    alwaysShow: true,
+    featureFlag: 'loyalty_enabled',
     section: NAV_SECTIONS.SYSTEM,
   },
   {
@@ -197,16 +263,24 @@ const navItemsConfig: NavItemWithFlag[] = [
 const navTerminology: Record<string, Record<string, string>> = {
   dental: {
     Pacientes: 'Pacientes',
+    Calendario: 'Citas',
+    Leads: 'Prospectos',
   },
   clinic: {
     Pacientes: 'Pacientes',
+    Calendario: 'Citas',
+    Leads: 'Prospectos',
   },
   restaurant: {
     Pacientes: 'Clientes',
     Calendario: 'Reservaciones',
+    Leads: 'Prospectos',
+    Lealtad: 'Programa VIP',
   },
   gym: {
     Pacientes: 'Miembros',
+    Calendario: 'Clases',
+    Leads: 'Prospectos',
   },
 };
 
@@ -237,15 +311,31 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
     });
   }, [router]);
 
-  // Filter nav items based on feature flags
+  // Filter nav items based on feature flags and vertical
   const visibleNavItems = useMemo(() => {
-    // While loading, show all items (better UX than empty sidebar)
-    if (flagsLoading) {
-      return navItemsConfig;
+    const currentVertical = tenant?.vertical || 'dental';
+
+    // While loading, show minimal items
+    if (flagsLoading || tenantLoading) {
+      return navItemsConfig.filter(item => item.alwaysShow && !item.verticals && !item.excludeVerticals);
     }
 
     return navItemsConfig.filter(item => {
-      // Always show items marked as alwaysShow
+      // Check vertical restrictions first
+      if (item.verticals && item.verticals.length > 0) {
+        if (!item.verticals.includes(currentVertical)) {
+          return false;
+        }
+      }
+
+      // Check excluded verticals
+      if (item.excludeVerticals && item.excludeVerticals.length > 0) {
+        if (item.excludeVerticals.includes(currentVertical)) {
+          return false;
+        }
+      }
+
+      // Always show items marked as alwaysShow (after vertical check)
       if (item.alwaysShow) return true;
 
       // Check feature flag
@@ -257,7 +347,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flagsLoading, isEnabled]);
+  }, [flagsLoading, tenantLoading, tenant?.vertical, isEnabled]);
 
   // Get display name with vertical-specific terminology
   const getDisplayName = (item: NavItemWithFlag): string => {

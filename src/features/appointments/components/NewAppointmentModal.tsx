@@ -72,6 +72,29 @@ interface StaffBranchAssignment {
   is_primary: boolean;
 }
 
+interface RestaurantTable {
+  id: string;
+  table_number: string;
+  name?: string;
+  max_capacity: number;
+  zone: string;
+  status: string;
+}
+
+// Restaurant occasion types
+const OCCASION_TYPES = [
+  { value: 'regular', label: 'Comida regular' },
+  { value: 'birthday', label: 'Cumpleaños' },
+  { value: 'anniversary', label: 'Aniversario' },
+  { value: 'business', label: 'Negocios' },
+  { value: 'date_night', label: 'Cita romántica' },
+  { value: 'family_gathering', label: 'Reunión familiar' },
+  { value: 'celebration', label: 'Celebración' },
+  { value: 'proposal', label: 'Propuesta' },
+  { value: 'graduation', label: 'Graduación' },
+  { value: 'other', label: 'Otro' },
+];
+
 interface NewAppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -171,7 +194,11 @@ export function NewAppointmentModal({
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffBranches, setStaffBranches] = useState<StaffBranchAssignment[]>([]);
+  const [restaurantTables, setRestaurantTables] = useState<RestaurantTable[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+
+  // Detect if restaurant vertical
+  const isRestaurant = tenant?.vertical === 'restaurant';
 
   // Form states
   const [selectedLeadId, setSelectedLeadId] = useState(preselectedLeadId || '');
@@ -185,6 +212,12 @@ export function NewAppointmentModal({
   const [duration, setDuration] = useState(30);
   const [notes, setNotes] = useState('');
 
+  // Restaurant-specific form states
+  const [partySize, setPartySize] = useState(2);
+  const [selectedTableId, setSelectedTableId] = useState('');
+  const [occasionType, setOccasionType] = useState('regular');
+  const [specialRequests, setSpecialRequests] = useState('');
+
   // UI states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +230,7 @@ export function NewAppointmentModal({
 
     setLoadingData(true);
     try {
+      // Run all queries in parallel
       const [leadsRes, patientsRes, servicesRes, staffRes, staffBranchesRes] = await Promise.all([
         supabase
           .from('leads')
@@ -220,12 +254,29 @@ export function NewAppointmentModal({
           .select('id, display_name, first_name, last_name, role, role_title, avatar_url')
           .eq('tenant_id', tenant.id)
           .eq('is_active', true)
-          .in('role', ['dentist', 'specialist', 'doctor', 'manager', 'owner'])
+          .in('role', ['dentist', 'specialist', 'doctor', 'manager', 'owner', 'host', 'server'])
           .order('display_name'),
         supabase
           .from('staff_branches')
           .select('staff_id, branch_id, is_primary'),
       ]);
+
+      // Fetch restaurant tables separately if needed (avoids type conflicts)
+      let tablesData: RestaurantTable[] = [];
+      if (isRestaurant) {
+        const tablesRes = await supabase
+          .from('restaurant_tables')
+          .select('id, table_number, name, max_capacity, zone, status')
+          .eq('tenant_id', tenant.id)
+          .eq('is_active', true)
+          .order('table_number');
+
+        if (tablesRes.error) {
+          console.error('Error fetching tables:', tablesRes.error);
+        } else {
+          tablesData = (tablesRes.data || []) as RestaurantTable[];
+        }
+      }
 
       if (leadsRes.error) console.error('Error fetching leads:', leadsRes.error);
       if (patientsRes.error) console.error('Error fetching patients:', patientsRes.error);
@@ -239,6 +290,7 @@ export function NewAppointmentModal({
       setServices(servicesRes.data || []);
       setStaff(staffRes.data || []);
       setStaffBranches(staffBranchesRes.data || []);
+      setRestaurantTables(tablesData);
 
       // Create unified client list with deduplication
       // Priority: Patients first (they are confirmed clients), then leads without patient_id
@@ -285,7 +337,7 @@ export function NewAppointmentModal({
     } finally {
       setLoadingData(false);
     }
-  }, [tenant?.id]);
+  }, [tenant?.id, isRestaurant]);
 
   // Fetch all data when modal opens
   useEffect(() => {
@@ -377,6 +429,21 @@ export function NewAppointmentModal({
     return staffForBranch;
   }, [staff, staffBranches, selectedBranchIdLocal]);
 
+  // Filter restaurant tables by branch and party size
+  const filteredTables = useMemo(() => {
+    if (!isRestaurant) return [];
+
+    return restaurantTables.filter((table) => {
+      // Filter by branch if selected
+      // Note: Tables are branch-specific in the database
+      // Filter by capacity - table must accommodate party size
+      if (table.max_capacity < partySize) return false;
+      // Only show available tables
+      if (table.status !== 'available') return false;
+      return true;
+    });
+  }, [restaurantTables, partySize, isRestaurant]);
+
   // Auto-set duration when service is selected
   useEffect(() => {
     if (selectedService?.duration_minutes) {
@@ -437,7 +504,7 @@ export function NewAppointmentModal({
         appointmentLeadId = selectedLeadId;
       }
 
-      const appointmentData = {
+      const appointmentData: Record<string, any> = {
         tenant_id: tenant.id,
         branch_id: selectedBranchIdLocal,
         lead_id: appointmentLeadId,
@@ -451,11 +518,39 @@ export function NewAppointmentModal({
         notes: notes || null,
       };
 
-      const { error: insertError } = await supabase
+      // Add restaurant-specific fields
+      if (isRestaurant) {
+        appointmentData.party_size = partySize;
+        appointmentData.reservation_type = occasionType;
+      }
+
+      const { data: appointmentResult, error: insertError } = await supabase
         .from('appointments')
-        .insert(appointmentData);
+        .insert(appointmentData)
+        .select('id')
+        .single();
 
       if (insertError) throw insertError;
+
+      // If restaurant, create appointment_restaurant_details record
+      if (isRestaurant && appointmentResult?.id) {
+        const restaurantDetails = {
+          appointment_id: appointmentResult.id,
+          party_size: partySize,
+          table_id: selectedTableId || null,
+          occasion_type: occasionType,
+          special_requests: specialRequests || null,
+        };
+
+        const { error: detailsError } = await supabase
+          .from('appointment_restaurant_details')
+          .insert(restaurantDetails);
+
+        if (detailsError) {
+          console.error('Error creating restaurant details:', detailsError);
+          // Don't fail the whole operation, just log
+        }
+      }
 
       // Update lead's branch_id to match the appointment's branch
       // This ensures the lead appears when filtering by branch
@@ -490,6 +585,12 @@ export function NewAppointmentModal({
     setNotes('');
     setError(null);
     setLeadSearch('');
+
+    // Reset restaurant-specific fields
+    setPartySize(2);
+    setSelectedTableId('');
+    setOccasionType('regular');
+    setSpecialRequests('');
   }
 
   function handleClose() {
@@ -748,7 +849,121 @@ export function NewAppointmentModal({
           </div>
         </div>
 
+        {/* Section: Restaurant-specific fields (Party Size, Table, Occasion) */}
+        {isRestaurant && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <span className="text-amber-500">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </span>
+              <span>Detalles de Reservación</span>
+              <span className="text-red-500">*</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Party Size */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  Número de personas <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={partySize}
+                  onChange={(e) => setPartySize(parseInt(e.target.value))}
+                  required
+                  className={cn(
+                    'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                    'focus:ring-2 focus:ring-amber-500 focus:border-transparent',
+                    'transition-all duration-200 appearance-none bg-white',
+                    'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
+                  )}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20].map((num) => (
+                    <option key={num} value={num}>
+                      {num} {num === 1 ? 'persona' : 'personas'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Occasion Type */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  Ocasión
+                </label>
+                <select
+                  value={occasionType}
+                  onChange={(e) => setOccasionType(e.target.value)}
+                  className={cn(
+                    'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                    'focus:ring-2 focus:ring-amber-500 focus:border-transparent',
+                    'transition-all duration-200 appearance-none bg-white',
+                    'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
+                  )}
+                >
+                  {OCCASION_TYPES.map((occ) => (
+                    <option key={occ.value} value={occ.value}>
+                      {occ.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Table Selection */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  Mesa <span className="text-gray-400">(opcional)</span>
+                </label>
+                <select
+                  value={selectedTableId}
+                  onChange={(e) => setSelectedTableId(e.target.value)}
+                  className={cn(
+                    'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                    'focus:ring-2 focus:ring-amber-500 focus:border-transparent',
+                    'transition-all duration-200 appearance-none bg-white',
+                    'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
+                  )}
+                >
+                  <option value="">Asignar al llegar</option>
+                  {filteredTables.length === 0 ? (
+                    <option value="" disabled>
+                      No hay mesas disponibles para {partySize} personas
+                    </option>
+                  ) : (
+                    filteredTables.map((table) => (
+                      <option key={table.id} value={table.id}>
+                        Mesa {table.table_number} ({table.max_capacity} pers.) - {table.zone}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </div>
+
+            {/* Special Requests */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                Solicitudes especiales <span className="text-gray-400">(alergias, preferencias, etc.)</span>
+              </label>
+              <textarea
+                value={specialRequests}
+                onChange={(e) => setSpecialRequests(e.target.value)}
+                rows={2}
+                placeholder="Ej: Alérgico a mariscos, preferencia de mesa cerca de la ventana, silla para bebé..."
+                className={cn(
+                  'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm',
+                  'focus:ring-2 focus:ring-amber-500 focus:border-transparent',
+                  'transition-all duration-200 resize-none',
+                  'placeholder:text-gray-400'
+                )}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Section: Servicio y Duración */}
+        {!isRestaurant && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <span className="text-green-500">{icons.medical}</span>
@@ -806,19 +1021,20 @@ export function NewAppointmentModal({
             </div>
           </div>
         </div>
+        )}
 
         {/* Section: Especialista y Sucursal */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <span className="text-orange-500">{icons.location}</span>
-            <span>Asignación</span>
+            <span>{isRestaurant ? 'Ubicación' : 'Asignación'}</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Branch Select - FIRST so staff filters by selected branch */}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                Sucursal <span className="text-red-500">*</span>
+                {isRestaurant ? 'Restaurante' : 'Sucursal'} <span className="text-red-500">*</span>
               </label>
               <select
                 value={selectedBranchIdLocal}
@@ -841,6 +1057,7 @@ export function NewAppointmentModal({
             </div>
 
             {/* Staff Select - filtered by selected branch */}
+            {!isRestaurant && (
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">
                 Especialista <span className="text-gray-400">(opcional)</span>
@@ -867,10 +1084,11 @@ export function NewAppointmentModal({
                 )}
               </select>
             </div>
+            )}
           </div>
 
           {/* Selected Staff Card */}
-          {selectedStaff && (
+          {selectedStaff && !isRestaurant && (
             <div className="p-3 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100 rounded-xl flex items-center gap-3">
               <Avatar
                 name={selectedStaff.display_name || `${selectedStaff.first_name} ${selectedStaff.last_name}`}
@@ -911,7 +1129,12 @@ export function NewAppointmentModal({
 
         {/* Summary Card */}
         {(scheduledDate && scheduledTime) && (
-          <div className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-xl space-y-3">
+          <div className={cn(
+            "p-4 border rounded-xl space-y-3",
+            isRestaurant
+              ? "bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200"
+              : "bg-gradient-to-br from-gray-50 to-slate-50 border-gray-200"
+          )}>
             <h4 className="text-sm font-semibold text-gray-700">{appointmentLabels.summaryTitle}</h4>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
@@ -924,14 +1147,22 @@ export function NewAppointmentModal({
                 <span className="text-gray-500">Hora:</span>
                 <p className="font-medium text-gray-900">{scheduledTime} hrs</p>
               </div>
+              {!isRestaurant && (
+                <div>
+                  <span className="text-gray-500">Duración:</span>
+                  <p className="font-medium text-gray-900">{duration} minutos</p>
+                </div>
+              )}
+              {isRestaurant && (
+                <div>
+                  <span className="text-gray-500">Personas:</span>
+                  <p className="font-medium text-gray-900">{partySize} {partySize === 1 ? 'persona' : 'personas'}</p>
+                </div>
+              )}
               <div>
-                <span className="text-gray-500">Duración:</span>
-                <p className="font-medium text-gray-900">{duration} minutos</p>
-              </div>
-              <div>
-                <span className="text-gray-500">Sucursal:</span>
+                <span className="text-gray-500">{isRestaurant ? 'Restaurante:' : 'Sucursal:'}</span>
                 <p className="font-medium text-gray-900">
-                  {authBranches.find(b => b.id === selectedBranchIdLocal)?.name || 'No seleccionada'}
+                  {authBranches.find(b => b.id === selectedBranchIdLocal)?.name || 'No seleccionado'}
                 </p>
               </div>
               {selectedClient && (
@@ -939,11 +1170,27 @@ export function NewAppointmentModal({
                   <span className="text-gray-500">Cliente:</span>
                   <p className="font-medium text-gray-900">
                     {selectedClient.name || selectedClient.phone}
-                    {selectedClient.type === 'patient' && ' (Paciente)'}
+                    {selectedClient.type === 'patient' && !isRestaurant && ' (Paciente)'}
                   </p>
                 </div>
               )}
-              {selectedService && (
+              {isRestaurant && occasionType !== 'regular' && (
+                <div className="col-span-2">
+                  <span className="text-gray-500">Ocasión:</span>
+                  <p className="font-medium text-gray-900">
+                    {OCCASION_TYPES.find(o => o.value === occasionType)?.label || occasionType}
+                  </p>
+                </div>
+              )}
+              {isRestaurant && selectedTableId && (
+                <div className="col-span-2">
+                  <span className="text-gray-500">Mesa asignada:</span>
+                  <p className="font-medium text-gray-900">
+                    Mesa {filteredTables.find(t => t.id === selectedTableId)?.table_number}
+                  </p>
+                </div>
+              )}
+              {!isRestaurant && selectedService && (
                 <div className="col-span-2">
                   <span className="text-gray-500">Servicio:</span>
                   <p className="font-medium text-gray-900">{selectedService.name}</p>

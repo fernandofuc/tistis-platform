@@ -48,10 +48,16 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
   email_enabled: true,
   loyalty_enabled: false, // Loyalty system (essentials+)
 
-  // Vertical-specific
+  // Vertical-specific: Dental
   treatment_plans_enabled: false,
-  inventory_enabled: false,
+
+  // Vertical-specific: Restaurant
   reservations_enabled: false,
+  tables_enabled: false,
+  menu_enabled: false,
+  inventory_enabled: false,
+  kitchen_display_enabled: false,
+  pos_enabled: false,
 };
 
 // Feature flags by plan (used when no DB flags exist)
@@ -110,10 +116,16 @@ const VERTICAL_FLAGS: Record<string, string[]> = {
   ],
   restaurant: [
     'reservations_enabled',
+    'tables_enabled',
+    'menu_enabled',
     'inventory_enabled',
+    'kitchen_display_enabled',
+    'pos_enabled',
+    'loyalty_enabled',
   ],
   gym: [
     'patients_enabled', // members
+    'loyalty_enabled',
   ],
 };
 
@@ -244,6 +256,7 @@ export function useFeatureFlags(clientId?: string): UseFeatureFlagsReturn {
 
 // Mapping of modules to their required feature flags
 export const MODULE_FLAGS: Record<string, string> = {
+  // Core modules
   dashboard: 'dashboard_enabled',
   leads: 'leads_enabled',
   appointments: 'appointments_enabled',
@@ -257,6 +270,28 @@ export const MODULE_FLAGS: Record<string, string> = {
   clinical_history: 'clinical_history_enabled',
   loyalty: 'loyalty_enabled',
   lealtad: 'loyalty_enabled',
+
+  // Restaurant-specific modules
+  reservations: 'reservations_enabled',
+  reservaciones: 'reservations_enabled',
+  tables: 'tables_enabled',
+  mesas: 'tables_enabled',
+  menu: 'menu_enabled',
+  inventory: 'inventory_enabled',
+  inventario: 'inventory_enabled',
+  kitchen: 'kitchen_display_enabled',
+  cocina: 'kitchen_display_enabled',
+  pos: 'pos_enabled',
+
+  // Dental-specific modules
+  treatment_plans: 'treatment_plans_enabled',
+  tratamientos: 'treatment_plans_enabled',
+
+  // Aliases for Spanish routes
+  clientes: 'leads_enabled',
+  pacientes: 'patients_enabled',
+  cotizaciones: 'quotes_enabled',
+  historial_clinico: 'clinical_history_enabled',
 };
 
 // Helper to check if a route/module should be accessible
