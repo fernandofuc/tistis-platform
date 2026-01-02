@@ -610,7 +610,9 @@ ALTER TABLE public.staff_restaurant_profile ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.restaurant_menu_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.restaurant_menu_items ENABLE ROW LEVEL SECURITY;
 
+-- =====================================================
 -- Políticas para service_role (acceso completo)
+-- =====================================================
 CREATE POLICY "service_role_all_restaurant_tables" ON public.restaurant_tables
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
@@ -628,6 +630,163 @@ CREATE POLICY "service_role_all_restaurant_menu_categories" ON public.restaurant
 
 CREATE POLICY "service_role_all_restaurant_menu_items" ON public.restaurant_menu_items
     FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+
+-- =====================================================
+-- Políticas para usuarios autenticados (by tenant)
+-- =====================================================
+
+-- restaurant_tables: Usuarios pueden ver/gestionar mesas de su tenant
+CREATE POLICY "tenant_select_restaurant_tables" ON public.restaurant_tables
+    FOR SELECT TO authenticated
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+        )
+    );
+
+CREATE POLICY "tenant_manage_restaurant_tables" ON public.restaurant_tables
+    FOR ALL TO authenticated
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+            AND role IN ('owner', 'admin', 'manager')
+        )
+    )
+    WITH CHECK (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+            AND role IN ('owner', 'admin', 'manager')
+        )
+    );
+
+-- lead_restaurant_profile: Usuarios pueden ver perfiles de leads de su tenant
+CREATE POLICY "tenant_select_lead_restaurant_profile" ON public.lead_restaurant_profile
+    FOR SELECT TO authenticated
+    USING (
+        lead_id IN (
+            SELECT id FROM public.leads
+            WHERE tenant_id IN (
+                SELECT tenant_id FROM public.user_roles
+                WHERE user_id = auth.uid() AND is_active = true
+            )
+        )
+    );
+
+CREATE POLICY "tenant_manage_lead_restaurant_profile" ON public.lead_restaurant_profile
+    FOR ALL TO authenticated
+    USING (
+        lead_id IN (
+            SELECT id FROM public.leads
+            WHERE tenant_id IN (
+                SELECT tenant_id FROM public.user_roles
+                WHERE user_id = auth.uid() AND is_active = true
+            )
+        )
+    );
+
+-- appointment_restaurant_details: Usuarios pueden ver/gestionar detalles de citas de su tenant
+CREATE POLICY "tenant_select_appointment_restaurant_details" ON public.appointment_restaurant_details
+    FOR SELECT TO authenticated
+    USING (
+        appointment_id IN (
+            SELECT id FROM public.appointments
+            WHERE tenant_id IN (
+                SELECT tenant_id FROM public.user_roles
+                WHERE user_id = auth.uid() AND is_active = true
+            )
+        )
+    );
+
+CREATE POLICY "tenant_manage_appointment_restaurant_details" ON public.appointment_restaurant_details
+    FOR ALL TO authenticated
+    USING (
+        appointment_id IN (
+            SELECT id FROM public.appointments
+            WHERE tenant_id IN (
+                SELECT tenant_id FROM public.user_roles
+                WHERE user_id = auth.uid() AND is_active = true
+            )
+        )
+    );
+
+-- staff_restaurant_profile: Staff puede ver su propio perfil, admins pueden gestionar
+CREATE POLICY "staff_select_own_restaurant_profile" ON public.staff_restaurant_profile
+    FOR SELECT TO authenticated
+    USING (
+        staff_id IN (
+            SELECT id FROM public.staff
+            WHERE user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "tenant_admin_manage_staff_restaurant_profile" ON public.staff_restaurant_profile
+    FOR ALL TO authenticated
+    USING (
+        staff_id IN (
+            SELECT s.id FROM public.staff s
+            JOIN public.user_roles ur ON ur.tenant_id = s.tenant_id
+            WHERE ur.user_id = auth.uid() AND ur.is_active = true
+            AND ur.role IN ('owner', 'admin')
+        )
+    );
+
+-- restaurant_menu_categories: Usuarios pueden ver categorías, admins gestionan
+CREATE POLICY "tenant_select_menu_categories" ON public.restaurant_menu_categories
+    FOR SELECT TO authenticated
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+        )
+    );
+
+CREATE POLICY "tenant_admin_manage_menu_categories" ON public.restaurant_menu_categories
+    FOR ALL TO authenticated
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+            AND role IN ('owner', 'admin', 'manager')
+        )
+    )
+    WITH CHECK (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+            AND role IN ('owner', 'admin', 'manager')
+        )
+    );
+
+-- restaurant_menu_items: Usuarios pueden ver items, admins gestionan
+CREATE POLICY "tenant_select_menu_items" ON public.restaurant_menu_items
+    FOR SELECT TO authenticated
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+        )
+    );
+
+CREATE POLICY "tenant_admin_manage_menu_items" ON public.restaurant_menu_items
+    FOR ALL TO authenticated
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+            AND role IN ('owner', 'admin', 'manager')
+        )
+    )
+    WITH CHECK (
+        tenant_id IN (
+            SELECT tenant_id FROM public.user_roles
+            WHERE user_id = auth.uid() AND is_active = true
+            AND role IN ('owner', 'admin', 'manager')
+        )
+    );
 
 
 -- =====================================================

@@ -84,7 +84,13 @@ const icons = {
   // Restaurant-specific icons
   tables: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+      {/* Mesa de restaurante con sillas - icono más representativo */}
+      <rect x="5" y="10" width="14" height="2" rx="0.5" strokeWidth={1.5} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12v4M17 12v4" />
+      <circle cx="4" cy="11" r="1.5" strokeWidth={1.5} />
+      <circle cx="20" cy="11" r="1.5" strokeWidth={1.5} />
+      <circle cx="12" cy="6" r="1.5" strokeWidth={1.5} />
+      <circle cx="12" cy="18" r="1.5" strokeWidth={1.5} />
     </svg>
   ),
   menu: (

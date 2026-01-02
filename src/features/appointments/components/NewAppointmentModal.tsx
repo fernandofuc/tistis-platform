@@ -209,7 +209,7 @@ export function NewAppointmentModal({
   const [selectedBranchIdLocal, setSelectedBranchIdLocal] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('09:00');
-  const [duration, setDuration] = useState(30);
+  const [duration, setDuration] = useState(isRestaurant ? 120 : 30);
   const [notes, setNotes] = useState('');
 
   // Restaurant-specific form states
@@ -217,6 +217,9 @@ export function NewAppointmentModal({
   const [selectedTableId, setSelectedTableId] = useState('');
   const [occasionType, setOccasionType] = useState('regular');
   const [specialRequests, setSpecialRequests] = useState('');
+
+  // Default duration: 30 min for dental/clinic, 120 min for restaurant
+  const defaultDuration = isRestaurant ? 120 : 30;
 
   // UI states
   const [loading, setLoading] = useState(false);
@@ -581,7 +584,7 @@ export function NewAppointmentModal({
     setSelectedStaffId('');
     setScheduledDate(new Date().toISOString().split('T')[0]);
     setScheduledTime('09:00');
-    setDuration(30);
+    setDuration(defaultDuration);
     setNotes('');
     setError(null);
     setLeadSearch('');
@@ -865,10 +868,12 @@ export function NewAppointmentModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Party Size */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                <label htmlFor="party-size" className="block text-xs font-medium text-gray-500 mb-1.5">
                   Número de personas <span className="text-red-500">*</span>
                 </label>
                 <select
+                  id="party-size"
+                  aria-label="Seleccionar número de personas"
                   value={partySize}
                   onChange={(e) => setPartySize(parseInt(e.target.value))}
                   required
@@ -889,10 +894,12 @@ export function NewAppointmentModal({
 
               {/* Occasion Type */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                <label htmlFor="occasion-type" className="block text-xs font-medium text-gray-500 mb-1.5">
                   Ocasión
                 </label>
                 <select
+                  id="occasion-type"
+                  aria-label="Seleccionar tipo de ocasión"
                   value={occasionType}
                   onChange={(e) => setOccasionType(e.target.value)}
                   className={cn(
@@ -912,10 +919,12 @@ export function NewAppointmentModal({
 
               {/* Table Selection */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                <label htmlFor="table-select" className="block text-xs font-medium text-gray-500 mb-1.5">
                   Mesa <span className="text-gray-400">(opcional)</span>
                 </label>
                 <select
+                  id="table-select"
+                  aria-label="Seleccionar mesa"
                   value={selectedTableId}
                   onChange={(e) => setSelectedTableId(e.target.value)}
                   className={cn(
@@ -943,10 +952,12 @@ export function NewAppointmentModal({
 
             {/* Special Requests */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="special-requests" className="block text-xs font-medium text-gray-500 mb-1.5">
                 Solicitudes especiales <span className="text-gray-400">(alergias, preferencias, etc.)</span>
               </label>
               <textarea
+                id="special-requests"
+                aria-label="Solicitudes especiales para la reservación"
                 value={specialRequests}
                 onChange={(e) => setSpecialRequests(e.target.value)}
                 rows={2}
