@@ -313,9 +313,13 @@ export default function PatientsPage() {
     return age;
   };
 
-  // Handle create patient
+  // Handle create patient - uses API endpoint with service role for reliable persistence
   const handleCreatePatient = async () => {
-    if (!tenant?.id) return;
+    if (!tenant?.id) {
+      console.error('❌ No tenant ID found');
+      alert('Error: No se encontró el tenant. Por favor recarga la página.');
+      return;
+    }
     if (!newPatient.first_name.trim() || !newPatient.last_name.trim() || !newPatient.phone.trim()) {
       alert('Por favor completa los campos requeridos: Nombre, Apellido y Teléfono');
       return;
@@ -323,29 +327,56 @@ export default function PatientsPage() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('patients')
-        .insert({
-          tenant_id: tenant.id,
-          first_name: newPatient.first_name.trim(),
-          last_name: newPatient.last_name.trim(),
-          phone: newPatient.phone.trim(),
-          email: newPatient.email.trim() || null,
-          date_of_birth: newPatient.date_of_birth || null,
-          gender: newPatient.gender || null,
-          notes: newPatient.notes.trim() || null,
-          preferred_branch_id: selectedBranchId || null,
-          status: 'active',
-        })
-        .select()
-        .single();
+      const patientData = {
+        tenant_id: tenant.id,
+        first_name: newPatient.first_name.trim(),
+        last_name: newPatient.last_name.trim(),
+        phone: newPatient.phone.trim(),
+        email: newPatient.email.trim() || null,
+        date_of_birth: newPatient.date_of_birth || null,
+        gender: newPatient.gender || null,
+        notes: newPatient.notes.trim() || null,
+        preferred_branch_id: selectedBranchId || null,
+        status: 'active',
+      };
 
-      if (error) throw error;
+      console.log('📝 Creating patient via API with data:', patientData);
+
+      // Get current session for auth
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
+      }
+
+      // Use API endpoint which has service role access (bypasses RLS issues)
+      const response = await fetch('/api/patients', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(patientData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ API error creating patient:', result);
+        throw new Error(result.error || 'Error al crear paciente');
+      }
+
+      console.log('✅ Patient created successfully:', result.patient);
+
+      // Optimistically add the new patient to the list
+      if (result.patient) {
+        setPatients(prev => [result.patient, ...prev]);
+      }
 
       setShowNewPatientModal(false);
       setNewPatient({ first_name: '', last_name: '', phone: '', email: '', date_of_birth: '', gender: '', notes: '' });
-      fetchPatients();
     } catch (error: unknown) {
+      console.error('❌ Error creating patient:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al crear paciente';
       alert(`Error al crear el paciente: ${errorMessage}`);
     } finally {

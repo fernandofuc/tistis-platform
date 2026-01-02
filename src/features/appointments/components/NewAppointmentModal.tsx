@@ -23,6 +23,30 @@ interface Lead {
   phone: string;
   email?: string;
   classification?: string;
+  patient_id?: string; // Reference to converted patient
+}
+
+interface Patient {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email?: string | null;
+  patient_number?: string;
+  lead_id?: string; // Reference to original lead
+}
+
+// Unified client type for search results
+interface UnifiedClient {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  type: 'lead' | 'patient';
+  classification?: string;
+  patient_number?: string;
+  lead_id?: string; // For patients, reference to original lead
+  patient_id?: string; // For leads, reference to converted patient
 }
 
 interface Service {
@@ -48,12 +72,6 @@ interface StaffBranchAssignment {
   staff_id: string;
   branch_id: string;
   is_primary: boolean;
-}
-
-interface Branch {
-  id: string;
-  name: string;
-  address?: string;
 }
 
 interface NewAppointmentModalProps {
@@ -151,7 +169,7 @@ export function NewAppointmentModal({
   const appointmentLabels = useMemo(() => getAppointmentLabels(terminology), [terminology]);
 
   // Data states
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [unifiedClients, setUnifiedClients] = useState<UnifiedClient[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffBranches, setStaffBranches] = useState<StaffBranchAssignment[]>([]);
@@ -159,6 +177,8 @@ export function NewAppointmentModal({
 
   // Form states
   const [selectedLeadId, setSelectedLeadId] = useState(preselectedLeadId || '');
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [selectedClientType, setSelectedClientType] = useState<'lead' | 'patient' | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [selectedBranchIdLocal, setSelectedBranchIdLocal] = useState('');
@@ -179,12 +199,18 @@ export function NewAppointmentModal({
 
     setLoadingData(true);
     try {
-      const [leadsRes, servicesRes, staffRes, staffBranchesRes] = await Promise.all([
+      const [leadsRes, patientsRes, servicesRes, staffRes, staffBranchesRes] = await Promise.all([
         supabase
           .from('leads')
-          .select('id, full_name, phone, email, classification')
+          .select('id, full_name, phone, email, classification, patient_id')
           .eq('tenant_id', tenant.id)
           .order('full_name'),
+        supabase
+          .from('patients')
+          .select('id, first_name, last_name, phone, email, patient_number, lead_id')
+          .eq('tenant_id', tenant.id)
+          .eq('status', 'active')
+          .order('first_name'),
         supabase
           .from('services')
           .select('id, name, duration_minutes, price_min, price_max, category')
@@ -204,14 +230,59 @@ export function NewAppointmentModal({
       ]);
 
       if (leadsRes.error) console.error('Error fetching leads:', leadsRes.error);
+      if (patientsRes.error) console.error('Error fetching patients:', patientsRes.error);
       if (servicesRes.error) console.error('Error fetching services:', servicesRes.error);
       if (staffRes.error) console.error('Error fetching staff:', staffRes.error);
       if (staffBranchesRes.error) console.error('Error fetching staff_branches:', staffBranchesRes.error);
 
-      setLeads(leadsRes.data || []);
+      const leadsData = leadsRes.data || [];
+      const patientsData = patientsRes.data || [];
+
       setServices(servicesRes.data || []);
       setStaff(staffRes.data || []);
       setStaffBranches(staffBranchesRes.data || []);
+
+      // Create unified client list with deduplication
+      // Priority: Patients first (they are confirmed clients), then leads without patient_id
+      const phoneSet = new Set<string>();
+      const unified: UnifiedClient[] = [];
+
+      // Add patients first
+      for (const patient of patientsData) {
+        const normalizedPhone = patient.phone?.replace(/[^\d]/g, '') || '';
+        if (normalizedPhone && !phoneSet.has(normalizedPhone)) {
+          phoneSet.add(normalizedPhone);
+          unified.push({
+            id: patient.id,
+            name: `${patient.first_name} ${patient.last_name}`.trim(),
+            phone: patient.phone,
+            email: patient.email,
+            type: 'patient',
+            patient_number: patient.patient_number,
+            lead_id: patient.lead_id,
+          });
+        }
+      }
+
+      // Add leads that are NOT already represented by a patient
+      for (const lead of leadsData) {
+        const normalizedPhone = lead.phone?.replace(/[^\d]/g, '') || '';
+        // Skip if this phone already exists (patient with same phone)
+        // Also skip if lead has patient_id (already converted)
+        if (normalizedPhone && !phoneSet.has(normalizedPhone) && !lead.patient_id) {
+          phoneSet.add(normalizedPhone);
+          unified.push({
+            id: lead.id,
+            name: lead.full_name || lead.phone,
+            phone: lead.phone,
+            email: lead.email,
+            type: 'lead',
+            classification: lead.classification,
+          });
+        }
+      }
+
+      setUnifiedClients(unified);
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -248,22 +319,34 @@ export function NewAppointmentModal({
     }
   }, [isOpen, preselectedDate, preselectedLeadId, selectedBranchId, authBranches]);
 
-  // Filter leads by search
-  const filteredLeads = useMemo(() => {
-    if (!leadSearch) return leads;
+  // Filter unified clients by search
+  const filteredClients = useMemo(() => {
+    if (!leadSearch) return unifiedClients;
     const search = leadSearch.toLowerCase();
-    return leads.filter(
-      (lead) =>
-        lead.full_name?.toLowerCase().includes(search) ||
-        lead.phone?.includes(search) ||
-        lead.email?.toLowerCase().includes(search)
+    return unifiedClients.filter(
+      (client) =>
+        client.name?.toLowerCase().includes(search) ||
+        client.phone?.includes(search) ||
+        client.email?.toLowerCase().includes(search) ||
+        client.patient_number?.toLowerCase().includes(search)
     );
-  }, [leads, leadSearch]);
+  }, [unifiedClients, leadSearch]);
 
-  // Get selected lead details
-  const selectedLead = useMemo(() => {
-    return leads.find((l) => l.id === selectedLeadId);
-  }, [leads, selectedLeadId]);
+  // Get selected client details (unified)
+  const selectedClient = useMemo(() => {
+    if (selectedClientType === 'patient' && selectedPatientId) {
+      return unifiedClients.find((c) => c.id === selectedPatientId && c.type === 'patient');
+    }
+    if (selectedClientType === 'lead' && selectedLeadId) {
+      return unifiedClients.find((c) => c.id === selectedLeadId && c.type === 'lead');
+    }
+    // Backwards compatibility: try to find by selectedLeadId in both
+    if (selectedLeadId) {
+      return unifiedClients.find((c) => c.id === selectedLeadId);
+    }
+    return null;
+  }, [unifiedClients, selectedLeadId, selectedPatientId, selectedClientType]);
+
 
   // Get selected service details
   const selectedService = useMemo(() => {
@@ -340,10 +423,29 @@ export function NewAppointmentModal({
       // Calculate end_time
       const endTime = new Date(scheduledAt.getTime() + duration * 60000);
 
+      // Determine the lead_id and patient_id based on selection
+      let appointmentLeadId: string | null = null;
+      let appointmentPatientId: string | null = null;
+
+      if (selectedClient) {
+        if (selectedClient.type === 'patient') {
+          appointmentPatientId = selectedClient.id;
+          // If the patient has a linked lead, use that lead_id
+          appointmentLeadId = selectedClient.lead_id || null;
+        } else {
+          // It's a lead
+          appointmentLeadId = selectedClient.id;
+        }
+      } else if (selectedLeadId) {
+        // Backwards compatibility
+        appointmentLeadId = selectedLeadId;
+      }
+
       const appointmentData = {
         tenant_id: tenant.id,
         branch_id: selectedBranchIdLocal,
-        lead_id: selectedLeadId || null,
+        lead_id: appointmentLeadId,
+        patient_id: appointmentPatientId,
         staff_id: selectedStaffId || null,
         service_id: selectedServiceId || null,
         scheduled_at: scheduledAt.toISOString(),
@@ -361,11 +463,11 @@ export function NewAppointmentModal({
 
       // Update lead's branch_id to match the appointment's branch
       // This ensures the lead appears when filtering by branch
-      if (selectedLeadId && selectedBranchIdLocal) {
+      if (appointmentLeadId && selectedBranchIdLocal) {
         await supabase
           .from('leads')
           .update({ branch_id: selectedBranchIdLocal })
-          .eq('id', selectedLeadId);
+          .eq('id', appointmentLeadId);
       }
 
       // Success
@@ -382,6 +484,8 @@ export function NewAppointmentModal({
 
   function resetForm() {
     setSelectedLeadId('');
+    setSelectedPatientId('');
+    setSelectedClientType(null);
     setSelectedServiceId('');
     setSelectedStaffId('');
     setScheduledDate(new Date().toISOString().split('T')[0]);
@@ -465,10 +569,12 @@ export function NewAppointmentModal({
               </span>
               <input
                 type="text"
-                value={selectedLead ? selectedLead.full_name || selectedLead.phone : leadSearch}
+                value={selectedClient ? selectedClient.name || selectedClient.phone : leadSearch}
                 onChange={(e) => {
                   setLeadSearch(e.target.value);
                   setSelectedLeadId('');
+                  setSelectedPatientId('');
+                  setSelectedClientType(null);
                   setShowLeadDropdown(true);
                 }}
                 onFocus={() => setShowLeadDropdown(true)}
@@ -477,14 +583,16 @@ export function NewAppointmentModal({
                   'w-full pl-10 pr-10 py-3 border rounded-xl text-sm',
                   'focus:ring-2 focus:ring-blue-500 focus:border-transparent',
                   'transition-all duration-200',
-                  selectedLead ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
+                  selectedClient ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
                 )}
               />
-              {selectedLead && (
+              {selectedClient && (
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedLeadId('');
+                    setSelectedPatientId('');
+                    setSelectedClientType(null);
                     setLeadSearch('');
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
@@ -496,44 +604,63 @@ export function NewAppointmentModal({
               )}
             </div>
 
-            {/* Dropdown */}
-            {showLeadDropdown && !selectedLead && (
+            {/* Dropdown - Now shows unified clients (patients + leads) */}
+            {showLeadDropdown && !selectedClient && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-auto">
                 {loadingData ? (
                   <div className="p-4 text-center text-gray-500 text-sm">Cargando...</div>
-                ) : filteredLeads.length === 0 ? (
+                ) : filteredClients.length === 0 ? (
                   <div className="p-4 text-center text-gray-500 text-sm">
                     {leadSearch ? 'No se encontraron resultados' : 'No hay clientes registrados'}
                   </div>
                 ) : (
-                  filteredLeads.slice(0, 10).map((lead) => (
+                  filteredClients.slice(0, 10).map((client) => (
                     <button
-                      key={lead.id}
+                      key={`${client.type}-${client.id}`}
                       type="button"
                       onClick={() => {
-                        setSelectedLeadId(lead.id);
+                        if (client.type === 'patient') {
+                          setSelectedPatientId(client.id);
+                          setSelectedLeadId('');
+                          setSelectedClientType('patient');
+                        } else {
+                          setSelectedLeadId(client.id);
+                          setSelectedPatientId('');
+                          setSelectedClientType('lead');
+                        }
                         setLeadSearch('');
                         setShowLeadDropdown(false);
                       }}
                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
                     >
-                      <Avatar name={lead.full_name || lead.phone} size="sm" />
+                      <Avatar name={client.name || client.phone} size="sm" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {lead.full_name || 'Sin nombre'}
+                          {client.name || 'Sin nombre'}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">{lead.phone}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {client.phone}
+                          {client.patient_number && ` • #${client.patient_number}`}
+                        </p>
                       </div>
-                      {lead.classification && (
+                      {/* Type badge: Patient or Lead */}
+                      <Badge
+                        size="sm"
+                        variant={client.type === 'patient' ? 'success' : 'info'}
+                      >
+                        {client.type === 'patient' ? 'Paciente' : 'Lead'}
+                      </Badge>
+                      {/* Classification badge for leads */}
+                      {client.type === 'lead' && client.classification && (
                         <Badge
                           size="sm"
                           variant={
-                            lead.classification === 'hot' ? 'danger' :
-                            lead.classification === 'warm' ? 'warning' :
+                            client.classification === 'hot' ? 'danger' :
+                            client.classification === 'warm' ? 'warning' :
                             'default'
                           }
                         >
-                          {lead.classification}
+                          {client.classification}
                         </Badge>
                       )}
                     </button>
@@ -543,13 +670,29 @@ export function NewAppointmentModal({
             )}
           </div>
 
-          {/* Selected Lead Card */}
-          {selectedLead && (
-            <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl flex items-center gap-3">
-              <Avatar name={selectedLead.full_name || selectedLead.phone} size="md" />
+          {/* Selected Client Card (Patient or Lead) */}
+          {selectedClient && (
+            <div className={cn(
+              'p-3 border rounded-xl flex items-center gap-3',
+              selectedClient.type === 'patient'
+                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-100'
+                : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100'
+            )}>
+              <Avatar name={selectedClient.name || selectedClient.phone} size="md" />
               <div className="flex-1">
-                <p className="font-medium text-gray-900">{selectedLead.full_name || 'Sin nombre'}</p>
-                <p className="text-sm text-gray-500">{selectedLead.phone}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-gray-900">{selectedClient.name || 'Sin nombre'}</p>
+                  <Badge
+                    size="sm"
+                    variant={selectedClient.type === 'patient' ? 'success' : 'info'}
+                  >
+                    {selectedClient.type === 'patient' ? 'Paciente' : 'Lead'}
+                  </Badge>
+                </div>
+                <p className="text-sm text-gray-500">
+                  {selectedClient.phone}
+                  {selectedClient.patient_number && ` • #${selectedClient.patient_number}`}
+                </p>
               </div>
               <div className="text-green-500">{icons.check}</div>
             </div>
@@ -797,10 +940,13 @@ export function NewAppointmentModal({
                   {authBranches.find(b => b.id === selectedBranchIdLocal)?.name || 'No seleccionada'}
                 </p>
               </div>
-              {selectedLead && (
+              {selectedClient && (
                 <div className="col-span-2">
                   <span className="text-gray-500">Cliente:</span>
-                  <p className="font-medium text-gray-900">{selectedLead.full_name || selectedLead.phone}</p>
+                  <p className="font-medium text-gray-900">
+                    {selectedClient.name || selectedClient.phone}
+                    {selectedClient.type === 'patient' && ' (Paciente)'}
+                  </p>
                 </div>
               )}
               {selectedService && (
