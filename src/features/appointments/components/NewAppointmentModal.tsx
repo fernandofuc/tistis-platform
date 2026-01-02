@@ -349,7 +349,7 @@ export function NewAppointmentModal({
     }
   }, [isOpen, tenant?.id, fetchAllData]);
 
-  // Set preselected values
+  // Set preselected values and vertical-specific defaults
   useEffect(() => {
     if (isOpen) {
       if (preselectedDate) {
@@ -368,8 +368,11 @@ export function NewAppointmentModal({
       } else if (authBranches.length > 0) {
         setSelectedBranchIdLocal(authBranches[0].id);
       }
+
+      // Set default duration based on vertical (restaurant: 120 min, others: 30 min)
+      setDuration(isRestaurant ? 120 : 30);
     }
-  }, [isOpen, preselectedDate, preselectedLeadId, selectedBranchId, authBranches]);
+  }, [isOpen, preselectedDate, preselectedLeadId, selectedBranchId, authBranches, isRestaurant]);
 
   // Filter unified clients by search
   const filteredClients = useMemo(() => {
