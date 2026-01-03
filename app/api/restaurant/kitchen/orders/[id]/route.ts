@@ -3,6 +3,8 @@
 // GET: Get order, PUT: Update, PATCH: Status/Actions
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 

@@ -3,6 +3,8 @@
 // GET: Get table, PUT: Update table, DELETE: Delete table
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 

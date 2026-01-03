@@ -3,6 +3,8 @@
 // GET: Get category, PUT: Update category, DELETE: Delete category
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 

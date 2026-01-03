@@ -3,6 +3,8 @@
 // POST: Bump order to next status
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
