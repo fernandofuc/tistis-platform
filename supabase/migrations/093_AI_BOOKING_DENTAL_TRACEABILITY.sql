@@ -283,8 +283,10 @@ GRANT EXECUTE ON FUNCTION calculate_dental_urgency(TEXT[], BOOLEAN, INTEGER, BOO
 -- =====================================================
 -- PARTE 6: VISTAS ANALÍTICAS PARA DENTAL
 -- =====================================================
+-- NOTA: Estas vistas usan solo tablas existentes (appointments, leads, services, staff, branches)
+-- Las tablas appointment_dental_details y lead_dental_profile no existen actualmente
 
--- Vista de citas de hoy (similar a v_today_reservations de restaurant)
+-- Vista de citas de hoy para dental
 CREATE OR REPLACE VIEW public.v_today_dental_appointments AS
 SELECT
     a.id,
@@ -298,29 +300,24 @@ SELECT
     a.ai_booking_channel,
     a.ai_confidence_score,
     a.ai_urgency_level,
+    a.ai_detected_symptoms,
     a.requires_human_review,
     a.human_review_reason,
-    add.procedure_type,
-    add.dental_urgency_type,
-    add.is_new_patient,
-    add.ai_extracted_symptoms,
     l.full_name as patient_name,
     l.phone as patient_phone,
     l.email as patient_email,
-    ldp.insurance_provider,
-    ldp.last_visit_date,
     s.name as service_name,
     st.display_name as doctor_name,
     b.name as branch_name
 FROM appointments a
-LEFT JOIN appointment_dental_details add ON add.appointment_id = a.id
 LEFT JOIN leads l ON a.lead_id = l.id
-LEFT JOIN lead_dental_profile ldp ON ldp.lead_id = l.id
 LEFT JOIN services s ON a.service_id = s.id
 LEFT JOIN staff st ON a.staff_id = st.id
 LEFT JOIN branches b ON a.branch_id = b.id
+JOIN tenants t ON a.tenant_id = t.id
 WHERE a.scheduled_at::DATE = CURRENT_DATE
 AND a.status NOT IN ('cancelled', 'no_show')
+AND t.vertical = 'dental'
 ORDER BY a.scheduled_at;
 
 
@@ -334,8 +331,6 @@ SELECT
     a.status,
     a.ai_urgency_level,
     a.ai_detected_symptoms,
-    add.dental_urgency_type,
-    add.patient_original_complaint,
     l.full_name as patient_name,
     l.phone as patient_phone,
     b.name as branch_name,
@@ -346,7 +341,6 @@ SELECT
         ELSE 'NORMAL'
     END as priority_label
 FROM appointments a
-LEFT JOIN appointment_dental_details add ON add.appointment_id = a.id
 LEFT JOIN leads l ON a.lead_id = l.id
 LEFT JOIN branches b ON a.branch_id = b.id
 WHERE a.ai_urgency_level >= 3
@@ -381,34 +375,30 @@ AND a.status IN ('scheduled', 'confirmed')
 ORDER BY a.scheduled_at;
 
 
--- Vista de pacientes que necesitan seguimiento
+-- Vista de pacientes que necesitan seguimiento (basada en última cita completada)
 CREATE OR REPLACE VIEW public.v_patients_needing_followup AS
 SELECT
     l.id as lead_id,
+    l.tenant_id,
     l.full_name,
     l.phone,
     l.email,
-    ldp.last_visit_date,
-    ldp.next_checkup_due,
-    ldp.treatment_plan_status,
-    ldp.pending_treatments,
+    MAX(a.scheduled_at) as last_visit_date,
     t.name as tenant_name,
     CASE
-        WHEN ldp.next_checkup_due < CURRENT_DATE THEN 'VENCIDO'
-        WHEN ldp.next_checkup_due <= CURRENT_DATE + INTERVAL '7 days' THEN 'ESTA SEMANA'
-        WHEN ldp.next_checkup_due <= CURRENT_DATE + INTERVAL '30 days' THEN 'ESTE MES'
-        ELSE 'PROGRAMADO'
+        WHEN MAX(a.scheduled_at) < CURRENT_DATE - INTERVAL '6 months' THEN 'VENCIDO'
+        WHEN MAX(a.scheduled_at) < CURRENT_DATE - INTERVAL '5 months' THEN 'PROXIMO'
+        ELSE 'AL DIA'
     END as followup_status
 FROM leads l
-JOIN lead_dental_profile ldp ON ldp.lead_id = l.id
 JOIN tenants t ON t.id = l.tenant_id
+LEFT JOIN appointments a ON a.lead_id = l.id AND a.status = 'completed'
 WHERE t.vertical = 'dental'
 AND t.status = 'active'
-AND (
-    ldp.next_checkup_due <= CURRENT_DATE + INTERVAL '30 days'
-    OR ldp.treatment_plan_status = 'in_progress'
-)
-ORDER BY ldp.next_checkup_due;
+GROUP BY l.id, l.tenant_id, l.full_name, l.phone, l.email, t.name
+HAVING MAX(a.scheduled_at) IS NULL
+    OR MAX(a.scheduled_at) < CURRENT_DATE - INTERVAL '5 months'
+ORDER BY MAX(a.scheduled_at) NULLS FIRST;
 
 
 -- =====================================================
