@@ -7,6 +7,264 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [4.7.0] - 2026-01-03
+
+### Resumen
+
+**Mejoras Multi-Vertical del Sistema AI** - Deteccion de urgencia dental, agente de pedidos para restaurantes, trazabilidad AI completa para citas, y tokens de lealtad automaticos.
+
+### Caracteristicas Principales
+
+#### 1. Deteccion de Urgencia Dental (DENTAL VERTICAL)
+
+Sistema inteligente que detecta urgencias dentales en mensajes de WhatsApp/chat para priorizar citas.
+
+##### Niveles de Urgencia (1-5)
+
+| Nivel | Tipo | Timeframe | Ejemplos |
+|-------|------|-----------|----------|
+| 1 | Rutina | 2 semanas | Chequeo, limpieza programada |
+| 2 | Leve | 1 semana | Sensibilidad, molestia menor |
+| 3 | Moderado | 2-3 días | Dolor manejable, problema estetico |
+| 4 | Urgente | Mismo día | Dolor severo, hinchazón, sangrado |
+| 5 | Emergencia | Inmediato | Trauma, diente caído, absceso |
+
+##### Funcion detectUrgentDentalIntent()
+
+```typescript
+interface DentalUrgencyResult {
+  isUrgent: boolean;
+  urgencyLevel: 1 | 2 | 3 | 4 | 5;
+  urgencyType: 'routine' | 'pain_mild' | 'pain_moderate' | 'pain_severe' | 'trauma' | 'swelling' | 'bleeding' | 'emergency';
+  detectedSymptoms: string[];
+  recommendedTimeframe: string;
+}
+```
+
+##### Flujo de Urgencia
+
+```
+1. Mensaje llega via WhatsApp → vertical-router.agent.ts
+2. detectUrgentDentalIntent() analiza síntomas
+3. Resultado se guarda en state.metadata.dental_urgency
+4. booking_dental agent recibe metadata
+5. Si urgente: prioriza slots del mismo día
+6. AI traceability fields se guardan en appointment
+```
+
+##### Keywords Detectados
+
+**Emergencia (Nivel 5):**
+- "se me cayó el diente", "diente fracturado", "absceso", "no puedo abrir la boca"
+
+**Urgente (Nivel 4):**
+- "dolor muy fuerte", "no puedo dormir", "hinchazón", "sangrado"
+
+**Moderado (Nivel 3):**
+- "me duele", "no puedo masticar", "corona caída"
+
+**Leve (Nivel 2):**
+- "sensibilidad", "molestia", "encía roja"
+
+#### 2. Agente de Pedidos para Restaurantes (RESTAURANT VERTICAL)
+
+Nuevo agente AI que toma pedidos pickup/delivery via WhatsApp.
+
+##### OrderingRestaurantAgent
+
+```typescript
+class OrderingRestaurantAgentClass extends BookingAgentClass {
+  // Maneja flujo completo de pedido:
+  // - Muestra menú
+  // - Agrega items al carrito
+  // - Calcula totales
+  // - Confirma pedido
+}
+```
+
+##### Flujo de Pedido
+
+```
+1. Cliente: "Quiero ordenar para llevar"
+2. detectPickupOrderIntent() → true
+3. vertical-router enruta a ordering_restaurant
+4. Agente muestra categorías del menú
+5. Cliente selecciona items
+6. Agente confirma y calcula total
+7. Pedido se guarda en orders table
+```
+
+##### Deteccion de Intent
+
+```typescript
+function detectPickupOrderIntent(message: string): boolean {
+  // Detecta:
+  // - "quiero ordenar", "para llevar", "delivery"
+  // - "hacer un pedido", "domicilio"
+}
+```
+
+#### 3. Trazabilidad AI para Citas
+
+Nuevos campos en tabla `appointments` para rastrear citas agendadas por AI.
+
+##### Campos de Trazabilidad
+
+| Campo | Tipo | Descripcion |
+|-------|------|-------------|
+| `ai_booking_channel` | enum | 'ai_whatsapp', 'ai_voice', 'ai_webchat', 'ai_instagram', 'ai_facebook' |
+| `ai_urgency_level` | int | Nivel 1-5 de urgencia detectada |
+| `ai_detected_symptoms` | jsonb | Array de síntomas detectados en mensaje |
+| `ai_confidence_score` | decimal | Score de confianza del AI (0-1) |
+| `ai_booked_at` | timestamp | Cuando el AI agendó la cita |
+| `requires_human_review` | boolean | Si urgencia >= 4, requiere revisión |
+| `human_review_reason` | text | Razón para revisión humana |
+
+##### Vistas SQL Creadas
+
+| Vista | Proposito |
+|-------|-----------|
+| `v_today_dental_appointments` | Citas dentales de hoy con urgencia |
+| `v_urgent_dental_appointments` | Solo citas urgentes (nivel >= 3) |
+| `v_appointments_pending_review` | Citas que requieren revisión humana |
+| `v_patients_needing_followup` | Pacientes sin cita de seguimiento |
+
+#### 4. Tokens de Lealtad Automaticos
+
+Trigger que otorga tokens cuando una cita se completa.
+
+##### Logica del Trigger
+
+```sql
+-- award_tokens_on_appointment_complete()
+1. Appointment status cambia a 'completed'
+2. Busca loyalty_program activo del tenant
+3. Obtiene precio del servicio
+4. Calcula tokens: price * tokens_per_currency
+5. Minimo 1 token, Maximo 100 tokens
+6. Llama award_loyalty_tokens()
+```
+
+##### Vista de Resumen
+
+```sql
+CREATE VIEW v_appointment_loyalty_summary AS
+SELECT
+  tenant_id,
+  total_completed_appointments,
+  total_token_transactions,
+  total_tokens_awarded,
+  avg_tokens_per_appointment
+FROM tenants...
+```
+
+#### 5. Contexto AI Dinamico por Vertical
+
+RPC `get_tenant_ai_context` ahora retorna datos específicos por vertical.
+
+##### Dental Context
+
+```json
+{
+  "vertical": "dental",
+  "business_name": "Clinica Dental",
+  "dental_profile": {
+    "total_patients": 150,
+    "total_treatments": 450,
+    "active_appointments": 12
+  }
+}
+```
+
+##### Restaurant Context
+
+```json
+{
+  "vertical": "restaurant",
+  "business_name": "Restaurante XYZ",
+  "restaurant_profile": {
+    "menu_items": 45,
+    "tables": 20,
+    "active_reservations": 8
+  }
+}
+```
+
+### Archivos Nuevos
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/features/ai/agents/specialists/ordering.agent.ts` | Agente de pedidos para restaurantes |
+| `src/hooks/useBusinessInsights.ts` | Hook para insights de negocio |
+| `supabase/migrations/092_AI_ORDERING_INTEGRATION.sql` | Estructura para pedidos AI |
+| `supabase/migrations/093_AI_BOOKING_DENTAL_TRACEABILITY.sql` | Campos AI en appointments |
+| `supabase/migrations/094_MULTI_VERTICAL_AI_CONTEXT.sql` | RPC dinamico por vertical |
+| `supabase/migrations/095_APPOINTMENT_LOYALTY_TRIGGER.sql` | Trigger de tokens automaticos |
+
+### Archivos Modificados
+
+| Archivo | Cambios |
+|---------|---------|
+| `src/features/ai/agents/routing/vertical-router.agent.ts` | + detectUrgentDentalIntent(), + detectPickupOrderIntent(), + metadata enrichment |
+| `src/features/ai/agents/specialists/booking.agent.ts` | + BookingDentalAgentClass.execute() override con urgencia |
+| `src/features/ai/services/appointment-booking.service.ts` | + AI traceability fields en BookingRequest y createBooking() |
+| `src/features/ai/state/agent-state.ts` | + campo `metadata` para comunicacion inter-agente |
+| `src/features/ai/graph/tistis-graph.ts` | + nodos ordering_restaurant, ordering_hotel |
+| `src/features/ai/agents/specialists/index.ts` | + exports de OrderingRestaurantAgent |
+| `src/features/ai/state/index.ts` | + exports de metadata types |
+
+### Arquitectura del Sistema AI
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         ENTRADA DE MENSAJE          │
+                    │   (WhatsApp, Voice, Web, Instagram) │
+                    └─────────────────┬───────────────────┘
+                                      │
+                    ┌─────────────────▼───────────────────┐
+                    │        INTENT CLASSIFIER            │
+                    │   Detecta: booking, ordering, faq   │
+                    └─────────────────┬───────────────────┘
+                                      │
+                    ┌─────────────────▼───────────────────┐
+                    │        VERTICAL ROUTER              │
+                    │  ┌─────────────────────────────┐   │
+                    │  │ DENTAL:                      │   │
+                    │  │ - detectUrgentDentalIntent() │   │
+                    │  │ - Enriquece metadata         │   │
+                    │  └─────────────────────────────┘   │
+                    │  ┌─────────────────────────────┐   │
+                    │  │ RESTAURANT:                  │   │
+                    │  │ - detectPickupOrderIntent()  │   │
+                    │  │ - Redirige a ordering        │   │
+                    │  └─────────────────────────────┘   │
+                    └─────────────────┬───────────────────┘
+                                      │
+          ┌───────────────────────────┼───────────────────────────┐
+          │                           │                           │
+┌─────────▼─────────┐   ┌─────────────▼─────────────┐   ┌─────────▼─────────┐
+│  BOOKING_DENTAL   │   │   ORDERING_RESTAURANT     │   │   GENERAL_AGENT   │
+│                   │   │                           │   │                   │
+│ - Usa urgency     │   │ - Muestra menú            │   │ - FAQs            │
+│   metadata        │   │ - Carrito                 │   │ - Info general    │
+│ - Prioriza slots  │   │ - Confirma pedido         │   │                   │
+│ - Guarda AI       │   │                           │   │                   │
+│   traceability    │   │                           │   │                   │
+└───────────────────┘   └───────────────────────────┘   └───────────────────┘
+```
+
+### Notas Tecnicas
+
+1. **Comunicacion Inter-Agente**: El campo `metadata` en el state permite pasar informacion contextual entre agentes sin modificar prompts.
+
+2. **Sin Modificacion de Prompts**: Los prompts base permanecen intactos. La urgencia se añade como contexto adicional, no como modificacion del prompt.
+
+3. **Retrocompatibilidad**: Todos los campos nuevos tienen valores por defecto. Tenants existentes funcionan sin cambios.
+
+4. **Vertical Dental No Tiene Ordering**: Solo agenda citas. La deteccion de urgencia es para priorizar, no para redirigir a ordering.
+
+---
+
 ## [4.6.0] - 2025-12-29
 
 ### Resumen
