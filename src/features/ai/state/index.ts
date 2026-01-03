@@ -10,6 +10,7 @@ export {
   type ConversationInfo,
   type ExtractedData,
   type BookingResult,
+  type OrderResult,
   type BusinessContext,
   type AgentTrace,
   type ControlFlags,

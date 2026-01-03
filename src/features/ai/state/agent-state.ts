@@ -120,6 +120,38 @@ export interface BookingResult {
 }
 
 /**
+ * Resultado de orden de restaurante (pickup/delivery)
+ */
+export interface OrderResult {
+  success: boolean;
+  order_id?: string;
+  order_number?: string;
+  order_type: 'pickup' | 'delivery' | 'dine_in';
+  items: Array<{
+    menu_item_id: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    subtotal: number;
+    modifiers?: string[];
+    special_instructions?: string;
+  }>;
+  subtotal?: number;
+  tax_amount?: number;
+  total?: number;
+  estimated_ready_time?: string;
+  pickup_time?: string;
+  confirmation_message?: string;
+  error?: string;
+  /** Nivel de confianza del AI (0-1) en la interpretación del pedido */
+  ai_confidence_score?: number;
+  /** Alternativas que el AI ofreció al cliente */
+  ai_alternatives_offered?: string[];
+  /** Tokens de lealtad otorgados por esta orden */
+  tokens_awarded?: number;
+}
+
+/**
  * Contexto del negocio (servicios, sucursales, etc.)
  * COMPLETO: Incluye todo el Knowledge Base del cliente
  */
@@ -222,6 +254,59 @@ export interface BusinessContext {
   }>;
 
   // =====================================================
+  // MENÚ DE RESTAURANTE (Solo para vertical restaurant)
+  // =====================================================
+
+  /** Items del menú disponibles para pedidos */
+  menu_items?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    ai_description?: string;
+    category_id: string;
+    category_name: string;
+    base_price: number;
+    is_available: boolean;
+    preparation_time_minutes?: number;
+    allergens?: string[];
+    tags?: string[];
+    is_popular?: boolean;
+    modifiers?: Array<{
+      id: string;
+      name: string;
+      options: Array<{
+        id: string;
+        name: string;
+        price_adjustment: number;
+      }>;
+      is_required: boolean;
+      max_selections?: number;
+    }>;
+  }>;
+
+  /** Categorías del menú */
+  menu_categories?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    display_order: number;
+    is_active: boolean;
+  }>;
+
+  /** Configuración de pedidos del restaurante */
+  ordering_config?: {
+    accepts_pickup: boolean;
+    accepts_delivery: boolean;
+    accepts_dine_in: boolean;
+    min_pickup_time_minutes: number;
+    min_delivery_time_minutes: number;
+    delivery_fee?: number;
+    min_order_amount?: number;
+    max_order_items?: number;
+    special_instructions_enabled: boolean;
+  };
+
+  // =====================================================
   // DATOS EXTERNOS - De sistemas integrados (CRM, POS, etc.)
   // OPCIONAL: Solo presente si el tenant tiene integraciones activas
   // =====================================================
@@ -280,9 +365,13 @@ export interface ControlFlags {
   should_escalate: boolean;
   escalation_reason?: string;
 
-  // Booking
+  // Booking (citas/reservaciones)
   booking_attempted: boolean;
   booking_successful: boolean;
+
+  // Ordering (pedidos de restaurante)
+  ordering_attempted: boolean;
+  ordering_successful: boolean;
 
   // Respuesta
   response_ready: boolean;
@@ -417,8 +506,14 @@ export const TISTISAgentState = Annotation.Root({
   // ACCIONES TRANSACCIONALES
   // =====================================================
 
-  /** Resultado del intento de booking */
+  /** Resultado del intento de booking (citas/reservaciones) */
   booking_result: Annotation<BookingResult | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
+
+  /** Resultado del intento de ordering (pedidos de restaurante) */
+  order_result: Annotation<OrderResult | null>({
     reducer: (_, next) => next,
     default: () => null,
   }),
@@ -468,6 +563,8 @@ export const TISTISAgentState = Annotation.Root({
       should_escalate: false,
       booking_attempted: false,
       booking_successful: false,
+      ordering_attempted: false,
+      ordering_successful: false,
       response_ready: false,
       response_sent: false,
       needs_clarification: false,
@@ -496,6 +593,24 @@ export const TISTISAgentState = Annotation.Root({
   errors: Annotation<string[]>({
     reducer: (prev, next) => [...prev, ...next],
     default: () => [],
+  }),
+
+  // =====================================================
+  // METADATA EXTENSIBLE
+  // =====================================================
+
+  /**
+   * Metadata adicional para pasar información entre agentes
+   * Usado por el vertical-router para pasar datos a agentes especializados
+   * sin modificar la estructura principal del estado.
+   *
+   * Ejemplos de uso:
+   * - dental_urgency: Información de urgencia detectada para dental
+   * - restaurant_context: Contexto especial para restaurantes
+   */
+  metadata: Annotation<Record<string, unknown>>({
+    reducer: (prev, next) => ({ ...prev, ...next }),
+    default: () => ({}),
   }),
 });
 
@@ -526,6 +641,7 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
     vertical: 'dental', // Default to dental (active vertical)
     routing_reason: '',
     booking_result: null,
+    order_result: null,
     score_change: 0,
     lead_fields_updated: [],
     final_response: '',
@@ -535,6 +651,8 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
       should_escalate: false,
       booking_attempted: false,
       booking_successful: false,
+      ordering_attempted: false,
+      ordering_successful: false,
       response_ready: false,
       response_sent: false,
       needs_clarification: false,
@@ -544,6 +662,7 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
     agent_trace: [],
     processing_started_at: new Date().toISOString(),
     errors: [],
+    metadata: {},
   };
 }
 

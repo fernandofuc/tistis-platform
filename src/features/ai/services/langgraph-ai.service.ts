@@ -215,6 +215,7 @@ async function loadConversationContext(
  * Incluye: servicios, sucursales, FAQs, Knowledge Base, políticas, competencia, etc.
  *
  * IMPORTANTE: Usa el RPC que ya tiene toda la lógica de carga optimizada
+ * Para restaurantes: También carga el menú completo con categorías
  */
 async function loadBusinessContext(tenantId: string): Promise<BusinessContext | null> {
   const supabase = createServerClient();
@@ -233,13 +234,82 @@ async function loadBusinessContext(tenantId: string): Promise<BusinessContext | 
     }
   };
 
-  const [coreResult, externalResult] = await Promise.all([
+  // Cargar menú del restaurante (solo si es vertical restaurant)
+  const loadRestaurantMenu = async () => {
+    try {
+      // Primero verificar si es restaurant
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('vertical')
+        .eq('id', tenantId)
+        .single();
+
+      if (tenant?.vertical?.toLowerCase() !== 'restaurant') {
+        return { categories: [], items: [] };
+      }
+
+      // Cargar categorías y items en paralelo
+      const [categoriesResult, itemsResult] = await Promise.all([
+        supabase
+          .from('restaurant_menu_categories')
+          .select('id, name, description, slug, display_order, is_active, parent_id')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_order'),
+        supabase
+          .from('restaurant_menu_items')
+          .select(`
+            id,
+            name,
+            description,
+            short_description,
+            category_id,
+            price,
+            prep_time_minutes,
+            is_available,
+            is_vegetarian,
+            is_vegan,
+            is_gluten_free,
+            is_spicy,
+            spice_level,
+            is_house_special,
+            is_chef_recommendation,
+            is_new,
+            allergens,
+            variants,
+            sizes,
+            add_ons,
+            is_featured,
+            times_ordered,
+            average_rating
+          `)
+          .eq('tenant_id', tenantId)
+          .eq('is_available', true)
+          .is('deleted_at', null)
+          .order('display_order'),
+      ]);
+
+      return {
+        categories: categoriesResult.data || [],
+        items: itemsResult.data || [],
+      };
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error loading menu';
+      console.log('[LangGraph AI] Restaurant menu not available:', errorMessage);
+      return { categories: [], items: [] };
+    }
+  };
+
+  const [coreResult, externalResult, menuResult] = await Promise.all([
     supabase.rpc('get_tenant_ai_context', { p_tenant_id: tenantId }),
     loadExternalData(),
+    loadRestaurantMenu(),
   ]);
 
   const { data, error } = coreResult;
   const externalData = externalResult?.data;
+  const menuData = menuResult;
 
   if (error || !data) {
     console.error('[LangGraph AI] Error loading business context via RPC:', error);
@@ -334,6 +404,98 @@ async function loadBusinessContext(tenantId: string): Promise<BusinessContext | 
       talking_points: ch.talking_points as string[] | undefined,
       avoid_saying: ch.avoid_saying as string[] | undefined,
     })),
+
+    // =====================================================
+    // MENÚ DE RESTAURANTE (Solo para vertical restaurant)
+    // =====================================================
+    menu_categories: menuData.categories.length > 0 ? menuData.categories.map((cat: Record<string, unknown>) => ({
+      id: cat.id as string,
+      name: cat.name as string,
+      description: cat.description as string | undefined,
+      display_order: (cat.display_order as number) || 0,
+      is_active: (cat.is_active as boolean) ?? true,
+    })) : undefined,
+
+    menu_items: menuData.items.length > 0 ? menuData.items.map((item: Record<string, unknown>) => {
+      // Encontrar el nombre de la categoría
+      const category = menuData.categories.find((c: Record<string, unknown>) => c.id === item.category_id);
+
+      // Mapear variants/sizes/add_ons a modifiers
+      const modifiers: Array<{
+        id: string;
+        name: string;
+        options: Array<{ id: string; name: string; price_adjustment: number }>;
+        is_required: boolean;
+        max_selections?: number;
+      }> = [];
+
+      // Agregar sizes como modifier si existen
+      const sizes = item.sizes as Array<{ name: string; price: number }> | null;
+      if (sizes && sizes.length > 0) {
+        modifiers.push({
+          id: 'size',
+          name: 'Tamaño',
+          options: sizes.map((s, idx) => ({
+            id: `size_${idx}`,
+            name: s.name,
+            price_adjustment: s.price - (item.price as number),
+          })),
+          is_required: true,
+          max_selections: 1,
+        });
+      }
+
+      // Agregar add_ons como modifier si existen
+      const addOns = item.add_ons as Array<{ name: string; price: number; max_qty?: number }> | null;
+      if (addOns && addOns.length > 0) {
+        modifiers.push({
+          id: 'add_ons',
+          name: 'Extras',
+          options: addOns.map((a, idx) => ({
+            id: `addon_${idx}`,
+            name: a.name,
+            price_adjustment: a.price,
+          })),
+          is_required: false,
+        });
+      }
+
+      // Construir tags basados en flags
+      const tags: string[] = [];
+      if (item.is_vegetarian) tags.push('vegetariano');
+      if (item.is_vegan) tags.push('vegano');
+      if (item.is_gluten_free) tags.push('sin gluten');
+      if (item.is_spicy) tags.push('picante');
+      if (item.is_house_special) tags.push('especialidad de la casa');
+      if (item.is_chef_recommendation) tags.push('recomendación del chef');
+      if (item.is_new) tags.push('nuevo');
+
+      return {
+        id: item.id as string,
+        name: item.name as string,
+        description: (item.description as string) || (item.short_description as string) || undefined,
+        ai_description: undefined, // Se puede agregar campo específico después
+        category_id: item.category_id as string,
+        category_name: (category?.name as string) || 'Sin categoría',
+        base_price: item.price as number,
+        is_available: (item.is_available as boolean) ?? true,
+        preparation_time_minutes: item.prep_time_minutes as number | undefined,
+        allergens: item.allergens as string[] | undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        is_popular: (item.times_ordered as number) > 10 || (item.is_featured as boolean),
+        modifiers: modifiers.length > 0 ? modifiers : undefined,
+      };
+    }) : undefined,
+
+    // Configuración de pedidos - TODO: mover a tabla de configuración del tenant
+    ordering_config: menuData.items.length > 0 ? {
+      accepts_pickup: true,
+      accepts_delivery: false, // Por ahora solo pickup
+      accepts_dine_in: true,
+      min_pickup_time_minutes: 20,
+      min_delivery_time_minutes: 45,
+      special_instructions_enabled: true,
+    } : undefined,
 
     // =====================================================
     // DATOS EXTERNOS - De sistemas integrados (CRM, POS, etc.)

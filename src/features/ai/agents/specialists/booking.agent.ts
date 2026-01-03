@@ -234,7 +234,10 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
 
 /**
  * Booking Agent para Dental
- * Incluye preguntas específicas sobre síntomas
+ * Incluye preguntas específicas sobre síntomas y detección de urgencia
+ *
+ * IMPORTANTE: Este agente usa información de urgencia detectada por el vertical-router
+ * para priorizar citas, pero NO modifica el prompt base.
  */
 class BookingDentalAgentClass extends BookingAgentClass {
   constructor() {
@@ -247,6 +250,206 @@ class BookingDentalAgentClass extends BookingAgentClass {
 - Si hay dolor, ofrece cita de urgencia
 - Pregunta si es primera vez o paciente recurrente
 - Menciona que debe traer estudios previos si los tiene`;
+  }
+
+  /**
+   * Override de execute para dental
+   * Usa la información de urgencia del metadata para:
+   * 1. Priorizar la búsqueda de slots (mismo día para urgencias)
+   * 2. Añadir contexto sobre la urgencia detectada al LLM
+   * 3. Guardar datos de trazabilidad AI en la cita
+   *
+   * NO modifica el prompt base, solo añade contexto adicional
+   */
+  async execute(state: TISTISAgentStateType): Promise<AgentResult> {
+    const tenant = state.tenant;
+    const lead = state.lead;
+    const extracted = state.extracted_data;
+
+    // Construir contexto base
+    const servicesContext = formatServicesForPrompt(state.business_context);
+    const branchesContext = formatBranchesForPrompt(state.business_context);
+
+    // 1. Obtener información de urgencia del metadata (detectada por vertical-router)
+    const dentalUrgency = state.metadata?.dental_urgency as {
+      level: number;
+      type: string;
+      symptoms: string[];
+      recommended_timeframe: string;
+      is_urgent: boolean;
+    } | undefined;
+
+    // 2. Extraer datos de booking del mensaje
+    const bookingData = extractBookingData(state.current_message);
+
+    // 3. Combinar con datos ya extraídos
+    let preferredDate = extracted.preferred_date || bookingData.date;
+    const preferredTime = extracted.preferred_time || bookingData.time;
+    const isFlexible = extracted.is_flexible_schedule || bookingData.is_flexible;
+
+    // 4. Para urgencias nivel 4-5, priorizar HOY si no especificó fecha
+    if (dentalUrgency?.is_urgent && !preferredDate) {
+      // Sugerir fecha de hoy para urgencias
+      const today = new Date();
+      preferredDate = today.toISOString().split('T')[0];
+    }
+
+    // 5. Determinar sucursal
+    let branchId: string | undefined;
+    const branches = state.business_context?.branches || [];
+
+    if (lead?.preferred_branch_id) {
+      branchId = lead.preferred_branch_id;
+    } else if (extracted.preferred_branch) {
+      const branch = branches.find((b) =>
+        b.name.toLowerCase().includes(extracted.preferred_branch!.toLowerCase())
+      );
+      branchId = branch?.id;
+    } else if (branches.length === 1) {
+      branchId = branches[0].id;
+    }
+
+    // 6. Determinar servicio
+    let serviceId: string | undefined;
+    const services = state.business_context?.services || [];
+
+    if (extracted.service_interest?.service_id) {
+      serviceId = extracted.service_interest.service_id;
+    } else {
+      const messageLower = state.current_message.toLowerCase();
+      for (const service of services) {
+        if (messageLower.includes(service.name.toLowerCase())) {
+          serviceId = service.id;
+          break;
+        }
+      }
+    }
+
+    // 7. Verificar si tenemos suficiente información para crear cita
+    const hasEnoughInfo = preferredDate && (preferredTime || isFlexible) && branchId;
+
+    if (hasEnoughInfo && tenant) {
+      // Crear cita con datos de trazabilidad AI
+      const bookingRequest: BookingRequest = {
+        tenant_id: tenant.tenant_id,
+        lead_id: lead?.lead_id || '',
+        conversation_id: state.conversation?.conversation_id || '',
+        branch_id: branchId,
+        service_id: serviceId,
+        requested_date: preferredDate,
+        requested_time: preferredTime,
+        vertical: 'dental',
+        // Datos de trazabilidad AI para dental
+        ai_booking_channel: state.channel === 'voice' ? 'ai_voice' : state.channel === 'whatsapp' ? 'ai_whatsapp' : 'ai_webchat',
+        ai_urgency_level: dentalUrgency?.level,
+        ai_detected_symptoms: dentalUrgency?.symptoms,
+      };
+
+      const bookingResult = await createBooking(bookingRequest);
+
+      if (bookingResult.success) {
+        const confirmationMessage = generateBookingConfirmation(bookingResult);
+        return {
+          response: confirmationMessage,
+          tokens_used: 0,
+        };
+      } else {
+        // No se pudo crear, ofrecer alternativas
+        let alternativeContext = `\n\nNOTA: No se pudo crear la cita. Razón: ${bookingResult.error}`;
+
+        if (bookingResult.suggestion) {
+          alternativeContext += `\nSugerencia: ${bookingResult.suggestion}`;
+        }
+
+        // Para urgencias, priorizar slots del mismo día
+        if (branchId && tenant) {
+          const slots = await getAvailableSlots(
+            tenant.tenant_id,
+            branchId,
+            undefined,
+            undefined,
+            undefined,
+            dentalUrgency?.is_urgent ? 3 : 5 // Menos slots pero más inmediatos para urgencias
+          );
+
+          if (slots.length > 0) {
+            alternativeContext += dentalUrgency?.is_urgent
+              ? `\n\nHorarios de URGENCIA disponibles:`
+              : `\n\nHorarios disponibles próximos:`;
+
+            for (const slot of slots) {
+              const date = new Date(slot.date + 'T12:00:00');
+              const dateStr = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+              alternativeContext += `\n- ${dateStr} a las ${slot.time} en ${slot.branch_name}`;
+            }
+          }
+        }
+
+        const { response, tokens } = await this.callLLM(
+          state,
+          `${servicesContext}\n${branchesContext}${alternativeContext}\n\nOfrece alternativas de horario al cliente.`
+        );
+
+        return {
+          response,
+          tokens_used: tokens,
+        };
+      }
+    } else {
+      // No tenemos suficiente información, preguntar lo que falta
+      let missingInfo: string[] = [];
+
+      if (!branchId && branches.length > 1) {
+        missingInfo.push('sucursal preferida');
+      }
+      if (!preferredDate) {
+        missingInfo.push('fecha preferida');
+      }
+      if (!preferredTime && !isFlexible) {
+        missingInfo.push('horario preferido');
+      }
+      if (!serviceId && services.length > 1) {
+        missingInfo.push('servicio deseado');
+      }
+
+      let additionalContext = `${servicesContext}\n${branchesContext}`;
+
+      // 8. Añadir contexto de urgencia detectada (NO modifica prompt, solo contexto)
+      if (dentalUrgency && dentalUrgency.level >= 3) {
+        additionalContext += `\n\n# INFORMACIÓN DE URGENCIA DETECTADA`;
+        additionalContext += `\nNivel: ${dentalUrgency.level}/5`;
+        additionalContext += `\nTipo: ${dentalUrgency.type}`;
+        if (dentalUrgency.symptoms.length > 0) {
+          additionalContext += `\nSíntomas mencionados: ${dentalUrgency.symptoms.join(', ')}`;
+        }
+        additionalContext += `\nRecomendación: Agendar ${dentalUrgency.recommended_timeframe}`;
+        additionalContext += `\nNOTA: Prioriza ofrecer citas inmediatas para este paciente.`;
+      }
+
+      // Obtener disponibilidad
+      if (tenant && branchId) {
+        const slots = await getAvailableSlots(tenant.tenant_id, branchId, undefined, undefined, undefined, 5);
+        if (slots.length > 0) {
+          additionalContext += `\n\n# PRÓXIMOS HORARIOS DISPONIBLES\n`;
+          for (const slot of slots) {
+            const date = new Date(slot.date + 'T12:00:00');
+            const dateStr = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+            additionalContext += `- ${dateStr} a las ${slot.time}\n`;
+          }
+        }
+      }
+
+      if (missingInfo.length > 0) {
+        additionalContext += `\n\nNOTA: Falta información para agendar: ${missingInfo.join(', ')}. Pregunta de manera natural.`;
+      }
+
+      const { response, tokens } = await this.callLLM(state, additionalContext);
+
+      return {
+        response,
+        tokens_used: tokens,
+      };
+    }
   }
 }
 

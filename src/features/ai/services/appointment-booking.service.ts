@@ -25,6 +25,11 @@ export interface BookingRequest {
   occasion_type?: string;
   special_requests?: string;
   vertical?: 'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary' | 'general';
+  // AI Traceability fields (dental and others)
+  ai_booking_channel?: 'ai_whatsapp' | 'ai_voice' | 'ai_webchat' | 'ai_instagram' | 'ai_facebook';
+  ai_urgency_level?: number; // 1-5
+  ai_detected_symptoms?: string[];
+  ai_confidence_score?: number; // 0-1
 }
 
 export interface BookingResult {
@@ -604,6 +609,7 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
 
     // 6. Crear la cita
     const isRestaurant = request.vertical === 'restaurant';
+    const isDental = request.vertical === 'dental';
     const appointmentData: Record<string, any> = {
       tenant_id: request.tenant_id,
       lead_id: request.lead_id,
@@ -617,7 +623,29 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
       notes: request.notes || (isRestaurant ? 'Reservación agendada por asistente AI' : 'Cita agendada por asistente AI'),
       reminder_sent: false,
       confirmation_sent: false,
+      // AI Traceability fields (for all AI-booked appointments)
+      conversation_id: request.conversation_id || null,
     };
+
+    // Add AI traceability fields if present
+    if (request.ai_booking_channel) {
+      appointmentData.ai_booking_channel = request.ai_booking_channel;
+      appointmentData.ai_booked_at = new Date().toISOString();
+    }
+    if (request.ai_urgency_level) {
+      appointmentData.ai_urgency_level = request.ai_urgency_level;
+      // Auto-set requires_human_review for high urgency cases
+      if (request.ai_urgency_level >= 4) {
+        appointmentData.requires_human_review = true;
+        appointmentData.human_review_reason = 'Caso de urgencia dental detectado por IA';
+      }
+    }
+    if (request.ai_detected_symptoms && request.ai_detected_symptoms.length > 0) {
+      appointmentData.ai_detected_symptoms = JSON.stringify(request.ai_detected_symptoms);
+    }
+    if (request.ai_confidence_score !== undefined) {
+      appointmentData.ai_confidence_score = request.ai_confidence_score;
+    }
 
     // Add restaurant-specific fields to appointments table
     if (isRestaurant && request.party_size) {

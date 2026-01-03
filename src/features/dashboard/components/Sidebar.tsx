@@ -13,6 +13,7 @@ import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
 import { useFeatureFlags, MODULE_FLAGS } from '@/src/hooks/useFeatureFlags';
 import { useTenant } from '@/src/hooks/useTenant';
+import { useBusinessInsights } from '@/src/hooks/useBusinessInsights';
 import { BranchSelector } from '@/shared/components/ui';
 import type { SidebarProps, NavItem } from '../types';
 
@@ -303,6 +304,7 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   // Multi-tenant hooks
   const { tenant, isLoading: tenantLoading } = useTenant();
   const { flagsLoading, isEnabled } = useFeatureFlags();
+  const { unseenCount: businessInsightsCount } = useBusinessInsights();
 
   // Use props if explicitly provided, otherwise use store state
   const collapsed = isCollapsed !== undefined ? isCollapsed : sidebarCollapsed;
@@ -365,6 +367,15 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
     }
 
     return item.name;
+  };
+
+  // Get dynamic badge for nav items
+  const getDynamicBadge = (item: NavItemWithFlag): number | string | undefined => {
+    // Business IA badge shows unseen insights count
+    if (item.href === '/dashboard/business-ia' && businessInsightsCount > 0) {
+      return businessInsightsCount > 9 ? '9+' : businessInsightsCount;
+    }
+    return item.badge;
   };
 
   return (
@@ -472,11 +483,14 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                       {!collapsed && (
                         <span className="text-sm">{displayName}</span>
                       )}
-                      {!collapsed && item.badge && (
-                        <span className="ml-auto bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
+                      {(() => {
+                        const dynamicBadge = getDynamicBadge(item);
+                        return !collapsed && dynamicBadge && (
+                          <span className="ml-auto bg-tis-coral/10 text-tis-coral text-xs font-medium px-2 py-0.5 rounded-full">
+                            {dynamicBadge}
+                          </span>
+                        );
+                      })()}
                     </Link>
                   );
                 })}

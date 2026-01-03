@@ -40,6 +40,12 @@ export {
   bookingMedicalNode,
 } from './booking.agent';
 
+// Ordering (restaurant pickup/delivery)
+export {
+  OrderingRestaurantAgent,
+  orderingRestaurantNode,
+} from './ordering.agent';
+
 // General/Fallback
 export { GeneralAgent, generalNode } from './general.agent';
 

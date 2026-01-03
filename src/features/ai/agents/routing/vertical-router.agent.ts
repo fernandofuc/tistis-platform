@@ -49,14 +49,15 @@ const VERTICAL_CONFIGS: Record<Vertical, VerticalConfig> = {
     booking_priority: 'high',
   },
   restaurant: {
-    agents: ['greeting', 'pricing', 'booking_restaurant', 'faq', 'location', 'menu', 'escalation'],
+    agents: ['greeting', 'pricing', 'booking_restaurant', 'ordering_restaurant', 'faq', 'location', 'menu', 'escalation'],
     intent_prompts: {
       GREETING: 'Da la bienvenida y menciona especialidades del día si las hay.',
       PRICE_INQUIRY: 'Comparte el menú y rangos de precios. Menciona promociones vigentes.',
       BOOK_APPOINTMENT: 'Ayuda a reservar mesa. Pregunta número de personas y si es ocasión especial.',
+      PICKUP_ORDER: 'Ayuda a tomar el pedido para recoger. Confirma los platillos y da número de orden.',
       LOCATION: 'Proporciona ubicación y opciones de estacionamiento.',
     },
-    keywords: ['reserva', 'mesa', 'menu', 'carta', 'comida', 'cena', 'almuerzo', 'evento', 'privado', 'terraza', 'servicio', 'platillo'],
+    keywords: ['reserva', 'mesa', 'menu', 'carta', 'comida', 'cena', 'almuerzo', 'evento', 'privado', 'terraza', 'servicio', 'platillo', 'pedir', 'ordenar', 'llevar', 'recoger', 'pickup'],
     booking_priority: 'high',
   },
 
@@ -175,6 +176,235 @@ function getBookingAgent(vertical: Vertical): string {
 }
 
 /**
+ * Detecta si el mensaje indica intención de hacer un pedido pickup/delivery
+ * IMPORTANTE: Solo activa ordering si el cliente EXPLÍCITAMENTE quiere pedir
+ */
+function detectPickupOrderIntent(message: string): boolean {
+  const messageLower = message.toLowerCase();
+
+  // Keywords que indican pedido para llevar/recoger
+  const pickupKeywords = [
+    'quiero pedir',
+    'quisiera ordenar',
+    'para llevar',
+    'para recoger',
+    'pickup',
+    'ordenar comida',
+    'pedir comida',
+    'hacer un pedido',
+    'me das',
+    'me pueden preparar',
+    'quiero ordenar',
+    'quisiera pedir',
+    'puedo pedir',
+    'puedo ordenar',
+    'delivery',
+    'a domicilio',
+  ];
+
+  for (const keyword of pickupKeywords) {
+    if (messageLower.includes(keyword)) {
+      return true;
+    }
+  }
+
+  // También detectar patrones como "2 hamburguesas para llevar"
+  const orderPattern = /\d+\s+\w+.*(llevar|recoger|pickup)/i;
+  if (orderPattern.test(messageLower)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Resultado de la detección de urgencia dental
+ * Usado para enriquecer el contexto sin modificar prompts
+ */
+interface DentalUrgencyResult {
+  isUrgent: boolean;
+  urgencyLevel: 1 | 2 | 3 | 4 | 5; // 1=routine, 5=emergency
+  urgencyType: 'routine' | 'pain_mild' | 'pain_moderate' | 'pain_severe' | 'trauma' | 'swelling' | 'bleeding' | 'emergency';
+  detectedSymptoms: string[];
+  recommendedTimeframe: string;
+}
+
+/**
+ * Detecta si el mensaje indica una urgencia dental
+ * IMPORTANTE: Esta función NO modifica prompts, solo enriquece el contexto
+ * para que el agente de booking pueda priorizar correctamente
+ *
+ * Niveles de urgencia:
+ * 1 = Rutina (checkup, limpieza programada)
+ * 2 = Leve (sensibilidad, molestia menor)
+ * 3 = Moderado (dolor manejable, problema estético)
+ * 4 = Urgente (dolor severo, hinchazón, sangrado)
+ * 5 = Emergencia (trauma, diente caído, absceso)
+ */
+function detectUrgentDentalIntent(message: string): DentalUrgencyResult {
+  const messageLower = message.toLowerCase();
+  const detectedSymptoms: string[] = [];
+  let urgencyLevel: 1 | 2 | 3 | 4 | 5 = 1;
+  let urgencyType: DentalUrgencyResult['urgencyType'] = 'routine';
+  let recommendedTimeframe = 'Próximas 2 semanas';
+
+  // NIVEL 5 - EMERGENCIA (requiere atención inmediata)
+  const emergencyKeywords = [
+    'se me cayó el diente',
+    'se me cayo el diente',
+    'diente caído',
+    'diente caido',
+    'se me rompió',
+    'se me rompio',
+    'me pegaron',
+    'accidente',
+    'golpe en la boca',
+    'traumatismo',
+    'diente fracturado',
+    'sangra mucho',
+    'no para de sangrar',
+    'absceso',
+    'pus',
+    'fiebre y dolor',
+    'hinchazón severa',
+    'no puedo abrir la boca',
+    'no puedo tragar',
+  ];
+
+  for (const keyword of emergencyKeywords) {
+    if (messageLower.includes(keyword)) {
+      detectedSymptoms.push(keyword);
+      urgencyLevel = 5;
+      urgencyType = 'emergency';
+      recommendedTimeframe = 'Inmediato';
+    }
+  }
+
+  // NIVEL 4 - URGENTE (atención mismo día)
+  if (urgencyLevel < 4) {
+    const urgentKeywords = [
+      'dolor muy fuerte',
+      'dolor insoportable',
+      'no puedo dormir',
+      'no he dormido',
+      'me duele mucho',
+      'dolor intenso',
+      'hinchazón',
+      'hinchado',
+      'inflamado',
+      'sangrado',
+      'sangra',
+      'dolor severo',
+      'urgente',
+      'emergencia',
+      'no aguanto',
+      'desesperado',
+    ];
+
+    for (const keyword of urgentKeywords) {
+      if (messageLower.includes(keyword)) {
+        detectedSymptoms.push(keyword);
+        if (urgencyLevel < 4) {
+          urgencyLevel = 4;
+          // Determinar tipo específico
+          if (messageLower.includes('hincha') || messageLower.includes('inflama')) {
+            urgencyType = 'swelling';
+          } else if (messageLower.includes('sangr')) {
+            urgencyType = 'bleeding';
+          } else {
+            urgencyType = 'pain_severe';
+          }
+          recommendedTimeframe = 'Hoy';
+        }
+      }
+    }
+  }
+
+  // NIVEL 3 - MODERADO (próximos 2-3 días)
+  if (urgencyLevel < 3) {
+    const moderateKeywords = [
+      'me duele',
+      'dolor',
+      'molestia fuerte',
+      'no puedo masticar',
+      'diente roto',
+      'corona caída',
+      'empaste caído',
+      'se me salió',
+      'dolor al morder',
+    ];
+
+    for (const keyword of moderateKeywords) {
+      if (messageLower.includes(keyword)) {
+        detectedSymptoms.push(keyword);
+        if (urgencyLevel < 3) {
+          urgencyLevel = 3;
+          urgencyType = 'pain_moderate';
+          recommendedTimeframe = 'Próximos 2-3 días';
+        }
+      }
+    }
+  }
+
+  // NIVEL 2 - LEVE (próxima semana)
+  if (urgencyLevel < 2) {
+    const mildKeywords = [
+      'sensibilidad',
+      'sensible',
+      'molestia',
+      'incomodidad',
+      'algo raro',
+      'se siente raro',
+      'encía roja',
+      'mal aliento',
+      'manchas',
+    ];
+
+    for (const keyword of mildKeywords) {
+      if (messageLower.includes(keyword)) {
+        detectedSymptoms.push(keyword);
+        if (urgencyLevel < 2) {
+          urgencyLevel = 2;
+          urgencyType = 'pain_mild';
+          recommendedTimeframe = 'Próxima semana';
+        }
+      }
+    }
+  }
+
+  // Detectar si es rutina explícita (baja prioridad)
+  const routineKeywords = [
+    'chequeo',
+    'revisión general',
+    'revision general',
+    'limpieza dental',
+    'profilaxis',
+    'cuando tengan',
+    'no es urgente',
+    'sin prisa',
+  ];
+
+  for (const keyword of routineKeywords) {
+    if (messageLower.includes(keyword)) {
+      // Solo reducir si no hay síntomas urgentes
+      if (detectedSymptoms.length === 0) {
+        urgencyLevel = 1;
+        urgencyType = 'routine';
+        recommendedTimeframe = 'Próximas 2 semanas';
+      }
+    }
+  }
+
+  return {
+    isUrgent: urgencyLevel >= 4,
+    urgencyLevel,
+    urgencyType,
+    detectedSymptoms: [...new Set(detectedSymptoms)], // Remove duplicates
+    recommendedTimeframe,
+  };
+}
+
+/**
  * Verifica si un agente está disponible para el vertical
  */
 function isAgentAvailable(vertical: Vertical, agentName: string): boolean {
@@ -208,7 +438,28 @@ export async function verticalRouterNode(
     const config = getVerticalConfig(vertical);
     let nextAgent = state.next_agent || 'general';
 
-    // 1. Verificar si el agente destino está disponible para este vertical
+    // Variables para enriquecer el contexto
+    let dentalUrgency: DentalUrgencyResult | null = null;
+
+    // 1. DENTAL: Detectar urgencia para enriquecer contexto de booking
+    // NOTA: Dental solo agenda citas, NO hay ordering
+    // La urgencia se usa para priorizar la cita, no para redirigir a otro agente
+    if (vertical === 'dental') {
+      dentalUrgency = detectUrgentDentalIntent(state.current_message);
+
+      if (dentalUrgency.isUrgent) {
+        console.log(`[Vertical Router] Detected URGENT dental case: level ${dentalUrgency.urgencyLevel}, symptoms: ${dentalUrgency.detectedSymptoms.join(', ')}`);
+      }
+    }
+
+    // 2. RESTAURANT: Detectar intención de pedido pickup/delivery
+    // IMPORTANTE: Solo activa ordering si es vertical restaurant Y cliente quiere pedir
+    if (vertical === 'restaurant' && detectPickupOrderIntent(state.current_message)) {
+      console.log(`[Vertical Router] Detected PICKUP_ORDER intent for restaurant`);
+      nextAgent = 'ordering_restaurant';
+    }
+
+    // 3. Verificar si el agente destino está disponible para este vertical
     if (!isAgentAvailable(vertical, nextAgent)) {
       // Buscar alternativa o usar general
       console.log(`[Vertical Router] Agent ${nextAgent} not available for ${vertical}, using fallback`);
@@ -221,29 +472,51 @@ export async function verticalRouterNode(
       }
     }
 
-    // 2. Obtener prompt especializado
+    // 4. Obtener prompt especializado
     const verticalPrompt = getVerticalPrompt(vertical, state.detected_intent);
 
-    // 3. Crear traza
+    // 5. Crear traza con información de urgencia si aplica
+    const traceDecision = dentalUrgency
+      ? `Using ${vertical} config, priority: ${config.booking_priority}, urgency: ${dentalUrgency.urgencyLevel}`
+      : `Using ${vertical} config, priority: ${config.booking_priority}`;
+
     const trace: AgentTrace = addAgentTrace(
       state,
       {
         agent_name: agentName,
         input_summary: `Routing ${state.detected_intent} for ${vertical}`,
         output_summary: `Next: ${nextAgent}`,
-        decision: `Using ${vertical} config, priority: ${config.booking_priority}`,
+        decision: traceDecision,
         duration_ms: Date.now() - startTime,
       }
     );
 
     console.log(`[Vertical Router] Routed to: ${nextAgent} for ${vertical}`);
 
-    return {
+    // 6. Construir respuesta con contexto enriquecido
+    const result: Partial<TISTISAgentStateType> = {
       current_agent: agentName,
       next_agent: nextAgent,
       routing_reason: `${state.routing_reason} | Vertical: ${vertical}`,
       agent_trace: [trace],
     };
+
+    // 7. DENTAL: Añadir información de urgencia al metadata para que booking_dental la use
+    // Esto NO modifica prompts, solo enriquece el contexto disponible
+    if (dentalUrgency && vertical === 'dental') {
+      result.metadata = {
+        ...state.metadata,
+        dental_urgency: {
+          level: dentalUrgency.urgencyLevel,
+          type: dentalUrgency.urgencyType,
+          symptoms: dentalUrgency.detectedSymptoms,
+          recommended_timeframe: dentalUrgency.recommendedTimeframe,
+          is_urgent: dentalUrgency.isUrgent,
+        },
+      };
+    }
+
+    return result;
   } catch (error) {
     console.error('[Vertical Router] Error:', error);
 
@@ -287,5 +560,7 @@ export const VerticalRouterAgent = {
   getBookingAgent,
   isAgentAvailable,
   detectVerticalFromMessage,
+  detectPickupOrderIntent,
+  detectUrgentDentalIntent,
   VERTICAL_CONFIGS,
 };
