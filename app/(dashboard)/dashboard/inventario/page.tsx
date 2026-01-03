@@ -1,0 +1,455 @@
+// =====================================================
+// TIS TIS PLATFORM - Inventario Page
+// Inventory management for restaurant operations
+// Professional Apple/TIS TIS Style Design
+// =====================================================
+
+'use client';
+
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { cn } from '@/shared/utils';
+import { useTenant } from '@/src/hooks/useTenant';
+import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
+import { useInventory } from '@/src/features/restaurant-inventory/hooks/useInventory';
+import { InventoryOverview } from '@/src/features/restaurant-inventory/components/InventoryOverview';
+import type { InventoryItem, InventoryCategory } from '@/src/features/restaurant-inventory/types';
+import { ITEM_TYPE_CONFIG, STORAGE_TYPE_CONFIG } from '@/src/features/restaurant-inventory/types';
+
+// ======================
+// TYPES
+// ======================
+type TabId = 'overview' | 'items' | 'categories' | 'suppliers' | 'movements';
+
+interface Tab {
+  id: TabId;
+  name: string;
+  description: string;
+}
+
+const TABS: Tab[] = [
+  { id: 'overview', name: 'Resumen', description: 'Vista general del inventario' },
+  { id: 'items', name: 'Productos', description: 'Gestionar ingredientes y suministros' },
+  { id: 'categories', name: 'Categorías', description: 'Organizar productos' },
+  { id: 'suppliers', name: 'Proveedores', description: 'Gestionar proveedores' },
+  { id: 'movements', name: 'Movimientos', description: 'Historial de movimientos' },
+];
+
+// ======================
+// UPGRADE PROMPT
+// ======================
+function UpgradePrompt() {
+  const router = useRouter();
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center p-8">
+      <div className="relative max-w-4xl w-full">
+        <div className="absolute inset-0 rounded-2xl overflow-hidden">
+          <div className="blur-sm opacity-50 p-8 bg-white">
+            <div className="grid grid-cols-4 gap-4 mb-8">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-slate-100 rounded-xl p-6 h-28" />
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-slate-100 rounded-xl p-6 h-40" />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 bg-white rounded-2xl shadow-xl border border-slate-200 p-8 mx-auto max-w-lg mt-20">
+          <div className="text-center">
+            <div className="mx-auto w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mb-6">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              Gestión de Inventario
+            </h2>
+            <p className="text-slate-500 mb-6">
+              Controla tu inventario de ingredientes, suministros y más.
+            </p>
+
+            <div className="text-left bg-slate-50 rounded-xl p-4 mb-6">
+              <ul className="space-y-3">
+                {[
+                  'Control de stock en tiempo real',
+                  'Alertas de stock bajo',
+                  'Gestión de lotes y caducidad',
+                  'Recetas y costeo automático',
+                  'Reportes de movimientos',
+                ].map((feature, i) => (
+                  <li key={i} className="flex items-center gap-3 text-sm text-slate-600">
+                    <svg className="w-5 h-5 text-tis-coral flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <button
+              onClick={() => router.push('/dashboard/settings/subscription')}
+              className="w-full bg-slate-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"
+            >
+              Desbloquear Inventario
+            </button>
+
+            <p className="text-xs text-slate-400 mt-4">
+              Disponible para restaurantes con vertical activa
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ======================
+// ITEMS LIST TAB
+// ======================
+interface ItemsListTabProps {
+  items: InventoryItem[];
+  categories: InventoryCategory[];
+  loading: boolean;
+  onAddItem: () => void;
+}
+
+function ItemsListTab({ items, categories, loading, onAddItem }: ItemsListTabProps) {
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+  const filteredItems = items.filter(item => {
+    if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (categoryFilter !== 'all' && item.category_id !== categoryFilter) return false;
+    return true;
+  });
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3, 4, 5].map(i => (
+          <div key={i} className="bg-slate-100 rounded-xl h-20 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar productos..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
+          />
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={e => setCategoryFilter(e.target.value)}
+          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
+        >
+          <option value="all">Todas las categorías</option>
+          {categories.map(cat => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          ))}
+        </select>
+        <button
+          onClick={onAddItem}
+          className="px-4 py-2 bg-tis-coral text-white font-medium rounded-lg hover:bg-tis-coral/90 transition-colors flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Agregar
+        </button>
+      </div>
+
+      {/* Items List */}
+      {filteredItems.length === 0 ? (
+        <div className="text-center py-16">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-slate-50 flex items-center justify-center">
+            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">
+            {search || categoryFilter !== 'all' ? 'Sin resultados' : 'Sin productos'}
+          </h3>
+          <p className="text-slate-500 mb-6 max-w-md mx-auto">
+            {search || categoryFilter !== 'all'
+              ? 'No se encontraron productos con los filtros aplicados'
+              : 'Comienza agregando tu primer producto al inventario'
+            }
+          </p>
+          {!search && categoryFilter === 'all' && (
+            <button
+              onClick={onAddItem}
+              className="px-6 py-2.5 bg-slate-900 text-white font-medium rounded-xl hover:bg-slate-800 transition-colors"
+            >
+              Agregar primer producto
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Producto</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Tipo</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Stock</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Costo</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Almacén</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredItems.map(item => {
+                const typeConfig = ITEM_TYPE_CONFIG[item.item_type];
+                const storageConfig = STORAGE_TYPE_CONFIG[item.storage_type];
+                const isLowStock = item.current_stock <= item.minimum_stock;
+
+                return (
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-10 h-10 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-medium text-slate-900">{item.name}</p>
+                          {item.sku && <p className="text-xs text-slate-500">SKU: {item.sku}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        'text-xs px-2 py-1 rounded-full',
+                        typeConfig.color,
+                        'text-white'
+                      )}>
+                        {typeConfig.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className={cn(
+                        'font-medium',
+                        isLowStock ? 'text-red-600' : 'text-slate-900'
+                      )}>
+                        {item.current_stock} {item.unit}
+                      </div>
+                      {isLowStock && (
+                        <div className="text-xs text-red-500">Bajo mínimo ({item.minimum_stock})</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      ${item.unit_cost.toFixed(2)} / {item.unit}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        'text-xs px-2 py-1 rounded-full',
+                        storageConfig.color
+                      )}>
+                        {storageConfig.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button className="text-slate-400 hover:text-slate-600 p-1">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ======================
+// PLACEHOLDER TABS
+// ======================
+function PlaceholderTab({ title }: { title: string }) {
+  return (
+    <div className="text-center py-16">
+      <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-slate-50 flex items-center justify-center">
+        <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
+      <p className="text-slate-500 mb-6">Esta sección está en desarrollo</p>
+      <span className="inline-flex items-center px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium border border-amber-100">
+        Próximamente
+      </span>
+    </div>
+  );
+}
+
+// ======================
+// MAIN PAGE COMPONENT
+// ======================
+export default function InventarioPage() {
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const { tenant, branches, isLoading: tenantLoading, currentBranchId } = useTenant();
+  const { isEnabled, flagsLoading } = useFeatureFlags();
+
+  // Get active branch
+  const activeBranchId = currentBranchId || branches?.[0]?.id;
+  const activeBranch = branches?.find(b => b.id === activeBranchId);
+
+  // Inventory data
+  const {
+    items,
+    categories,
+    suppliers,
+    stats,
+    loading: inventoryLoading,
+    createItem,
+    refresh,
+  } = useInventory({ branch_id: activeBranchId });
+
+  // Check feature flag
+  const inventoryEnabled = isEnabled('inventory_enabled');
+  const isRestaurant = tenant?.vertical === 'restaurant';
+
+  // Handlers
+  const handleAddItem = useCallback(() => {
+    // TODO: Open add item modal
+    console.log('Add item');
+  }, []);
+
+  const handleViewLowStock = useCallback(() => {
+    setActiveTab('items');
+    // TODO: Apply low stock filter
+  }, []);
+
+  const handleViewExpiring = useCallback(() => {
+    // TODO: Navigate to expiring batches view
+    console.log('View expiring');
+  }, []);
+
+  // Loading state
+  if (tenantLoading || flagsLoading) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 border-t-tis-coral"></div>
+      </div>
+    );
+  }
+
+  // Check access
+  if (!isRestaurant || !inventoryEnabled) {
+    return <UpgradePrompt />;
+  }
+
+  // Render tab content
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return (
+          <InventoryOverview
+            stats={stats}
+            items={items}
+            loading={inventoryLoading}
+            onViewLowStock={handleViewLowStock}
+            onViewExpiring={handleViewExpiring}
+            onAddItem={handleAddItem}
+          />
+        );
+      case 'items':
+        return (
+          <ItemsListTab
+            items={items}
+            categories={categories}
+            loading={inventoryLoading}
+            onAddItem={handleAddItem}
+          />
+        );
+      case 'categories':
+        return <PlaceholderTab title="Categorías de Inventario" />;
+      case 'suppliers':
+        return <PlaceholderTab title="Proveedores" />;
+      case 'movements':
+        return <PlaceholderTab title="Historial de Movimientos" />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Inventario</h1>
+          <p className="text-slate-500 mt-1">
+            Gestiona ingredientes, suministros y control de stock
+          </p>
+        </div>
+
+        {activeBranch && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl">
+            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            </svg>
+            <span className="text-sm font-medium text-slate-700">{activeBranch.name}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-slate-200">
+        <nav className="-mb-px flex space-x-6">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200',
+                activeTab === tab.id
+                  ? 'border-tis-coral text-tis-coral'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              )}
+            >
+              {tab.name}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      <div className="mt-6">
+        {renderTabContent()}
+      </div>
+    </div>
+  );
+}
