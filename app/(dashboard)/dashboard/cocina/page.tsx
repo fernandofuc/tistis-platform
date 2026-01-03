@@ -262,9 +262,9 @@ export default function CocinaPage() {
     refresh,
   } = useKitchen({ branch_id: activeBranchId });
 
-  // Check feature flag
-  const kdsEnabled = isEnabled('kds_enabled');
-  const isRestaurant = tenant?.vertical === 'restaurant';
+  // Check feature flag - use kitchen_display_enabled (the correct flag name)
+  const kdsEnabled = isEnabled('kitchen_display_enabled');
+  const isRestaurant = tenant?.vertical?.toLowerCase() === 'restaurant';
 
   // Handlers
   const handleBumpOrder = useCallback(async (orderId: string) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/auth';
 
 // Feature flag structure
@@ -57,7 +57,6 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
   menu_enabled: false,
   inventory_enabled: false,
   kitchen_display_enabled: false,
-  pos_enabled: false,
 };
 
 // Feature flags by plan (used when no DB flags exist)
@@ -70,6 +69,9 @@ const PLAN_DEFAULT_FLAGS: Record<string, string[]> = {
     'appointments_enabled',
     'conversations_enabled',
     'whatsapp_enabled',
+    // Restaurant features (starter includes menu & inventory)
+    'menu_enabled',
+    'inventory_enabled',
   ],
   essentials: [
     'auth_enabled',
@@ -82,6 +84,12 @@ const PLAN_DEFAULT_FLAGS: Record<string, string[]> = {
     'email_enabled',
     'patients_enabled',
     'loyalty_enabled',
+    // Restaurant features (essentials+)
+    'reservations_enabled',
+    'tables_enabled',
+    'menu_enabled',
+    'inventory_enabled',
+    'kitchen_display_enabled',
   ],
   growth: [
     'auth_enabled',
@@ -98,8 +106,14 @@ const PLAN_DEFAULT_FLAGS: Record<string, string[]> = {
     'ai_chat_enabled',
     'analytics_advanced_enabled',
     'loyalty_enabled',
+    // Restaurant features (all enabled in growth)
+    'reservations_enabled',
+    'tables_enabled',
+    'menu_enabled',
+    'inventory_enabled',
+    'kitchen_display_enabled',
   ],
-  };
+};
 
 // Vertical-specific flags
 const VERTICAL_FLAGS: Record<string, string[]> = {
@@ -120,7 +134,6 @@ const VERTICAL_FLAGS: Record<string, string[]> = {
     'menu_enabled',
     'inventory_enabled',
     'kitchen_display_enabled',
-    'pos_enabled',
     'loyalty_enabled',
   ],
   gym: [
@@ -205,9 +218,12 @@ export function useFeatureFlags(clientId?: string): UseFeatureFlagsReturn {
             flagsRecord[flag] = true;
           });
 
-          // Enable vertical flags if plan supports
+          // Enable vertical flags - these are enabled if:
+          // 1. The flag is included in the plan, OR
+          // 2. The plan is essentials/growth (which now include vertical features)
+          const isPaidPlan = plan === 'essentials' || plan === 'growth';
           verticalFlags.forEach(flag => {
-            if (planFlags.includes(flag) || plan === 'growth') {
+            if (planFlags.includes(flag) || isPaidPlan) {
               flagsRecord[flag] = true;
             }
           });
@@ -282,7 +298,6 @@ export const MODULE_FLAGS: Record<string, string> = {
   inventario: 'inventory_enabled',
   kitchen: 'kitchen_display_enabled',
   cocina: 'kitchen_display_enabled',
-  pos: 'pos_enabled',
 
   // Dental-specific modules
   treatment_plans: 'treatment_plans_enabled',
