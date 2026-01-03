@@ -6,6 +6,39 @@
 -- obtener el perfil correcto según la vertical del tenant
 -- (dental, restaurant, etc.)
 -- =====================================================
+-- DEPENDENCIAS:
+--   - 003_esva_schema_v2.sql: staff_dental_profile
+--   - 051_AI_BOOKING_SYSTEM.sql: staff_availability
+--   - 088_RESTAURANT_VERTICAL_SCHEMA.sql: restaurant tables
+-- =====================================================
+
+-- =====================================================
+-- PARTE 0: VERIFICAR DEPENDENCIAS
+-- =====================================================
+-- Nota: Si estas tablas no existen, la función usará '[]' por defecto
+-- gracias al patrón COALESCE(..., '[]'::jsonb)
+
+DO $$
+BEGIN
+    -- Verificar tablas críticas
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'staff') THEN
+        RAISE EXCEPTION 'Table staff does not exist. Run previous migrations first.';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenants') THEN
+        RAISE EXCEPTION 'Table tenants does not exist. Run previous migrations first.';
+    END IF;
+
+    -- Advertir sobre tablas opcionales
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'staff_dental_profile') THEN
+        RAISE NOTICE 'Table staff_dental_profile not found - dental profile data will be empty';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'staff_availability') THEN
+        RAISE NOTICE 'Table staff_availability not found - availability data will be empty';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'restaurant_menu_items') THEN
+        RAISE NOTICE 'Table restaurant_menu_items not found - menu data will be empty';
+    END IF;
+END $$;
 
 -- =====================================================
 -- PARTE 1: ACTUALIZAR RPC get_tenant_ai_context

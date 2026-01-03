@@ -12,45 +12,105 @@
 -- =====================================================
 
 -- Agregar columna conversation_id para rastrear qué conversación creó la cita
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS conversation_id UUID REFERENCES public.conversations(id);
+-- NOTA: Se agrega SIN foreign key para evitar error si tabla conversations no existe
+-- La integridad se maneja a nivel de aplicación
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'conversation_id') THEN
+        ALTER TABLE public.appointments ADD COLUMN conversation_id UUID;
+    END IF;
+END $$;
 
 -- Agregar columna para indicar la fuente de la cita (ai, manual, web, etc.)
 -- Nota: booking_source ya existe, pero vamos a agregar ai_booking_source
 -- para más granularidad sobre el canal AI
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS ai_booking_channel VARCHAR(20) CHECK (ai_booking_channel IN (
-    'ai_whatsapp',  -- Agendada por IA vía WhatsApp
-    'ai_voice',     -- Agendada por IA vía llamada de voz (VAPI)
-    'ai_webchat',   -- Agendada por IA vía webchat
-    'ai_instagram', -- Agendada por IA vía Instagram DM
-    'ai_facebook',  -- Agendada por IA vía Facebook Messenger
-    NULL            -- No fue agendada por IA
-));
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'ai_booking_channel') THEN
+        ALTER TABLE public.appointments
+        ADD COLUMN ai_booking_channel VARCHAR(20) CHECK (ai_booking_channel IN (
+            'ai_whatsapp',  -- Agendada por IA vía WhatsApp
+            'ai_voice',     -- Agendada por IA vía llamada de voz (VAPI)
+            'ai_webchat',   -- Agendada por IA vía webchat
+            'ai_instagram', -- Agendada por IA vía Instagram DM
+            'ai_facebook'   -- Agendada por IA vía Facebook Messenger
+        ));
+    END IF;
+END $$;
 
 -- Agregar score de confianza del AI (0-1)
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS ai_confidence_score DECIMAL(3, 2) CHECK (ai_confidence_score >= 0 AND ai_confidence_score <= 1);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'ai_confidence_score') THEN
+        ALTER TABLE public.appointments
+        ADD COLUMN ai_confidence_score DECIMAL(3, 2) CHECK (ai_confidence_score >= 0 AND ai_confidence_score <= 1);
+    END IF;
+END $$;
 
 -- Agregar flag para indicar si requiere revisión humana
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS requires_human_review BOOLEAN DEFAULT false;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'requires_human_review') THEN
+        ALTER TABLE public.appointments ADD COLUMN requires_human_review BOOLEAN DEFAULT false;
+    END IF;
+END $$;
 
 -- Agregar razón de la revisión humana requerida
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS human_review_reason TEXT;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'human_review_reason') THEN
+        ALTER TABLE public.appointments ADD COLUMN human_review_reason TEXT;
+    END IF;
+END $$;
 
 -- Agregar síntomas detectados por IA (para dental)
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS ai_detected_symptoms JSONB DEFAULT '[]';
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'ai_detected_symptoms') THEN
+        ALTER TABLE public.appointments ADD COLUMN ai_detected_symptoms JSONB DEFAULT '[]';
+    END IF;
+END $$;
 
 -- Agregar nivel de urgencia detectado por IA (1-5, donde 5 es emergencia)
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS ai_urgency_level INTEGER CHECK (ai_urgency_level >= 1 AND ai_urgency_level <= 5);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'ai_urgency_level') THEN
+        ALTER TABLE public.appointments
+        ADD COLUMN ai_urgency_level INTEGER CHECK (ai_urgency_level >= 1 AND ai_urgency_level <= 5);
+    END IF;
+END $$;
 
 -- Agregar timestamp de cuándo el AI agendó
-ALTER TABLE public.appointments
-ADD COLUMN IF NOT EXISTS ai_booked_at TIMESTAMPTZ;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                   AND table_name = 'appointments'
+                   AND column_name = 'ai_booked_at') THEN
+        ALTER TABLE public.appointments ADD COLUMN ai_booked_at TIMESTAMPTZ;
+    END IF;
+END $$;
 
 
 -- =====================================================
@@ -91,40 +151,68 @@ BEGIN
         AND table_name = 'appointment_dental_details'
     ) THEN
         -- Agregar texto original del paciente para auditoría
-        ALTER TABLE public.appointment_dental_details
-        ADD COLUMN IF NOT EXISTS patient_original_complaint TEXT;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appointment_dental_details'
+                       AND column_name = 'patient_original_complaint') THEN
+            ALTER TABLE public.appointment_dental_details
+            ADD COLUMN patient_original_complaint TEXT;
+        END IF;
 
         -- Agregar síntomas extraídos por IA
-        ALTER TABLE public.appointment_dental_details
-        ADD COLUMN IF NOT EXISTS ai_extracted_symptoms TEXT[];
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appointment_dental_details'
+                       AND column_name = 'ai_extracted_symptoms') THEN
+            ALTER TABLE public.appointment_dental_details
+            ADD COLUMN ai_extracted_symptoms TEXT[];
+        END IF;
 
         -- Agregar procedimiento sugerido por IA
-        ALTER TABLE public.appointment_dental_details
-        ADD COLUMN IF NOT EXISTS ai_suggested_procedure VARCHAR(100);
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appointment_dental_details'
+                       AND column_name = 'ai_suggested_procedure') THEN
+            ALTER TABLE public.appointment_dental_details
+            ADD COLUMN ai_suggested_procedure VARCHAR(100);
+        END IF;
 
         -- Agregar confianza en el diagnóstico preliminar
-        ALTER TABLE public.appointment_dental_details
-        ADD COLUMN IF NOT EXISTS ai_diagnosis_confidence DECIMAL(3, 2)
-        CHECK (ai_diagnosis_confidence >= 0 AND ai_diagnosis_confidence <= 1);
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appointment_dental_details'
+                       AND column_name = 'ai_diagnosis_confidence') THEN
+            ALTER TABLE public.appointment_dental_details
+            ADD COLUMN ai_diagnosis_confidence DECIMAL(3, 2)
+            CHECK (ai_diagnosis_confidence >= 0 AND ai_diagnosis_confidence <= 1);
+        END IF;
 
         -- Agregar flag de paciente nuevo vs recurrente
-        ALTER TABLE public.appointment_dental_details
-        ADD COLUMN IF NOT EXISTS is_new_patient BOOLEAN;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appointment_dental_details'
+                       AND column_name = 'is_new_patient') THEN
+            ALTER TABLE public.appointment_dental_details
+            ADD COLUMN is_new_patient BOOLEAN;
+        END IF;
 
         -- Agregar urgencia específica dental
-        ALTER TABLE public.appointment_dental_details
-        ADD COLUMN IF NOT EXISTS dental_urgency_type VARCHAR(30) CHECK (dental_urgency_type IN (
-            'routine',           -- Chequeo regular
-            'preventive',        -- Limpieza preventiva
-            'restorative',       -- Restauración programada
-            'pain_mild',         -- Dolor leve
-            'pain_moderate',     -- Dolor moderado
-            'pain_severe',       -- Dolor severo
-            'trauma',            -- Trauma dental
-            'swelling',          -- Hinchazón
-            'bleeding',          -- Sangrado
-            'emergency'          -- Emergencia (diente caído, absceso)
-        ));
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appointment_dental_details'
+                       AND column_name = 'dental_urgency_type') THEN
+            ALTER TABLE public.appointment_dental_details
+            ADD COLUMN dental_urgency_type VARCHAR(30) CHECK (dental_urgency_type IN (
+                'routine',           -- Chequeo regular
+                'preventive',        -- Limpieza preventiva
+                'restorative',       -- Restauración programada
+                'pain_mild',         -- Dolor leve
+                'pain_moderate',     -- Dolor moderado
+                'pain_severe',       -- Dolor severo
+                'trauma',            -- Trauma dental
+                'swelling',          -- Hinchazón
+                'bleeding',          -- Sangrado
+                'emergency'          -- Emergencia (diente caído, absceso)
+            ));
+        END IF;
+
+        RAISE NOTICE 'Columns added to appointment_dental_details';
+    ELSE
+        RAISE NOTICE 'Table appointment_dental_details does not exist, skipping PARTE 3';
     END IF;
 END $$;
 
@@ -247,7 +335,7 @@ BEGIN
     END IF;
 
     -- Analizar síntomas específicos
-    IF p_symptoms IS NOT NULL THEN
+    IF p_symptoms IS NOT NULL AND array_length(p_symptoms, 1) > 0 THEN
         FOR i IN 1..array_length(p_symptoms, 1) LOOP
             CASE lower(p_symptoms[i])
                 WHEN 'diente caído', 'diente roto', 'fractura' THEN
@@ -402,10 +490,11 @@ ORDER BY MAX(a.scheduled_at) NULLS FIRST;
 
 
 -- =====================================================
--- PARTE 7: ESTADÍSTICAS DE AI BOOKING
+-- PARTE 7: ESTADÍSTICAS DE AI BOOKING (CORREGIDA)
 -- =====================================================
 
 -- Función para obtener estadísticas de booking AI por tenant
+-- NOTA: Reescrita completamente para evitar errores de SQL
 CREATE OR REPLACE FUNCTION public.get_ai_booking_stats(
     p_tenant_id UUID,
     p_start_date DATE DEFAULT CURRENT_DATE - INTERVAL '30 days',
@@ -423,53 +512,80 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+    v_total INTEGER;
+    v_by_channel JSONB;
+    v_avg_confidence DECIMAL;
+    v_requiring_review INTEGER;
+    v_urgency_dist JSONB;
+    v_conversion DECIMAL;
 BEGIN
-    RETURN QUERY
-    SELECT
-        -- Total de citas agendadas por AI
-        COUNT(*)::INTEGER as total_ai_bookings,
+    -- Total de citas agendadas por AI
+    SELECT COUNT(*)::INTEGER INTO v_total
+    FROM appointments
+    WHERE tenant_id = p_tenant_id
+    AND ai_booking_channel IS NOT NULL
+    AND created_at::DATE BETWEEN p_start_date AND p_end_date;
 
-        -- Distribución por canal
-        jsonb_object_agg(
-            COALESCE(a.ai_booking_channel, 'manual'),
-            channel_count
-        ) as by_channel,
-
-        -- Confianza promedio
-        ROUND(AVG(a.ai_confidence_score), 2) as avg_confidence,
-
-        -- Cuántas requirieron revisión
-        COUNT(*) FILTER (WHERE a.requires_human_review = true)::INTEGER as requiring_review,
-
-        -- Distribución de urgencia
-        jsonb_build_object(
-            'level_1', COUNT(*) FILTER (WHERE a.ai_urgency_level = 1),
-            'level_2', COUNT(*) FILTER (WHERE a.ai_urgency_level = 2),
-            'level_3', COUNT(*) FILTER (WHERE a.ai_urgency_level = 3),
-            'level_4', COUNT(*) FILTER (WHERE a.ai_urgency_level = 4),
-            'level_5', COUNT(*) FILTER (WHERE a.ai_urgency_level = 5)
-        ) as urgency_distribution,
-
-        -- Tasa de conversión (completed / total)
-        ROUND(
-            COUNT(*) FILTER (WHERE a.status = 'completed')::DECIMAL /
-            NULLIF(COUNT(*), 0),
-            2
-        ) as conversion_rate
-
-    FROM appointments a
-    LEFT JOIN LATERAL (
-        SELECT ai_booking_channel, COUNT(*) as channel_count
+    -- Distribución por canal
+    SELECT COALESCE(jsonb_object_agg(channel, cnt), '{}'::jsonb) INTO v_by_channel
+    FROM (
+        SELECT ai_booking_channel as channel, COUNT(*) as cnt
         FROM appointments
         WHERE tenant_id = p_tenant_id
         AND ai_booking_channel IS NOT NULL
         AND created_at::DATE BETWEEN p_start_date AND p_end_date
         GROUP BY ai_booking_channel
-    ) channels ON true
-    WHERE a.tenant_id = p_tenant_id
-    AND a.ai_booking_channel IS NOT NULL
-    AND a.created_at::DATE BETWEEN p_start_date AND p_end_date
-    GROUP BY channels.ai_booking_channel, channels.channel_count;
+    ) channels;
+
+    -- Confianza promedio
+    SELECT ROUND(AVG(ai_confidence_score), 2) INTO v_avg_confidence
+    FROM appointments
+    WHERE tenant_id = p_tenant_id
+    AND ai_booking_channel IS NOT NULL
+    AND ai_confidence_score IS NOT NULL
+    AND created_at::DATE BETWEEN p_start_date AND p_end_date;
+
+    -- Cuántas requirieron revisión
+    SELECT COUNT(*)::INTEGER INTO v_requiring_review
+    FROM appointments
+    WHERE tenant_id = p_tenant_id
+    AND ai_booking_channel IS NOT NULL
+    AND requires_human_review = true
+    AND created_at::DATE BETWEEN p_start_date AND p_end_date;
+
+    -- Distribución de urgencia
+    SELECT jsonb_build_object(
+        'level_1', COUNT(*) FILTER (WHERE ai_urgency_level = 1),
+        'level_2', COUNT(*) FILTER (WHERE ai_urgency_level = 2),
+        'level_3', COUNT(*) FILTER (WHERE ai_urgency_level = 3),
+        'level_4', COUNT(*) FILTER (WHERE ai_urgency_level = 4),
+        'level_5', COUNT(*) FILTER (WHERE ai_urgency_level = 5),
+        'unset', COUNT(*) FILTER (WHERE ai_urgency_level IS NULL)
+    ) INTO v_urgency_dist
+    FROM appointments
+    WHERE tenant_id = p_tenant_id
+    AND ai_booking_channel IS NOT NULL
+    AND created_at::DATE BETWEEN p_start_date AND p_end_date;
+
+    -- Tasa de conversión (completed / total)
+    SELECT ROUND(
+        COUNT(*) FILTER (WHERE status = 'completed')::DECIMAL /
+        NULLIF(COUNT(*), 0),
+        2
+    ) INTO v_conversion
+    FROM appointments
+    WHERE tenant_id = p_tenant_id
+    AND ai_booking_channel IS NOT NULL
+    AND created_at::DATE BETWEEN p_start_date AND p_end_date;
+
+    RETURN QUERY SELECT
+        COALESCE(v_total, 0),
+        COALESCE(v_by_channel, '{}'::jsonb),
+        COALESCE(v_avg_confidence, 0.0),
+        COALESCE(v_requiring_review, 0),
+        COALESCE(v_urgency_dist, '{}'::jsonb),
+        COALESCE(v_conversion, 0.0);
 END;
 $$;
 

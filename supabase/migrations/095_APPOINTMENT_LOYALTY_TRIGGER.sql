@@ -29,11 +29,12 @@ BEGIN
 
         -- 1. Buscar programa de lealtad activo para el tenant
         -- NOTA: El campo se llama tokens_per_currency (tokens por cada $1 gastado)
+        -- NOTA: loyalty_programs NO tiene deleted_at (ver 053_LOYALTY_SYSTEM.sql)
         SELECT id, tokens_per_currency INTO v_program_id, v_earning_ratio
         FROM loyalty_programs
         WHERE tenant_id = NEW.tenant_id
           AND is_active = true
-          AND deleted_at IS NULL
+          AND tokens_enabled = true
         LIMIT 1;
 
         -- Si no hay programa activo, salir
@@ -132,6 +133,8 @@ END $$;
 -- =====================================================
 -- PARTE 4: VISTA DE TOKENS GANADOS POR CITAS
 -- =====================================================
+-- NOTA: El campo en loyalty_transactions es 'tokens', no 'tokens_amount'
+-- (ver 053_LOYALTY_SYSTEM.sql línea 219: tokens INTEGER NOT NULL)
 
 CREATE OR REPLACE VIEW public.v_appointment_loyalty_summary AS
 SELECT
@@ -139,8 +142,8 @@ SELECT
     t.name as tenant_name,
     COUNT(DISTINCT a.id) as total_completed_appointments,
     COUNT(DISTINCT lt.id) as total_token_transactions,
-    COALESCE(SUM(lt.tokens_amount), 0) as total_tokens_awarded,
-    COALESCE(AVG(lt.tokens_amount), 0) as avg_tokens_per_appointment
+    COALESCE(SUM(lt.tokens), 0)::INTEGER as total_tokens_awarded,
+    ROUND(COALESCE(AVG(lt.tokens), 0), 2) as avg_tokens_per_appointment
 FROM tenants t
 LEFT JOIN appointments a ON a.tenant_id = t.id AND a.status = 'completed'
 LEFT JOIN loyalty_transactions lt ON lt.source_type = 'appointment_complete' AND lt.source_id = a.id
