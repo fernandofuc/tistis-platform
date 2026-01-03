@@ -242,14 +242,16 @@ CREATE TRIGGER trigger_decrement_order_stock
 -- Las políticas existentes deberían cubrir esto, pero agreguemos una específica
 
 -- Permitir al service role insertar órdenes (para el agente AI)
-CREATE POLICY IF NOT EXISTS "Service role can insert orders"
+DROP POLICY IF EXISTS "Service role can insert orders" ON public.restaurant_orders;
+CREATE POLICY "Service role can insert orders"
     ON public.restaurant_orders
     FOR INSERT
     TO service_role
     WITH CHECK (true);
 
 -- Permitir al service role actualizar órdenes (para confirmar desde AI)
-CREATE POLICY IF NOT EXISTS "Service role can update orders"
+DROP POLICY IF EXISTS "Service role can update orders" ON public.restaurant_orders;
+CREATE POLICY "Service role can update orders"
     ON public.restaurant_orders
     FOR UPDATE
     TO service_role
