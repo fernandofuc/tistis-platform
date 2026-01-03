@@ -70,10 +70,10 @@ export async function GET(request: NextRequest) {
 
     // Build query
     let query = supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .select(`
         *,
-        category:menu_categories(id, name, parent_category_id)
+        category:restaurant_menu_categories(id, name, parent_category_id)
       `, { count: 'exact' })
       .eq('tenant_id', tenantId)
       .is('deleted_at', null)
@@ -127,19 +127,19 @@ export async function GET(request: NextRequest) {
       (items || []).map(async (item) => {
         const [variantsResult, sizesResult, addOnsResult] = await Promise.all([
           supabase
-            .from('menu_item_variants')
+            .from('restaurant_menu_item_variants')
             .select('*')
             .eq('menu_item_id', item.id)
             .is('deleted_at', null)
             .order('display_order', { ascending: true }),
           supabase
-            .from('menu_item_sizes')
+            .from('restaurant_menu_item_sizes')
             .select('*')
             .eq('menu_item_id', item.id)
             .is('deleted_at', null)
             .order('display_order', { ascending: true }),
           supabase
-            .from('menu_item_add_ons')
+            .from('restaurant_menu_item_add_ons')
             .select('*')
             .eq('menu_item_id', item.id)
             .is('deleted_at', null)
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
 
     // Verify category belongs to tenant
     const { data: category } = await supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .select('id')
       .eq('id', category_id)
       .eq('tenant_id', tenantId)
@@ -259,7 +259,7 @@ export async function POST(request: NextRequest) {
     let finalDisplayOrder = display_order;
     if (finalDisplayOrder === undefined) {
       const { data: maxOrderResult } = await supabase
-        .from('menu_items')
+        .from('restaurant_menu_items')
         .select('display_order')
         .eq('category_id', category_id)
         .order('display_order', { ascending: false })
@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
 
     // Insert menu item
     const { data: newItem, error: insertError } = await supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .insert({
         tenant_id: tenantId,
         branch_id,
@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
       })
       .select(`
         *,
-        category:menu_categories(id, name)
+        category:restaurant_menu_categories(id, name)
       `)
       .single();
 
@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
         display_order: v.display_order || index,
       }));
 
-      await supabase.from('menu_item_variants').insert(variantsToInsert);
+      await supabase.from('restaurant_menu_item_variants').insert(variantsToInsert);
     }
 
     // Insert sizes if provided
@@ -336,7 +336,7 @@ export async function POST(request: NextRequest) {
         display_order: s.display_order || index,
       }));
 
-      await supabase.from('menu_item_sizes').insert(sizesToInsert);
+      await supabase.from('restaurant_menu_item_sizes').insert(sizesToInsert);
     }
 
     // Insert add-ons if provided
@@ -351,25 +351,25 @@ export async function POST(request: NextRequest) {
         display_order: a.display_order || index,
       }));
 
-      await supabase.from('menu_item_add_ons').insert(addOnsToInsert);
+      await supabase.from('restaurant_menu_item_add_ons').insert(addOnsToInsert);
     }
 
     // Fetch complete item with extras
     const [variantsResult, sizesResult, addOnsResult] = await Promise.all([
       supabase
-        .from('menu_item_variants')
+        .from('restaurant_menu_item_variants')
         .select('*')
         .eq('menu_item_id', newItem.id)
         .is('deleted_at', null)
         .order('display_order', { ascending: true }),
       supabase
-        .from('menu_item_sizes')
+        .from('restaurant_menu_item_sizes')
         .select('*')
         .eq('menu_item_id', newItem.id)
         .is('deleted_at', null)
         .order('display_order', { ascending: true }),
       supabase
-        .from('menu_item_add_ons')
+        .from('restaurant_menu_item_add_ons')
         .select('*')
         .eq('menu_item_id', newItem.id)
         .is('deleted_at', null)
@@ -448,7 +448,7 @@ export async function PUT(request: NextRequest) {
         const reorderUpdates = await Promise.all(
           item_ids.map(async (id, index) => {
             const { error } = await supabase
-              .from('menu_items')
+              .from('restaurant_menu_items')
               .update({ display_order: index })
               .eq('id', id)
               .eq('tenant_id', tenantId);
@@ -467,7 +467,7 @@ export async function PUT(request: NextRequest) {
 
     // Apply bulk update
     const { data: updatedItems, error: updateError } = await supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .update(updateData)
       .in('id', item_ids)
       .eq('tenant_id', tenantId)

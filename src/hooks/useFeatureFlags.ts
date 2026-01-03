@@ -185,8 +185,9 @@ export function useFeatureFlags(clientId?: string): UseFeatureFlagsReturn {
 
         if (roleData?.tenants) {
           const tenantData = roleData.tenants as any;
-          const plan = tenantData.plan || 'essentials';
-          const vertical = tenantData.vertical || 'dental';
+          // IMPORTANT: Normalize plan and vertical to lowercase for consistent comparison
+          const plan = (tenantData.plan || 'essentials').toLowerCase();
+          const vertical = (tenantData.vertical || 'dental').toLowerCase();
 
           // Build flags from plan + vertical
           const planFlags = PLAN_DEFAULT_FLAGS[plan] || PLAN_DEFAULT_FLAGS.essentials;

@@ -378,7 +378,7 @@ export function MenuOverview({
 
         <StatCard
           title="Precio Promedio"
-          value={`$${stats.average_price.toFixed(0)}`}
+          value={`$${(stats.average_price ?? 0).toFixed(0)}`}
           subtitle="Por platillo"
           color="purple"
           icon={

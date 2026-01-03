@@ -39,11 +39,11 @@ async function getUserAndVerify(request: NextRequest, categoryId: string) {
 
   // Verify category belongs to tenant
   const { data: category } = await supabase
-    .from('menu_categories')
+    .from('restaurant_menu_categories')
     .select(`
       *,
       branch:branches(id, name),
-      parent:menu_categories!parent_category_id(id, name)
+      parent:restaurant_menu_categories!parent_category_id(id, name)
     `)
     .eq('id', categoryId)
     .eq('tenant_id', userRole.tenant_id)
@@ -74,7 +74,7 @@ export async function GET(
 
     // Get child categories
     const { data: children } = await supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .select('id, name, display_order, is_active')
       .eq('parent_category_id', category.id)
       .is('deleted_at', null)
@@ -82,7 +82,7 @@ export async function GET(
 
     // Get items in this category
     const { data: items, count } = await supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .select(`
         id,
         name,
@@ -148,7 +148,7 @@ export async function PUT(
 
         // Verify parent exists
         const { data: parentCategory } = await supabase
-          .from('menu_categories')
+          .from('restaurant_menu_categories')
           .select('id, parent_category_id')
           .eq('id', body.parent_category_id)
           .eq('tenant_id', userRole.tenant_id)
@@ -191,13 +191,13 @@ export async function PUT(
 
     // Update category
     const { data: updatedCategory, error: updateError } = await supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .update(updateData)
       .eq('id', category.id)
       .select(`
         *,
         branch:branches(id, name),
-        parent:menu_categories!parent_category_id(id, name)
+        parent:restaurant_menu_categories!parent_category_id(id, name)
       `)
       .single();
 
@@ -239,7 +239,7 @@ export async function DELETE(
 
     // Check if category has children
     const { count: childrenCount } = await supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .select('*', { count: 'exact', head: true })
       .eq('parent_category_id', category.id)
       .is('deleted_at', null);
@@ -253,7 +253,7 @@ export async function DELETE(
 
     // Check if category has items
     const { count: itemsCount } = await supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .select('*', { count: 'exact', head: true })
       .eq('category_id', category.id)
       .is('deleted_at', null);
@@ -267,7 +267,7 @@ export async function DELETE(
 
     // Soft delete
     const { error: deleteError } = await supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', category.id);
 

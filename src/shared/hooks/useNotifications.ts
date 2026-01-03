@@ -1,11 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { createClient, RealtimeChannel } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-// Create a single instance for the hook
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { RealtimeChannel } from '@supabase/supabase-js';
+// IMPORTANT: Use shared supabase instance to avoid multiple GoTrueClient warning
+import { supabase } from '@/src/shared/lib/supabase';
 
 interface Notification {
   id: string;
@@ -357,14 +353,9 @@ export async function createNotification(
   } = {}
 ) {
   // This should only be called from server-side (API routes)
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!serviceKey) {
-    console.error('SUPABASE_SERVICE_ROLE_KEY not available');
-    return null;
-  }
-
-  const serviceClient = createClient(supabaseUrl, serviceKey);
+  // Import createServerClient to avoid creating multiple instances
+  const { createServerClient } = await import('@/src/shared/lib/supabase');
+  const serviceClient = createServerClient();
 
   const { data, error } = await serviceClient
     .from('notifications')

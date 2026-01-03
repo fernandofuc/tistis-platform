@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     // Get all items for stats calculation
     let itemsQuery = supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .select('*')
       .eq('tenant_id', tenantId)
       .is('deleted_at', null);
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     // Get categories count
     let categoriesQuery = supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId)
       .is('deleted_at', null);
@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
 
     // Get categories for items_by_category
     let categoriesDataQuery = supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .select('id, name')
       .eq('tenant_id', tenantId)
       .is('deleted_at', null);
@@ -208,12 +208,32 @@ export async function GET(request: NextRequest) {
         margin_percent: Math.round(((i.price - i.cost) / i.price) * 100),
       }));
 
+    // Map to expected format per MenuStats type
     return NextResponse.json({
       success: true,
       data: {
-        ...stats,
-        popular_items: popularItems,
-        low_margin_items_list: lowMarginItemsList,
+        total_categories: stats.total_categories,
+        total_items: stats.total_items,
+        available_items: stats.available_items,
+        unavailable_items: stats.unavailable_items,
+        featured_items: stats.featured_items,
+        average_price: stats.avg_price,
+        most_ordered: popularItems.map(item => ({
+          id: item.id,
+          name: item.name,
+          times_ordered: 0, // TODO: Get from actual order data
+          image_url: item.image_url,
+        })),
+        categories_breakdown: Object.entries(stats.items_by_category).map(([id, data]) => ({
+          id,
+          name: (data as { name: string; count: number }).name,
+          items_count: (data as { name: string; count: number }).count,
+        })),
+        dietary_counts: {
+          vegetarian: stats.vegetarian_items,
+          vegan: stats.vegan_items,
+          gluten_free: stats.gluten_free_items,
+        },
       },
     });
 

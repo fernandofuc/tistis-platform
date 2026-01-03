@@ -62,11 +62,11 @@ export async function GET(request: NextRequest) {
 
     // Build query
     let query = supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .select(`
         *,
         branch:branches(id, name),
-        parent:menu_categories!parent_category_id(id, name)
+        parent:restaurant_menu_categories!parent_category_id(id, name)
       `)
       .eq('tenant_id', tenantId)
       .is('deleted_at', null)
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
       categoriesWithCount = await Promise.all(
         (categories || []).map(async (category) => {
           const { count } = await supabase
-            .from('menu_items')
+            .from('restaurant_menu_items')
             .select('*', { count: 'exact', head: true })
             .eq('category_id', category.id)
             .is('deleted_at', null);
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
     // Verify parent category if provided
     if (parent_category_id) {
       const { data: parentCategory } = await supabase
-        .from('menu_categories')
+        .from('restaurant_menu_categories')
         .select('id')
         .eq('id', parent_category_id)
         .eq('tenant_id', tenantId)
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
     let finalDisplayOrder = display_order;
     if (finalDisplayOrder === undefined) {
       const { data: maxOrderResult } = await supabase
-        .from('menu_categories')
+        .from('restaurant_menu_categories')
         .select('display_order')
         .eq('branch_id', branch_id)
         .order('display_order', { ascending: false })
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
 
     // Insert category
     const { data: newCategory, error: insertError } = await supabase
-      .from('menu_categories')
+      .from('restaurant_menu_categories')
       .insert({
         tenant_id: tenantId,
         branch_id,
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         branch:branches(id, name),
-        parent:menu_categories!parent_category_id(id, name)
+        parent:restaurant_menu_categories!parent_category_id(id, name)
       `)
       .single();
 
@@ -293,7 +293,7 @@ export async function PUT(request: NextRequest) {
     const updates = await Promise.all(
       categories.map(async (cat: { id: string; display_order: number }) => {
         const { error } = await supabase
-          .from('menu_categories')
+          .from('restaurant_menu_categories')
           .update({ display_order: cat.display_order })
           .eq('id', cat.id)
           .eq('tenant_id', tenantId);

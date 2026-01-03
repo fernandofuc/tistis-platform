@@ -39,10 +39,10 @@ async function getUserAndVerify(request: NextRequest, itemId: string) {
 
   // Verify item belongs to tenant
   const { data: item } = await supabase
-    .from('menu_items')
+    .from('restaurant_menu_items')
     .select(`
       *,
-      category:menu_categories(id, name, parent_category_id)
+      category:restaurant_menu_categories(id, name, parent_category_id)
     `)
     .eq('id', itemId)
     .eq('tenant_id', userRole.tenant_id)
@@ -74,19 +74,19 @@ export async function GET(
     // Get variants, sizes, and add-ons
     const [variantsResult, sizesResult, addOnsResult] = await Promise.all([
       supabase
-        .from('menu_item_variants')
+        .from('restaurant_menu_item_variants')
         .select('*')
         .eq('menu_item_id', item.id)
         .is('deleted_at', null)
         .order('display_order', { ascending: true }),
       supabase
-        .from('menu_item_sizes')
+        .from('restaurant_menu_item_sizes')
         .select('*')
         .eq('menu_item_id', item.id)
         .is('deleted_at', null)
         .order('display_order', { ascending: true }),
       supabase
-        .from('menu_item_add_ons')
+        .from('restaurant_menu_item_add_ons')
         .select('*')
         .eq('menu_item_id', item.id)
         .is('deleted_at', null)
@@ -135,7 +135,7 @@ export async function PUT(
     // Validate category_id if changing
     if (body.category_id && body.category_id !== item.category_id) {
       const { data: category } = await supabase
-        .from('menu_categories')
+        .from('restaurant_menu_categories')
         .select('id')
         .eq('id', body.category_id)
         .eq('tenant_id', tenantId)
@@ -182,12 +182,12 @@ export async function PUT(
 
     // Update item
     const { data: updatedItem, error: updateError } = await supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .update(updateData)
       .eq('id', item.id)
       .select(`
         *,
-        category:menu_categories(id, name)
+        category:restaurant_menu_categories(id, name)
       `)
       .single();
 
@@ -200,7 +200,7 @@ export async function PUT(
     if (body.variants !== undefined) {
       // Delete existing variants
       await supabase
-        .from('menu_item_variants')
+        .from('restaurant_menu_item_variants')
         .update({ deleted_at: new Date().toISOString() })
         .eq('menu_item_id', item.id);
 
@@ -216,14 +216,14 @@ export async function PUT(
           display_order: v.display_order || index,
         }));
 
-        await supabase.from('menu_item_variants').insert(variantsToInsert);
+        await supabase.from('restaurant_menu_item_variants').insert(variantsToInsert);
       }
     }
 
     // Handle sizes update if provided
     if (body.sizes !== undefined) {
       await supabase
-        .from('menu_item_sizes')
+        .from('restaurant_menu_item_sizes')
         .update({ deleted_at: new Date().toISOString() })
         .eq('menu_item_id', item.id);
 
@@ -238,14 +238,14 @@ export async function PUT(
           display_order: s.display_order || index,
         }));
 
-        await supabase.from('menu_item_sizes').insert(sizesToInsert);
+        await supabase.from('restaurant_menu_item_sizes').insert(sizesToInsert);
       }
     }
 
     // Handle add-ons update if provided
     if (body.add_ons !== undefined) {
       await supabase
-        .from('menu_item_add_ons')
+        .from('restaurant_menu_item_add_ons')
         .update({ deleted_at: new Date().toISOString() })
         .eq('menu_item_id', item.id);
 
@@ -260,26 +260,26 @@ export async function PUT(
           display_order: a.display_order || index,
         }));
 
-        await supabase.from('menu_item_add_ons').insert(addOnsToInsert);
+        await supabase.from('restaurant_menu_item_add_ons').insert(addOnsToInsert);
       }
     }
 
     // Fetch complete item with extras
     const [variantsResult, sizesResult, addOnsResult] = await Promise.all([
       supabase
-        .from('menu_item_variants')
+        .from('restaurant_menu_item_variants')
         .select('*')
         .eq('menu_item_id', item.id)
         .is('deleted_at', null)
         .order('display_order', { ascending: true }),
       supabase
-        .from('menu_item_sizes')
+        .from('restaurant_menu_item_sizes')
         .select('*')
         .eq('menu_item_id', item.id)
         .is('deleted_at', null)
         .order('display_order', { ascending: true }),
       supabase
-        .from('menu_item_add_ons')
+        .from('restaurant_menu_item_add_ons')
         .select('*')
         .eq('menu_item_id', item.id)
         .is('deleted_at', null)
@@ -324,7 +324,7 @@ export async function DELETE(
 
     // Soft delete item
     const { error: deleteError } = await supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', item.id);
 
@@ -336,15 +336,15 @@ export async function DELETE(
     // Also soft delete related variants, sizes, and add-ons
     await Promise.all([
       supabase
-        .from('menu_item_variants')
+        .from('restaurant_menu_item_variants')
         .update({ deleted_at: new Date().toISOString() })
         .eq('menu_item_id', item.id),
       supabase
-        .from('menu_item_sizes')
+        .from('restaurant_menu_item_sizes')
         .update({ deleted_at: new Date().toISOString() })
         .eq('menu_item_id', item.id),
       supabase
-        .from('menu_item_add_ons')
+        .from('restaurant_menu_item_add_ons')
         .update({ deleted_at: new Date().toISOString() })
         .eq('menu_item_id', item.id),
     ]);
@@ -400,7 +400,7 @@ export async function PATCH(
     }
 
     const { data: updatedItem, error: updateError } = await supabase
-      .from('menu_items')
+      .from('restaurant_menu_items')
       .update(updateData)
       .eq('id', item.id)
       .select('id, name, is_available, is_featured')

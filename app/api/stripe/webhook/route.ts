@@ -473,11 +473,59 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
-  const { plan, customerName, customerPhone, branches, addons, vertical, proposalId } = subscription.metadata || {};
+  const { plan: metadataPlan, customerName, customerPhone, branches, addons, vertical, proposalId } = subscription.metadata || {};
   const customerId = subscription.customer as string;
 
+  // ============================================
+  // CRITICAL FIX: Detect plan from Stripe product name if not in metadata
+  // This handles cases where metadata didn't propagate correctly
+  // ============================================
+  let detectedPlan = metadataPlan;
+
+  if (!detectedPlan || !isValidPlan(detectedPlan)) {
+    console.log('⚠️ [Subscription] Plan not in metadata, detecting from product name...');
+
+    // Try to detect plan from the subscription items (product names)
+    for (const item of subscription.items.data) {
+      const price = item.price;
+      let productName = '';
+
+      // Get product name - it might be expanded or just an ID
+      if (typeof price.product === 'object' && price.product !== null) {
+        productName = (price.product as Stripe.Product).name || '';
+      } else if (typeof price.product === 'string') {
+        // Need to fetch the product
+        try {
+          const product = await stripe.products.retrieve(price.product);
+          productName = product.name || '';
+        } catch (e) {
+          console.warn('Could not fetch product:', price.product);
+        }
+      }
+
+      // Check product name for plan indicators
+      const nameLower = productName.toLowerCase();
+      if (nameLower.includes('growth')) {
+        detectedPlan = 'growth';
+        console.log('✅ [Subscription] Detected plan from product name:', productName, '-> growth');
+        break;
+      } else if (nameLower.includes('essentials')) {
+        detectedPlan = 'essentials';
+        console.log('✅ [Subscription] Detected plan from product name:', productName, '-> essentials');
+        break;
+      } else if (nameLower.includes('starter')) {
+        detectedPlan = 'starter';
+        console.log('✅ [Subscription] Detected plan from product name:', productName, '-> starter');
+        break;
+      }
+    }
+  }
+
+  // Use detected plan or metadata plan
+  const plan = detectedPlan;
+
   // Log without exposing PII
-  console.log('📋 Subscription metadata:', { plan, branches, addons, hasCustomerPhone: !!customerPhone });
+  console.log('📋 Subscription metadata:', { plan, metadataPlan, branches, addons, hasCustomerPhone: !!customerPhone });
 
   // ============================================
   // FIX: Detect PLAN CHANGE scenario
@@ -526,16 +574,6 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   }
 
   // ============================================
-  // FIX 4: Validar plan obligatorio y válido
-  // ============================================
-  const validatedPlan = isValidPlan(plan) ? plan : 'essentials';
-  if (!plan) {
-    console.warn('⚠️ [Subscription] No plan in metadata, defaulting to essentials');
-  } else if (!isValidPlan(plan)) {
-    console.warn(`⚠️ [Subscription] Invalid plan "${plan}", using "essentials"`);
-  }
-
-  // ============================================
   // FIX 2: Crear cliente si no existe (race condition prevention)
   // ============================================
   let { data: client } = await supabase
@@ -543,6 +581,31 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     .select('id, metadata')
     .ilike('contact_email', customerEmail)
     .maybeSingle();
+
+  // ============================================
+  // FIX 4: Validar plan - Multiple fallbacks
+  // Priority: 1. Stripe product name (detected above)
+  //          2. Subscription metadata
+  //          3. Client metadata (set by checkout.session.completed)
+  //          4. Default to essentials
+  // ============================================
+  let finalPlan = plan; // Already detected from product name or metadata
+
+  if (!finalPlan || !isValidPlan(finalPlan)) {
+    // Try to get plan from client.metadata (set by checkout handler)
+    const clientMetadataPlan = client?.metadata?.plan;
+    if (clientMetadataPlan && isValidPlan(clientMetadataPlan)) {
+      finalPlan = clientMetadataPlan;
+      console.log('✅ [Subscription] Got plan from client.metadata:', finalPlan);
+    }
+  }
+
+  const validatedPlan = isValidPlan(finalPlan) ? finalPlan : 'essentials';
+  if (!finalPlan) {
+    console.warn('⚠️ [Subscription] No plan found in any source, defaulting to essentials');
+  } else if (!isValidPlan(finalPlan)) {
+    console.warn(`⚠️ [Subscription] Invalid plan "${finalPlan}", using "essentials"`);
+  }
 
   if (!client) {
     console.warn('⚠️ [Subscription] Client not found, creating now (race condition fallback)');
@@ -814,6 +877,55 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   // Get plan from metadata if changed
   const metadataPlan = subscription.metadata?.plan;
 
+  // ============================================
+  // CRITICAL FIX: Detect plan from Stripe product name if not in metadata
+  // This handles cases where metadata didn't propagate correctly
+  // ============================================
+  let detectedPlan = metadataPlan;
+
+  if (!detectedPlan || !isValidPlan(detectedPlan)) {
+    console.log('⚠️ [SubscriptionUpdated] Plan not in metadata, detecting from product name...');
+
+    // Try to detect plan from the subscription items (product names)
+    for (const item of subscription.items.data) {
+      const price = item.price;
+      let productName = '';
+
+      // Get product name - it might be expanded or just an ID
+      if (typeof price.product === 'object' && price.product !== null) {
+        productName = (price.product as Stripe.Product).name || '';
+      } else if (typeof price.product === 'string') {
+        // Need to fetch the product
+        try {
+          const product = await stripe.products.retrieve(price.product);
+          productName = product.name || '';
+        } catch (e) {
+          console.warn('Could not fetch product:', price.product);
+        }
+      }
+
+      // Check product name for plan indicators (skip branch add-ons)
+      const nameLower = productName.toLowerCase();
+      if (nameLower.includes('sucursal') || nameLower.includes('branch')) {
+        continue; // Skip branch items, look for plan items
+      }
+
+      if (nameLower.includes('growth')) {
+        detectedPlan = 'growth';
+        console.log('✅ [SubscriptionUpdated] Detected plan from product name:', productName, '-> growth');
+        break;
+      } else if (nameLower.includes('essentials')) {
+        detectedPlan = 'essentials';
+        console.log('✅ [SubscriptionUpdated] Detected plan from product name:', productName, '-> essentials');
+        break;
+      } else if (nameLower.includes('starter')) {
+        detectedPlan = 'starter';
+        console.log('✅ [SubscriptionUpdated] Detected plan from product name:', productName, '-> starter');
+        break;
+      }
+    }
+  }
+
   // Calculate total monthly amount from all line items
   let totalMonthlyAmount = 0;
   for (const item of subscription.items.data) {
@@ -837,10 +949,10 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     console.log(`📊 Branches count updated to: ${branchesCount}`);
   }
 
-  // Update plan if changed
-  if (metadataPlan && isValidPlan(metadataPlan)) {
-    updateData.plan = metadataPlan;
-    console.log(`📋 Plan updated to: ${metadataPlan}`);
+  // Update plan if detected or in metadata
+  if (detectedPlan && isValidPlan(detectedPlan)) {
+    updateData.plan = detectedPlan;
+    console.log(`📋 Plan updated to: ${detectedPlan}`);
   }
 
   // Update monthly amount if changed
@@ -865,9 +977,9 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   });
 
   // ============================================
-  // Also update tenant plan if plan changed
+  // Also update tenant plan if plan changed (use detected plan, not just metadata)
   // ============================================
-  if (metadataPlan && isValidPlan(metadataPlan)) {
+  if (detectedPlan && isValidPlan(detectedPlan)) {
     // Get tenant_id from the subscription's client
     const { data: subData } = await supabase
       .from('subscriptions')
@@ -885,9 +997,9 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       if (clientData?.tenant_id) {
         await supabase
           .from('tenants')
-          .update({ plan: metadataPlan, updated_at: new Date().toISOString() })
+          .update({ plan: detectedPlan, updated_at: new Date().toISOString() })
           .eq('id', clientData.tenant_id);
-        console.log('✅ [SubscriptionUpdated] Tenant plan updated to:', metadataPlan);
+        console.log('✅ [SubscriptionUpdated] Tenant plan updated to:', detectedPlan);
       }
     }
   }
