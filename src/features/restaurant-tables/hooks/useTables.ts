@@ -25,6 +25,9 @@ export function useTables(filters: TableFilters = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Memoize filters to avoid complex dependency expressions
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+
   const fetchTables = useCallback(async () => {
     try {
       setLoading(true);
@@ -39,7 +42,8 @@ export function useTables(filters: TableFilters = {}) {
     } finally {
       setLoading(false);
     }
-  }, [JSON.stringify(filters)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   // Subscribe to real-time changes
   useEffect(() => {

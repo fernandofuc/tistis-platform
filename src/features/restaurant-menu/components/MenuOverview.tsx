@@ -6,6 +6,7 @@
 
 'use client';
 
+import Image from 'next/image';
 import { cn } from '@/shared/utils';
 import type { MenuStats, MenuCategory } from '../types';
 
@@ -107,10 +108,13 @@ function PopularItems({ items }: PopularItemsProps) {
               </div>
 
               {item.image_url ? (
-                <img
+                <Image
                   src={item.image_url}
                   alt={item.name}
+                  width={40}
+                  height={40}
                   className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                  unoptimized
                 />
               ) : (
                 <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">

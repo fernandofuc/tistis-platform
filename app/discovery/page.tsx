@@ -491,7 +491,6 @@ export default function DiscoveryPage() {
   }, [sessionToken, router]);
 
   // Cargar mensaje inicial - solo se ejecuta una vez al montar el componente
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const initialMessage = sessionStorage.getItem('initial_message');
     if (initialMessage) {
@@ -514,6 +513,7 @@ export default function DiscoveryPage() {
       };
       setMessages([welcomeMessage]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Manejar envío de mensaje

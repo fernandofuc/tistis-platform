@@ -8,6 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { cn } from '@/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
@@ -227,10 +228,13 @@ function ItemsListTab({ items, categories, loading, onAddItem }: ItemsListTabPro
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {item.image_url ? (
-                          <img
+                          <Image
                             src={item.image_url}
                             alt={item.name}
+                            width={40}
+                            height={40}
                             className="w-10 h-10 rounded-lg object-cover"
+                            unoptimized
                           />
                         ) : (
                           <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">

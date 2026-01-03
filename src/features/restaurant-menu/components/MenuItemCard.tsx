@@ -7,6 +7,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { cn } from '@/shared/utils';
 import type { MenuItem, Allergen } from '../types';
 import { ALLERGEN_CONFIG, DIETARY_LABELS } from '../types';
@@ -283,10 +284,13 @@ export function MenuItemCard({
         )}
       >
         {item.image_url ? (
-          <img
+          <Image
             src={item.image_url}
             alt={item.name}
+            width={48}
+            height={48}
             className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+            unoptimized
           />
         ) : (
           <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -330,10 +334,12 @@ export function MenuItemCard({
       {/* Image */}
       <div className="relative aspect-[4/3] bg-slate-100">
         {item.image_url ? (
-          <img
+          <Image
             src={item.image_url}
             alt={item.name}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            unoptimized
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { X, Folder, Image as ImageIcon } from 'lucide-react';
 import type { MenuCategory, CategoryFormData } from '../types';
 import { AVAILABLE_DAYS } from '../types';
@@ -345,10 +346,13 @@ export function CategoryFormModal({
                 </div>
                 {formState.image_url && (
                   <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200">
-                    <img
+                    <Image
                       src={formState.image_url}
                       alt="Preview"
+                      width={40}
+                      height={40}
                       className="w-full h-full object-cover"
+                      unoptimized
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}

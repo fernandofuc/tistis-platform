@@ -8,6 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { cn } from '@/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
@@ -377,10 +378,13 @@ function CategoriesTab({ categories, onEdit, onDelete, onAdd }: CategoriesTabPro
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   {cat.image_url ? (
-                    <img
+                    <Image
                       src={cat.image_url}
                       alt={cat.name}
+                      width={48}
+                      height={48}
                       className="w-12 h-12 rounded-xl object-cover"
+                      unoptimized
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">

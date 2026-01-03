@@ -146,6 +146,9 @@ export function useMenuItems(filters: MenuFilters = {}, page: number = 1, limit:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Memoize filters to avoid complex dependency expressions
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+
   const fetchItems = useCallback(async () => {
     try {
       setLoading(true);
@@ -160,7 +163,8 @@ export function useMenuItems(filters: MenuFilters = {}, page: number = 1, limit:
     } finally {
       setLoading(false);
     }
-  }, [JSON.stringify(filters), page, limit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey, page, limit]);
 
   useEffect(() => {
     fetchItems();
