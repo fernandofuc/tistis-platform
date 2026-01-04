@@ -237,7 +237,7 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
                 />
                 <ProgressBar
                   label="Eficiencia Cocina"
-                  value={Math.max(0, 100 - (safeData.avgPrepTime / 30 * 100))}
+                  value={Math.max(0, 100 - ((isNaN(safeData.avgPrepTime) ? 0 : safeData.avgPrepTime) / 30 * 100))}
                   color="bg-purple-500"
                 />
                 <ProgressBar

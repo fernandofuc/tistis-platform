@@ -142,11 +142,22 @@ export function safeDivide(dividend: number, divisor: number): number {
 /**
  * Calculates average from an array of numbers
  * @param values - Array of numbers
- * @returns Average value or 0 if array is empty
+ * @returns Average value or 0 if array is empty or invalid
  */
-export function calculateAverage(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, val) => sum + val, 0) / values.length;
+export function calculateAverage(values: number[] | undefined | null): number {
+  if (!values || values.length === 0) return 0;
+  return values.reduce((sum, val) => sum + (val || 0), 0) / values.length;
+}
+
+/**
+ * Ensures a number is valid (not NaN, null, or undefined)
+ * @param value - The value to check
+ * @param defaultValue - Default value if invalid (defaults to 0)
+ * @returns Valid number or default
+ */
+export function safeNumber(value: number | undefined | null, defaultValue: number = 0): number {
+  if (value === null || value === undefined || isNaN(value)) return defaultValue;
+  return value;
 }
 
 // ======================

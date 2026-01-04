@@ -302,7 +302,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
                 <span className="text-sm text-slate-600">Valor Perdido</span>
               </div>
               <p className="text-2xl font-bold text-red-600">-${formatNumber(safeData.wasteValue)}</p>
-              <p className="text-xs text-slate-500 mt-1">{safeData.wastePercentage.toFixed(1)}% del inventario</p>
+              <p className="text-xs text-slate-500 mt-1">{(isNaN(safeData.wastePercentage) ? 0 : safeData.wastePercentage).toFixed(1)}% del inventario</p>
             </div>
             <div className="p-4 bg-amber-50 rounded-xl">
               <div className="flex items-center gap-2 mb-2">

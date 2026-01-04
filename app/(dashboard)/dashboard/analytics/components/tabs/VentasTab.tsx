@@ -124,7 +124,7 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
         />
         <MetricCard
           title="Items por Orden"
-          value={safeData.itemsPerOrder.toFixed(1)}
+          value={(isNaN(safeData.itemsPerOrder) ? 0 : safeData.itemsPerOrder).toFixed(1)}
           change={safeData.itemsChange}
           changeLabel="vs período anterior"
           icon={icons.items}
@@ -246,7 +246,7 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
             <div className="p-4 bg-red-50 rounded-xl">
               <p className="text-sm text-slate-600 mb-1">Total Descuentos</p>
               <p className="text-2xl font-bold text-red-600">-${formatNumber(safeData.discountTotal)}</p>
-              <p className="text-xs text-slate-500 mt-1">{safeData.discountPercentage.toFixed(1)}% del total</p>
+              <p className="text-xs text-slate-500 mt-1">{(isNaN(safeData.discountPercentage) ? 0 : safeData.discountPercentage).toFixed(1)}% del total</p>
             </div>
             <div className="p-4 bg-emerald-50 rounded-xl">
               <p className="text-sm text-slate-600 mb-1">Ingreso Neto</p>
@@ -255,7 +255,7 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
             </div>
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-sm text-slate-600 mb-1">Descuento Promedio</p>
-              <p className="text-2xl font-bold text-blue-600">{safeData.discountPercentage.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-blue-600">{(isNaN(safeData.discountPercentage) ? 0 : safeData.discountPercentage).toFixed(1)}%</p>
               <p className="text-xs text-slate-500 mt-1">Por transacción</p>
             </div>
           </div>
