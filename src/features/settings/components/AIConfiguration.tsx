@@ -14,6 +14,7 @@ import { cn } from '@/src/shared/utils';
 import { KnowledgeBase } from './KnowledgeBase';
 import { ServicePriorityConfig } from './ServicePriorityConfig';
 import { ServiceCatalogConfig } from './ServiceCatalogConfig';
+import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 
 // ======================
 // TYPES
@@ -219,9 +220,161 @@ const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday
 
 export function AIConfiguration() {
   const { tenant, isAdmin } = useAuthContext();
+  const { vertical } = useVerticalTerminology();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring' | 'catalog'>('general');
+
+  // Terminology based on vertical
+  const verticalTerms = {
+    dental: {
+      clinicSection: 'Cl\u00ednica y Sucursales',
+      clinicInfo: 'Informaci\u00f3n de la Cl\u00ednica',
+      staffTitle: 'Doctores / Especialistas',
+      staffSingular: 'Doctor',
+      staffAdd: 'Agregar Doctor',
+      staffEmpty: 'No hay doctores registrados',
+      staffEmptyHint: 'Agrega doctores para asignarlos a sucursales',
+      staffPrefix: 'Dr.',
+      catalogSection: 'Cat\u00e1logo de Servicios',
+      scoringHot: 'Implantes, Ortodoncia, Carillas, Rehabilitaci\u00f3n',
+      scoringWarm: 'Endodoncia, Coronas, Blanqueamiento, Resinas',
+      scoringCold: 'Limpieza, Consulta, Diagn\u00f3stico, Radiograf\u00edas',
+      scoringHotExample: 'implantes, ortodoncia u otro servicio HOT',
+      emergencyExample: '"emergencia", "dolor fuerte", "urgente"',
+      staffRoles: [
+        { value: 'dentist', label: 'Dentista / Doctor' },
+        { value: 'specialist', label: 'Especialista' },
+        { value: 'assistant', label: 'Asistente' },
+        { value: 'receptionist', label: 'Recepcionista' },
+        { value: 'admin', label: 'Administrador' },
+        { value: 'manager', label: 'Gerente' },
+      ],
+    },
+    restaurant: {
+      clinicSection: 'Restaurante y Sucursales',
+      clinicInfo: 'Informaci\u00f3n del Restaurante',
+      staffTitle: 'Personal de Servicio',
+      staffSingular: 'Encargado',
+      staffAdd: 'Agregar Personal',
+      staffEmpty: 'No hay personal registrado',
+      staffEmptyHint: 'Agrega personal para asignarlos a sucursales',
+      staffPrefix: '',
+      catalogSection: 'Cat\u00e1logo de Servicios/Eventos',
+      scoringHot: 'Eventos Privados, Reservaciones VIP, Catering',
+      scoringWarm: 'Reservaciones Grupales, Men\u00fa de Temporada, Promociones',
+      scoringCold: 'Consultas de Men\u00fa, Horarios, Disponibilidad',
+      scoringHotExample: 'evento privado, catering u otro servicio premium',
+      emergencyExample: '"urgente", "queja", "problema con pedido"',
+      staffRoles: [
+        { value: 'manager', label: 'Gerente General' },
+        { value: 'chef', label: 'Chef / Cocinero' },
+        { value: 'host', label: 'Host / Hostess' },
+        { value: 'captain', label: 'Capit\u00e1n de Meseros' },
+        { value: 'waiter', label: 'Mesero' },
+        { value: 'receptionist', label: 'Recepcionista' },
+      ],
+    },
+    clinic: {
+      clinicSection: 'Cl\u00ednica y Sucursales',
+      clinicInfo: 'Informaci\u00f3n de la Cl\u00ednica',
+      staffTitle: 'M\u00e9dicos / Especialistas',
+      staffSingular: 'M\u00e9dico',
+      staffAdd: 'Agregar M\u00e9dico',
+      staffEmpty: 'No hay m\u00e9dicos registrados',
+      staffEmptyHint: 'Agrega m\u00e9dicos para asignarlos a sucursales',
+      staffPrefix: 'Dr.',
+      catalogSection: 'Cat\u00e1logo de Servicios',
+      scoringHot: 'Cirug\u00edas, Procedimientos Especializados',
+      scoringWarm: 'Consultas Especializadas, Estudios',
+      scoringCold: 'Consulta General, Diagn\u00f3stico B\u00e1sico',
+      scoringHotExample: 'cirug\u00eda u otro procedimiento de alto valor',
+      emergencyExample: '"emergencia", "dolor fuerte", "urgente"',
+      staffRoles: [
+        { value: 'doctor', label: 'M\u00e9dico General' },
+        { value: 'specialist', label: 'Especialista' },
+        { value: 'nurse', label: 'Enfermero/a' },
+        { value: 'receptionist', label: 'Recepcionista' },
+        { value: 'admin', label: 'Administrador' },
+        { value: 'manager', label: 'Gerente' },
+      ],
+    },
+    gym: {
+      clinicSection: 'Gimnasio y Sucursales',
+      clinicInfo: 'Informaci\u00f3n del Gimnasio',
+      staffTitle: 'Entrenadores',
+      staffSingular: 'Entrenador',
+      staffAdd: 'Agregar Entrenador',
+      staffEmpty: 'No hay entrenadores registrados',
+      staffEmptyHint: 'Agrega entrenadores para asignarlos a sucursales',
+      staffPrefix: 'Coach',
+      catalogSection: 'Cat\u00e1logo de Membres\u00edas',
+      scoringHot: 'Membres\u00eda Anual, Entrenamiento Personal',
+      scoringWarm: 'Membres\u00eda Mensual, Clases Grupales',
+      scoringCold: 'Consultas, Pase de Visitante',
+      scoringHotExample: 'membres\u00eda anual o entrenamiento personal',
+      emergencyExample: '"cancelar membres\u00eda", "queja", "problema"',
+      staffRoles: [
+        { value: 'trainer', label: 'Entrenador Personal' },
+        { value: 'instructor', label: 'Instructor de Clases' },
+        { value: 'nutritionist', label: 'Nutricionista' },
+        { value: 'receptionist', label: 'Recepcionista' },
+        { value: 'admin', label: 'Administrador' },
+        { value: 'manager', label: 'Gerente' },
+      ],
+    },
+    beauty: {
+      clinicSection: 'Sal\u00f3n y Sucursales',
+      clinicInfo: 'Informaci\u00f3n del Sal\u00f3n',
+      staffTitle: 'Estilistas / Especialistas',
+      staffSingular: 'Estilista',
+      staffAdd: 'Agregar Estilista',
+      staffEmpty: 'No hay estilistas registrados',
+      staffEmptyHint: 'Agrega estilistas para asignarlos a sucursales',
+      staffPrefix: '',
+      catalogSection: 'Cat\u00e1logo de Servicios',
+      scoringHot: 'Tratamientos Premium, Paquetes Completos',
+      scoringWarm: 'Coloraci\u00f3n, Tratamientos Capilares',
+      scoringCold: 'Corte B\u00e1sico, Peinado Simple',
+      scoringHotExample: 'tratamiento premium o paquete completo',
+      emergencyExample: '"problema con servicio", "queja", "devoluci\u00f3n"',
+      staffRoles: [
+        { value: 'stylist', label: 'Estilista' },
+        { value: 'colorist', label: 'Colorista' },
+        { value: 'nail_tech', label: 'Manicurista' },
+        { value: 'esthetician', label: 'Esteticista' },
+        { value: 'receptionist', label: 'Recepcionista' },
+        { value: 'manager', label: 'Gerente' },
+      ],
+    },
+    veterinary: {
+      clinicSection: 'Veterinaria y Sucursales',
+      clinicInfo: 'Informaci\u00f3n de la Veterinaria',
+      staffTitle: 'Veterinarios',
+      staffSingular: 'Veterinario',
+      staffAdd: 'Agregar Veterinario',
+      staffEmpty: 'No hay veterinarios registrados',
+      staffEmptyHint: 'Agrega veterinarios para asignarlos a sucursales',
+      staffPrefix: 'Dr.',
+      catalogSection: 'Cat\u00e1logo de Servicios',
+      scoringHot: 'Cirug\u00edas, Hospitalizaci\u00f3n, Especialidades',
+      scoringWarm: 'Vacunaci\u00f3n, Desparasitaci\u00f3n, Consultas',
+      scoringCold: 'Consulta General, Ba\u00f1o, Est\u00e9tica',
+      scoringHotExample: 'cirug\u00eda o procedimiento especializado',
+      emergencyExample: '"emergencia", "accidente", "urgente"',
+      staffRoles: [
+        { value: 'veterinarian', label: 'Veterinario' },
+        { value: 'vet_tech', label: 'T\u00e9cnico Veterinario' },
+        { value: 'groomer', label: 'Peluquero' },
+        { value: 'receptionist', label: 'Recepcionista' },
+        { value: 'admin', label: 'Administrador' },
+        { value: 'manager', label: 'Gerente' },
+      ],
+    },
+  };
+
+  // Get terms for current vertical (default to dental)
+  const terms = verticalTerms[vertical] || verticalTerms.dental;
 
   // AI Config State - must match database schema exactly
   const [config, setConfig] = useState<AIConfig>({
@@ -621,7 +774,7 @@ export function AIConfiguration() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message || data.error || 'Error al eliminar doctor');
+        alert(data.message || data.error || 'Error al eliminar personal');
         return;
       }
 
@@ -632,7 +785,7 @@ export function AIConfiguration() {
       setDeletingStaff(null);
     } catch (error) {
       console.error('Error deleting staff:', error);
-      alert('Error al eliminar doctor');
+      alert('Error al eliminar personal');
     } finally {
       setDeletingStaffLoading(false);
     }
@@ -704,8 +857,8 @@ export function AIConfiguration() {
           <div className="flex border-b border-gray-100 overflow-x-auto">
             {[
               { key: 'general', label: 'General', icon: icons.ai },
-              { key: 'clinic', label: 'Clínica y Sucursales', icon: icons.clinic },
-              { key: 'catalog', label: 'Catálogo de Servicios', icon: icons.catalog },
+              { key: 'clinic', label: terms.clinicSection, icon: icons.clinic },
+              { key: 'catalog', label: terms.catalogSection, icon: icons.catalog },
               { key: 'knowledge', label: 'Base de Conocimiento', icon: icons.brain },
               { key: 'scoring', label: 'Clasificación', icon: icons.check },
             ].map((tab) => (
@@ -923,10 +1076,10 @@ export function AIConfiguration() {
                     {icons.clinic}
                   </div>
                   <div>
-                    <h4 className="font-medium text-blue-900 mb-1">Información de la Clínica</h4>
+                    <h4 className="font-medium text-blue-900 mb-1">{terms.clinicInfo}</h4>
                     <p className="text-sm text-blue-700">
                       Esta información es utilizada por el AI para responder preguntas sobre ubicaciones,
-                      horarios y doctores. Las coordenadas GPS permiten enviar ubicaciones directas por WhatsApp.
+                      horarios y personal. Las coordenadas GPS permiten enviar ubicaciones directas por WhatsApp.
                     </p>
                   </div>
                 </div>
@@ -1201,6 +1354,7 @@ export function AIConfiguration() {
                         key={branch.id}
                         branch={branch}
                         staff={getStaffForBranch(branch.id)}
+                        terms={terms}
                         onEdit={() => {
                           setEditingBranch(branch);
                           setShowBranchModal(true);
@@ -1215,7 +1369,7 @@ export function AIConfiguration() {
               {/* Doctors Summary */}
               <div className="pt-6 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium text-gray-900">Doctores / Especialistas ({staff.length})</h4>
+                  <h4 className="font-medium text-gray-900">{terms.staffTitle} ({staff.length})</h4>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1225,14 +1379,14 @@ export function AIConfiguration() {
                     }}
                   >
                     {icons.plus}
-                    <span className="ml-2">Agregar Doctor</span>
+                    <span className="ml-2">{terms.staffAdd}</span>
                   </Button>
                 </div>
 
                 {staff.length === 0 ? (
                   <div className="text-center py-6 bg-gray-50 rounded-xl">
-                    <p className="text-gray-500">No hay doctores registrados</p>
-                    <p className="text-sm text-gray-400">Agrega doctores para asignarlos a sucursales</p>
+                    <p className="text-gray-500">{terms.staffEmpty}</p>
+                    <p className="text-sm text-gray-400">{terms.staffEmptyHint}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1255,7 +1409,7 @@ export function AIConfiguration() {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-900">
-                                  Dr. {member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre'}
+                                  {terms.staffPrefix} {member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre'}
                                 </p>
                                 {member.specialty && (
                                   <p className="text-sm text-gray-500">{member.specialty}</p>
@@ -1278,14 +1432,14 @@ export function AIConfiguration() {
                                   setShowStaffModal(true);
                                 }}
                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Editar doctor"
+                                title="Editar"
                               >
                                 {icons.edit}
                               </button>
                               <button
                                 onClick={() => setDeletingStaff(member)}
                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Eliminar doctor"
+                                title="Eliminar"
                               >
                                 {icons.trash}
                               </button>
@@ -1354,7 +1508,7 @@ export function AIConfiguration() {
                       <Badge variant="hot" size="sm">HOT</Badge>
                     </div>
                     <p className="text-sm font-medium text-red-900">Servicios de Alto Valor</p>
-                    <p className="text-xs text-red-700 mt-1">Implantes, Ortodoncia, Carillas, Rehabilitación</p>
+                    <p className="text-xs text-red-700 mt-1">{terms.scoringHot}</p>
                     <p className="text-sm text-red-700 mt-2">→ Escalamiento automático para cierre de venta</p>
                   </div>
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
@@ -1363,7 +1517,7 @@ export function AIConfiguration() {
                       <Badge variant="warning" size="sm">WARM</Badge>
                     </div>
                     <p className="text-sm font-medium text-amber-900">Servicios Moderados</p>
-                    <p className="text-xs text-amber-700 mt-1">Endodoncia, Coronas, Blanqueamiento, Resinas</p>
+                    <p className="text-xs text-amber-700 mt-1">{terms.scoringWarm}</p>
                     <p className="text-sm text-amber-700 mt-2">→ Seguimiento prioritario</p>
                   </div>
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
@@ -1372,7 +1526,7 @@ export function AIConfiguration() {
                       <Badge variant="info" size="sm">COLD</Badge>
                     </div>
                     <p className="text-sm font-medium text-blue-900">Servicios Básicos</p>
-                    <p className="text-xs text-blue-700 mt-1">Limpieza, Consulta, Diagnóstico, Radiografías</p>
+                    <p className="text-xs text-blue-700 mt-1">{terms.scoringCold}</p>
                     <p className="text-sm text-blue-700 mt-2">→ Nutrir con información</p>
                   </div>
                 </div>
@@ -1408,7 +1562,7 @@ export function AIConfiguration() {
                     </div>
                   </div>
                   <p className="text-sm text-red-700">
-                    Cuando el lead pregunta por implantes, ortodoncia u otro servicio HOT.
+                    Cuando el lead pregunta por {terms.scoringHotExample}.
                   </p>
                 </div>
 
@@ -1444,7 +1598,7 @@ export function AIConfiguration() {
                     </div>
                   </div>
                   <p className="text-sm text-purple-700">
-                    Detecta &quot;emergencia&quot;, &quot;dolor fuerte&quot;, &quot;urgente&quot;.
+                    Detecta {terms.emergencyExample}.
                   </p>
                 </div>
 
@@ -1848,6 +2002,7 @@ export function AIConfiguration() {
           branches={branches}
           staffBranches={staffBranches}
           tenantId={tenant.id}
+          terms={terms}
           onClose={() => {
             setShowStaffModal(false);
             setEditingStaff(null);
@@ -1923,15 +2078,15 @@ export function AIConfiguration() {
                 <span className="text-red-600">{icons.trash}</span>
               </div>
               <h2 className="text-xl font-bold text-gray-900 text-center">
-                ¿Eliminar doctor?
+                ¿Eliminar {terms.staffSingular.toLowerCase()}?
               </h2>
               <p className="text-gray-500 text-center mt-2">
-                Esta acción eliminará a <strong>Dr. {deletingStaff.display_name || `${deletingStaff.first_name || ''} ${deletingStaff.last_name || ''}`.trim()}</strong> del sistema.
+                Esta acción eliminará a <strong>{terms.staffPrefix} {deletingStaff.display_name || `${deletingStaff.first_name || ''} ${deletingStaff.last_name || ''}`.trim()}</strong> del sistema.
               </p>
 
               <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <p className="text-sm text-amber-800">
-                  <strong>Importante:</strong> El doctor será removido de todas las sucursales y sus citas pendientes quedarán sin asignar.
+                  <strong>Importante:</strong> Será removido de todas las sucursales y sus asignaciones pendientes quedarán sin asignar.
                 </p>
               </div>
             </div>
@@ -1950,7 +2105,7 @@ export function AIConfiguration() {
                 onClick={handleDeleteStaff}
                 isLoading={deletingStaffLoading}
               >
-                Sí, Eliminar Doctor
+                Sí, Eliminar {terms.staffSingular}
               </Button>
             </div>
           </div>
@@ -1970,9 +2125,12 @@ interface BranchCardProps {
   staff: Staff[];
   onEdit: () => void;
   onDelete?: () => void;
+  terms: {
+    staffTitle: string;
+  };
 }
 
-function BranchCard({ branch, staff, onEdit, onDelete }: BranchCardProps) {
+function BranchCard({ branch, staff, onEdit, onDelete, terms }: BranchCardProps) {
   const hasCoordinates = branch.latitude && branch.longitude;
 
   return (
@@ -2050,7 +2208,7 @@ function BranchCard({ branch, staff, onEdit, onDelete }: BranchCardProps) {
 
         {/* Staff */}
         <div>
-          <p className="text-xs text-gray-500 mb-1">Doctores</p>
+          <p className="text-xs text-gray-500 mb-1">{terms.staffTitle}</p>
           <p className="text-sm font-medium text-gray-900">
             {staff.length > 0 ? `${staff.length} asignados` : 'Ninguno'}
           </p>
@@ -2267,7 +2425,7 @@ function BranchModal({ branch, onClose, onSave, saving }: BranchModalProps) {
                 />
                 <div>
                   <p className="font-medium text-gray-900">Sucursal Principal</p>
-                  <p className="text-sm text-gray-500">Esta es la sede principal de la clínica</p>
+                  <p className="text-sm text-gray-500">Esta es la sede principal del negocio</p>
                 </div>
               </label>
             </div>
@@ -2444,9 +2602,15 @@ interface StaffModalProps {
   tenantId: string;
   onClose: () => void;
   onSave: () => void;
+  terms: {
+    staffSingular: string;
+    staffAdd: string;
+    staffPrefix: string;
+    staffRoles: { value: string; label: string }[];
+  };
 }
 
-function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave }: StaffModalProps) {
+function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave, terms }: StaffModalProps) {
   const isEditing = !!staff;
 
   const [formData, setFormData] = useState({
@@ -2514,19 +2678,19 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
         if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
           alert('Error de permisos: No tienes autorización para realizar esta acción. Contacta al administrador.');
         } else if (errorMessage.includes('unique constraint') || errorMessage.includes('duplicate')) {
-          alert('Este doctor ya está asignado a esa sucursal.');
+          alert('Este miembro ya está asignado a esa sucursal.');
         } else {
           alert(`Error al guardar: ${errorMessage}`);
         }
         return;
       }
 
-      console.log('✅ Doctor guardado correctamente');
+      console.log('✅ Personal guardado correctamente');
       onSave();
       onClose();
     } catch (error: unknown) {
       console.error('Error saving staff:', error);
-      alert('Error al guardar el doctor');
+      alert('Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -2587,10 +2751,10 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-semibold text-gray-900">
-                {isEditing ? 'Editar Doctor' : 'Agregar Doctor'}
+                {isEditing ? `Editar ${terms.staffSingular}` : terms.staffAdd}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                {isEditing ? 'Modifica los datos del doctor' : 'Registra un nuevo doctor o especialista'}
+                {isEditing ? `Modifica los datos del ${terms.staffSingular.toLowerCase()}` : `Registra un nuevo ${terms.staffSingular.toLowerCase()}`}
               </p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -2652,12 +2816,9 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
-              <option value="dentist">Dentista / Doctor</option>
-              <option value="specialist">Especialista</option>
-              <option value="assistant">Asistente</option>
-              <option value="receptionist">Recepcionista</option>
-              <option value="admin">Administrador</option>
-              <option value="manager">Gerente</option>
+              {terms.staffRoles.map((role) => (
+                <option key={role.value} value={role.value}>{role.label}</option>
+              ))}
             </select>
           </div>
 
@@ -2716,7 +2877,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
               className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
             />
             <div>
-              <p className="font-medium text-gray-900">Doctor Activo</p>
+              <p className="font-medium text-gray-900">{terms.staffSingular} Activo</p>
               <p className="text-sm text-gray-500">Aparecerá en las opciones de asignación</p>
             </div>
           </label>
@@ -2742,7 +2903,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave 
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Agregar Doctor')}
+              {saving ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : terms.staffAdd)}
             </Button>
           </div>
         </div>
