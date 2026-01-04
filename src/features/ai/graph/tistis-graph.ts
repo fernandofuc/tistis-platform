@@ -24,6 +24,7 @@ import {
   bookingRestaurantNode,
   bookingMedicalNode,
   orderingRestaurantNode,
+  invoicingRestaurantNode,
   generalNode,
   escalationNode,
   urgentCareNode,
@@ -130,6 +131,7 @@ function agentRouter(state: TISTISAgentStateType): string {
     booking_retail: 'booking', // fallback
     booking_general: 'booking', // fallback
     ordering_restaurant: 'ordering_restaurant', // Restaurant pickup/delivery
+    invoicing_restaurant: 'invoicing_restaurant', // Restaurant invoicing (CFDI)
     general: 'general',
     escalation: 'escalation',
     urgent_care: 'urgent_care',
@@ -209,6 +211,7 @@ export function buildTISTISGraph() {
     .addNode('booking_restaurant', bookingRestaurantNode)
     .addNode('booking_medical', bookingMedicalNode)
     .addNode('ordering_restaurant', orderingRestaurantNode)
+    .addNode('invoicing_restaurant', invoicingRestaurantNode)
     .addNode('general', generalNode)
     .addNode('escalation', escalationNode)
     .addNode('urgent_care', urgentCareNode)
@@ -242,6 +245,7 @@ export function buildTISTISGraph() {
       booking_restaurant: 'booking_restaurant',
       booking_medical: 'booking_medical',
       ordering_restaurant: 'ordering_restaurant',
+      invoicing_restaurant: 'invoicing_restaurant',
       general: 'general',
       escalation: 'escalation',
       urgent_care: 'urgent_care',
@@ -343,6 +347,13 @@ export function buildTISTISGraph() {
       booking_restaurant: 'booking_restaurant',
       escalation: 'escalation',
       general: 'general',
+      finalize: 'finalize',
+    })
+
+    // Invoicing Restaurant -> postAgentRouter
+    .addConditionalEdges('invoicing_restaurant', postAgentRouter, {
+      general: 'general',
+      escalation: 'escalation',
       finalize: 'finalize',
     })
 

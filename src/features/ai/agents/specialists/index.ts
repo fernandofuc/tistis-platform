@@ -51,3 +51,9 @@ export { GeneralAgent, generalNode } from './general.agent';
 
 // Escalation
 export { EscalationAgent, UrgentCareAgent, escalationNode, urgentCareNode } from './escalation.agent';
+
+// Invoicing (restaurant CFDI via WhatsApp)
+export {
+  InvoicingRestaurantAgent,
+  invoicingRestaurantNode,
+} from './invoicing.agent';

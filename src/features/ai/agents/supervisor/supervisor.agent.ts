@@ -58,6 +58,11 @@ function detectIntentRuleBased(message: string): AIIntent {
       intent: 'HUMAN_REQUEST',
       regex: /\b(humano|persona|asesor|gerente|encargado|supervisor|hablar con alguien|quiero hablar)\b/,
     },
+    // FACTURACIÓN - Alta prioridad para restaurantes
+    {
+      intent: 'INVOICE_REQUEST',
+      regex: /\b(factura|facturar|cfdi|rfc|datos fiscales|necesito factura|quiero factura|mi factura|comprobante fiscal)\b/,
+    },
     // BOOKING - Alta prioridad comercial
     {
       intent: 'BOOK_APPOINTMENT',
@@ -205,12 +210,21 @@ function determineNextAgent(
     LOCATION: 'location',
     HOURS: 'hours',
     FAQ: 'faq',
+    INVOICE_REQUEST: 'invoicing_restaurant',
     UNKNOWN: 'general',
   };
 
   // Para booking, usar agente especializado por vertical
   if (intent === 'BOOK_APPOINTMENT') {
     return `booking_${vertical}`;
+  }
+
+  // Para facturación, solo disponible para restaurantes
+  if (intent === 'INVOICE_REQUEST' && vertical === 'restaurant') {
+    return 'invoicing_restaurant';
+  } else if (intent === 'INVOICE_REQUEST') {
+    // Para otras verticales, ir a general (pueden manejarlo manualmente)
+    return 'general';
   }
 
   return intentToAgent[intent] || 'general';

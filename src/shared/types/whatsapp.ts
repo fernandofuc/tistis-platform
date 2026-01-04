@@ -278,6 +278,7 @@ export type AIIntent =
   | 'LOCATION'
   | 'HOURS'
   | 'FAQ'
+  | 'INVOICE_REQUEST'
   | 'UNKNOWN';
 
 export interface AISignal {

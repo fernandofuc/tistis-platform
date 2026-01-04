@@ -49,15 +49,16 @@ const VERTICAL_CONFIGS: Record<Vertical, VerticalConfig> = {
     booking_priority: 'high',
   },
   restaurant: {
-    agents: ['greeting', 'pricing', 'booking_restaurant', 'ordering_restaurant', 'faq', 'location', 'menu', 'escalation'],
+    agents: ['greeting', 'pricing', 'booking_restaurant', 'ordering_restaurant', 'invoicing_restaurant', 'faq', 'location', 'menu', 'escalation'],
     intent_prompts: {
       GREETING: 'Da la bienvenida y menciona especialidades del día si las hay.',
       PRICE_INQUIRY: 'Comparte el menú y rangos de precios. Menciona promociones vigentes.',
       BOOK_APPOINTMENT: 'Ayuda a reservar mesa. Pregunta número de personas y si es ocasión especial.',
       PICKUP_ORDER: 'Ayuda a tomar el pedido para recoger. Confirma los platillos y da número de orden.',
+      INVOICE_REQUEST: 'Ayuda al cliente a facturar su consumo. Guíalo paso a paso para enviar la foto del ticket.',
       LOCATION: 'Proporciona ubicación y opciones de estacionamiento.',
     },
-    keywords: ['reserva', 'mesa', 'menu', 'carta', 'comida', 'cena', 'almuerzo', 'evento', 'privado', 'terraza', 'servicio', 'platillo', 'pedir', 'ordenar', 'llevar', 'recoger', 'pickup'],
+    keywords: ['reserva', 'mesa', 'menu', 'carta', 'comida', 'cena', 'almuerzo', 'evento', 'privado', 'terraza', 'servicio', 'platillo', 'pedir', 'ordenar', 'llevar', 'recoger', 'pickup', 'factura', 'facturar', 'cfdi', 'rfc'],
     booking_priority: 'high',
   },
 
