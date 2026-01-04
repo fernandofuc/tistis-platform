@@ -36,6 +36,7 @@ interface UseKitchenOptions {
 interface UseKitchenReturn {
   // State
   orders: KDSOrderView[];
+  orderHistory: RestaurantOrder[];
   stations: KitchenStationConfig[];
   stats: KDSStats | null;
   loading: boolean;
@@ -49,6 +50,7 @@ interface UseKitchenReturn {
   bumpOrder: (orderId: string) => Promise<void>;
   recallOrder: (orderId: string) => Promise<void>;
   setPriority: (orderId: string, priority: number) => Promise<void>;
+  fetchOrderHistory: () => Promise<void>;
 
   // Item actions
   addItem: (orderId: string, item: OrderItemFormData) => Promise<void>;
@@ -76,6 +78,7 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
   const { branch_id, station, autoRefresh = true, refreshInterval = 30000 } = options;
 
   const [orders, setOrders] = useState<KDSOrderView[]>([]);
+  const [orderHistory, setOrderHistory] = useState<RestaurantOrder[]>([]);
   const [stations, setStations] = useState<KitchenStationConfig[]>([]);
   const [stats, setStats] = useState<KDSStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -243,6 +246,28 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
     [fetchData]
   );
 
+  // Fetch historical orders (completed/cancelled)
+  const fetchOrderHistory = useCallback(async () => {
+    if (!branch_id) return;
+
+    try {
+      // Get orders from last 30 days with completed/cancelled/served status
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const historyData = await kitchenService.getOrders({
+        branch_id,
+        status: ['completed', 'served', 'cancelled'],
+        date_from: thirtyDaysAgo.toISOString(),
+        limit: 200,
+      });
+
+      setOrderHistory(historyData);
+    } catch (err) {
+      console.error('Error fetching order history:', err);
+    }
+  }, [branch_id]);
+
   // ======================
   // ITEM ACTIONS
   // ======================
@@ -334,6 +359,7 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
 
   return {
     orders,
+    orderHistory,
     stations,
     stats,
     loading,
@@ -345,6 +371,7 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
     bumpOrder,
     recallOrder,
     setPriority,
+    fetchOrderHistory,
     addItem,
     updateItem,
     updateItemStatus: updateItemStatusAction,

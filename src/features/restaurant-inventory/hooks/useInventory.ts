@@ -12,6 +12,7 @@ import type {
   InventoryItem,
   InventoryCategory,
   InventorySupplier,
+  InventoryMovement,
   InventoryStats,
   ItemFormData,
   CategoryFormData,
@@ -39,6 +40,7 @@ interface UseInventoryReturn {
   items: InventoryItem[];
   categories: InventoryCategory[];
   suppliers: InventorySupplier[];
+  movements: InventoryMovement[];
   stats: InventoryStats | null;
   loading: boolean;
   error: string | null;
@@ -86,6 +88,7 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [suppliers, setSuppliers] = useState<InventorySupplier[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [stats, setStats] = useState<InventoryStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +109,7 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
     try {
       setError(null);
 
-      const [itemsData, categoriesData, suppliersData, statsData] = await Promise.all([
+      const [itemsData, categoriesData, suppliersData, movementsData, statsData] = await Promise.all([
         inventoryService.getItems({
           branch_id,
           category_id,
@@ -116,12 +119,14 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
         }),
         inventoryService.getCategories(branch_id),
         inventoryService.getSuppliers(),
+        inventoryService.getMovements({ branch_id }),
         inventoryService.getStats(branch_id),
       ]);
 
       setItems(itemsData);
       setCategories(categoriesData);
       setSuppliers(suppliersData);
+      setMovements(movementsData);
       setStats(statsData);
     } catch (err) {
       console.error('Error fetching inventory data:', err);
@@ -354,6 +359,7 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
     items,
     categories,
     suppliers,
+    movements,
     stats,
     loading,
     error,

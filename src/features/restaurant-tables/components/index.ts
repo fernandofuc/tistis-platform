@@ -6,3 +6,4 @@ export { TablesOverview, TablesOverviewSkeleton } from './TablesOverview';
 export { TableCard, StatusBadge, CapacityIndicator, ZoneBadge, FeatureTags } from './TableCard';
 export { TablesList, TablesListSkeleton } from './TablesList';
 export { TableFormModal } from './TableFormModal';
+export { FloorPlanEditor } from './FloorPlanEditor';

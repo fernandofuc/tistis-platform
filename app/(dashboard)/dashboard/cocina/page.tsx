@@ -6,14 +6,14 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
 import { useKitchen } from '@/src/features/restaurant-kitchen/hooks/useKitchen';
-import { KDSDisplay } from '@/src/features/restaurant-kitchen/components/KDSDisplay';
-import type { KitchenStation } from '@/src/features/restaurant-kitchen/types';
+import { KDSDisplay, OrdersHistoryTab } from '@/src/features/restaurant-kitchen/components';
+import type { KitchenStation, RestaurantOrder } from '@/src/features/restaurant-kitchen/types';
 
 // ======================
 // TYPES
@@ -109,29 +109,6 @@ function UpgradePrompt() {
   );
 }
 
-// ======================
-// ORDERS HISTORY TAB
-// ======================
-function OrdersHistoryTab() {
-  return (
-    <div className="text-center py-16">
-      <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-slate-50 flex items-center justify-center">
-        <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-      </div>
-      <h3 className="text-lg font-semibold text-slate-900 mb-2">
-        Historial de Órdenes
-      </h3>
-      <p className="text-slate-500 mb-6 max-w-md mx-auto">
-        Aquí podrás ver el historial completo de órdenes, filtrar por fecha, estado y más.
-      </p>
-      <span className="inline-flex items-center px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium border border-amber-100">
-        En desarrollo
-      </span>
-    </div>
-  );
-}
 
 // ======================
 // STATIONS CONFIG TAB
@@ -247,6 +224,7 @@ export default function CocinaPage() {
   // Kitchen data
   const {
     orders,
+    orderHistory,
     stations,
     stats,
     loading: kitchenLoading,
@@ -256,6 +234,7 @@ export default function CocinaPage() {
     bumpItem,
     cancelItem,
     setPriority,
+    fetchOrderHistory,
     createStation,
     updateStation,
     deleteStation,
@@ -315,6 +294,13 @@ export default function CocinaPage() {
     }
   }, [setPriority]);
 
+  // Load order history when switching to orders tab
+  useEffect(() => {
+    if (activeTab === 'orders' && activeBranchId) {
+      fetchOrderHistory();
+    }
+  }, [activeTab, activeBranchId, fetchOrderHistory]);
+
   // Loading state
   if (tenantLoading || flagsLoading) {
     return (
@@ -349,7 +335,13 @@ export default function CocinaPage() {
           />
         );
       case 'orders':
-        return <OrdersHistoryTab />;
+        return (
+          <OrdersHistoryTab
+            orders={orderHistory}
+            isLoading={kitchenLoading}
+            onRefresh={fetchOrderHistory}
+          />
+        );
       case 'stations':
         return (
           <StationsConfigTab

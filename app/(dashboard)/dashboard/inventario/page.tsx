@@ -13,8 +13,24 @@ import { cn } from '@/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
 import { useInventory } from '@/src/features/restaurant-inventory/hooks/useInventory';
-import { InventoryOverview } from '@/src/features/restaurant-inventory/components/InventoryOverview';
-import type { InventoryItem, InventoryCategory } from '@/src/features/restaurant-inventory/types';
+import {
+  InventoryOverview,
+  CategoriesTab,
+  SuppliersTab,
+  MovementsTab,
+  CategoryForm,
+  SupplierForm,
+  MovementForm,
+} from '@/src/features/restaurant-inventory/components';
+import type {
+  InventoryItem,
+  InventoryCategory,
+  InventorySupplier,
+  InventoryMovement,
+  CategoryFormData,
+  SupplierFormData,
+  MovementFormData,
+} from '@/src/features/restaurant-inventory/types';
 import { ITEM_TYPE_CONFIG, STORAGE_TYPE_CONFIG } from '@/src/features/restaurant-inventory/types';
 
 // ======================
@@ -298,25 +314,6 @@ function ItemsListTab({ items, categories, loading, onAddItem }: ItemsListTabPro
   );
 }
 
-// ======================
-// PLACEHOLDER TABS
-// ======================
-function PlaceholderTab({ title }: { title: string }) {
-  return (
-    <div className="text-center py-16">
-      <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-slate-50 flex items-center justify-center">
-        <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-      </div>
-      <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
-      <p className="text-slate-500 mb-6">Esta sección está en desarrollo</p>
-      <span className="inline-flex items-center px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium border border-amber-100">
-        Próximamente
-      </span>
-    </div>
-  );
-}
 
 // ======================
 // MAIN PAGE COMPONENT
@@ -325,6 +322,14 @@ export default function InventarioPage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const { tenant, branches, isLoading: tenantLoading, currentBranchId } = useTenant();
   const { isEnabled, flagsLoading } = useFeatureFlags();
+
+  // Modal states
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [showMovementForm, setShowMovementForm] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
 
   // Get active branch
   const activeBranchId = currentBranchId || branches?.[0]?.id;
@@ -335,9 +340,17 @@ export default function InventarioPage() {
     items,
     categories,
     suppliers,
+    movements,
     stats,
     loading: inventoryLoading,
     createItem,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    createSupplier,
+    updateSupplier,
+    deleteSupplier,
+    recordMovement,
     refresh,
   } = useInventory({ branch_id: activeBranchId });
 
@@ -360,6 +373,81 @@ export default function InventarioPage() {
     // TODO: Navigate to expiring batches view
     console.log('View expiring');
   }, []);
+
+  // Category handlers
+  const handleCreateCategory = useCallback(() => {
+    setEditingCategory(null);
+    setShowCategoryForm(true);
+  }, []);
+
+  const handleEditCategory = useCallback((category: InventoryCategory) => {
+    setEditingCategory(category);
+    setShowCategoryForm(true);
+  }, []);
+
+  const handleCategorySubmit = useCallback(async (data: CategoryFormData) => {
+    setFormLoading(true);
+    try {
+      if (editingCategory) {
+        await updateCategory(editingCategory.id, data);
+      } else {
+        await createCategory(data);
+      }
+      setShowCategoryForm(false);
+      setEditingCategory(null);
+    } finally {
+      setFormLoading(false);
+    }
+  }, [editingCategory, createCategory, updateCategory]);
+
+  const handleDeleteCategory = useCallback(async (id: string) => {
+    await deleteCategory(id);
+  }, [deleteCategory]);
+
+  // Supplier handlers
+  const handleCreateSupplier = useCallback(() => {
+    setEditingSupplier(null);
+    setShowSupplierForm(true);
+  }, []);
+
+  const handleEditSupplier = useCallback((supplier: InventorySupplier) => {
+    setEditingSupplier(supplier);
+    setShowSupplierForm(true);
+  }, []);
+
+  const handleSupplierSubmit = useCallback(async (data: SupplierFormData) => {
+    setFormLoading(true);
+    try {
+      if (editingSupplier) {
+        await updateSupplier(editingSupplier.id, data);
+      } else {
+        await createSupplier(data);
+      }
+      setShowSupplierForm(false);
+      setEditingSupplier(null);
+    } finally {
+      setFormLoading(false);
+    }
+  }, [editingSupplier, createSupplier, updateSupplier]);
+
+  const handleDeleteSupplier = useCallback(async (id: string) => {
+    await deleteSupplier(id);
+  }, [deleteSupplier]);
+
+  // Movement handlers
+  const handleRecordMovement = useCallback(() => {
+    setShowMovementForm(true);
+  }, []);
+
+  const handleMovementSubmit = useCallback(async (data: MovementFormData) => {
+    setFormLoading(true);
+    try {
+      await recordMovement(data);
+      setShowMovementForm(false);
+    } finally {
+      setFormLoading(false);
+    }
+  }, [recordMovement]);
 
   // Loading state
   if (tenantLoading || flagsLoading) {
@@ -399,11 +487,35 @@ export default function InventarioPage() {
           />
         );
       case 'categories':
-        return <PlaceholderTab title="Categorías de Inventario" />;
+        return (
+          <CategoriesTab
+            categories={categories}
+            isLoading={inventoryLoading}
+            onCreateCategory={handleCreateCategory}
+            onEditCategory={handleEditCategory}
+            onDeleteCategory={handleDeleteCategory}
+          />
+        );
       case 'suppliers':
-        return <PlaceholderTab title="Proveedores" />;
+        return (
+          <SuppliersTab
+            suppliers={suppliers}
+            isLoading={inventoryLoading}
+            onCreateSupplier={handleCreateSupplier}
+            onEditSupplier={handleEditSupplier}
+            onDeleteSupplier={handleDeleteSupplier}
+          />
+        );
       case 'movements':
-        return <PlaceholderTab title="Historial de Movimientos" />;
+        return (
+          <MovementsTab
+            movements={movements || []}
+            items={items}
+            isLoading={inventoryLoading}
+            onRecordMovement={handleRecordMovement}
+            onRefresh={refresh}
+          />
+        );
       default:
         return null;
     }
@@ -454,6 +566,43 @@ export default function InventarioPage() {
       <div className="mt-6">
         {renderTabContent()}
       </div>
+
+      {/* Category Form Modal */}
+      {showCategoryForm && (
+        <CategoryForm
+          category={editingCategory || undefined}
+          parentCategories={categories}
+          onSubmit={handleCategorySubmit}
+          onCancel={() => {
+            setShowCategoryForm(false);
+            setEditingCategory(null);
+          }}
+          isLoading={formLoading}
+        />
+      )}
+
+      {/* Supplier Form Modal */}
+      {showSupplierForm && (
+        <SupplierForm
+          supplier={editingSupplier || undefined}
+          onSubmit={handleSupplierSubmit}
+          onCancel={() => {
+            setShowSupplierForm(false);
+            setEditingSupplier(null);
+          }}
+          isLoading={formLoading}
+        />
+      )}
+
+      {/* Movement Form Modal */}
+      {showMovementForm && (
+        <MovementForm
+          items={items}
+          onSubmit={handleMovementSubmit}
+          onCancel={() => setShowMovementForm(false)}
+          isLoading={formLoading}
+        />
+      )}
     </div>
   );
 }

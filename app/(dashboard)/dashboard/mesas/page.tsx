@@ -15,6 +15,7 @@ import { useTables } from '@/src/features/restaurant-tables/hooks/useTables';
 import { TablesOverview } from '@/src/features/restaurant-tables/components/TablesOverview';
 import { TablesList } from '@/src/features/restaurant-tables/components/TablesList';
 import { TableFormModal } from '@/src/features/restaurant-tables/components/TableFormModal';
+import { FloorPlanEditor } from '@/src/features/restaurant-tables/components/FloorPlanEditor';
 import type {
   RestaurantTable,
   TableFormData,
@@ -116,29 +117,6 @@ function UpgradePrompt() {
   );
 }
 
-// ======================
-// FLOOR PLAN PLACEHOLDER
-// ======================
-function FloorPlanTab() {
-  return (
-    <div className="text-center py-16">
-      <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-slate-50 flex items-center justify-center">
-        <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-        </svg>
-      </div>
-      <h3 className="text-lg font-semibold text-slate-900 mb-2">
-        Editor de Plano Visual
-      </h3>
-      <p className="text-slate-500 mb-6 max-w-md mx-auto">
-        Próximamente podrás arrastrar y soltar mesas en un plano visual de tu restaurante
-      </p>
-      <span className="inline-flex items-center px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium border border-amber-100">
-        En desarrollo
-      </span>
-    </div>
-  );
-}
 
 // ======================
 // DELETE CONFIRMATION MODAL
@@ -284,6 +262,11 @@ export default function MesasPage() {
     console.log('View reservations for table:', table.id);
   }, []);
 
+  // Handler for updating table position from floor plan editor
+  const handleUpdatePosition = useCallback(async (tableId: string, x: number, y: number) => {
+    await updateTable(tableId, { position_x: x, position_y: y });
+  }, [updateTable]);
+
   // Loading state
   if (tenantLoading || flagsLoading) {
     return (
@@ -326,7 +309,17 @@ export default function MesasPage() {
           />
         );
       case 'floor_plan':
-        return <FloorPlanTab />;
+        return (
+          <FloorPlanEditor
+            tables={tables}
+            isLoading={tablesLoading}
+            onUpdatePosition={handleUpdatePosition}
+            onAddTable={handleAddTable}
+            onEditTable={handleEditTable}
+            onChangeStatus={handleChangeStatus}
+            onRefresh={refresh}
+          />
+        );
       default:
         return null;
     }

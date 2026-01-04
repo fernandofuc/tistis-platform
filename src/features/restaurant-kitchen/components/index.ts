@@ -5,3 +5,4 @@
 
 export { KDSOrderCard } from './KDSOrderCard';
 export { KDSDisplay } from './KDSDisplay';
+export { OrdersHistoryTab } from './OrdersHistoryTab';
