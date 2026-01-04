@@ -247,11 +247,12 @@ function RestaurantDashboard() {
           .eq('tenant_id', tenant.id)
           .match(branchFilter),
 
-        // 5. VIP customers today (from lead_restaurant_profile)
+        // 5. VIP customers (from lead_restaurant_profile via leads table)
         supabase
-          .from('lead_restaurant_profile')
-          .select('id, loyalty_tier')
-          .in('loyalty_tier', ['gold', 'platinum', 'vip']),
+          .from('leads')
+          .select('id, lead_restaurant_profile(loyalty_tier)')
+          .eq('tenant_id', tenant.id)
+          .not('lead_restaurant_profile', 'is', null),
       ]);
 
       // Process tables
@@ -267,6 +268,14 @@ function RestaurantDashboard() {
       const inventoryItems = inventoryResult.data || [];
       const lowStockItems = inventoryItems.filter((i: any) => i.current_stock <= i.minimum_stock).length;
 
+      // Process VIP customers (filter by loyalty tier gold, platinum, vip)
+      const vipLeads = (vipResult.data || []).filter((lead: any) => {
+        const profile = lead.lead_restaurant_profile;
+        if (!profile) return false;
+        const tier = Array.isArray(profile) ? profile[0]?.loyalty_tier : profile.loyalty_tier;
+        return ['gold', 'platinum', 'vip'].includes(tier);
+      });
+
       // Calculate stats
       setStats({
         tablesTotal: activeTables.length,
@@ -277,7 +286,7 @@ function RestaurantDashboard() {
         pendingOrders,
         preparingOrders,
         lowStockItems,
-        vipCustomersToday: vipResult.data?.length || 0,
+        vipCustomersToday: vipLeads.length,
         todayRevenue: orders.reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0),
       });
 
