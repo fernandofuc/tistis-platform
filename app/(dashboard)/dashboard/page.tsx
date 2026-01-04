@@ -2,6 +2,7 @@
 // TIS TIS PLATFORM - Dashboard Overview Page
 // Design System: TIS TIS Premium (Apple-like aesthetics)
 // Centro de control principal del negocio
+// Renderiza dashboard especializado según vertical
 // =====================================================
 
 'use client';
@@ -84,6 +85,40 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
     </svg>
   ),
+  // Restaurant specific icons
+  tables: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="5" y="10" width="14" height="2" rx="0.5" strokeWidth={1.5} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12v4M17 12v4" />
+      <circle cx="4" cy="11" r="1.5" strokeWidth={1.5} />
+      <circle cx="20" cy="11" r="1.5" strokeWidth={1.5} />
+    </svg>
+  ),
+  kitchen: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+    </svg>
+  ),
+  inventory: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </svg>
+  ),
+  menu: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  ),
+  orders: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  ),
+  vip: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    </svg>
+  ),
 };
 
 // ======================
@@ -104,7 +139,7 @@ const listItemVariants = {
 };
 
 // ======================
-// STATS DATA
+// STATS DATA TYPES
 // ======================
 interface DashboardStats {
   totalLeads: number;
@@ -116,10 +151,714 @@ interface DashboardStats {
   escalatedConversations: number;
 }
 
+// Restaurant specific stats
+interface RestaurantStats {
+  tablesTotal: number;
+  tablesAvailable: number;
+  tablesOccupied: number;
+  tablesReserved: number;
+  todayReservations: number;
+  pendingOrders: number;
+  preparingOrders: number;
+  lowStockItems: number;
+  vipCustomersToday: number;
+  todayRevenue: number;
+}
+
 // ======================
-// COMPONENT
+// RESTAURANT DASHBOARD COMPONENT
 // ======================
-export default function DashboardPage() {
+function RestaurantDashboard() {
+  const router = useRouter();
+  const { staff, tenant } = useAuthContext();
+  const { selectedBranchId, selectedBranch } = useBranch();
+  const [stats, setStats] = useState<RestaurantStats>({
+    tablesTotal: 0,
+    tablesAvailable: 0,
+    tablesOccupied: 0,
+    tablesReserved: 0,
+    todayReservations: 0,
+    pendingOrders: 0,
+    preparingOrders: 0,
+    lowStockItems: 0,
+    vipCustomersToday: 0,
+    todayRevenue: 0,
+  });
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [todayReservations, setTodayReservations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch restaurant dashboard data
+  const fetchRestaurantData = useCallback(async () => {
+    if (!tenant?.id) return;
+
+    try {
+      const branchFilter = selectedBranchId ? { branch_id: selectedBranchId } : {};
+
+      // Calculate today's date range
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+
+      // Execute all queries in parallel
+      const [
+        tablesResult,
+        reservationsResult,
+        ordersResult,
+        inventoryResult,
+        vipResult,
+      ] = await Promise.all([
+        // 1. Tables stats
+        supabase
+          .from('restaurant_tables')
+          .select('id, status, is_active')
+          .eq('tenant_id', tenant.id)
+          .is('deleted_at', null)
+          .match(branchFilter),
+
+        // 2. Today's reservations
+        supabase
+          .from('appointments')
+          .select(`
+            id, scheduled_at, status, reason,
+            leads(full_name, phone),
+            appointment_restaurant_details(party_size, occasion_type, table_id)
+          `)
+          .eq('tenant_id', tenant.id)
+          .gte('scheduled_at', startOfDay)
+          .lte('scheduled_at', endOfDay)
+          .match(branchFilter)
+          .order('scheduled_at'),
+
+        // 3. Active orders
+        supabase
+          .from('restaurant_orders')
+          .select('id, status, total_amount, order_type, created_at')
+          .eq('tenant_id', tenant.id)
+          .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+          .match(branchFilter)
+          .order('created_at', { ascending: false })
+          .limit(10),
+
+        // 4. Low stock items
+        supabase
+          .from('inventory_items')
+          .select('id, name, current_stock, minimum_stock')
+          .eq('tenant_id', tenant.id)
+          .match(branchFilter),
+
+        // 5. VIP customers today (from lead_restaurant_profile)
+        supabase
+          .from('lead_restaurant_profile')
+          .select('id, loyalty_tier')
+          .in('loyalty_tier', ['gold', 'platinum', 'vip']),
+      ]);
+
+      // Process tables
+      const tables = tablesResult.data || [];
+      const activeTables = tables.filter((t: any) => t.is_active);
+
+      // Process orders
+      const orders = ordersResult.data || [];
+      const pendingOrders = orders.filter((o: any) => ['pending', 'confirmed'].includes(o.status)).length;
+      const preparingOrders = orders.filter((o: any) => ['preparing', 'ready'].includes(o.status)).length;
+
+      // Process inventory for low stock
+      const inventoryItems = inventoryResult.data || [];
+      const lowStockItems = inventoryItems.filter((i: any) => i.current_stock <= i.minimum_stock).length;
+
+      // Calculate stats
+      setStats({
+        tablesTotal: activeTables.length,
+        tablesAvailable: activeTables.filter((t: any) => t.status === 'available').length,
+        tablesOccupied: activeTables.filter((t: any) => t.status === 'occupied').length,
+        tablesReserved: activeTables.filter((t: any) => t.status === 'reserved').length,
+        todayReservations: reservationsResult.data?.length || 0,
+        pendingOrders,
+        preparingOrders,
+        lowStockItems,
+        vipCustomersToday: vipResult.data?.length || 0,
+        todayRevenue: orders.reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0),
+      });
+
+      setRecentOrders(orders.slice(0, 5));
+      setTodayReservations(reservationsResult.data || []);
+    } catch (error) {
+      console.error('Error fetching restaurant data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenant?.id, selectedBranchId]);
+
+  useEffect(() => {
+    fetchRestaurantData();
+    // Auto-refresh every 30 seconds for real-time data
+    const interval = setInterval(fetchRestaurantData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchRestaurantData]);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Buenos días';
+    if (hour < 18) return 'Buenas tardes';
+    return 'Buenas noches';
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+  };
+
+  const getOrderStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-amber-100 text-amber-700';
+      case 'confirmed': return 'bg-blue-100 text-blue-700';
+      case 'preparing': return 'bg-orange-100 text-orange-700';
+      case 'ready': return 'bg-emerald-100 text-emerald-700';
+      default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  const getOrderStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Pendiente';
+      case 'confirmed': return 'Confirmada';
+      case 'preparing': return 'En cocina';
+      case 'ready': return 'Lista';
+      default: return status;
+    }
+  };
+
+  return (
+    <PageWrapper
+      title={`${getGreeting()}, ${staff?.first_name || 'Usuario'}`}
+      subtitle={selectedBranch ? `Centro de control - ${selectedBranch.name}` : `Centro de control de ${tenant?.name || 'tu restaurante'}`}
+      actions={
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            leftIcon={icons.menu}
+            onClick={() => router.push('/dashboard/menu')}
+          >
+            Menú
+          </Button>
+          <Button
+            leftIcon={icons.plus}
+            onClick={() => router.push('/dashboard/calendario')}
+          >
+            Nueva Reservación
+          </Button>
+        </div>
+      }
+    >
+      {/* Stats Cards - Restaurant Specific - Premium Design */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Tables Status */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => router.push('/dashboard/mesas')}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl">
+              <span className="text-indigo-600">{icons.tables}</span>
+            </div>
+            <Badge variant="info" size="sm">Mesas</Badge>
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-8 w-16 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-24 bg-slate-100 rounded animate-pulse" />
+            </div>
+          ) : (
+            <>
+              <div className="text-3xl font-bold text-slate-800">
+                {stats.tablesAvailable}<span className="text-lg text-slate-400">/{stats.tablesTotal}</span>
+              </div>
+              <p className="text-sm text-slate-500 mt-1">Mesas disponibles</p>
+              <div className="flex gap-2 mt-3">
+                <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+                  {stats.tablesOccupied} ocupadas
+                </span>
+                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                  {stats.tablesReserved} reservadas
+                </span>
+              </div>
+            </>
+          )}
+        </motion.div>
+
+        {/* Today's Reservations */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200/60 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => router.push('/dashboard/calendario')}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2.5 bg-emerald-100 rounded-xl">
+              <span className="text-emerald-600">{icons.calendar}</span>
+            </div>
+            <Badge variant="success" size="sm">Hoy</Badge>
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-8 w-10 bg-emerald-200 rounded animate-pulse" />
+              <div className="h-4 w-20 bg-emerald-100 rounded animate-pulse" />
+            </div>
+          ) : (
+            <>
+              <div className="text-3xl font-bold text-emerald-700">{stats.todayReservations}</div>
+              <p className="text-sm text-emerald-600 mt-1">Reservaciones hoy</p>
+            </>
+          )}
+        </motion.div>
+
+        {/* Orders in Kitchen */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className={cn(
+            'rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
+            stats.preparingOrders > 0
+              ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200/60'
+              : 'bg-white border-slate-200/60'
+          )}
+          onClick={() => router.push('/dashboard/cocina')}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className={cn(
+              'p-2.5 rounded-xl',
+              stats.preparingOrders > 0 ? 'bg-orange-100' : 'bg-slate-100'
+            )}>
+              <span className={stats.preparingOrders > 0 ? 'text-orange-600' : 'text-slate-600'}>
+                {icons.kitchen}
+              </span>
+            </div>
+            {stats.preparingOrders > 0 ? (
+              <Badge variant="warning" size="sm">En cocina</Badge>
+            ) : (
+              <Badge variant="default" size="sm">Cocina</Badge>
+            )}
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-8 w-10 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-20 bg-slate-100 rounded animate-pulse" />
+            </div>
+          ) : (
+            <>
+              <div className={cn(
+                'text-3xl font-bold',
+                stats.preparingOrders > 0 ? 'text-orange-700' : 'text-slate-800'
+              )}>
+                {stats.pendingOrders + stats.preparingOrders}
+              </div>
+              <p className={cn(
+                'text-sm mt-1',
+                stats.preparingOrders > 0 ? 'text-orange-600' : 'text-slate-500'
+              )}>
+                Órdenes activas
+              </p>
+              {stats.preparingOrders > 0 && (
+                <div className="flex gap-2 mt-3">
+                  <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">
+                    {stats.preparingOrders} preparando
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </motion.div>
+
+        {/* Inventory Alert / Revenue */}
+        <motion.div
+          variants={cardHoverVariants}
+          initial="rest"
+          whileHover="hover"
+          className={cn(
+            'rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
+            stats.lowStockItems > 0
+              ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60'
+              : 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200/60'
+          )}
+          onClick={() => router.push(stats.lowStockItems > 0 ? '/dashboard/inventario' : '/dashboard/analytics')}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className={cn(
+              'p-2.5 rounded-xl',
+              stats.lowStockItems > 0 ? 'bg-red-100' : 'bg-purple-100'
+            )}>
+              <span className={stats.lowStockItems > 0 ? 'text-red-600' : 'text-purple-600'}>
+                {stats.lowStockItems > 0 ? icons.alert : icons.vip}
+              </span>
+            </div>
+            {stats.lowStockItems > 0 ? (
+              <Badge variant="danger" size="sm">{stats.lowStockItems} alertas</Badge>
+            ) : (
+              <Badge variant="default" size="sm">VIP</Badge>
+            )}
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-8 w-20 bg-purple-200 rounded animate-pulse" />
+              <div className="h-4 w-24 bg-purple-100 rounded animate-pulse" />
+            </div>
+          ) : stats.lowStockItems > 0 ? (
+            <>
+              <div className="text-3xl font-bold text-red-700">{stats.lowStockItems}</div>
+              <p className="text-sm text-red-600 mt-1">Productos bajo stock</p>
+            </>
+          ) : (
+            <>
+              <div className="text-3xl font-bold text-purple-700">{stats.vipCustomersToday}</div>
+              <p className="text-sm text-purple-600 mt-1">Clientes VIP</p>
+            </>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Content Grid - Two Columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Content - Orders & Actions (2/3) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Active Orders */}
+          <Card variant="bordered" className="overflow-hidden">
+            <CardHeader
+              title="Órdenes Activas"
+              subtitle="Órdenes en proceso en tiempo real"
+              action={
+                <Link href="/dashboard/cocina">
+                  <Button variant="ghost" size="sm" rightIcon={icons.arrowRight}>
+                    Ver cocina
+                  </Button>
+                </Link>
+              }
+            />
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="p-4 space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-4 p-3">
+                      <div className="w-11 h-11 bg-slate-200 rounded-xl animate-pulse" />
+                      <div className="flex-1">
+                        <div className="h-4 bg-slate-200 rounded w-1/3 mb-2 animate-pulse" />
+                        <div className="h-3 bg-slate-100 rounded w-1/4 animate-pulse" />
+                      </div>
+                      <div className="h-6 w-16 bg-slate-100 rounded-full animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              ) : recentOrders.length === 0 ? (
+                <div className="p-10 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-2xl flex items-center justify-center">
+                    <span className="text-3xl">✨</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                    Sin órdenes activas
+                  </h3>
+                  <p className="text-sm text-slate-500 max-w-sm mx-auto mb-4">
+                    Las órdenes aparecerán aquí cuando los clientes realicen pedidos.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {recentOrders.map((order, index) => (
+                    <motion.div
+                      key={order.id}
+                      custom={index}
+                      variants={listItemVariants}
+                      initial="hidden"
+                      animate="visible"
+                      onClick={() => router.push('/dashboard/cocina')}
+                      className="flex items-center gap-4 p-4 hover:bg-slate-50/80 cursor-pointer transition-all duration-200 group"
+                    >
+                      {/* Order Number */}
+                      <div className="w-11 h-11 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center">
+                        <span className="text-white text-sm font-bold">
+                          #{order.id?.slice(-4).toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-medium text-slate-900">
+                            {order.order_type === 'dine_in' ? 'Mesa' :
+                             order.order_type === 'takeout' ? 'Para llevar' :
+                             order.order_type === 'delivery' ? 'Delivery' : 'Orden'}
+                          </p>
+                          <span className="text-xs text-slate-400">
+                            {formatRelativeTime(order.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-500">
+                          {formatCurrency(order.total_amount || 0)}
+                        </p>
+                      </div>
+
+                      {/* Status Badge */}
+                      <span className={cn(
+                        'px-2.5 py-1 rounded-full text-xs font-semibold',
+                        getOrderStatusColor(order.status)
+                      )}>
+                        {getOrderStatusLabel(order.status)}
+                      </span>
+
+                      {/* Arrow */}
+                      <span className="text-slate-300 group-hover:text-slate-400 transition-colors">
+                        {icons.arrowRight}
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions - Restaurant Specific */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              {
+                label: 'Ver Mesas',
+                emoji: '🪑',
+                gradient: 'from-indigo-50 to-purple-50',
+                hoverGradient: 'hover:from-indigo-100 hover:to-purple-100',
+                border: 'border-indigo-200/60',
+                text: 'text-indigo-700',
+                href: '/dashboard/mesas',
+              },
+              {
+                label: 'Cocina (KDS)',
+                emoji: '🔥',
+                gradient: 'from-orange-50 to-red-50',
+                hoverGradient: 'hover:from-orange-100 hover:to-red-100',
+                border: 'border-orange-200/60',
+                text: 'text-orange-700',
+                href: '/dashboard/cocina',
+              },
+              {
+                label: 'Inventario',
+                emoji: '📦',
+                gradient: 'from-teal-50 to-emerald-50',
+                hoverGradient: 'hover:from-teal-100 hover:to-emerald-100',
+                border: 'border-teal-200/60',
+                text: 'text-teal-700',
+                href: '/dashboard/inventario',
+              },
+              {
+                label: 'Facturación AI',
+                emoji: '🧾',
+                gradient: 'from-purple-50 to-pink-50',
+                hoverGradient: 'hover:from-purple-100 hover:to-pink-100',
+                border: 'border-purple-200/60',
+                text: 'text-purple-700',
+                href: '/dashboard/facturacion-ai',
+              },
+            ].map((action) => (
+              <Link
+                key={action.label}
+                href={action.href}
+                className={cn(
+                  'flex flex-col items-center gap-2 p-4 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                  `bg-gradient-to-br ${action.gradient} ${action.hoverGradient} ${action.border}`
+                )}
+              >
+                <span className="text-2xl">{action.emoji}</span>
+                <span className={cn('text-sm font-semibold text-center', action.text)}>{action.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Sidebar - Today's Reservations (1/3) */}
+        <div className="space-y-6">
+          <Card variant="bordered" className="overflow-hidden">
+            <CardHeader
+              title="Reservaciones de Hoy"
+              subtitle={`${new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })}`}
+              action={
+                <Link href="/dashboard/calendario">
+                  <Button variant="ghost" size="sm" rightIcon={icons.arrowRight}>
+                    Ver todas
+                  </Button>
+                </Link>
+              }
+            />
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="p-4 space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3 p-3">
+                      <div className="w-12 h-12 bg-slate-200 rounded-xl animate-pulse" />
+                      <div className="flex-1">
+                        <div className="h-4 bg-slate-200 rounded w-3/4 mb-2 animate-pulse" />
+                        <div className="h-3 bg-slate-100 rounded w-1/2 animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : todayReservations.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="w-14 h-14 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-2xl flex items-center justify-center">
+                    <span className="text-2xl">🍽️</span>
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-800 mb-1">Sin reservaciones</h3>
+                  <p className="text-sm text-slate-500 mb-4">
+                    No hay reservaciones para hoy
+                  </p>
+                  <Link href="/dashboard/calendario">
+                    <Button variant="outline" size="sm" leftIcon={icons.plus}>
+                      Nueva reservación
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {todayReservations.slice(0, 5).map((res: any, index: number) => {
+                    const time = formatTime(res.scheduled_at);
+                    const hour = time.split(':')[0];
+                    const isConfirmed = res.status === 'confirmed';
+                    const isPast = new Date(res.scheduled_at) < new Date();
+                    const partySize = res.appointment_restaurant_details?.[0]?.party_size || 2;
+                    const clientName = res.leads?.full_name || res.leads?.phone || 'Cliente';
+
+                    return (
+                      <motion.div
+                        key={res.id}
+                        custom={index}
+                        variants={listItemVariants}
+                        initial="hidden"
+                        animate="visible"
+                        onClick={() => router.push('/dashboard/calendario')}
+                        className={cn(
+                          'flex items-center gap-3 p-4 cursor-pointer transition-all duration-200 group',
+                          isPast ? 'bg-slate-50/50 opacity-60' : 'hover:bg-slate-50/80'
+                        )}
+                      >
+                        {/* Time Block */}
+                        <div className={cn(
+                          'flex-shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center text-center',
+                          isConfirmed
+                            ? 'bg-gradient-to-br from-emerald-100 to-teal-100'
+                            : 'bg-gradient-to-br from-blue-100 to-indigo-100'
+                        )}>
+                          <span className={cn(
+                            'text-lg font-bold leading-none',
+                            isConfirmed ? 'text-emerald-700' : 'text-blue-700'
+                          )}>
+                            {hour}
+                          </span>
+                          <span className={cn(
+                            'text-[10px] font-medium',
+                            isConfirmed ? 'text-emerald-600' : 'text-blue-600'
+                          )}>
+                            {time.split(':')[1]} {parseInt(hour) < 12 ? 'am' : 'pm'}
+                          </span>
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 truncate">
+                            {clientName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-slate-500">
+                              {partySize} personas
+                            </span>
+                            {res.appointment_restaurant_details?.[0]?.occasion_type &&
+                             res.appointment_restaurant_details[0].occasion_type !== 'regular' && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-xs text-slate-500 truncate">
+                                  {res.appointment_restaurant_details[0].occasion_type === 'birthday' ? '🎂' :
+                                   res.appointment_restaurant_details[0].occasion_type === 'anniversary' ? '💕' :
+                                   res.appointment_restaurant_details[0].occasion_type === 'business' ? '💼' : '✨'}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <Badge
+                          variant={isConfirmed ? 'success' : 'info'}
+                          size="sm"
+                        >
+                          {isConfirmed ? (
+                            <span className="flex items-center gap-1">
+                              {icons.check}
+                            </span>
+                          ) : (
+                            'Pendiente'
+                          )}
+                        </Badge>
+                      </motion.div>
+                    );
+                  })}
+
+                  {/* Ver más */}
+                  {todayReservations.length > 5 && (
+                    <Link
+                      href="/dashboard/calendario"
+                      className="block p-4 text-center text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      Ver {todayReservations.length - 5} reservaciones más
+                    </Link>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Stats - Tables Overview */}
+          <Card variant="bordered" className="p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4">Estado de Mesas</h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Disponibles', emoji: '✅', count: stats.tablesAvailable, color: 'bg-emerald-500', bgLight: 'bg-emerald-100' },
+                { label: 'Ocupadas', emoji: '🍽️', count: stats.tablesOccupied, color: 'bg-orange-500', bgLight: 'bg-orange-100' },
+                { label: 'Reservadas', emoji: '📅', count: stats.tablesReserved, color: 'bg-blue-500', bgLight: 'bg-blue-100' },
+              ].map((item) => {
+                const percentage = stats.tablesTotal > 0 ? Math.round((item.count / stats.tablesTotal) * 100) : 0;
+                return (
+                  <div key={item.label} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span>{item.emoji}</span>
+                        <span className="text-slate-600">{item.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-800">{item.count}</span>
+                        <span className="text-xs text-slate-400">({percentage}%)</span>
+                      </div>
+                    </div>
+                    <div className={cn('h-2 rounded-full overflow-hidden', item.bgLight)}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percentage}%` }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                        className={cn('h-full rounded-full', item.color)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </PageWrapper>
+  );
+}
+
+// ======================
+// DEFAULT/DENTAL DASHBOARD COMPONENT (Original)
+// ======================
+function DefaultDashboard() {
   const router = useRouter();
   const { staff, tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
@@ -776,4 +1515,21 @@ export default function DashboardPage() {
       </div>
     </PageWrapper>
   );
+}
+
+// ======================
+// MAIN COMPONENT - Route by Vertical
+// ======================
+export default function DashboardPage() {
+  const { tenant } = useAuthContext();
+  const { vertical } = useVerticalTerminology();
+
+  // Determine which dashboard to show based on vertical
+  const isRestaurant = tenant?.vertical?.toLowerCase() === 'restaurant' || vertical === 'restaurant';
+
+  if (isRestaurant) {
+    return <RestaurantDashboard />;
+  }
+
+  return <DefaultDashboard />;
 }
