@@ -9,7 +9,14 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card, CardHeader, CardContent, Button } from '@/src/shared/components/ui';
 import { StatsGrid, StatCard } from '@/src/features/dashboard';
 import { supabase } from '@/src/shared/lib/supabase';
-import { formatNumber, cn } from '@/src/shared/utils';
+import {
+  formatNumber,
+  cn,
+  calcChange,
+  getDateRange,
+  generateDailyLabels,
+  type Period,
+} from '@/src/shared/utils';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import {
   AreaChart,
@@ -61,8 +68,6 @@ const icons = {
 // ======================
 // TYPES
 // ======================
-type Period = '7d' | '30d' | '90d';
-
 interface DailyData {
   date: string;
   label: string;
@@ -168,12 +173,7 @@ export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAn
       setLoading(true);
 
       try {
-        const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-
-        const prevStartDate = new Date(startDate);
-        prevStartDate.setDate(prevStartDate.getDate() - days);
+        const { startDate, prevStartDate, days } = getDateRange(period);
 
         // Leads
         let leadsQuery = supabase
@@ -263,11 +263,7 @@ export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAn
         const conversationsTotal = conversations?.length || 0;
         const conversationsResolved = conversations?.filter((c) => c.status === 'resolved' || c.status === 'closed').length || 0;
 
-        const calcChange = (current: number, previous: number) => {
-          if (previous === 0) return current > 0 ? 100 : 0;
-          return Math.round(((current - previous) / previous) * 100);
-        };
-
+        // Use shared calcChange from analyticsHelpers
         const newLeadsChange = calcChange(newLeads, prevNewLeads);
         const hotLeadsChange = calcChange(hotLeads, prevHotLeads);
 
@@ -303,16 +299,13 @@ export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAn
           no_show: appointmentsNoShow,
         });
 
-        // Build daily data
+        // Build daily data using shared generateDailyLabels
         const dailyMap = new Map<string, DailyData>();
+        const dailyLabels = generateDailyLabels(days);
 
-        for (let i = days - 1; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
-          const label = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-          dailyMap.set(dateStr, { date: dateStr, label, leads: 0, appointments: 0, conversations: 0 });
-        }
+        dailyLabels.forEach(({ date, label }) => {
+          dailyMap.set(date, { date, label, leads: 0, appointments: 0, conversations: 0 });
+        });
 
         leads?.forEach((lead) => {
           const dateStr = new Date(lead.created_at).toISOString().split('T')[0];

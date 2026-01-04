@@ -77,16 +77,26 @@ interface AnalyticsTabsProps {
 // ======================
 export function AnalyticsTabs({ activeTab, onTabChange }: AnalyticsTabsProps) {
   return (
-    <div className="mb-6">
+    <div className="mb-6" role="navigation" aria-label="Analytics sections">
       {/* Desktop Tabs */}
       <div className="hidden md:block">
-        <nav className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
+        <nav
+          className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl"
+          role="tablist"
+          aria-label="Analytics tabs"
+        >
           {ANALYTICS_TABS.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => onTabChange(tab.key)}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`tabpanel-${tab.key}`}
+                id={`tab-${tab.key}`}
+                tabIndex={isActive ? 0 : -1}
+                title={tab.description}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                   isActive
@@ -94,10 +104,13 @@ export function AnalyticsTabs({ activeTab, onTabChange }: AnalyticsTabsProps) {
                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
                 )}
               >
-                <span className={cn(
-                  'transition-colors',
-                  isActive ? 'text-tis-coral' : 'text-slate-400'
-                )}>
+                <span
+                  className={cn(
+                    'transition-colors',
+                    isActive ? 'text-tis-coral' : 'text-slate-400'
+                  )}
+                  aria-hidden="true"
+                >
                   {tab.icon}
                 </span>
                 <span>{tab.label}</span>
@@ -109,13 +122,23 @@ export function AnalyticsTabs({ activeTab, onTabChange }: AnalyticsTabsProps) {
 
       {/* Mobile Tabs - Scrollable */}
       <div className="md:hidden">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+        <div
+          className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide"
+          role="tablist"
+          aria-label="Analytics tabs"
+        >
           {ANALYTICS_TABS.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => onTabChange(tab.key)}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`tabpanel-${tab.key}`}
+                id={`tab-mobile-${tab.key}`}
+                tabIndex={isActive ? 0 : -1}
+                title={tab.description}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200',
                   isActive
@@ -123,7 +146,7 @@ export function AnalyticsTabs({ activeTab, onTabChange }: AnalyticsTabsProps) {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 )}
               >
-                {tab.icon}
+                <span aria-hidden="true">{tab.icon}</span>
                 <span>{tab.label}</span>
               </button>
             );

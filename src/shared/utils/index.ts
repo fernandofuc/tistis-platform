@@ -262,3 +262,8 @@ export async function retry<T>(
     return retry(fn, retries - 1, delay * 2);
   }
 }
+
+// ======================
+// ANALYTICS UTILITIES (Re-exports)
+// ======================
+export * from './analyticsHelpers';
