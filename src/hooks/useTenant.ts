@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/auth';
+import { useAppStore, useBranch } from '@/shared/stores';
 
 // Types for tenant data
 interface Tenant {
@@ -21,6 +22,7 @@ interface Branch {
   name: string;
   slug: string;
   city: string;
+  state: string | null;
   is_headquarters: boolean;
   is_active: boolean;
 }
@@ -83,7 +85,16 @@ export function useTenant(): TenantContextValue {
   const [verticalConfig, setVerticalConfig] = useState<VerticalConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentBranchId, setCurrentBranchId] = useState<string | null>(null);
+
+  // Use the global Zustand store for branch selection (unified with Header/BranchSelector)
+  const { selectedBranchId, setSelectedBranchId } = useBranch();
+  const setBranchesStore = useAppStore((state) => state.setBranches);
+
+  // Use ref to access current selectedBranchId without causing re-renders
+  const selectedBranchIdRef = useRef(selectedBranchId);
+  useEffect(() => {
+    selectedBranchIdRef.current = selectedBranchId;
+  }, [selectedBranchId]);
 
   const loadTenantData = useCallback(async () => {
     setIsLoading(true);
@@ -164,19 +175,25 @@ export function useTenant(): TenantContextValue {
         // Load branches for this tenant
         const { data: branchesData } = await supabase
           .from('branches')
-          .select('id, name, slug, city, is_headquarters, is_active')
+          .select('id, name, slug, city, state, is_headquarters, is_active')
           .eq('tenant_id', tenantData.id)
           .eq('is_active', true)
           .order('is_headquarters', { ascending: false });
 
         if (branchesData) {
           setBranches(branchesData);
-          // Set headquarters as default branch
-          const hq = branchesData.find(b => b.is_headquarters);
-          if (hq) {
-            setCurrentBranchId(hq.id);
-          } else if (branchesData.length > 0) {
-            setCurrentBranchId(branchesData[0].id);
+          // Also sync to global Zustand store for Header/BranchSelector
+          setBranchesStore(branchesData as any);
+
+          // Only set default branch if none is selected yet in the global store
+          // Use ref to get current value without causing dependency issues
+          if (!selectedBranchIdRef.current) {
+            const hq = branchesData.find(b => b.is_headquarters);
+            if (hq) {
+              setSelectedBranchId(hq.id);
+            } else if (branchesData.length > 0) {
+              setSelectedBranchId(branchesData[0].id);
+            }
           }
         }
 
@@ -222,7 +239,8 @@ export function useTenant(): TenantContextValue {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+    // selectedBranchIdRef.current is used instead of selectedBranchId to avoid infinite loops
+  }, [setBranchesStore, setSelectedBranchId]);
 
   // Load data on mount
   useEffect(() => {
@@ -235,15 +253,19 @@ export function useTenant(): TenantContextValue {
       if (event === 'SIGNED_IN') {
         loadTenantData();
       } else if (event === 'SIGNED_OUT') {
+        // Clear local state
         setTenant(null);
         setBranches([]);
         setUserRole(null);
         setVerticalConfig(null);
+        // Clear global Zustand store
+        setBranchesStore([]);
+        setSelectedBranchId(null);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [loadTenantData]);
+  }, [loadTenantData, setBranchesStore, setSelectedBranchId]);
 
   // Computed values
   const isSuperAdmin = userRole?.role === 'super_admin';
@@ -256,13 +278,16 @@ export function useTenant(): TenantContextValue {
     ...(verticalConfig?.terminology || {}),
   };
 
+  // Use the global store's setSelectedBranchId for switching
   const switchBranch = useCallback((branchId: string) => {
     const branch = branches.find(b => b.id === branchId);
     if (branch) {
-      setCurrentBranchId(branchId);
+      setSelectedBranchId(branchId);
     }
-  }, [branches]);
+  }, [branches, setSelectedBranchId]);
 
+  // currentBranchId now reads from the global Zustand store
+  // This unifies branch selection across Header, BranchSelector, and all pages
   return {
     tenant,
     branches,
@@ -276,7 +301,7 @@ export function useTenant(): TenantContextValue {
     terminology,
     refreshTenant: loadTenantData,
     switchBranch,
-    currentBranchId,
+    currentBranchId: selectedBranchId,
   };
 }
 

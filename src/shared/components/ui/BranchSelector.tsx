@@ -7,8 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/shared/utils';
-import { useAppStore, useBranch } from '@/shared/stores';
-import { useAuthContext } from '@/src/features/auth';
+import { useBranch } from '@/shared/stores';
 
 // ======================
 // ICONS
@@ -52,19 +51,8 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Get branches from auth context (loaded on login)
-  const { branches: authBranches } = useAuthContext();
-
-  // Get branch state from store
-  const { selectedBranchId, selectedBranch, setSelectedBranchId } = useBranch();
-  const setBranches = useAppStore((state) => state.setBranches);
-
-  // Sync branches from auth context to store
-  useEffect(() => {
-    if (authBranches && authBranches.length > 0) {
-      setBranches(authBranches);
-    }
-  }, [authBranches, setBranches]);
+  // Get branch state from store (synced by BranchSyncProvider in DashboardLayout)
+  const { selectedBranchId, selectedBranch, branches, setSelectedBranchId } = useBranch();
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -78,8 +66,8 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Don't render if no branches or only one branch
-  if (!authBranches || authBranches.length <= 1) {
+  // Don't render UI if no branches or only one branch
+  if (!branches || branches.length <= 1) {
     return null;
   }
 
@@ -169,7 +157,7 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
           <div className="border-t border-gray-100 my-1" />
 
           {/* Branch Options */}
-          {authBranches.map((branch) => (
+          {branches.map((branch) => (
             <button
               key={branch.id}
               onClick={() => handleSelect(branch.id)}
@@ -197,7 +185,7 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
                   )}
                 </div>
                 <p className="text-xs text-gray-500 truncate">
-                  {branch.city}, {branch.state}
+                  {branch.city}{branch.state ? `, ${branch.state}` : ''}
                 </p>
               </div>
               {selectedBranchId === branch.id && (

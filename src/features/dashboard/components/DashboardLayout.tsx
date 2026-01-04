@@ -4,16 +4,49 @@
 
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
 import { NavigationProgress } from '@/shared/components/ui';
-import { AuthProvider, ProtectedRoute } from '@/features/auth';
+import { AuthProvider, ProtectedRoute, useAuthContext } from '@/features/auth';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { MobileBottomNav, MobileDrawer } from './MobileNav';
 import { DashboardSkeleton } from './DashboardSkeleton';
 import type { DashboardLayoutProps } from '../types';
+
+// ======================
+// BRANCH SYNC COMPONENT
+// Syncs branches from auth context to Zustand store
+// This ensures all components (Header, Sidebar, etc) have access
+// to branches regardless of whether BranchSelector renders
+// ======================
+function BranchSyncProvider({ children }: { children: React.ReactNode }) {
+  const { branches: authBranches } = useAuthContext();
+  const setBranches = useAppStore((state) => state.setBranches);
+  const selectedBranchId = useAppStore((state) => state.selectedBranchId);
+  const setSelectedBranchId = useAppStore((state) => state.setSelectedBranchId);
+
+  // Sync branches from auth context to global store
+  // This runs every time authBranches changes (e.g., after creating a branch)
+  useEffect(() => {
+    if (authBranches && authBranches.length > 0) {
+      setBranches(authBranches);
+
+      // Validate that selected branch still exists
+      // If not, reset to headquarters or first branch
+      if (selectedBranchId) {
+        const branchExists = authBranches.some(b => b.id === selectedBranchId);
+        if (!branchExists) {
+          const hq = authBranches.find(b => b.is_headquarters);
+          setSelectedBranchId(hq?.id || authBranches[0]?.id || null);
+        }
+      }
+    }
+  }, [authBranches, setBranches, selectedBranchId, setSelectedBranchId]);
+
+  return <>{children}</>;
+}
 
 // ======================
 // COMPONENT
@@ -25,42 +58,45 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <AuthProvider>
       <ProtectedRoute loadingSkeleton={<DashboardSkeleton />}>
-        {/* Navigation Progress Indicator */}
-        <Suspense fallback={null}>
-          <NavigationProgress />
-        </Suspense>
+        {/* Sync branches from auth to global store */}
+        <BranchSyncProvider>
+          {/* Navigation Progress Indicator */}
+          <Suspense fallback={null}>
+            <NavigationProgress />
+          </Suspense>
 
-        <div className="min-h-screen bg-gray-50">
-          {/* Desktop Sidebar */}
-          <div className="hidden lg:block">
-            <Sidebar />
+          <div className="min-h-screen bg-gray-50">
+            {/* Desktop Sidebar */}
+            <div className="hidden lg:block">
+              <Sidebar />
+            </div>
+
+            {/* Mobile Drawer */}
+            <MobileDrawer
+              isOpen={mobileDrawerOpen}
+              onClose={() => setMobileDrawerOpen(false)}
+            />
+
+            {/* Main Content */}
+            <div
+              className={cn(
+                'min-h-screen transition-all duration-300',
+                sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+              )}
+            >
+              {/* Header */}
+              <Header onMenuClick={() => setMobileDrawerOpen(true)} />
+
+              {/* Page Content */}
+              <main className="p-4 lg:p-6 pb-24 lg:pb-6">
+                {children}
+              </main>
+            </div>
+
+            {/* Mobile Bottom Nav */}
+            <MobileBottomNav />
           </div>
-
-          {/* Mobile Drawer */}
-          <MobileDrawer
-            isOpen={mobileDrawerOpen}
-            onClose={() => setMobileDrawerOpen(false)}
-          />
-
-          {/* Main Content */}
-          <div
-            className={cn(
-              'min-h-screen transition-all duration-300',
-              sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
-            )}
-          >
-            {/* Header */}
-            <Header onMenuClick={() => setMobileDrawerOpen(true)} />
-
-            {/* Page Content */}
-            <main className="p-4 lg:p-6 pb-24 lg:pb-6">
-              {children}
-            </main>
-          </div>
-
-          {/* Mobile Bottom Nav */}
-          <MobileBottomNav />
-        </div>
+        </BranchSyncProvider>
       </ProtectedRoute>
     </AuthProvider>
   );
