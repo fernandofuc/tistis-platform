@@ -6,10 +6,13 @@
 -- Issue: Views with SECURITY DEFINER bypass RLS and run
 -- with the permissions of the view creator (superuser).
 -- Solution: Recreate views with security_invoker = true
+--
+-- IMPORTANT: This migration copies the EXACT definitions from
+-- the original migrations, only adding security_invoker = true
 -- =====================================================
 
 -- ======================
--- 1. v_vip_customers (Restaurant)
+-- 1. v_vip_customers (from 088_RESTAURANT_VERTICAL_SCHEMA.sql:903)
 -- ======================
 DROP VIEW IF EXISTS public.v_vip_customers;
 CREATE VIEW public.v_vip_customers
@@ -20,27 +23,36 @@ SELECT
     l.full_name,
     l.phone,
     l.email,
-    l.tenant_id,
-    l.preferred_branch_id as branch_id,
-    rcs.vip_status,
-    rcs.total_visits,
-    rcs.total_spent,
-    rcs.avg_ticket,
-    rcs.last_visit_date,
-    rcs.favorite_table_id,
-    CASE
-        WHEN rcs.vip_status = 'platinum' THEN 1
-        WHEN rcs.vip_status = 'gold' THEN 2
-        WHEN rcs.vip_status = 'silver' THEN 3
-        ELSE 4
-    END as vip_rank
+    lrp.loyalty_tier,
+    lrp.total_visits,
+    lrp.total_spent,
+    lrp.average_spend_per_visit,
+    lrp.loyalty_points,
+    lrp.birthday,
+    lrp.anniversary,
+    lrp.dietary_restrictions,
+    lrp.food_allergies,
+    lrp.favorite_dishes,
+    t.name as tenant_name,
+    (
+        SELECT a.scheduled_at::DATE
+        FROM appointments a
+        WHERE a.lead_id = l.id
+        AND a.scheduled_at::DATE > CURRENT_DATE
+        AND a.status NOT IN ('cancelled', 'no_show')
+        ORDER BY a.scheduled_at
+        LIMIT 1
+    ) as next_reservation
 FROM leads l
-JOIN restaurant_customer_stats rcs ON rcs.lead_id = l.id
-WHERE rcs.vip_status IS NOT NULL
-ORDER BY vip_rank, rcs.total_spent DESC;
+JOIN lead_restaurant_profile lrp ON lrp.lead_id = l.id
+JOIN tenants t ON t.id = l.tenant_id
+WHERE t.vertical = 'restaurant'
+AND lrp.loyalty_tier IN ('gold', 'platinum', 'vip')
+AND t.status = 'active'
+ORDER BY lrp.total_spent DESC;
 
 -- ======================
--- 2. v_kds_items_by_station (Restaurant KDS)
+-- 2. v_kds_items_by_station (from 089_RESTAURANT_ORDERS_KDS.sql:600)
 -- ======================
 DROP VIEW IF EXISTS public.v_kds_items_by_station;
 CREATE VIEW public.v_kds_items_by_station
@@ -51,29 +63,36 @@ SELECT
     roi.tenant_id,
     roi.order_id,
     ro.branch_id,
-    roi.kds_station,
-    roi.menu_item_id,
-    mi.name as item_name,
-    roi.quantity,
-    roi.modifiers,
-    roi.special_instructions,
-    roi.kds_status,
-    roi.started_at,
-    roi.completed_at,
     ro.display_number as order_number,
     ro.order_type,
-    ro.priority,
-    ro.status as order_status,
-    ro.created_at as order_created_at,
-    EXTRACT(EPOCH FROM (NOW() - roi.started_at)) / 60 as minutes_in_progress
+    ro.priority as order_priority,
+    roi.menu_item_name,
+    roi.quantity,
+    roi.variant_name,
+    roi.size_name,
+    roi.add_ons,
+    roi.modifiers,
+    roi.status as item_status,
+    roi.kitchen_station,
+    roi.special_instructions,
+    roi.allergen_notes,
+    roi.started_at,
+    roi.ready_at,
+    roi.created_at as ordered_at,
+    rt.table_number,
+    EXTRACT(EPOCH FROM (NOW() - roi.created_at)) / 60 as minutes_waiting
 FROM restaurant_order_items roi
 JOIN restaurant_orders ro ON ro.id = roi.order_id
-LEFT JOIN menu_items mi ON mi.id = roi.menu_item_id
-WHERE roi.kds_status IN ('pending', 'in_progress')
-ORDER BY ro.priority DESC, ro.created_at ASC;
+LEFT JOIN restaurant_tables rt ON rt.id = ro.table_id
+WHERE roi.status IN ('pending', 'preparing')
+AND ro.status NOT IN ('completed', 'cancelled')
+AND ro.deleted_at IS NULL
+ORDER BY
+    ro.priority DESC,
+    roi.created_at ASC;
 
 -- ======================
--- 3. v_today_reservations (Restaurant)
+-- 3. v_today_reservations (from 088_RESTAURANT_VERTICAL_SCHEMA.sql:830)
 -- ======================
 DROP VIEW IF EXISTS public.v_today_reservations;
 CREATE VIEW public.v_today_reservations
@@ -84,28 +103,39 @@ SELECT
     a.tenant_id,
     a.branch_id,
     a.lead_id,
-    l.full_name as guest_name,
-    l.phone as guest_phone,
     a.scheduled_at,
     a.duration_minutes,
-    ra.party_size,
-    ra.special_requests,
-    ra.occasion,
-    rt.table_number,
-    rt.name as table_name,
-    ra.table_id,
     a.status,
-    a.notes
+    a.notes,
+    a.party_size as appointment_party_size,
+    ard.party_size,
+    ard.table_id,
+    ard.occasion_type,
+    ard.special_requests,
+    ard.arrival_status,
+    ard.deposit_paid,
+    rt.table_number,
+    rt.zone as table_zone,
+    l.full_name as guest_name,
+    l.phone as guest_phone,
+    l.email as guest_email,
+    lrp.loyalty_tier,
+    lrp.dietary_restrictions,
+    lrp.food_allergies,
+    b.name as branch_name
 FROM appointments a
-JOIN leads l ON l.id = a.lead_id
-LEFT JOIN restaurant_appointments ra ON ra.appointment_id = a.id
-LEFT JOIN restaurant_tables rt ON rt.id = ra.table_id
-WHERE a.appointment_type = 'reservation'
-  AND DATE(a.scheduled_at AT TIME ZONE 'America/Mexico_City') = CURRENT_DATE
-ORDER BY a.scheduled_at ASC;
+LEFT JOIN appointment_restaurant_details ard ON ard.appointment_id = a.id
+LEFT JOIN restaurant_tables rt ON rt.id = ard.table_id
+LEFT JOIN leads l ON a.lead_id = l.id
+LEFT JOIN lead_restaurant_profile lrp ON lrp.lead_id = l.id
+LEFT JOIN branches b ON a.branch_id = b.id
+WHERE a.scheduled_at::DATE = CURRENT_DATE
+AND a.status NOT IN ('cancelled')
+ORDER BY a.scheduled_at;
 
 -- ======================
--- 4. v_urgent_dental_appointments (Dental)
+-- 4. v_urgent_dental_appointments (from 093_AI_BOOKING_DENTAL_TRACEABILITY.sql:413)
+-- NOTE: Uses appointments table AI columns, NOT lead_dental_profile
 -- ======================
 DROP VIEW IF EXISTS public.v_urgent_dental_appointments;
 CREATE VIEW public.v_urgent_dental_appointments
@@ -117,23 +147,27 @@ SELECT
     a.branch_id,
     a.scheduled_at,
     a.status,
+    a.ai_urgency_level,
+    a.ai_detected_symptoms,
     l.full_name as patient_name,
     l.phone as patient_phone,
-    da.chief_complaint,
-    da.urgency_level,
-    da.pain_level,
-    da.symptoms,
-    da.ai_triage_notes,
-    da.requires_immediate_attention
+    b.name as branch_name,
+    CASE
+        WHEN a.ai_urgency_level = 5 THEN 'EMERGENCIA'
+        WHEN a.ai_urgency_level = 4 THEN 'URGENTE'
+        WHEN a.ai_urgency_level = 3 THEN 'PRIORITARIO'
+        ELSE 'NORMAL'
+    END as priority_label
 FROM appointments a
-JOIN leads l ON l.id = a.lead_id
-LEFT JOIN dental_appointments da ON da.appointment_id = a.id
-WHERE (da.urgency_level >= 4 OR da.requires_immediate_attention = true)
-  AND a.status IN ('scheduled', 'confirmed')
-ORDER BY da.urgency_level DESC, a.scheduled_at ASC;
+LEFT JOIN leads l ON a.lead_id = l.id
+LEFT JOIN branches b ON a.branch_id = b.id
+WHERE a.ai_urgency_level >= 3
+AND a.status IN ('scheduled', 'confirmed')
+AND a.scheduled_at >= NOW()
+ORDER BY a.ai_urgency_level DESC, a.scheduled_at;
 
 -- ======================
--- 5. v_table_availability (Restaurant)
+-- 5. v_table_availability (from 088_RESTAURANT_VERTICAL_SCHEMA.sql:868)
 -- ======================
 DROP VIEW IF EXISTS public.v_table_availability;
 CREATE VIEW public.v_table_availability
@@ -144,25 +178,35 @@ SELECT
     rt.branch_id,
     rt.table_number,
     rt.name as table_name,
-    rt.capacity,
-    rt.min_capacity,
-    rt.location_zone,
-    rt.status as table_status,
-    COALESCE(
-        (SELECT COUNT(*) FROM appointments a
-         JOIN restaurant_appointments ra ON ra.appointment_id = a.id
-         WHERE ra.table_id = rt.id
-           AND a.status IN ('scheduled', 'confirmed')
-           AND DATE(a.scheduled_at AT TIME ZONE 'America/Mexico_City') = CURRENT_DATE
-        ), 0
-    ) as reservations_today,
-    (rt.status = 'available') as is_available
+    rt.max_capacity,
+    rt.zone,
+    rt.status,
+    rt.features,
+    b.name as branch_name,
+    (
+        SELECT json_agg(json_build_object(
+            'date', a.scheduled_at::DATE,
+            'time', a.scheduled_at::TIME,
+            'end_time', (a.scheduled_at + (COALESCE(a.duration_minutes, 60) || ' minutes')::INTERVAL)::TIME,
+            'guest_name', l.full_name,
+            'party_size', ard.party_size,
+            'status', a.status
+        ) ORDER BY a.scheduled_at)
+        FROM appointments a
+        JOIN appointment_restaurant_details ard ON ard.appointment_id = a.id
+        LEFT JOIN leads l ON a.lead_id = l.id
+        WHERE ard.table_id = rt.id
+        AND a.scheduled_at::DATE >= CURRENT_DATE
+        AND a.scheduled_at::DATE <= CURRENT_DATE + INTERVAL '7 days'
+        AND a.status NOT IN ('cancelled', 'no_show')
+    ) as upcoming_reservations
 FROM restaurant_tables rt
+JOIN branches b ON b.id = rt.branch_id
 WHERE rt.is_active = true
-ORDER BY rt.location_zone, rt.table_number;
+AND rt.deleted_at IS NULL;
 
 -- ======================
--- 6. v_kds_active_orders (Restaurant KDS)
+-- 6. v_kds_active_orders (from 089_RESTAURANT_ORDERS_KDS.sql:554)
 -- ======================
 DROP VIEW IF EXISTS public.v_kds_active_orders;
 CREATE VIEW public.v_kds_active_orders
@@ -174,29 +218,46 @@ SELECT
     ro.branch_id,
     ro.display_number,
     ro.order_type,
-    ro.status,
+    ro.status as order_status,
     ro.priority,
-    ro.source_channel,
+    ro.ordered_at,
+    ro.estimated_prep_time,
     ro.table_id,
     rt.table_number,
-    ro.customer_name,
-    ro.created_at,
-    ro.preparation_started_at,
-    EXTRACT(EPOCH FROM (NOW() - ro.created_at)) / 60 as minutes_since_created,
-    EXTRACT(EPOCH FROM (NOW() - ro.preparation_started_at)) / 60 as minutes_in_preparation,
-    (SELECT COUNT(*) FROM restaurant_order_items roi
-     WHERE roi.order_id = ro.id AND roi.kds_status = 'pending') as pending_items,
-    (SELECT COUNT(*) FROM restaurant_order_items roi
-     WHERE roi.order_id = ro.id AND roi.kds_status = 'in_progress') as in_progress_items,
-    (SELECT COUNT(*) FROM restaurant_order_items roi
-     WHERE roi.order_id = ro.id AND roi.kds_status = 'completed') as completed_items
+    ro.customer_notes,
+    ro.kitchen_notes,
+    (
+        SELECT json_agg(json_build_object(
+            'id', roi.id,
+            'menu_item_name', roi.menu_item_name,
+            'quantity', roi.quantity,
+            'variant_name', roi.variant_name,
+            'size_name', roi.size_name,
+            'add_ons', roi.add_ons,
+            'modifiers', roi.modifiers,
+            'status', roi.status,
+            'kitchen_station', roi.kitchen_station,
+            'special_instructions', roi.special_instructions,
+            'allergen_notes', roi.allergen_notes,
+            'started_at', roi.started_at,
+            'ready_at', roi.ready_at
+        ) ORDER BY roi.display_order, roi.created_at)
+        FROM restaurant_order_items roi
+        WHERE roi.order_id = ro.id
+        AND roi.status != 'cancelled'
+    ) as items,
+    EXTRACT(EPOCH FROM (NOW() - ro.ordered_at)) / 60 as minutes_elapsed
 FROM restaurant_orders ro
 LEFT JOIN restaurant_tables rt ON rt.id = ro.table_id
-WHERE ro.status IN ('pending', 'preparing', 'ready')
-ORDER BY ro.priority DESC, ro.created_at ASC;
+WHERE ro.status IN ('pending', 'confirmed', 'preparing', 'ready')
+AND ro.deleted_at IS NULL
+ORDER BY
+    ro.priority DESC,
+    ro.ordered_at ASC;
 
 -- ======================
--- 7. v_patients_needing_followup (Dental)
+-- 7. v_patients_needing_followup (from 093_AI_BOOKING_DENTAL_TRACEABILITY.sql:467)
+-- NOTE: Uses GROUP BY on leads + appointments, NOT patients table
 -- ======================
 DROP VIEW IF EXISTS public.v_patients_needing_followup;
 CREATE VIEW public.v_patients_needing_followup
@@ -208,24 +269,26 @@ SELECT
     l.full_name,
     l.phone,
     l.email,
-    p.id as patient_id,
-    p.last_appointment_date,
-    p.next_recommended_visit,
-    p.treatment_plan_active,
+    MAX(a.scheduled_at) as last_visit_date,
+    t.name as tenant_name,
     CASE
-        WHEN p.next_recommended_visit < CURRENT_DATE THEN 'overdue'
-        WHEN p.next_recommended_visit <= CURRENT_DATE + INTERVAL '7 days' THEN 'due_soon'
-        ELSE 'upcoming'
-    END as followup_status,
-    (CURRENT_DATE - p.last_appointment_date) as days_since_last_visit
+        WHEN MAX(a.scheduled_at) < CURRENT_DATE - INTERVAL '6 months' THEN 'VENCIDO'
+        WHEN MAX(a.scheduled_at) < CURRENT_DATE - INTERVAL '5 months' THEN 'PROXIMO'
+        ELSE 'AL DIA'
+    END as followup_status
 FROM leads l
-JOIN patients p ON p.lead_id = l.id
-WHERE p.next_recommended_visit IS NOT NULL
-  AND p.next_recommended_visit <= CURRENT_DATE + INTERVAL '30 days'
-ORDER BY p.next_recommended_visit ASC;
+JOIN tenants t ON t.id = l.tenant_id
+LEFT JOIN appointments a ON a.lead_id = l.id AND a.status = 'completed'
+WHERE t.vertical = 'dental'
+AND t.status = 'active'
+GROUP BY l.id, l.tenant_id, l.full_name, l.phone, l.email, t.name
+HAVING MAX(a.scheduled_at) IS NULL
+    OR MAX(a.scheduled_at) < CURRENT_DATE - INTERVAL '5 months'
+ORDER BY MAX(a.scheduled_at) NULLS FIRST;
 
 -- ======================
--- 8. v_appointments_pending_review (Dental)
+-- 8. v_appointments_pending_review (from 093_AI_BOOKING_DENTAL_TRACEABILITY.sql:441)
+-- NOTE: Uses appointments table columns, NOT ai_bookings table
 -- ======================
 DROP VIEW IF EXISTS public.v_appointments_pending_review;
 CREATE VIEW public.v_appointments_pending_review
@@ -236,28 +299,26 @@ SELECT
     a.tenant_id,
     a.branch_id,
     a.scheduled_at,
-    a.status,
-    a.created_at,
+    a.ai_booking_channel,
+    a.ai_confidence_score,
+    a.requires_human_review,
+    a.human_review_reason,
+    a.ai_detected_symptoms,
     l.full_name as patient_name,
     l.phone as patient_phone,
-    da.chief_complaint,
-    da.ai_triage_notes,
-    da.staff_reviewed,
-    da.reviewed_by,
-    da.reviewed_at,
-    ab.booked_by_ai,
-    ab.ai_confidence_score
+    s.name as service_name,
+    b.name as branch_name,
+    a.created_at as booked_at
 FROM appointments a
-JOIN leads l ON l.id = a.lead_id
-LEFT JOIN dental_appointments da ON da.appointment_id = a.id
-LEFT JOIN ai_bookings ab ON ab.appointment_id = a.id
-WHERE ab.booked_by_ai = true
-  AND da.staff_reviewed = false
-  AND a.status IN ('scheduled', 'confirmed')
-ORDER BY a.scheduled_at ASC;
+LEFT JOIN leads l ON a.lead_id = l.id
+LEFT JOIN services s ON a.service_id = s.id
+LEFT JOIN branches b ON a.branch_id = b.id
+WHERE a.requires_human_review = true
+AND a.status IN ('scheduled', 'confirmed')
+ORDER BY a.scheduled_at;
 
 -- ======================
--- 9. v_expiring_batches (Restaurant Inventory)
+-- 9. v_expiring_batches (from 090_RESTAURANT_INVENTORY.sql:671)
 -- ======================
 DROP VIEW IF EXISTS public.v_expiring_batches;
 CREATE VIEW public.v_expiring_batches
@@ -271,25 +332,27 @@ SELECT
     i.name as item_name,
     i.sku,
     b.batch_number,
-    b.quantity_remaining,
-    b.expiration_date,
+    b.current_quantity,
     b.unit_cost,
+    b.expiration_date,
     (b.expiration_date - CURRENT_DATE) as days_until_expiration,
     CASE
         WHEN b.expiration_date <= CURRENT_DATE THEN 'expired'
-        WHEN b.expiration_date <= CURRENT_DATE + INTERVAL '3 days' THEN 'critical'
-        WHEN b.expiration_date <= CURRENT_DATE + INTERVAL '7 days' THEN 'warning'
+        WHEN b.expiration_date <= CURRENT_DATE + 3 THEN 'critical'
+        WHEN b.expiration_date <= CURRENT_DATE + 7 THEN 'warning'
         ELSE 'ok'
     END as expiration_status
 FROM inventory_batches b
 JOIN inventory_items i ON i.id = b.item_id
-WHERE b.quantity_remaining > 0
-  AND b.expiration_date IS NOT NULL
-  AND b.expiration_date <= CURRENT_DATE + INTERVAL '14 days'
-ORDER BY b.expiration_date ASC;
+WHERE b.status = 'available'
+AND b.current_quantity > 0
+AND b.expiration_date IS NOT NULL
+AND b.expiration_date <= CURRENT_DATE + 14
+ORDER BY b.expiration_date;
 
 -- ======================
--- 10. v_today_dental_appointments (Dental)
+-- 10. v_today_dental_appointments (from 093_AI_BOOKING_DENTAL_TRACEABILITY.sql:378)
+-- NOTE: Uses appointments table AI columns, NOT lead_dental_profile
 -- ======================
 DROP VIEW IF EXISTS public.v_today_dental_appointments;
 CREATE VIEW public.v_today_dental_appointments
@@ -300,29 +363,36 @@ SELECT
     a.tenant_id,
     a.branch_id,
     a.lead_id,
-    l.full_name as patient_name,
-    l.phone as patient_phone,
     a.scheduled_at,
     a.duration_minutes,
     a.status,
     a.notes,
-    da.chief_complaint,
-    da.treatment_type,
-    da.urgency_level,
-    da.pain_level,
-    s.full_name as provider_name,
-    ab.booked_by_ai,
-    ab.ai_confidence_score
+    a.ai_booking_channel,
+    a.ai_confidence_score,
+    a.ai_urgency_level,
+    a.ai_detected_symptoms,
+    a.requires_human_review,
+    a.human_review_reason,
+    l.full_name as patient_name,
+    l.phone as patient_phone,
+    l.email as patient_email,
+    s.name as service_name,
+    st.display_name as doctor_name,
+    b.name as branch_name
 FROM appointments a
-JOIN leads l ON l.id = a.lead_id
-LEFT JOIN dental_appointments da ON da.appointment_id = a.id
-LEFT JOIN staff s ON s.id = a.staff_id
-LEFT JOIN ai_bookings ab ON ab.appointment_id = a.id
-WHERE DATE(a.scheduled_at AT TIME ZONE 'America/Mexico_City') = CURRENT_DATE
-ORDER BY a.scheduled_at ASC;
+LEFT JOIN leads l ON a.lead_id = l.id
+LEFT JOIN services s ON a.service_id = s.id
+LEFT JOIN staff st ON a.staff_id = st.id
+LEFT JOIN branches b ON a.branch_id = b.id
+JOIN tenants t ON a.tenant_id = t.id
+WHERE a.scheduled_at::DATE = CURRENT_DATE
+AND a.status NOT IN ('cancelled', 'no_show')
+AND t.vertical = 'dental'
+ORDER BY a.scheduled_at;
 
 -- ======================
--- 11. v_appointment_loyalty_summary (Loyalty)
+-- 11. v_appointment_loyalty_summary (from 095_APPOINTMENT_LOYALTY_TRIGGER.sql:139)
+-- NOTE: Uses loyalty_transactions.tokens (NOT amount), source_type = 'appointment_complete'
 -- ======================
 DROP VIEW IF EXISTS public.v_appointment_loyalty_summary;
 CREATE VIEW public.v_appointment_loyalty_summary
@@ -333,16 +403,16 @@ SELECT
     t.name as tenant_name,
     COUNT(DISTINCT a.id) as total_completed_appointments,
     COUNT(DISTINCT lt.id) as total_token_transactions,
-    COALESCE(SUM(lt.amount) FILTER (WHERE lt.transaction_type = 'earn'), 0) as total_tokens_earned,
-    COALESCE(SUM(lt.amount) FILTER (WHERE lt.transaction_type = 'redeem'), 0) as total_tokens_redeemed,
-    COUNT(DISTINCT a.lead_id) as unique_patients_rewarded
+    COALESCE(SUM(lt.tokens), 0)::INTEGER as total_tokens_awarded,
+    ROUND(COALESCE(AVG(lt.tokens), 0), 2) as avg_tokens_per_appointment
 FROM tenants t
 LEFT JOIN appointments a ON a.tenant_id = t.id AND a.status = 'completed'
-LEFT JOIN loyalty_transactions lt ON lt.appointment_id = a.id
+LEFT JOIN loyalty_transactions lt ON lt.source_type = 'appointment_complete' AND lt.source_id = a.id
+WHERE t.status = 'active'
 GROUP BY t.id, t.name;
 
 -- ======================
--- 12. v_low_stock_items (Restaurant Inventory)
+-- 12. v_low_stock_items (from 090_RESTAURANT_INVENTORY.sql:642)
 -- ======================
 DROP VIEW IF EXISTS public.v_low_stock_items;
 CREATE VIEW public.v_low_stock_items
@@ -354,49 +424,41 @@ SELECT
     i.branch_id,
     i.sku,
     i.name,
-    i.category,
-    i.current_quantity,
-    i.reorder_point,
-    i.reorder_quantity,
+    i.category_id,
+    ic.name as category_name,
+    i.current_stock,
+    i.minimum_stock,
     i.unit,
-    i.avg_daily_usage,
+    i.unit_cost,
+    i.is_perishable,
+    i.storage_type,
+    (i.minimum_stock - i.current_stock) as shortage,
     CASE
-        WHEN i.current_quantity <= 0 THEN 'out_of_stock'
-        WHEN i.current_quantity <= i.reorder_point * 0.5 THEN 'critical'
-        WHEN i.current_quantity <= i.reorder_point THEN 'low'
-        ELSE 'ok'
-    END as stock_status,
-    CASE
-        WHEN i.avg_daily_usage > 0 THEN
-            ROUND(i.current_quantity / i.avg_daily_usage, 1)
-        ELSE NULL
-    END as days_of_stock_remaining
+        WHEN i.current_stock <= 0 THEN 'out_of_stock'
+        WHEN i.current_stock <= i.minimum_stock * 0.5 THEN 'critical'
+        ELSE 'low'
+    END as stock_status
 FROM inventory_items i
+LEFT JOIN inventory_categories ic ON ic.id = i.category_id
 WHERE i.is_active = true
-  AND i.current_quantity <= i.reorder_point
-ORDER BY
-    CASE
-        WHEN i.current_quantity <= 0 THEN 1
-        WHEN i.current_quantity <= i.reorder_point * 0.5 THEN 2
-        ELSE 3
-    END,
-    i.current_quantity ASC;
+AND i.deleted_at IS NULL
+AND i.current_stock <= i.minimum_stock;
 
 -- ======================
 -- COMMENTS
 -- ======================
-COMMENT ON VIEW public.v_vip_customers IS 'VIP customers with loyalty stats (security_invoker)';
-COMMENT ON VIEW public.v_kds_items_by_station IS 'KDS items grouped by station (security_invoker)';
-COMMENT ON VIEW public.v_today_reservations IS 'Today restaurant reservations (security_invoker)';
-COMMENT ON VIEW public.v_urgent_dental_appointments IS 'Urgent dental appointments (security_invoker)';
-COMMENT ON VIEW public.v_table_availability IS 'Table availability status (security_invoker)';
-COMMENT ON VIEW public.v_kds_active_orders IS 'Active KDS orders (security_invoker)';
-COMMENT ON VIEW public.v_patients_needing_followup IS 'Patients due for followup (security_invoker)';
-COMMENT ON VIEW public.v_appointments_pending_review IS 'AI appointments pending staff review (security_invoker)';
-COMMENT ON VIEW public.v_expiring_batches IS 'Inventory batches near expiration (security_invoker)';
-COMMENT ON VIEW public.v_today_dental_appointments IS 'Today dental appointments (security_invoker)';
-COMMENT ON VIEW public.v_appointment_loyalty_summary IS 'Loyalty summary by tenant (security_invoker)';
-COMMENT ON VIEW public.v_low_stock_items IS 'Low stock inventory items (security_invoker)';
+COMMENT ON VIEW public.v_vip_customers IS 'VIP customers with loyalty stats (security_invoker) - Restaurant vertical';
+COMMENT ON VIEW public.v_kds_items_by_station IS 'KDS items grouped by station (security_invoker) - Restaurant vertical';
+COMMENT ON VIEW public.v_today_reservations IS 'Today restaurant reservations (security_invoker) - Restaurant vertical';
+COMMENT ON VIEW public.v_urgent_dental_appointments IS 'Urgent dental appointments (security_invoker) - Dental vertical';
+COMMENT ON VIEW public.v_table_availability IS 'Table availability status (security_invoker) - Restaurant vertical';
+COMMENT ON VIEW public.v_kds_active_orders IS 'Active KDS orders (security_invoker) - Restaurant vertical';
+COMMENT ON VIEW public.v_patients_needing_followup IS 'Patients due for followup (security_invoker) - Dental vertical';
+COMMENT ON VIEW public.v_appointments_pending_review IS 'AI appointments pending staff review (security_invoker) - Multi-vertical';
+COMMENT ON VIEW public.v_expiring_batches IS 'Inventory batches near expiration (security_invoker) - Restaurant vertical';
+COMMENT ON VIEW public.v_today_dental_appointments IS 'Today dental appointments (security_invoker) - Dental vertical';
+COMMENT ON VIEW public.v_appointment_loyalty_summary IS 'Loyalty summary by tenant (security_invoker) - Multi-vertical';
+COMMENT ON VIEW public.v_low_stock_items IS 'Low stock inventory items (security_invoker) - Restaurant vertical';
 
 -- ======================
 -- VERIFICATION

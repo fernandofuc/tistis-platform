@@ -26,7 +26,8 @@ import { validateRFC } from '../utils/rfc-validator';
 // ======================
 
 export class InvoiceService {
-  private supabase: SupabaseClient<unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private supabase: SupabaseClient<any>;
 
   constructor(supabaseUrl?: string, supabaseKey?: string) {
     this.supabase = createClient(

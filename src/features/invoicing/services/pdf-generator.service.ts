@@ -83,7 +83,8 @@ Handlebars.registerHelper('formatDate', formatDate);
 // ======================
 
 export class PDFGeneratorService {
-  private supabase: SupabaseClient<unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private supabase: SupabaseClient<any>;
   private pdfApiUrl: string;
   private pdfApiKey: string;
 

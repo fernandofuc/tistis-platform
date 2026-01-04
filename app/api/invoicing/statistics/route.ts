@@ -20,7 +20,8 @@ interface UserRole {
 // HELPERS
 // ======================
 
-async function getTenantFromUser(supabase: SupabaseClient<unknown>, userId: string): Promise<UserRole | null> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getTenantFromUser(supabase: SupabaseClient<any>, userId: string): Promise<UserRole | null> {
   const { data: userRole, error } = await supabase
     .from('user_roles')
     .select('tenant_id, role')
