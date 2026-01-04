@@ -56,82 +56,103 @@ const icons = {
 interface ResumenTabProps {
   data: {
     // KPIs
-    totalRevenue: number;
-    revenueChange: number;
-    totalOrders: number;
-    ordersChange: number;
-    avgPrepTime: number;
-    prepTimeChange: number;
-    tableOccupancy: number;
-    occupancyChange: number;
-    avgTicket: number;
-    ticketChange: number;
+    totalRevenue?: number;
+    revenueChange?: number;
+    totalOrders?: number;
+    ordersChange?: number;
+    avgPrepTime?: number;
+    prepTimeChange?: number;
+    tableOccupancy?: number;
+    occupancyChange?: number;
+    avgTicket?: number;
+    ticketChange?: number;
     // Chart data
-    dailyRevenue: Array<{ label: string; revenue: number; orders: number; avgTicket: number }>;
-    ordersByType: Array<{ name: string; value: number; color: string }>;
-    topItems: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    ordersByStatus: Array<{ name: string; value: number; fill: string }>;
+    dailyRevenue?: Array<{ label: string; revenue: number; orders: number; avgTicket: number }>;
+    ordersByType?: Array<{ name: string; value: number; color: string }>;
+    topItems?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    ordersByStatus?: Array<{ name: string; value: number; fill: string }>;
   };
   loading: boolean;
   period: string;
 }
 
+// Default values for safe data access
+const DEFAULT_DATA = {
+  totalRevenue: 0,
+  revenueChange: 0,
+  totalOrders: 0,
+  ordersChange: 0,
+  avgPrepTime: 0,
+  prepTimeChange: 0,
+  tableOccupancy: 0,
+  occupancyChange: 0,
+  avgTicket: 0,
+  ticketChange: 0,
+  dailyRevenue: [] as Array<{ label: string; revenue: number; orders: number; avgTicket: number }>,
+  ordersByType: [] as Array<{ name: string; value: number; color: string }>,
+  topItems: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  ordersByStatus: [] as Array<{ name: string; value: number; fill: string }>,
+};
+
 // ======================
 // COMPONENT
 // ======================
 export function ResumenTab({ data, loading, period }: ResumenTabProps) {
+  // Safe data with defaults - prevents undefined errors
+  const safeData = { ...DEFAULT_DATA, ...data };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards Row */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard
           title="Ingresos"
-          value={`$${formatNumber(data.totalRevenue)}`}
-          change={data.revenueChange}
+          value={`$${formatNumber(safeData.totalRevenue)}`}
+          change={safeData.revenueChange}
           changeLabel="vs período anterior"
           icon={icons.revenue}
           iconBgColor="bg-emerald-50"
-          trend={data.revenueChange > 0 ? 'up' : data.revenueChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.revenueChange > 0 ? 'up' : safeData.revenueChange < 0 ? 'down' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Órdenes"
-          value={formatNumber(data.totalOrders)}
-          change={data.ordersChange}
+          value={formatNumber(safeData.totalOrders)}
+          change={safeData.ordersChange}
           changeLabel="vs período anterior"
           icon={icons.orders}
           iconBgColor="bg-blue-50"
-          trend={data.ordersChange > 0 ? 'up' : data.ordersChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.ordersChange > 0 ? 'up' : safeData.ordersChange < 0 ? 'down' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Ticket Promedio"
-          value={`$${formatNumber(data.avgTicket)}`}
-          change={data.ticketChange}
+          value={`$${formatNumber(safeData.avgTicket)}`}
+          change={safeData.ticketChange}
           changeLabel="vs período anterior"
           icon={icons.trendUp}
           iconBgColor="bg-tis-coral/10"
-          trend={data.ticketChange > 0 ? 'up' : data.ticketChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.ticketChange > 0 ? 'up' : safeData.ticketChange < 0 ? 'down' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Tiempo Prep."
-          value={`${data.avgPrepTime} min`}
-          change={data.prepTimeChange}
+          value={`${safeData.avgPrepTime} min`}
+          change={safeData.prepTimeChange}
           changeLabel="vs período anterior"
           icon={icons.clock}
           iconBgColor="bg-purple-50"
-          trend={data.prepTimeChange < 0 ? 'up' : data.prepTimeChange > 0 ? 'down' : 'neutral'}
+          trend={safeData.prepTimeChange < 0 ? 'up' : safeData.prepTimeChange > 0 ? 'down' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Ocupación"
-          value={`${data.tableOccupancy}%`}
-          change={data.occupancyChange}
+          value={`${safeData.tableOccupancy}%`}
+          change={safeData.occupancyChange}
           changeLabel="vs período anterior"
           icon={icons.tables}
           iconBgColor="bg-amber-50"
-          trend={data.occupancyChange > 0 ? 'up' : data.occupancyChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.occupancyChange > 0 ? 'up' : safeData.occupancyChange < 0 ? 'down' : 'neutral'}
           loading={loading}
         />
       </div>
@@ -144,7 +165,7 @@ export function ResumenTab({ data, loading, period }: ResumenTabProps) {
         />
         <CardContent className="pt-2">
           <TISAreaChart
-            data={data.dailyRevenue}
+            data={safeData.dailyRevenue}
             areas={[
               { dataKey: 'revenue', name: 'Ingresos ($)', color: CHART_COLORS.success },
               { dataKey: 'orders', name: 'Órdenes', color: CHART_COLORS.blue },
@@ -169,7 +190,7 @@ export function ResumenTab({ data, loading, period }: ResumenTabProps) {
             <div className="flex items-center gap-4">
               <div className="w-1/2">
                 <TISPieChart
-                  data={data.ordersByType}
+                  data={safeData.ordersByType}
                   height={180}
                   loading={loading}
                   innerRadius={40}
@@ -177,8 +198,8 @@ export function ResumenTab({ data, loading, period }: ResumenTabProps) {
                 />
               </div>
               <div className="flex-1 space-y-3">
-                {data.ordersByType.map((item) => {
-                  const total = data.ordersByType.reduce((sum, i) => sum + i.value, 0) || 1;
+                {safeData.ordersByType.map((item) => {
+                  const total = safeData.ordersByType.reduce((sum, i) => sum + i.value, 0) || 1;
                   const percentage = Math.round((item.value / total) * 100);
                   return (
                     <div key={item.name} className="flex items-center justify-between">
@@ -203,7 +224,7 @@ export function ResumenTab({ data, loading, period }: ResumenTabProps) {
           <CardHeader title="Top 5 Items" subtitle="Más vendidos del período" />
           <CardContent>
             <RankingList
-              items={data.topItems}
+              items={safeData.topItems}
               loading={loading}
               emptyMessage="Sin ventas en este período"
               valuePrefix=""
@@ -217,7 +238,7 @@ export function ResumenTab({ data, loading, period }: ResumenTabProps) {
           <CardHeader title="Estado de Órdenes" subtitle="Distribución actual" />
           <CardContent>
             <TISBarChart
-              data={data.ordersByStatus}
+              data={safeData.ordersByStatus}
               height={200}
               loading={loading}
               layout="vertical"
@@ -231,32 +252,32 @@ export function ResumenTab({ data, loading, period }: ResumenTabProps) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <QuickStatCard
           label="Órdenes Completadas"
-          value={data.ordersByStatus.find(s => s.name === 'Completadas')?.value || 0}
-          total={data.totalOrders}
+          value={safeData.ordersByStatus.find(s => s.name === 'Completadas')?.value || 0}
+          total={safeData.totalOrders}
           color="bg-emerald-500"
           bgColor="bg-emerald-50"
           loading={loading}
         />
         <QuickStatCard
           label="En Preparación"
-          value={data.ordersByStatus.find(s => s.name === 'Preparando')?.value || 0}
-          total={data.totalOrders}
+          value={safeData.ordersByStatus.find(s => s.name === 'Preparando')?.value || 0}
+          total={safeData.totalOrders}
           color="bg-amber-500"
           bgColor="bg-amber-50"
           loading={loading}
         />
         <QuickStatCard
           label="Canceladas"
-          value={data.ordersByStatus.find(s => s.name === 'Canceladas')?.value || 0}
-          total={data.totalOrders}
+          value={safeData.ordersByStatus.find(s => s.name === 'Canceladas')?.value || 0}
+          total={safeData.totalOrders}
           color="bg-red-500"
           bgColor="bg-red-50"
           loading={loading}
         />
         <QuickStatCard
           label="Pendientes"
-          value={data.ordersByStatus.find(s => s.name === 'Pendientes')?.value || 0}
-          total={data.totalOrders}
+          value={safeData.ordersByStatus.find(s => s.name === 'Pendientes')?.value || 0}
+          total={safeData.totalOrders}
           color="bg-slate-500"
           bgColor="bg-slate-50"
           loading={loading}

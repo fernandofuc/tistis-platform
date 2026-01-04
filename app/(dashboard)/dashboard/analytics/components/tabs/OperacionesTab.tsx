@@ -55,49 +55,70 @@ const icons = {
 interface OperacionesTabProps {
   data: {
     // KPIs
-    avgPrepTime: number;
-    prepTimeChange: number;
-    completedOrders: number;
-    completedRate: number;
-    cancelledOrders: number;
-    cancellationRate: number;
-    tableOccupancy: number;
-    avgTurnover: number;
+    avgPrepTime?: number;
+    prepTimeChange?: number;
+    completedOrders?: number;
+    completedRate?: number;
+    cancelledOrders?: number;
+    cancellationRate?: number;
+    tableOccupancy?: number;
+    avgTurnover?: number;
     // Chart data
-    prepTimeByHour: Array<{ label: string; prepTime: number; orders: number }>;
-    prepTimeByStation: Array<{ name: string; value: number; fill: string }>;
-    ordersByHourHeatmap: Array<{ label: string; value: number }>;
-    serverPerformance: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    slowestItems: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    tableUtilization: Array<{ name: string; value: number; fill: string }>;
+    prepTimeByHour?: Array<{ label: string; prepTime: number; orders: number }>;
+    prepTimeByStation?: Array<{ name: string; value: number; fill: string }>;
+    ordersByHourHeatmap?: Array<{ label: string; value: number }>;
+    serverPerformance?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    slowestItems?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    tableUtilization?: Array<{ name: string; value: number; fill: string }>;
   };
   loading: boolean;
   period: string;
 }
 
+// Default values for safe data access
+const DEFAULT_DATA = {
+  avgPrepTime: 0,
+  prepTimeChange: 0,
+  completedOrders: 0,
+  completedRate: 0,
+  cancelledOrders: 0,
+  cancellationRate: 0,
+  tableOccupancy: 0,
+  avgTurnover: 0,
+  prepTimeByHour: [] as Array<{ label: string; prepTime: number; orders: number }>,
+  prepTimeByStation: [] as Array<{ name: string; value: number; fill: string }>,
+  ordersByHourHeatmap: [] as Array<{ label: string; value: number }>,
+  serverPerformance: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  slowestItems: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  tableUtilization: [] as Array<{ name: string; value: number; fill: string }>,
+};
+
 // ======================
 // COMPONENT
 // ======================
 export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
+  // Safe data with defaults - prevents undefined errors
+  const safeData = { ...DEFAULT_DATA, ...data };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Tiempo Promedio"
-          value={`${data.avgPrepTime} min`}
-          change={data.prepTimeChange}
+          value={`${safeData.avgPrepTime} min`}
+          change={safeData.prepTimeChange}
           changeLabel="vs período anterior"
           icon={icons.clock}
           iconBgColor="bg-purple-50"
-          trend={data.prepTimeChange < 0 ? 'up' : data.prepTimeChange > 0 ? 'down' : 'neutral'}
+          trend={safeData.prepTimeChange < 0 ? 'up' : safeData.prepTimeChange > 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Órdenes Completadas"
-          value={formatNumber(data.completedOrders)}
-          change={data.completedRate}
+          value={formatNumber(safeData.completedOrders)}
+          change={safeData.completedRate}
           changeLabel="tasa de éxito"
           icon={icons.check}
           iconBgColor="bg-emerald-50"
@@ -107,23 +128,23 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
         />
         <MetricCard
           title="Cancelaciones"
-          value={formatNumber(data.cancelledOrders)}
-          change={data.cancellationRate}
+          value={formatNumber(safeData.cancelledOrders)}
+          change={safeData.cancellationRate}
           changeLabel="tasa de cancelación"
           icon={icons.x}
           iconBgColor="bg-red-50"
-          trend={data.cancellationRate > 5 ? 'down' : 'neutral'}
+          trend={safeData.cancellationRate > 5 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Ocupación Mesas"
-          value={`${data.tableOccupancy}%`}
-          change={data.avgTurnover}
+          value={`${safeData.tableOccupancy}%`}
+          change={safeData.avgTurnover}
           changeLabel="rotaciones/día"
           icon={icons.table}
           iconBgColor="bg-amber-50"
-          trend={data.tableOccupancy > 70 ? 'up' : 'neutral'}
+          trend={safeData.tableOccupancy > 70 ? 'up' : 'neutral'}
           loading={loading}
           size="lg"
         />
@@ -137,7 +158,7 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
         />
         <CardContent>
           <TISLineChart
-            data={data.prepTimeByHour}
+            data={safeData.prepTimeByHour}
             lines={[
               { dataKey: 'prepTime', name: 'Tiempo Prep. (min)', color: CHART_COLORS.primary },
               { dataKey: 'orders', name: 'Órdenes', color: CHART_COLORS.blue },
@@ -155,7 +176,7 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
           <CardHeader title="Tiempo por Estación" subtitle="Promedio de preparación" />
           <CardContent>
             <TISBarChart
-              data={data.prepTimeByStation}
+              data={safeData.prepTimeByStation}
               height={240}
               loading={loading}
               layout="vertical"
@@ -178,7 +199,7 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
           />
           <CardContent>
             <RankingList
-              items={data.slowestItems}
+              items={safeData.slowestItems}
               loading={loading}
               emptyMessage="Sin datos de preparación"
               valueSuffix=" min"
@@ -195,7 +216,7 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
             <div>
               <h4 className="text-sm font-medium text-slate-600 mb-3">Top Meseros por Órdenes</h4>
               <RankingList
-                items={data.serverPerformance}
+                items={safeData.serverPerformance}
                 loading={loading}
                 emptyMessage="Sin datos de meseros"
                 valueSuffix=" órdenes"
@@ -206,22 +227,22 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
               <div className="space-y-4">
                 <ProgressBar
                   label="Tasa de Completado"
-                  value={data.completedRate}
+                  value={safeData.completedRate}
                   color="bg-emerald-500"
                 />
                 <ProgressBar
                   label="Ocupación de Mesas"
-                  value={data.tableOccupancy}
+                  value={safeData.tableOccupancy}
                   color="bg-blue-500"
                 />
                 <ProgressBar
                   label="Eficiencia Cocina"
-                  value={Math.max(0, 100 - (data.avgPrepTime / 30 * 100))}
+                  value={Math.max(0, 100 - (safeData.avgPrepTime / 30 * 100))}
                   color="bg-purple-500"
                 />
                 <ProgressBar
                   label="Sin Cancelaciones"
-                  value={100 - data.cancellationRate}
+                  value={100 - safeData.cancellationRate}
                   color="bg-tis-coral"
                 />
               </div>
@@ -235,7 +256,7 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
         <CardHeader title="Utilización de Mesas" subtitle="Estado y ocupación" />
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {data.tableUtilization.map((item) => (
+            {safeData.tableUtilization.map((item) => (
               <div key={item.name} className="p-4 rounded-xl" style={{ backgroundColor: `${item.fill}15` }}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.fill }} />
@@ -254,8 +275,8 @@ export function OperacionesTab({ data, loading, period }: OperacionesTabProps) {
         <CardHeader title="Horas Pico" subtitle="Volumen de órdenes por hora" />
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {data.ordersByHourHeatmap.map((item, index) => {
-              const maxValue = Math.max(...data.ordersByHourHeatmap.map(h => h.value), 1);
+            {safeData.ordersByHourHeatmap.map((item, index) => {
+              const maxValue = Math.max(...safeData.ordersByHourHeatmap.map(h => h.value), 1);
               const intensity = item.value / maxValue;
               return (
                 <div

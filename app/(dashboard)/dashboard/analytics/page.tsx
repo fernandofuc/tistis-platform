@@ -12,7 +12,7 @@ import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { useBranch } from '@/src/shared/stores';
 import { supabase } from '@/src/shared/lib/supabase';
-import { cn } from '@/src/shared/utils';
+import { cn, ANALYTICS_DEFAULTS } from '@/src/shared/utils';
 import { useTenant } from '@/src/hooks/useTenant';
 
 // Components
@@ -271,7 +271,7 @@ export default function AnalyticsPage() {
       const ordersWithPrepTime = orders.filter(o => o.actual_prep_time);
       const avgPrepTime = ordersWithPrepTime.length > 0
         ? Math.round(ordersWithPrepTime.reduce((sum, o) => sum + o.actual_prep_time, 0) / ordersWithPrepTime.length)
-        : 18;
+        : ANALYTICS_DEFAULTS.MIN_PREP_TIME;
 
       // Orders by type
       const ordersByType = orders.reduce((acc: Record<string, number>, order) => {
@@ -449,12 +449,19 @@ export default function AnalyticsPage() {
         cancelledOrders,
         cancellationRate: totalOrders > 0 ? Math.round((cancelledOrders / totalOrders) * 100) : 0,
         tableOccupancy,
-        avgTurnover: 3.2,
-        prepTimeByHour: hourLabels.map(({ label, hour }) => ({
-          label,
-          prepTime: 15 + Math.random() * 10,
-          orders: orders.filter(o => new Date(o.ordered_at).getHours() === hour).length,
-        })),
+        avgTurnover: ANALYTICS_DEFAULTS.DEFAULT_TURNOVER,
+        prepTimeByHour: hourLabels.map(({ label, hour }) => {
+          const hourOrders = orders.filter(o => new Date(o.ordered_at).getHours() === hour);
+          const hourOrdersWithTime = hourOrders.filter(o => o.actual_prep_time);
+          const avgHourPrepTime = hourOrdersWithTime.length > 0
+            ? hourOrdersWithTime.reduce((sum, o) => sum + o.actual_prep_time, 0) / hourOrdersWithTime.length
+            : ANALYTICS_DEFAULTS.MIN_PREP_TIME;
+          return {
+            label,
+            prepTime: Math.round(avgHourPrepTime),
+            orders: hourOrders.length,
+          };
+        }),
         prepTimeByStation: [
           { name: 'Parrilla', value: 22, fill: CHART_COLORS.primary },
           { name: 'Freidora', value: 12, fill: CHART_COLORS.blue },
@@ -503,11 +510,13 @@ export default function AnalyticsPage() {
           { name: 'Bebidas', value: inventory.filter(i => i.category_id === 'beverages').length || 18, fill: CHART_COLORS.warning },
           { name: 'Otros', value: 10, fill: CHART_COLORS.slate },
         ],
-        movementTrend: dailyLabels.map(({ label }) => ({
+        // Note: Movement data would need inventory_movements table to be dynamic
+        // Using average estimates based on inventory size for now
+        movementTrend: dailyLabels.map(({ label }, index) => ({
           label,
-          entrada: Math.floor(Math.random() * 20) + 5,
-          salida: Math.floor(Math.random() * 15) + 10,
-          ajuste: Math.floor(Math.random() * 5),
+          entrada: Math.round(inventory.length * 0.1) + (index % 3),
+          salida: Math.round(inventory.length * 0.08) + (index % 2),
+          ajuste: index % 5 === 0 ? 1 : 0,
         })),
         lowStockItems: lowStockItems.slice(0, 5).map((item, index) => ({
           rank: index + 1,
@@ -618,10 +627,17 @@ export default function AnalyticsPage() {
           { name: 'Ubicación', value: Math.round(totalConversations * 0.08), fill: CHART_COLORS.secondary },
           { name: 'Otros', value: Math.round(totalConversations * 0.05), fill: CHART_COLORS.slate },
         ],
-        responseTimeByHour: hourLabels.map(({ label }) => ({
-          label: label.split(':')[0],
-          value: Math.round(1 + Math.random() * 4),
-        })),
+        // Response time by hour - based on avgResponseTime with slight variance by hour
+        responseTimeByHour: hourLabels.map(({ label, hour }) => {
+          // Business hours (9-21) have faster response times
+          const isBusinessHour = hour >= 9 && hour <= 21;
+          const baseTime = avgResponseTime;
+          const variance = isBusinessHour ? 0 : baseTime * 0.5;
+          return {
+            label: label.split(':')[0],
+            value: Math.round(baseTime + variance),
+          };
+        }),
         topIntents: [
           { rank: 1, name: 'Hacer reservación', value: 35, subValue: 'Más común' },
           { rank: 2, name: 'Ver menú', value: 25, subValue: 'Frecuente' },
@@ -695,11 +711,17 @@ export default function AnalyticsPage() {
           </div>
         }
       >
-        <DentalAnalytics
-          tenantId={tenant?.id || ''}
-          selectedBranchId={selectedBranchId}
-          period={period}
-        />
+        {tenant?.id ? (
+          <DentalAnalytics
+            tenantId={tenant.id}
+            selectedBranchId={selectedBranchId}
+            period={period}
+          />
+        ) : (
+          <div className="flex items-center justify-center py-12 text-slate-500">
+            <p>Cargando datos del tenant...</p>
+          </div>
+        )}
       </PageWrapper>
     );
   }

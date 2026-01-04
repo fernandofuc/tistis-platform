@@ -59,76 +59,98 @@ const icons = {
 interface AIInsightsTabProps {
   data: {
     // KPIs
-    totalConversations: number;
-    conversationsChange: number;
-    resolvedConversations: number;
-    resolutionRate: number;
-    avgResponseTime: number;
-    responseTimeChange: number;
-    escalatedCount: number;
-    escalationRate: number;
-    aiHandlingRate: number;
+    totalConversations?: number;
+    conversationsChange?: number;
+    resolvedConversations?: number;
+    resolutionRate?: number;
+    avgResponseTime?: number;
+    responseTimeChange?: number;
+    escalatedCount?: number;
+    escalationRate?: number;
+    aiHandlingRate?: number;
     // Chart data
-    conversationsTrend: Array<{ label: string; conversations: number; resolved: number; escalated: number }>;
-    conversationsByChannel: Array<{ name: string; value: number; color: string }>;
-    intentDistribution: Array<{ name: string; value: number; fill: string }>;
-    responseTimeByHour: Array<{ label: string; value: number }>;
-    topIntents: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    handlingBreakdown: Array<{ name: string; value: number; color: string }>;
+    conversationsTrend?: Array<{ label: string; conversations: number; resolved: number; escalated: number }>;
+    conversationsByChannel?: Array<{ name: string; value: number; color: string }>;
+    intentDistribution?: Array<{ name: string; value: number; fill: string }>;
+    responseTimeByHour?: Array<{ label: string; value: number }>;
+    topIntents?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    handlingBreakdown?: Array<{ name: string; value: number; color: string }>;
   };
   loading: boolean;
   period: string;
 }
 
+// Default values for safe data access
+const DEFAULT_DATA = {
+  totalConversations: 0,
+  conversationsChange: 0,
+  resolvedConversations: 0,
+  resolutionRate: 0,
+  avgResponseTime: 0,
+  responseTimeChange: 0,
+  escalatedCount: 0,
+  escalationRate: 0,
+  aiHandlingRate: 0,
+  conversationsTrend: [] as Array<{ label: string; conversations: number; resolved: number; escalated: number }>,
+  conversationsByChannel: [] as Array<{ name: string; value: number; color: string }>,
+  intentDistribution: [] as Array<{ name: string; value: number; fill: string }>,
+  responseTimeByHour: [] as Array<{ label: string; value: number }>,
+  topIntents: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  handlingBreakdown: [] as Array<{ name: string; value: number; color: string }>,
+};
+
 // ======================
 // COMPONENT
 // ======================
 export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
+  // Safe data with defaults - prevents undefined errors
+  const safeData = { ...DEFAULT_DATA, ...data };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Conversaciones"
-          value={formatNumber(data.totalConversations)}
-          change={data.conversationsChange}
+          value={formatNumber(safeData.totalConversations)}
+          change={safeData.conversationsChange}
           changeLabel="vs período anterior"
           icon={icons.chat}
           iconBgColor="bg-purple-50"
-          trend={data.conversationsChange > 0 ? 'up' : data.conversationsChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.conversationsChange > 0 ? 'up' : safeData.conversationsChange < 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Tasa de Resolución"
-          value={`${data.resolutionRate}%`}
-          change={data.resolvedConversations}
+          value={`${safeData.resolutionRate}%`}
+          change={safeData.resolvedConversations}
           changeLabel="resueltas"
           icon={icons.check}
           iconBgColor="bg-emerald-50"
-          trend={data.resolutionRate > 80 ? 'up' : data.resolutionRate < 60 ? 'down' : 'neutral'}
+          trend={safeData.resolutionRate > 80 ? 'up' : safeData.resolutionRate < 60 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Tiempo Respuesta"
-          value={`${data.avgResponseTime}s`}
-          change={data.responseTimeChange}
+          value={`${safeData.avgResponseTime}s`}
+          change={safeData.responseTimeChange}
           changeLabel="vs período anterior"
           icon={icons.clock}
           iconBgColor="bg-blue-50"
-          trend={data.responseTimeChange < 0 ? 'up' : data.responseTimeChange > 0 ? 'down' : 'neutral'}
+          trend={safeData.responseTimeChange < 0 ? 'up' : safeData.responseTimeChange > 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Escalaciones"
-          value={formatNumber(data.escalatedCount)}
-          change={data.escalationRate}
+          value={formatNumber(safeData.escalatedCount)}
+          change={safeData.escalationRate}
           changeLabel="tasa de escalación"
           icon={icons.escalation}
           iconBgColor="bg-amber-50"
-          trend={data.escalationRate < 10 ? 'up' : 'down'}
+          trend={safeData.escalationRate < 10 ? 'up' : 'down'}
           loading={loading}
           size="lg"
         />
@@ -144,23 +166,23 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
               </div>
               <div>
                 <p className="text-sm text-slate-600">Manejo Automático AI</p>
-                <p className="text-3xl font-bold text-slate-900">{data.aiHandlingRate}%</p>
+                <p className="text-3xl font-bold text-slate-900">{safeData.aiHandlingRate}%</p>
                 <p className="text-xs text-slate-500">de todas las conversaciones</p>
               </div>
             </div>
             <div className="flex items-center gap-8">
               <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">{data.resolvedConversations}</p>
+                <p className="text-2xl font-bold text-purple-600">{safeData.resolvedConversations}</p>
                 <p className="text-sm text-slate-500">Resueltas por AI</p>
               </div>
               <div className="h-12 w-px bg-slate-200" />
               <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{data.escalatedCount}</p>
+                <p className="text-2xl font-bold text-blue-600">{safeData.escalatedCount}</p>
                 <p className="text-sm text-slate-500">Escaladas a humano</p>
               </div>
               <div className="h-12 w-px bg-slate-200" />
               <div className="text-center">
-                <p className="text-2xl font-bold text-emerald-600">{data.avgResponseTime}s</p>
+                <p className="text-2xl font-bold text-emerald-600">{safeData.avgResponseTime}s</p>
                 <p className="text-sm text-slate-500">Tiempo promedio</p>
               </div>
             </div>
@@ -176,7 +198,7 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
         />
         <CardContent>
           <TISAreaChart
-            data={data.conversationsTrend}
+            data={safeData.conversationsTrend}
             areas={[
               { dataKey: 'conversations', name: 'Total', color: CHART_COLORS.secondary },
               { dataKey: 'resolved', name: 'Resueltas', color: CHART_COLORS.success },
@@ -197,7 +219,7 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
             <div className="flex flex-col gap-4">
               <div className="flex justify-center">
                 <TISPieChart
-                  data={data.conversationsByChannel}
+                  data={safeData.conversationsByChannel}
                   height={160}
                   loading={loading}
                   innerRadius={35}
@@ -205,8 +227,8 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
                 />
               </div>
               <div className="space-y-3">
-                {data.conversationsByChannel.map((channel) => {
-                  const total = data.totalConversations || 1;
+                {safeData.conversationsByChannel.map((channel) => {
+                  const total = safeData.totalConversations || 1;
                   const percentage = Math.round((channel.value / total) * 100);
                   return (
                     <div key={channel.name} className="flex items-center justify-between">
@@ -233,7 +255,7 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
             <div className="flex flex-col gap-4">
               <div className="flex justify-center">
                 <TISPieChart
-                  data={data.handlingBreakdown}
+                  data={safeData.handlingBreakdown}
                   height={160}
                   loading={loading}
                   innerRadius={35}
@@ -241,8 +263,8 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
                 />
               </div>
               <div className="space-y-3">
-                {data.handlingBreakdown.map((item) => {
-                  const total = data.handlingBreakdown.reduce((sum, h) => sum + h.value, 0) || 1;
+                {safeData.handlingBreakdown.map((item) => {
+                  const total = safeData.handlingBreakdown.reduce((sum, h) => sum + h.value, 0) || 1;
                   const percentage = Math.round((item.value / total) * 100);
                   return (
                     <div key={item.name} className="flex items-center justify-between">
@@ -267,7 +289,7 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
           <CardHeader title="Intenciones Principales" subtitle="Qué buscan los clientes" />
           <CardContent>
             <RankingList
-              items={data.topIntents}
+              items={safeData.topIntents}
               loading={loading}
               emptyMessage="Sin datos de intenciones"
               valueSuffix="%"
@@ -281,8 +303,8 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
         <CardHeader title="Tiempo de Respuesta por Hora" subtitle="Rendimiento durante el día" />
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {data.responseTimeByHour.map((item, index) => {
-              const maxValue = Math.max(...data.responseTimeByHour.map(h => h.value), 1);
+            {safeData.responseTimeByHour.map((item, index) => {
+              const maxValue = Math.max(...safeData.responseTimeByHour.map(h => h.value), 1);
               const intensity = item.value / maxValue;
               const isGood = item.value < 3;
               const isBad = item.value > 5;
@@ -331,7 +353,7 @@ export function AIInsightsTab({ data, loading, period }: AIInsightsTabProps) {
         <CardHeader title="Distribución de Intenciones" subtitle="Categorías de consultas" />
         <CardContent>
           <TISBarChart
-            data={data.intentDistribution}
+            data={safeData.intentDistribution}
             height={240}
             loading={loading}
             layout="vertical"

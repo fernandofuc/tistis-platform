@@ -54,47 +54,67 @@ const icons = {
 interface InventarioTabProps {
   data: {
     // KPIs
-    totalItems: number;
-    lowStockCount: number;
-    expiringCount: number;
-    stockValue: number;
-    stockValueChange: number;
-    wasteValue: number;
-    wastePercentage: number;
+    totalItems?: number;
+    lowStockCount?: number;
+    expiringCount?: number;
+    stockValue?: number;
+    stockValueChange?: number;
+    wasteValue?: number;
+    wastePercentage?: number;
     // Chart data
-    stockByCategory: Array<{ name: string; value: number; fill: string }>;
-    movementTrend: Array<{ label: string; entrada: number; salida: number; ajuste: number }>;
-    lowStockItems: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    expiringItems: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    topUsedItems: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    storageDistribution: Array<{ name: string; value: number; color: string }>;
+    stockByCategory?: Array<{ name: string; value: number; fill: string }>;
+    movementTrend?: Array<{ label: string; entrada: number; salida: number; ajuste: number }>;
+    lowStockItems?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    expiringItems?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    topUsedItems?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    storageDistribution?: Array<{ name: string; value: number; color: string }>;
   };
   loading: boolean;
   period: string;
 }
 
+// Default values for safe data access
+const DEFAULT_DATA = {
+  totalItems: 0,
+  lowStockCount: 0,
+  expiringCount: 0,
+  stockValue: 0,
+  stockValueChange: 0,
+  wasteValue: 0,
+  wastePercentage: 0,
+  stockByCategory: [] as Array<{ name: string; value: number; fill: string }>,
+  movementTrend: [] as Array<{ label: string; entrada: number; salida: number; ajuste: number }>,
+  lowStockItems: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  expiringItems: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  topUsedItems: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  storageDistribution: [] as Array<{ name: string; value: number; color: string }>,
+};
+
 // ======================
 // COMPONENT
 // ======================
 export function InventarioTab({ data, loading, period }: InventarioTabProps) {
+  // Safe data with defaults - prevents undefined errors
+  const safeData = { ...DEFAULT_DATA, ...data };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Valor en Stock"
-          value={`$${formatNumber(data.stockValue)}`}
-          change={data.stockValueChange}
+          value={`$${formatNumber(safeData.stockValue)}`}
+          change={safeData.stockValueChange}
           changeLabel="vs período anterior"
           icon={icons.value}
           iconBgColor="bg-emerald-50"
-          trend={data.stockValueChange > 0 ? 'up' : data.stockValueChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.stockValueChange > 0 ? 'up' : safeData.stockValueChange < 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Items Totales"
-          value={formatNumber(data.totalItems)}
+          value={formatNumber(safeData.totalItems)}
           changeLabel="productos en inventario"
           icon={icons.inventory}
           iconBgColor="bg-blue-50"
@@ -103,31 +123,31 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
         />
         <MetricCard
           title="Stock Bajo"
-          value={formatNumber(data.lowStockCount)}
+          value={formatNumber(safeData.lowStockCount)}
           changeLabel="requieren reorden"
           icon={icons.alert}
           iconBgColor="bg-amber-50"
-          trend={data.lowStockCount > 5 ? 'down' : 'neutral'}
+          trend={safeData.lowStockCount > 5 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Por Expirar"
-          value={formatNumber(data.expiringCount)}
+          value={formatNumber(safeData.expiringCount)}
           changeLabel="próximos 14 días"
           icon={icons.expire}
           iconBgColor="bg-red-50"
-          trend={data.expiringCount > 0 ? 'down' : 'neutral'}
+          trend={safeData.expiringCount > 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
       </div>
 
       {/* Alerts Row */}
-      {(data.lowStockCount > 0 || data.expiringCount > 0) && (
+      {(safeData.lowStockCount > 0 || safeData.expiringCount > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Low Stock Alert */}
-          {data.lowStockCount > 0 && (
+          {safeData.lowStockCount > 0 && (
             <Card variant="bordered" className="border-amber-200 bg-amber-50/30">
               <CardHeader
                 title={
@@ -140,7 +160,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
               />
               <CardContent>
                 <RankingList
-                  items={data.lowStockItems}
+                  items={safeData.lowStockItems}
                   loading={loading}
                   emptyMessage="Sin alertas de stock"
                   valueSuffix=" uds"
@@ -150,7 +170,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
           )}
 
           {/* Expiring Alert */}
-          {data.expiringCount > 0 && (
+          {safeData.expiringCount > 0 && (
             <Card variant="bordered" className="border-red-200 bg-red-50/30">
               <CardHeader
                 title={
@@ -163,7 +183,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
               />
               <CardContent>
                 <RankingList
-                  items={data.expiringItems}
+                  items={safeData.expiringItems}
                   loading={loading}
                   emptyMessage="Sin items por expirar"
                   valueSuffix=" días"
@@ -182,7 +202,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
         />
         <CardContent>
           <TISAreaChart
-            data={data.movementTrend}
+            data={safeData.movementTrend}
             areas={[
               { dataKey: 'entrada', name: 'Entradas', color: CHART_COLORS.success },
               { dataKey: 'salida', name: 'Salidas', color: CHART_COLORS.danger },
@@ -201,7 +221,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
           <CardHeader title="Stock por Categoría" subtitle="Distribución de items" />
           <CardContent>
             <TISBarChart
-              data={data.stockByCategory}
+              data={safeData.stockByCategory}
               height={240}
               loading={loading}
               layout="vertical"
@@ -217,7 +237,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
             <div className="flex items-center gap-6">
               <div className="w-2/5">
                 <TISPieChart
-                  data={data.storageDistribution}
+                  data={safeData.storageDistribution}
                   height={200}
                   loading={loading}
                   innerRadius={45}
@@ -225,8 +245,8 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
                 />
               </div>
               <div className="flex-1 space-y-3">
-                {data.storageDistribution.map((item) => {
-                  const total = data.storageDistribution.reduce((sum, i) => sum + i.value, 0) || 1;
+                {safeData.storageDistribution.map((item) => {
+                  const total = safeData.storageDistribution.reduce((sum, i) => sum + i.value, 0) || 1;
                   const percentage = Math.round((item.value / total) * 100);
                   return (
                     <div key={item.name} className="flex items-center justify-between">
@@ -253,13 +273,13 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <RankingList
-              items={data.topUsedItems.slice(0, 5)}
+              items={safeData.topUsedItems.slice(0, 5)}
               loading={loading}
               emptyMessage="Sin datos de uso"
               valueSuffix=" uds"
             />
             <RankingList
-              items={data.topUsedItems.slice(5, 10)}
+              items={safeData.topUsedItems.slice(5, 10)}
               loading={loading}
               emptyMessage=""
               valueSuffix=" uds"
@@ -281,15 +301,15 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
                 {icons.waste}
                 <span className="text-sm text-slate-600">Valor Perdido</span>
               </div>
-              <p className="text-2xl font-bold text-red-600">-${formatNumber(data.wasteValue)}</p>
-              <p className="text-xs text-slate-500 mt-1">{data.wastePercentage.toFixed(1)}% del inventario</p>
+              <p className="text-2xl font-bold text-red-600">-${formatNumber(safeData.wasteValue)}</p>
+              <p className="text-xs text-slate-500 mt-1">{safeData.wastePercentage.toFixed(1)}% del inventario</p>
             </div>
             <div className="p-4 bg-amber-50 rounded-xl">
               <div className="flex items-center gap-2 mb-2">
                 {icons.alert}
                 <span className="text-sm text-slate-600">Items en Riesgo</span>
               </div>
-              <p className="text-2xl font-bold text-amber-600">{data.lowStockCount + data.expiringCount}</p>
+              <p className="text-2xl font-bold text-amber-600">{safeData.lowStockCount + safeData.expiringCount}</p>
               <p className="text-xs text-slate-500 mt-1">Requieren atención</p>
             </div>
             <div className="p-4 bg-emerald-50 rounded-xl">
@@ -299,7 +319,7 @@ export function InventarioTab({ data, loading, period }: InventarioTabProps) {
                 </svg>
                 <span className="text-sm text-slate-600">Nivel Óptimo</span>
               </div>
-              <p className="text-2xl font-bold text-emerald-600">{data.totalItems - data.lowStockCount}</p>
+              <p className="text-2xl font-bold text-emerald-600">{safeData.totalItems - safeData.lowStockCount}</p>
               <p className="text-xs text-slate-500 mt-1">Items saludables</p>
             </div>
           </div>

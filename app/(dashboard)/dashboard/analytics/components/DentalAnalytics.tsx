@@ -167,8 +167,10 @@ export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAn
 
   // Fetch analytics data
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchAnalytics() {
-      if (!tenantId) return;
+      if (!tenantId || tenantId.trim() === '') return;
 
       setLoading(true);
 
@@ -275,30 +277,6 @@ export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAn
           : 0;
         const conversionRateChange = conversionRate - prevConversionRate;
 
-        setStats({
-          newLeads,
-          newLeadsChange,
-          hotLeads,
-          hotLeadsChange,
-          appointmentsScheduled,
-          appointmentsCompleted,
-          appointmentsCancelled,
-          conversationsTotal,
-          conversationsResolved,
-          avgResponseTime: 2,
-          conversionRate,
-          conversionRateChange,
-        });
-
-        setLeadsByClassification({ hot: hotLeads, warm: warmLeads, cold: coldLeads });
-        setAppointmentsByStatus({
-          scheduled: appointmentsScheduled - appointmentsConfirmed - appointmentsCompleted - appointmentsCancelled - appointmentsNoShow,
-          confirmed: appointmentsConfirmed,
-          completed: appointmentsCompleted,
-          cancelled: appointmentsCancelled,
-          no_show: appointmentsNoShow,
-        });
-
         // Build daily data using shared generateDailyLabels
         const dailyMap = new Map<string, DailyData>();
         const dailyLabels = generateDailyLabels(days);
@@ -325,16 +303,50 @@ export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAn
           if (dayData) dayData.conversations += 1;
         });
 
+        // Check if component is still mounted before updating state
+        if (!isMounted) return;
+
+        setStats({
+          newLeads,
+          newLeadsChange,
+          hotLeads,
+          hotLeadsChange,
+          appointmentsScheduled,
+          appointmentsCompleted,
+          appointmentsCancelled,
+          conversationsTotal,
+          conversationsResolved,
+          avgResponseTime: 2,
+          conversionRate,
+          conversionRateChange,
+        });
+
+        setLeadsByClassification({ hot: hotLeads, warm: warmLeads, cold: coldLeads });
+        setAppointmentsByStatus({
+          scheduled: Math.max(0, appointmentsScheduled - appointmentsConfirmed - appointmentsCompleted - appointmentsCancelled - appointmentsNoShow),
+          confirmed: appointmentsConfirmed,
+          completed: appointmentsCompleted,
+          cancelled: appointmentsCancelled,
+          no_show: appointmentsNoShow,
+        });
+
         setDailyData(Array.from(dailyMap.values()));
 
       } catch (error) {
         console.error('Error fetching analytics:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     fetchAnalytics();
+
+    // Cleanup function to prevent memory leaks
+    return () => {
+      isMounted = false;
+    };
   }, [period, tenantId, selectedBranchId]);
 
   // Pie chart data

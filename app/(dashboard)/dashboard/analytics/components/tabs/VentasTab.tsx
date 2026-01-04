@@ -49,76 +49,98 @@ const icons = {
 interface VentasTabProps {
   data: {
     // KPIs
-    totalRevenue: number;
-    revenueChange: number;
-    avgTicket: number;
-    ticketChange: number;
-    itemsPerOrder: number;
-    itemsChange: number;
-    totalTips: number;
-    tipsChange: number;
-    discountTotal: number;
-    discountPercentage: number;
+    totalRevenue?: number;
+    revenueChange?: number;
+    avgTicket?: number;
+    ticketChange?: number;
+    itemsPerOrder?: number;
+    itemsChange?: number;
+    totalTips?: number;
+    tipsChange?: number;
+    discountTotal?: number;
+    discountPercentage?: number;
     // Chart data
-    revenueByHour: Array<{ label: string; revenue: number; orders: number }>;
-    revenueByDay: Array<{ label: string; revenue: number }>;
-    paymentMethods: Array<{ name: string; value: number; color: string }>;
-    topItemsByRevenue: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    categoryRevenue: Array<{ name: string; value: number; fill: string }>;
+    revenueByHour?: Array<{ label: string; revenue: number; orders: number }>;
+    revenueByDay?: Array<{ label: string; revenue: number }>;
+    paymentMethods?: Array<{ name: string; value: number; color: string }>;
+    topItemsByRevenue?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    categoryRevenue?: Array<{ name: string; value: number; fill: string }>;
   };
   loading: boolean;
   period: string;
 }
 
+// Default values for safe data access
+const DEFAULT_DATA = {
+  totalRevenue: 0,
+  revenueChange: 0,
+  avgTicket: 0,
+  ticketChange: 0,
+  itemsPerOrder: 0,
+  itemsChange: 0,
+  totalTips: 0,
+  tipsChange: 0,
+  discountTotal: 0,
+  discountPercentage: 0,
+  revenueByHour: [] as Array<{ label: string; revenue: number; orders: number }>,
+  revenueByDay: [] as Array<{ label: string; revenue: number }>,
+  paymentMethods: [] as Array<{ name: string; value: number; color: string }>,
+  topItemsByRevenue: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  categoryRevenue: [] as Array<{ name: string; value: number; fill: string }>,
+};
+
 // ======================
 // COMPONENT
 // ======================
 export function VentasTab({ data, loading, period }: VentasTabProps) {
+  // Safe data with defaults - prevents undefined errors
+  const safeData = { ...DEFAULT_DATA, ...data };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Ingresos Totales"
-          value={`$${formatNumber(data.totalRevenue)}`}
-          change={data.revenueChange}
+          value={`$${formatNumber(safeData.totalRevenue)}`}
+          change={safeData.revenueChange}
           changeLabel="vs período anterior"
           icon={icons.revenue}
           iconBgColor="bg-emerald-50"
-          trend={data.revenueChange > 0 ? 'up' : data.revenueChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.revenueChange > 0 ? 'up' : safeData.revenueChange < 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Ticket Promedio"
-          value={`$${formatNumber(data.avgTicket)}`}
-          change={data.ticketChange}
+          value={`$${formatNumber(safeData.avgTicket)}`}
+          change={safeData.ticketChange}
           changeLabel="vs período anterior"
           icon={icons.ticket}
           iconBgColor="bg-blue-50"
-          trend={data.ticketChange > 0 ? 'up' : data.ticketChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.ticketChange > 0 ? 'up' : safeData.ticketChange < 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Items por Orden"
-          value={data.itemsPerOrder.toFixed(1)}
-          change={data.itemsChange}
+          value={safeData.itemsPerOrder.toFixed(1)}
+          change={safeData.itemsChange}
           changeLabel="vs período anterior"
           icon={icons.items}
           iconBgColor="bg-purple-50"
-          trend={data.itemsChange > 0 ? 'up' : data.itemsChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.itemsChange > 0 ? 'up' : safeData.itemsChange < 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
         <MetricCard
           title="Propinas"
-          value={`$${formatNumber(data.totalTips)}`}
-          change={data.tipsChange}
+          value={`$${formatNumber(safeData.totalTips)}`}
+          change={safeData.tipsChange}
           changeLabel="vs período anterior"
           icon={icons.tips}
           iconBgColor="bg-amber-50"
-          trend={data.tipsChange > 0 ? 'up' : data.tipsChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.tipsChange > 0 ? 'up' : safeData.tipsChange < 0 ? 'down' : 'neutral'}
           loading={loading}
           size="lg"
         />
@@ -132,7 +154,7 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
         />
         <CardContent>
           <TISBarChart
-            data={data.revenueByHour.map(item => ({
+            data={safeData.revenueByHour.map(item => ({
               name: item.label,
               value: item.revenue,
               fill: CHART_COLORS.primary,
@@ -154,7 +176,7 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
             <div className="flex items-center gap-6">
               <div className="w-2/5">
                 <TISPieChart
-                  data={data.paymentMethods}
+                  data={safeData.paymentMethods}
                   height={200}
                   loading={loading}
                   innerRadius={45}
@@ -162,8 +184,8 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
                 />
               </div>
               <div className="flex-1 space-y-4">
-                {data.paymentMethods.map((method) => {
-                  const total = data.paymentMethods.reduce((sum, m) => sum + m.value, 0) || 1;
+                {safeData.paymentMethods.map((method) => {
+                  const total = safeData.paymentMethods.reduce((sum, m) => sum + m.value, 0) || 1;
                   const percentage = Math.round((method.value / total) * 100);
                   return (
                     <div key={method.name}>
@@ -193,7 +215,7 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
           <CardHeader title="Top Items por Ingresos" subtitle="Productos más rentables" />
           <CardContent>
             <RankingList
-              items={data.topItemsByRevenue}
+              items={safeData.topItemsByRevenue}
               loading={loading}
               emptyMessage="Sin ventas en este período"
               valuePrefix="$"
@@ -207,7 +229,7 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
         <CardHeader title="Ingresos por Categoría" subtitle="Ventas por tipo de producto" />
         <CardContent>
           <TISBarChart
-            data={data.categoryRevenue}
+            data={safeData.categoryRevenue}
             height={240}
             loading={loading}
             layout="vertical"
@@ -223,17 +245,17 @@ export function VentasTab({ data, loading, period }: VentasTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-4 bg-red-50 rounded-xl">
               <p className="text-sm text-slate-600 mb-1">Total Descuentos</p>
-              <p className="text-2xl font-bold text-red-600">-${formatNumber(data.discountTotal)}</p>
-              <p className="text-xs text-slate-500 mt-1">{data.discountPercentage.toFixed(1)}% del total</p>
+              <p className="text-2xl font-bold text-red-600">-${formatNumber(safeData.discountTotal)}</p>
+              <p className="text-xs text-slate-500 mt-1">{safeData.discountPercentage.toFixed(1)}% del total</p>
             </div>
             <div className="p-4 bg-emerald-50 rounded-xl">
               <p className="text-sm text-slate-600 mb-1">Ingreso Neto</p>
-              <p className="text-2xl font-bold text-emerald-600">${formatNumber(data.totalRevenue - data.discountTotal)}</p>
+              <p className="text-2xl font-bold text-emerald-600">${formatNumber(safeData.totalRevenue - safeData.discountTotal)}</p>
               <p className="text-xs text-slate-500 mt-1">Después de descuentos</p>
             </div>
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-sm text-slate-600 mb-1">Descuento Promedio</p>
-              <p className="text-2xl font-bold text-blue-600">{data.discountPercentage.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-blue-600">{safeData.discountPercentage.toFixed(1)}%</p>
               <p className="text-xs text-slate-500 mt-1">Por transacción</p>
             </div>
           </div>

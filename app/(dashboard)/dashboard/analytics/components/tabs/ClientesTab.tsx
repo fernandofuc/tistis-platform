@@ -54,82 +54,104 @@ const icons = {
 interface ClientesTabProps {
   data: {
     // KPIs
-    totalLeads: number;
-    leadsChange: number;
-    hotLeads: number;
-    hotLeadsChange: number;
-    loyaltyMembers: number;
-    membersChange: number;
-    repeatCustomers: number;
-    repeatRate: number;
-    conversionRate: number;
+    totalLeads?: number;
+    leadsChange?: number;
+    hotLeads?: number;
+    hotLeadsChange?: number;
+    loyaltyMembers?: number;
+    membersChange?: number;
+    repeatCustomers?: number;
+    repeatRate?: number;
+    conversionRate?: number;
     // Chart data
-    leadsTrend: Array<{ label: string; leads: number; converted: number }>;
-    leadsByClassification: Array<{ name: string; value: number; color: string }>;
-    leadsBySource: Array<{ name: string; value: number; fill: string }>;
-    loyaltyTiers: Array<{ name: string; value: number; color: string }>;
-    topCustomers: Array<{ rank: number; name: string; value: number; subValue: string }>;
-    conversionFunnel: Array<{ name: string; value: number; percentage: number }>;
+    leadsTrend?: Array<{ label: string; leads: number; converted: number }>;
+    leadsByClassification?: Array<{ name: string; value: number; color: string }>;
+    leadsBySource?: Array<{ name: string; value: number; fill: string }>;
+    loyaltyTiers?: Array<{ name: string; value: number; color: string }>;
+    topCustomers?: Array<{ rank: number; name: string; value: number; subValue: string }>;
+    conversionFunnel?: Array<{ name: string; value: number; percentage: number }>;
   };
   loading: boolean;
   period: string;
 }
 
+// Default values for safe data access
+const DEFAULT_DATA = {
+  totalLeads: 0,
+  leadsChange: 0,
+  hotLeads: 0,
+  hotLeadsChange: 0,
+  loyaltyMembers: 0,
+  membersChange: 0,
+  repeatCustomers: 0,
+  repeatRate: 0,
+  conversionRate: 0,
+  leadsTrend: [] as Array<{ label: string; leads: number; converted: number }>,
+  leadsByClassification: [] as Array<{ name: string; value: number; color: string }>,
+  leadsBySource: [] as Array<{ name: string; value: number; fill: string }>,
+  loyaltyTiers: [] as Array<{ name: string; value: number; color: string }>,
+  topCustomers: [] as Array<{ rank: number; name: string; value: number; subValue: string }>,
+  conversionFunnel: [] as Array<{ name: string; value: number; percentage: number }>,
+};
+
 // ======================
 // COMPONENT
 // ======================
 export function ClientesTab({ data, loading, period }: ClientesTabProps) {
+  // Safe data with defaults - prevents undefined errors
+  const safeData = { ...DEFAULT_DATA, ...data };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard
           title="Nuevos Leads"
-          value={formatNumber(data.totalLeads)}
-          change={data.leadsChange}
+          value={formatNumber(safeData.totalLeads)}
+          change={safeData.leadsChange}
           changeLabel="vs período anterior"
           icon={icons.leads}
           iconBgColor="bg-blue-50"
-          trend={data.leadsChange > 0 ? 'up' : data.leadsChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.leadsChange > 0 ? 'up' : safeData.leadsChange < 0 ? 'down' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Leads Calientes"
-          value={formatNumber(data.hotLeads)}
-          change={data.hotLeadsChange}
+          value={formatNumber(safeData.hotLeads)}
+          change={safeData.hotLeadsChange}
           changeLabel="vs período anterior"
           icon={icons.hot}
           iconBgColor="bg-red-50"
-          trend={data.hotLeadsChange > 0 ? 'up' : data.hotLeadsChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.hotLeadsChange > 0 ? 'up' : safeData.hotLeadsChange < 0 ? 'down' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Miembros VIP"
-          value={formatNumber(data.loyaltyMembers)}
-          change={data.membersChange}
+          value={formatNumber(safeData.loyaltyMembers)}
+          change={safeData.membersChange}
           changeLabel="vs período anterior"
           icon={icons.loyalty}
           iconBgColor="bg-purple-50"
-          trend={data.membersChange > 0 ? 'up' : data.membersChange < 0 ? 'down' : 'neutral'}
+          trend={safeData.membersChange > 0 ? 'up' : safeData.membersChange < 0 ? 'down' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Clientes Recurrentes"
-          value={formatNumber(data.repeatCustomers)}
-          change={data.repeatRate}
+          value={formatNumber(safeData.repeatCustomers)}
+          change={safeData.repeatRate}
           changeLabel="tasa de retención"
           icon={icons.repeat}
           iconBgColor="bg-emerald-50"
-          trend={data.repeatRate > 30 ? 'up' : 'neutral'}
+          trend={safeData.repeatRate > 30 ? 'up' : 'neutral'}
           loading={loading}
         />
         <MetricCard
           title="Conversión"
-          value={`${data.conversionRate}%`}
+          value={`${safeData.conversionRate}%`}
           changeLabel="leads a clientes"
           icon={icons.star}
           iconBgColor="bg-amber-50"
-          trend={data.conversionRate > 20 ? 'up' : 'neutral'}
+          trend={safeData.conversionRate > 20 ? 'up' : 'neutral'}
           loading={loading}
         />
       </div>
@@ -142,7 +164,7 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
         />
         <CardContent>
           <TISAreaChart
-            data={data.leadsTrend}
+            data={safeData.leadsTrend}
             areas={[
               { dataKey: 'leads', name: 'Nuevos Leads', color: CHART_COLORS.blue },
               { dataKey: 'converted', name: 'Convertidos', color: CHART_COLORS.success },
@@ -162,7 +184,7 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
             <div className="flex flex-col gap-4">
               <div className="flex justify-center">
                 <TISPieChart
-                  data={data.leadsByClassification}
+                  data={safeData.leadsByClassification}
                   height={160}
                   loading={loading}
                   innerRadius={35}
@@ -171,11 +193,11 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
               </div>
               <div className="space-y-3">
                 {[
-                  { label: 'Calientes', value: data.leadsByClassification.find(l => l.name === 'Calientes')?.value || 0, color: '#EF4444', emoji: '🔥' },
-                  { label: 'Tibios', value: data.leadsByClassification.find(l => l.name === 'Tibios')?.value || 0, color: '#F59E0B', emoji: '🌡️' },
-                  { label: 'Fríos', value: data.leadsByClassification.find(l => l.name === 'Fríos')?.value || 0, color: '#3B82F6', emoji: '❄️' },
+                  { label: 'Calientes', value: safeData.leadsByClassification.find(l => l.name === 'Calientes')?.value || 0, color: '#EF4444', emoji: '🔥' },
+                  { label: 'Tibios', value: safeData.leadsByClassification.find(l => l.name === 'Tibios')?.value || 0, color: '#F59E0B', emoji: '🌡️' },
+                  { label: 'Fríos', value: safeData.leadsByClassification.find(l => l.name === 'Fríos')?.value || 0, color: '#3B82F6', emoji: '❄️' },
                 ].map((item) => {
-                  const total = data.totalLeads || 1;
+                  const total = safeData.totalLeads || 1;
                   const percentage = Math.round((item.value / total) * 100);
                   return (
                     <div key={item.label} className="flex items-center justify-between">
@@ -200,7 +222,7 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
           <CardHeader title="Canales de Origen" subtitle="De dónde vienen los leads" />
           <CardContent>
             <TISBarChart
-              data={data.leadsBySource}
+              data={safeData.leadsBySource}
               height={220}
               loading={loading}
               layout="vertical"
@@ -216,7 +238,7 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
             <div className="flex flex-col gap-4">
               <div className="flex justify-center">
                 <TISPieChart
-                  data={data.loyaltyTiers}
+                  data={safeData.loyaltyTiers}
                   height={160}
                   loading={loading}
                   innerRadius={35}
@@ -224,8 +246,8 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
                 />
               </div>
               <div className="space-y-3">
-                {data.loyaltyTiers.map((tier) => {
-                  const total = data.loyaltyMembers || 1;
+                {safeData.loyaltyTiers.map((tier) => {
+                  const total = safeData.loyaltyMembers || 1;
                   const percentage = Math.round((tier.value / total) * 100);
                   return (
                     <div key={tier.name} className="flex items-center justify-between">
@@ -251,8 +273,8 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
         <CardHeader title="Embudo de Conversión" subtitle="Del lead al cliente recurrente" />
         <CardContent>
           <div className="space-y-4">
-            {data.conversionFunnel.map((stage, index) => {
-              const maxWidth = data.conversionFunnel[0]?.percentage || 100;
+            {safeData.conversionFunnel.map((stage, index) => {
+              const maxWidth = safeData.conversionFunnel[0]?.percentage || 100;
               const width = (stage.percentage / maxWidth) * 100;
               return (
                 <div key={stage.name} className="flex items-center gap-4">
@@ -293,13 +315,13 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <RankingList
-              items={data.topCustomers.slice(0, 5)}
+              items={safeData.topCustomers.slice(0, 5)}
               loading={loading}
               emptyMessage="Sin datos de clientes"
               valuePrefix="$"
             />
             <RankingList
-              items={data.topCustomers.slice(5, 10)}
+              items={safeData.topCustomers.slice(5, 10)}
               loading={loading}
               emptyMessage=""
               valuePrefix="$"
@@ -312,15 +334,15 @@ export function ClientesTab({ data, loading, period }: ClientesTabProps) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 bg-blue-50 rounded-xl">
           <p className="text-sm text-slate-600 mb-1">Leads esta semana</p>
-          <p className="text-2xl font-bold text-blue-600">{Math.round(data.totalLeads / 4)}</p>
+          <p className="text-2xl font-bold text-blue-600">{Math.round(safeData.totalLeads / 4)}</p>
         </div>
         <div className="p-4 bg-emerald-50 rounded-xl">
           <p className="text-sm text-slate-600 mb-1">Tasa de Retención</p>
-          <p className="text-2xl font-bold text-emerald-600">{data.repeatRate}%</p>
+          <p className="text-2xl font-bold text-emerald-600">{safeData.repeatRate}%</p>
         </div>
         <div className="p-4 bg-purple-50 rounded-xl">
           <p className="text-sm text-slate-600 mb-1">Puntos Canjeados</p>
-          <p className="text-2xl font-bold text-purple-600">{formatNumber(data.loyaltyMembers * 50)}</p>
+          <p className="text-2xl font-bold text-purple-600">{formatNumber(safeData.loyaltyMembers * 50)}</p>
         </div>
         <div className="p-4 bg-amber-50 rounded-xl">
           <p className="text-sm text-slate-600 mb-1">Valor Promedio Cliente</p>
