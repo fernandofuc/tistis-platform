@@ -26,6 +26,7 @@ import {
   AIInsightsTab,
 } from './components/tabs';
 import { CHART_COLORS } from './components/charts';
+import { DentalAnalytics } from './components/DentalAnalytics';
 
 // ======================
 // ICONS
@@ -660,6 +661,48 @@ export default function AnalyticsPage() {
     '90d': 'Últimos 90 días',
   };
 
+  // ============================================
+  // NON-RESTAURANT VERTICAL: Show simplified analytics
+  // ============================================
+  if (!isRestaurant) {
+    return (
+      <PageWrapper
+        title="Analítica"
+        subtitle={selectedBranch ? `${selectedBranch.name} • ${periodLabels[period]}` : periodLabels[period]}
+        actions={
+          <div className="flex items-center gap-3">
+            {/* Period Selector */}
+            <div className="flex items-center bg-slate-100 rounded-xl p-1">
+              {(['7d', '30d', '90d'] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={cn(
+                    'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                    period === p
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  )}
+                >
+                  {p === '7d' ? '7D' : p === '30d' ? '30D' : '90D'}
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+      >
+        <DentalAnalytics
+          tenantId={tenant?.id || ''}
+          selectedBranchId={selectedBranchId}
+          period={period}
+        />
+      </PageWrapper>
+    );
+  }
+
+  // ============================================
+  // RESTAURANT VERTICAL: Show full 6-tab analytics
+  // ============================================
   return (
     <PageWrapper
       title="Analítica"

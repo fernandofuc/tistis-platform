@@ -58,8 +58,8 @@ Card.displayName = 'Card';
 // ======================
 // CARD HEADER (Premium Typography)
 // ======================
-export interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
-  title?: string;
+export interface CardHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
+  title?: React.ReactNode;
   subtitle?: string;
   action?: React.ReactNode;
 }

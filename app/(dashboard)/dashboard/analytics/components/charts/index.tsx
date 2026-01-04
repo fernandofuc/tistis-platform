@@ -229,7 +229,7 @@ export function TISPieChart({
     <ResponsiveContainer width="100%" height={height}>
       <PieChart>
         <Pie
-          data={filteredData}
+          data={filteredData as unknown as Array<Record<string, unknown>>}
           cx="50%"
           cy="50%"
           innerRadius={innerRadius}
