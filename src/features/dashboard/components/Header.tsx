@@ -388,54 +388,65 @@ export function Header({ onMenuClick }: HeaderProps) {
 
         {/* Right: Branch Selector, Notifications, User */}
         <div className="flex items-center gap-3">
-          {/* Branch Selector */}
-          {branches.length > 1 && (
-            <div className="relative" ref={branchMenuRef}>
-              <button
-                onClick={() => setShowBranchMenu(!showBranchMenu)}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-              >
-                <span className="text-slate-400">{icons.building}</span>
-                <span className="hidden sm:inline max-w-32 truncate font-medium">
-                  {selectedBranch?.name || 'Seleccionar'}
-                </span>
-                <span className={cn('text-slate-400 transition-transform', showBranchMenu && 'rotate-180')}>
-                  {icons.chevronDown}
-                </span>
-              </button>
+          {/* Branch Selector - Show when there are branches */}
+          {branches.length >= 1 && (() => {
+            const singleBranch = branches.length === 1;
+            const displayBranch = singleBranch ? branches[0] : selectedBranch;
+            return (
+              <div className="relative" ref={branchMenuRef}>
+                <button
+                  onClick={() => !singleBranch && setShowBranchMenu(!showBranchMenu)}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 text-sm text-slate-600 rounded-xl transition-colors',
+                    singleBranch ? 'cursor-default' : 'hover:bg-slate-100 cursor-pointer'
+                  )}
+                >
+                  <span className="text-slate-400">{icons.building}</span>
+                  <span className="hidden sm:inline max-w-32 truncate font-medium">
+                    {displayBranch?.name || 'Sucursal'}
+                  </span>
+                  {/* Only show chevron if multiple branches */}
+                  {!singleBranch && (
+                    <span className={cn('text-slate-400 transition-transform', showBranchMenu && 'rotate-180')}>
+                      {icons.chevronDown}
+                    </span>
+                  )}
+                </button>
 
-              {showBranchMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 py-2 overflow-hidden">
-                  <div className="px-3 py-2 border-b border-slate-100">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Sucursales</p>
-                  </div>
-                  {branches.map((branch) => (
-                    <button
-                      key={branch.id}
-                      onClick={() => {
-                        setSelectedBranchId(branch.id);
-                        setShowBranchMenu(false);
-                      }}
-                      className={cn(
-                        'w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 transition-colors',
-                        selectedBranch?.id === branch.id
-                          ? 'bg-slate-100'
-                          : 'text-slate-700'
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{branch.name}</span>
-                        {branch.is_headquarters && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-slate-900 text-white rounded-md">HQ</span>
+                {/* Dropdown only shows for multiple branches */}
+                {showBranchMenu && !singleBranch && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 py-2 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-slate-100">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Sucursales</p>
+                    </div>
+                    {branches.map((branch) => (
+                      <button
+                        key={branch.id}
+                        onClick={() => {
+                          setSelectedBranchId(branch.id);
+                          setShowBranchMenu(false);
+                        }}
+                        className={cn(
+                          'w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 transition-colors',
+                          selectedBranch?.id === branch.id
+                            ? 'bg-slate-100'
+                            : 'text-slate-700'
                         )}
-                      </div>
-                      <span className="text-xs text-slate-500">{branch.city}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{branch.name}</span>
+                          {branch.is_headquarters && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-slate-900 text-white rounded-md">HQ</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-slate-500">{branch.city}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Notifications */}
           <div className="relative" ref={notificationsRef}>

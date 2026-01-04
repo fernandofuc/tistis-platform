@@ -30,18 +30,32 @@ function BranchSyncProvider({ children }: { children: React.ReactNode }) {
   // Sync branches from auth context to global store
   // This runs every time authBranches changes (e.g., after creating a branch)
   useEffect(() => {
+    // Debug logging to trace branch sync issues
+    console.log('🔄 [BranchSync] authBranches:', authBranches?.length || 0, authBranches?.map(b => b.name));
+
     if (authBranches && authBranches.length > 0) {
+      console.log('🟢 [BranchSync] Syncing', authBranches.length, 'branches to Zustand store');
       setBranches(authBranches);
 
-      // Validate that selected branch still exists
-      // If not, reset to headquarters or first branch
-      if (selectedBranchId) {
+      // Auto-select first branch or HQ if none selected
+      if (!selectedBranchId) {
+        const hq = authBranches.find(b => b.is_headquarters);
+        const defaultBranch = hq || authBranches[0];
+        if (defaultBranch) {
+          console.log('🟢 [BranchSync] Auto-selecting branch:', defaultBranch.name);
+          setSelectedBranchId(defaultBranch.id);
+        }
+      } else {
+        // Validate that selected branch still exists
         const branchExists = authBranches.some(b => b.id === selectedBranchId);
         if (!branchExists) {
           const hq = authBranches.find(b => b.is_headquarters);
+          console.log('🟡 [BranchSync] Selected branch not found, resetting to:', hq?.name || authBranches[0]?.name);
           setSelectedBranchId(hq?.id || authBranches[0]?.id || null);
         }
       }
+    } else {
+      console.log('🟡 [BranchSync] No branches from auth context');
     }
   }, [authBranches, setBranches, selectedBranchId, setSelectedBranchId]);
 

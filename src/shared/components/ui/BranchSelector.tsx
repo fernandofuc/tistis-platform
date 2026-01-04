@@ -66,29 +66,34 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Don't render UI if no branches or only one branch
-  if (!branches || branches.length <= 1) {
+  // Don't render if no branches
+  if (!branches || branches.length < 1) {
     return null;
   }
+
+  // With only 1 branch, just show the branch info (no dropdown)
+  const singleBranch = branches.length === 1;
+  const currentBranch = singleBranch ? branches[0] : selectedBranch;
 
   const handleSelect = (branchId: string | null) => {
     setSelectedBranchId(branchId);
     setIsOpen(false);
   };
 
-  // Get display text
-  const displayText = selectedBranch?.name || 'Todas las sucursales';
-  const displayCity = selectedBranch?.city || '';
+  // Get display text - use current branch or "Todas las sucursales" for multi-branch
+  const displayText = currentBranch?.name || (singleBranch ? 'Sucursal' : 'Todas las sucursales');
+  const displayCity = currentBranch?.city || '';
 
   return (
     <div ref={dropdownRef} className={cn('relative', className)}>
-      {/* Trigger Button */}
+      {/* Trigger Button - clickable only if multiple branches */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !singleBranch && setIsOpen(!isOpen)}
         className={cn(
           'flex items-center gap-2 w-full px-3 py-2 rounded-lg transition-colors',
-          'bg-gray-50 hover:bg-gray-100 border border-gray-200',
+          'bg-gray-50 border border-gray-200',
           'text-left',
+          singleBranch ? 'cursor-default' : 'hover:bg-gray-100 cursor-pointer',
           collapsed && 'justify-center px-2'
         )}
         title={collapsed ? displayText : undefined}
@@ -105,18 +110,21 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
                 <p className="text-xs text-gray-500 truncate">{displayCity}</p>
               )}
             </div>
-            <span className={cn(
-              'text-gray-400 transition-transform',
-              isOpen && 'rotate-180'
-            )}>
-              {icons.chevronDown}
-            </span>
+            {/* Only show chevron if multiple branches */}
+            {!singleBranch && (
+              <span className={cn(
+                'text-gray-400 transition-transform',
+                isOpen && 'rotate-180'
+              )}>
+                {icons.chevronDown}
+              </span>
+            )}
           </>
         )}
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
+      {/* Dropdown Menu - only show if multiple branches */}
+      {isOpen && !singleBranch && (
         <div className={cn(
           'absolute z-50 mt-1 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-1',
           collapsed ? 'left-full ml-2 top-0' : 'left-0 right-0'
