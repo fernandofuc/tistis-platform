@@ -135,6 +135,7 @@ export default function FacturacionAIConfigPage() {
     }
 
     fetchConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.access_token]);
 
   // Handle save
@@ -460,7 +461,7 @@ export default function FacturacionAIConfigPage() {
               <div>
                 <p className="font-medium text-slate-900">Abre WhatsApp y envía un mensaje</p>
                 <p className="text-sm text-slate-600">
-                  Escribe "quiero factura" o envía una foto de un ticket
+                  Escribe &quot;quiero factura&quot; o envía una foto de un ticket
                 </p>
               </div>
             </div>

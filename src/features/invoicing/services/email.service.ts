@@ -36,8 +36,7 @@ interface EmailTemplateData {
 // ======================
 
 export class InvoiceEmailService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private supabase: SupabaseClient<any>;
+  private supabase: SupabaseClient<unknown>;
   private resendApiKey: string;
   private fromEmail: string;
 
