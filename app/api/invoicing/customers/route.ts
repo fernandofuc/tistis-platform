@@ -3,6 +3,8 @@
 // CRUD operations for customer fiscal data
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getInvoiceService, validateRFC } from '@/src/features/invoicing';

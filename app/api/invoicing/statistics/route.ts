@@ -3,6 +3,8 @@
 // Get invoice statistics and analytics
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getInvoiceService } from '@/src/features/invoicing';

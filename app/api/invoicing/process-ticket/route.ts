@@ -3,6 +3,8 @@
 // Extracts data from ticket images using Gemini 2.0 Flash
 // =====================================================
 
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getGeminiExtractionService, getInvoiceService } from '@/src/features/invoicing';
