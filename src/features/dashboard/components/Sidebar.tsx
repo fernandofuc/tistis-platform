@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useMemo, useTransition, useCallback } from 'react';
+import { useMemo, useTransition, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -319,24 +319,29 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
     });
   }, [router]);
 
+  // Prefetch route on hover for instant navigation
+  const handlePrefetch = useCallback((href: string) => {
+    router.prefetch(href);
+  }, [router]);
+
   // Filter nav items based on feature flags and vertical
+  // IMPORTANT: Show all items immediately to avoid layout shift/flash
   const visibleNavItems = useMemo(() => {
     const currentVertical = tenant?.vertical || 'dental';
 
-    // While loading, show minimal items
-    if (flagsLoading || tenantLoading) {
-      return navItemsConfig.filter(item => item.alwaysShow && !item.verticals && !item.excludeVerticals);
-    }
+    // OPTIMIZATION: Don't hide items while loading - show based on vertical immediately
+    // This prevents the "flash" where items appear/disappear
+    // Feature-flagged items will show/hide after flags load (acceptable UX)
 
     return navItemsConfig.filter(item => {
-      // Check vertical restrictions first
+      // Check vertical restrictions first - this is known immediately
       if (item.verticals && item.verticals.length > 0) {
         if (!item.verticals.includes(currentVertical)) {
           return false;
         }
       }
 
-      // Check excluded verticals
+      // Check excluded verticals - this is known immediately
       if (item.excludeVerticals && item.excludeVerticals.length > 0) {
         if (item.excludeVerticals.includes(currentVertical)) {
           return false;
@@ -345,6 +350,10 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
 
       // Always show items marked as alwaysShow (after vertical check)
       if (item.alwaysShow) return true;
+
+      // While flags loading, show feature-flagged items (assume enabled)
+      // This prevents flash - items may hide after load if actually disabled
+      if (flagsLoading) return true;
 
       // Check feature flag
       if (item.featureFlag) {
@@ -355,7 +364,18 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flagsLoading, tenantLoading, tenant?.vertical, isEnabled]);
+  }, [flagsLoading, tenant?.vertical, isEnabled]);
+
+  // Prefetch all visible routes on mount for instant navigation
+  useEffect(() => {
+    // Prefetch all nav routes after a short delay to not block initial render
+    const timer = setTimeout(() => {
+      visibleNavItems.forEach(item => {
+        router.prefetch(item.href);
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [visibleNavItems, router]);
 
   // Get display name with vertical-specific terminology
   const getDisplayName = (item: NavItemWithFlag): string => {
@@ -463,7 +483,9 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                     <Link
                       key={item.href}
                       href={item.href}
+                      prefetch={true}
                       onClick={(e) => handleNavigation(item.href, e)}
+                      onMouseEnter={() => handlePrefetch(item.href)}
                       className={cn(
                         'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
                         isActive

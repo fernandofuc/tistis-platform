@@ -4,9 +4,9 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/shared/utils';
 
 // ======================
@@ -71,6 +71,22 @@ const navItems = [
 // ======================
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Prefetch route on touch for faster navigation
+  const handlePrefetch = useCallback((href: string) => {
+    router.prefetch(href);
+  }, [router]);
+
+  // Prefetch all routes on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      navItems.forEach(item => {
+        router.prefetch(item.href);
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [router]);
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bottom-nav px-2 pb-safe">
@@ -82,6 +98,8 @@ export function MobileBottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
+              onTouchStart={() => handlePrefetch(item.href)}
               className={cn(
                 'bottom-nav-item',
                 isActive && 'active'
@@ -118,6 +136,12 @@ interface MobileDrawerProps {
 
 export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Prefetch route on touch
+  const handlePrefetch = useCallback((href: string) => {
+    router.prefetch(href);
+  }, [router]);
 
   // Close on navigation
   useEffect(() => {
@@ -179,6 +203,8 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
+                onTouchStart={() => handlePrefetch(item.href)}
                 className={cn(
                   'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
                   isActive
