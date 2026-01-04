@@ -1,6 +1,6 @@
 // =====================================================
 // TIS TIS PLATFORM - AI Configuration Component
-// Configure AI assistant behavior and clinic information
+// Configure AI assistant behavior and business information
 // =====================================================
 
 'use client';
@@ -220,7 +220,7 @@ const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday
 
 export function AIConfiguration() {
   const { tenant, isAdmin } = useAuthContext();
-  const { vertical } = useVerticalTerminology();
+  const { vertical, terminology } = useVerticalTerminology();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring' | 'catalog'>('general');
@@ -242,6 +242,11 @@ export function AIConfiguration() {
       scoringCold: 'Limpieza, Consulta, Diagn\u00f3stico, Radiograf\u00edas',
       scoringHotExample: 'implantes, ortodoncia u otro servicio HOT',
       emergencyExample: '"emergencia", "dolor fuerte", "urgente"',
+      specialtyLabel: 'Especialidad',
+      specialtyPlaceholder: 'Ej: Ortodoncia',
+      licenseLabel: 'C\u00e9dula Profesional',
+      licensePlaceholder: 'Ej: 12345678',
+      showLicense: true,
       staffRoles: [
         { value: 'dentist', label: 'Dentista / Doctor' },
         { value: 'specialist', label: 'Especialista' },
@@ -266,6 +271,11 @@ export function AIConfiguration() {
       scoringCold: 'Consultas de Men\u00fa, Horarios, Disponibilidad',
       scoringHotExample: 'evento privado, catering u otro servicio premium',
       emergencyExample: '"urgente", "queja", "problema con pedido"',
+      specialtyLabel: '\u00c1rea de Experiencia',
+      specialtyPlaceholder: 'Ej: Cocina Italiana, Sommelier',
+      licenseLabel: '',
+      licensePlaceholder: '',
+      showLicense: false,
       staffRoles: [
         { value: 'manager', label: 'Gerente General' },
         { value: 'chef', label: 'Chef / Cocinero' },
@@ -290,6 +300,11 @@ export function AIConfiguration() {
       scoringCold: 'Consulta General, Diagn\u00f3stico B\u00e1sico',
       scoringHotExample: 'cirug\u00eda u otro procedimiento de alto valor',
       emergencyExample: '"emergencia", "dolor fuerte", "urgente"',
+      specialtyLabel: 'Especialidad M\u00e9dica',
+      specialtyPlaceholder: 'Ej: Cardiolog\u00eda, Pediatr\u00eda',
+      licenseLabel: 'C\u00e9dula Profesional',
+      licensePlaceholder: 'Ej: 12345678',
+      showLicense: true,
       staffRoles: [
         { value: 'doctor', label: 'M\u00e9dico General' },
         { value: 'specialist', label: 'Especialista' },
@@ -301,19 +316,24 @@ export function AIConfiguration() {
     },
     gym: {
       clinicSection: 'Gimnasio y Sucursales',
-      clinicInfo: 'Informaci\u00f3n del Gimnasio',
+      clinicInfo: 'Información del Gimnasio',
       staffTitle: 'Entrenadores',
       staffSingular: 'Entrenador',
       staffAdd: 'Agregar Entrenador',
       staffEmpty: 'No hay entrenadores registrados',
       staffEmptyHint: 'Agrega entrenadores para asignarlos a sucursales',
       staffPrefix: 'Coach',
-      catalogSection: 'Cat\u00e1logo de Membres\u00edas',
-      scoringHot: 'Membres\u00eda Anual, Entrenamiento Personal',
-      scoringWarm: 'Membres\u00eda Mensual, Clases Grupales',
+      catalogSection: 'Catálogo de Membresías',
+      scoringHot: 'Membresía Anual, Entrenamiento Personal',
+      scoringWarm: 'Membresía Mensual, Clases Grupales',
       scoringCold: 'Consultas, Pase de Visitante',
-      scoringHotExample: 'membres\u00eda anual o entrenamiento personal',
-      emergencyExample: '"cancelar membres\u00eda", "queja", "problema"',
+      scoringHotExample: 'membresía anual o entrenamiento personal',
+      emergencyExample: '"cancelar membresía", "queja", "problema"',
+      specialtyLabel: 'Especialidad',
+      specialtyPlaceholder: 'Ej: Crossfit, Yoga, Funcional',
+      licenseLabel: 'Certificación',
+      licensePlaceholder: 'Ej: NSCA, ACE, ACSM',
+      showLicense: true,
       staffRoles: [
         { value: 'trainer', label: 'Entrenador Personal' },
         { value: 'instructor', label: 'Instructor de Clases' },
@@ -324,20 +344,25 @@ export function AIConfiguration() {
       ],
     },
     beauty: {
-      clinicSection: 'Sal\u00f3n y Sucursales',
-      clinicInfo: 'Informaci\u00f3n del Sal\u00f3n',
+      clinicSection: 'Salón y Sucursales',
+      clinicInfo: 'Información del Salón',
       staffTitle: 'Estilistas / Especialistas',
       staffSingular: 'Estilista',
       staffAdd: 'Agregar Estilista',
       staffEmpty: 'No hay estilistas registrados',
       staffEmptyHint: 'Agrega estilistas para asignarlos a sucursales',
       staffPrefix: '',
-      catalogSection: 'Cat\u00e1logo de Servicios',
+      catalogSection: 'Catálogo de Servicios',
       scoringHot: 'Tratamientos Premium, Paquetes Completos',
-      scoringWarm: 'Coloraci\u00f3n, Tratamientos Capilares',
-      scoringCold: 'Corte B\u00e1sico, Peinado Simple',
+      scoringWarm: 'Coloración, Tratamientos Capilares',
+      scoringCold: 'Corte Básico, Peinado Simple',
       scoringHotExample: 'tratamiento premium o paquete completo',
-      emergencyExample: '"problema con servicio", "queja", "devoluci\u00f3n"',
+      emergencyExample: '"problema con servicio", "queja", "devolución"',
+      specialtyLabel: 'Especialidad',
+      specialtyPlaceholder: 'Ej: Colorimetría, Extensiones, Uñas',
+      licenseLabel: 'Certificación',
+      licensePlaceholder: 'Ej: Wella, L\'Oréal Professionnel',
+      showLicense: false,
       staffRoles: [
         { value: 'stylist', label: 'Estilista' },
         { value: 'colorist', label: 'Colorista' },
@@ -349,19 +374,24 @@ export function AIConfiguration() {
     },
     veterinary: {
       clinicSection: 'Veterinaria y Sucursales',
-      clinicInfo: 'Informaci\u00f3n de la Veterinaria',
+      clinicInfo: 'Información de la Veterinaria',
       staffTitle: 'Veterinarios',
       staffSingular: 'Veterinario',
       staffAdd: 'Agregar Veterinario',
       staffEmpty: 'No hay veterinarios registrados',
       staffEmptyHint: 'Agrega veterinarios para asignarlos a sucursales',
       staffPrefix: 'Dr.',
-      catalogSection: 'Cat\u00e1logo de Servicios',
-      scoringHot: 'Cirug\u00edas, Hospitalizaci\u00f3n, Especialidades',
-      scoringWarm: 'Vacunaci\u00f3n, Desparasitaci\u00f3n, Consultas',
-      scoringCold: 'Consulta General, Ba\u00f1o, Est\u00e9tica',
-      scoringHotExample: 'cirug\u00eda o procedimiento especializado',
+      catalogSection: 'Catálogo de Servicios',
+      scoringHot: 'Cirugías, Hospitalización, Especialidades',
+      scoringWarm: 'Vacunación, Desparasitación, Consultas',
+      scoringCold: 'Consulta General, Baño, Estética',
+      scoringHotExample: 'cirugía o procedimiento especializado',
       emergencyExample: '"emergencia", "accidente", "urgente"',
+      specialtyLabel: 'Especialidad',
+      specialtyPlaceholder: 'Ej: Pequeñas especies, Cirugía, Dermatología',
+      licenseLabel: 'Cédula Profesional',
+      licensePlaceholder: 'Ej: 12345678',
+      showLicense: true,
       staffRoles: [
         { value: 'veterinarian', label: 'Veterinario' },
         { value: 'vet_tech', label: 'T\u00e9cnico Veterinario' },
@@ -392,7 +422,7 @@ export function AIConfiguration() {
     default_language: 'es',
   });
 
-  // Clinic Data State
+  // Business Data State
   const [branches, setBranches] = useState<Branch[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffBranches, setStaffBranches] = useState<StaffBranch[]>([]);
@@ -463,12 +493,12 @@ export function AIConfiguration() {
       }
 
       // Load staff - filter out empty records at DB level
+      // Note: We load ALL active staff regardless of role to support all verticals
       const { data: staffData } = await supabase
         .from('staff')
         .select('*')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
-        .in('role', ['dentist', 'specialist', 'owner', 'manager'])
         .or('first_name.neq.,last_name.neq.,display_name.neq.');
 
       if (staffData) {
@@ -759,7 +789,7 @@ export function AIConfiguration() {
     }
   };
 
-  // Handle delete staff/doctor
+  // Handle delete staff member
   const handleDeleteStaff = async () => {
     if (!deletingStaff) return;
 
@@ -1066,7 +1096,7 @@ export function AIConfiguration() {
             </div>
           )}
 
-          {/* Clinic & Branches Settings */}
+          {/* Business & Branches Settings */}
           {activeSection === 'clinic' && (
             <div className="p-6 space-y-6">
               {/* Info Banner */}
@@ -1366,7 +1396,7 @@ export function AIConfiguration() {
                 )}
               </div>
 
-              {/* Doctors Summary */}
+              {/* Staff Summary */}
               <div className="pt-6 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-medium text-gray-900">{terms.staffTitle} ({staff.length})</h4>
@@ -1491,8 +1521,8 @@ export function AIConfiguration() {
                     <h4 className="font-medium text-purple-900 mb-1">¿Cómo funciona?</h4>
                     <p className="text-sm text-purple-700">
                       Cuando un lead muestra interés en un servicio específico, se clasifica automáticamente según
-                      la prioridad que hayas asignado a ese servicio. Los servicios de alto valor (implantes, ortodoncia)
-                      generan leads <strong>HOT</strong>, mientras que servicios básicos (limpieza) generan leads <strong>COLD</strong>.
+                      la prioridad que hayas asignado a ese servicio. Los servicios de alto valor ({terms.scoringHot.split(', ').slice(0, 2).join(', ')})
+                      generan leads <strong>HOT</strong>, mientras que servicios básicos ({terms.scoringCold.split(', ')[0]}) generan leads <strong>COLD</strong>.
                     </p>
                   </div>
                 </div>
@@ -2042,7 +2072,7 @@ export function AIConfiguration() {
 
               <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <p className="text-sm text-amber-800">
-                  <strong>Nota:</strong> Los leads, citas y conversaciones de esta sucursal
+                  <strong>Nota:</strong> Los leads, {terminology.appointments.toLowerCase()} y conversaciones de esta sucursal
                   se moverán automáticamente a la Sucursal Principal.
                 </p>
               </div>
@@ -2069,7 +2099,7 @@ export function AIConfiguration() {
         </div>
       )}
 
-      {/* Delete Staff/Doctor Confirmation Modal */}
+      {/* Delete Staff Confirmation Modal */}
       {deletingStaff && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
@@ -2367,13 +2397,13 @@ function BranchModal({ branch, onClose, onSave, saving }: BranchModalProps) {
               <div className="grid grid-cols-2 gap-4">
                 <Input
                   label="Nombre de la Sucursal *"
-                  placeholder="Ej: ESVA Nogales"
+                  placeholder="Ej: Sucursal Centro"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
                 <Input
                   label="Slug (URL)"
-                  placeholder="esva-nogales"
+                  placeholder="sucursal-centro"
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
                 />
@@ -2560,13 +2590,13 @@ function BranchModal({ branch, onClose, onSave, saving }: BranchModalProps) {
                 </ol>
               </div>
 
-              {/* Coordinates for ESVA clinics reference */}
+              {/* Coordinates reference examples */}
               <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 mb-2">Coordenadas de referencia (ESVA Clinic):</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">Coordenadas de referencia (ciudades ejemplo):</p>
                 <div className="space-y-2 text-xs text-gray-600">
-                  <p>Nogales, Sonora: <code className="bg-gray-200 px-1 rounded">31.3159, -110.9559</code></p>
-                  <p>Hermosillo, Sonora: <code className="bg-gray-200 px-1 rounded">29.0729, -110.9559</code></p>
-                  <p>Tijuana, Baja California: <code className="bg-gray-200 px-1 rounded">32.5149, -117.0382</code></p>
+                  <p>CDMX (Centro): <code className="bg-gray-200 px-1 rounded">19.4326, -99.1332</code></p>
+                  <p>Guadalajara: <code className="bg-gray-200 px-1 rounded">20.6597, -103.3496</code></p>
+                  <p>Monterrey: <code className="bg-gray-200 px-1 rounded">25.6866, -100.3161</code></p>
                 </div>
               </div>
             </div>
@@ -2607,6 +2637,11 @@ interface StaffModalProps {
     staffAdd: string;
     staffPrefix: string;
     staffRoles: { value: string; label: string }[];
+    specialtyLabel: string;
+    specialtyPlaceholder: string;
+    licenseLabel: string;
+    licensePlaceholder: string;
+    showLicense: boolean;
   };
 }
 
@@ -2795,20 +2830,22 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           />
 
-          {/* Specialty & License */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Specialty & License (dynamic per vertical) */}
+          <div className={terms.showLicense ? "grid grid-cols-2 gap-4" : ""}>
             <Input
-              label="Especialidad"
-              placeholder="Ej: Ortodoncia"
+              label={terms.specialtyLabel}
+              placeholder={terms.specialtyPlaceholder}
               value={formData.specialty}
               onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
             />
-            <Input
-              label="Cédula Profesional"
-              placeholder="Ej: 12345678"
-              value={formData.license_number}
-              onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
-            />
+            {terms.showLicense && (
+              <Input
+                label={terms.licenseLabel}
+                placeholder={terms.licensePlaceholder}
+                value={formData.license_number}
+                onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
+              />
+            )}
           </div>
 
           {/* Role Selection */}
