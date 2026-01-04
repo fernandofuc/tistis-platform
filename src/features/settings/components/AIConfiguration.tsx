@@ -181,26 +181,26 @@ const responseStyles = [
     value: 'professional',
     label: 'Profesional',
     desc: 'Formal y directo',
-    example: '"La limpieza dental tiene un costo de $800. El procedimiento dura 45 minutos. ¿Desea agendar una cita?"'
+    example: '"El servicio tiene un costo de $800. El tiempo estimado es de 45 minutos. ¿Desea agendar?"'
   },
   {
     value: 'professional_friendly',
     label: 'Profesional Cálido',
     desc: 'Formal pero amigable',
-    example: '"Con gusto le informo que la limpieza dental tiene un costo de $800 MXN e incluye revisión completa. ¿Le gustaría agendar una cita?"',
+    example: '"Con gusto le informo que el servicio tiene un costo de $800 MXN e incluye atención completa. ¿Le gustaría agendar?"',
     recommended: true
   },
   {
     value: 'casual',
     label: 'Casual',
     desc: 'Informal y cercano',
-    example: '"Claro que sí, la limpieza te sale en $800 y tardamos como 45 mins. ¿Quieres que te aparte un espacio?"'
+    example: '"Claro que sí, el servicio te sale en $800 y tardamos como 45 mins. ¿Quieres que te aparte un espacio?"'
   },
   {
     value: 'formal',
     label: 'Muy Formal',
     desc: 'Extremadamente profesional',
-    example: '"Estimado/a paciente, le informo que el procedimiento de profilaxis dental tiene un costo de $800.00 MXN. Quedamos a sus órdenes."'
+    example: '"Estimado/a cliente, le informo que el servicio solicitado tiene un costo de $800.00 MXN. Quedamos a sus órdenes."'
   },
 ];
 
@@ -1409,7 +1409,7 @@ export function AIConfiguration() {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-900">
-                                  {terms.staffPrefix} {member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre'}
+                                  {terms.staffPrefix}{terms.staffPrefix ? ' ' : ''}{member.display_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre'}
                                 </p>
                                 {member.specialty && (
                                   <p className="text-sm text-gray-500">{member.specialty}</p>
@@ -2081,7 +2081,7 @@ export function AIConfiguration() {
                 ¿Eliminar {terms.staffSingular.toLowerCase()}?
               </h2>
               <p className="text-gray-500 text-center mt-2">
-                Esta acción eliminará a <strong>{terms.staffPrefix} {deletingStaff.display_name || `${deletingStaff.first_name || ''} ${deletingStaff.last_name || ''}`.trim()}</strong> del sistema.
+                Esta acción eliminará a <strong>{terms.staffPrefix}{terms.staffPrefix ? ' ' : ''}{deletingStaff.display_name || `${deletingStaff.first_name || ''} ${deletingStaff.last_name || ''}`.trim()}</strong> del sistema.
               </p>
 
               <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -2613,13 +2613,16 @@ interface StaffModalProps {
 function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave, terms }: StaffModalProps) {
   const isEditing = !!staff;
 
+  // Default role is the first role in the vertical's staffRoles list
+  const defaultRole = terms.staffRoles[0]?.value || 'staff';
+
   const [formData, setFormData] = useState({
     first_name: staff?.first_name || '',
     last_name: staff?.last_name || '',
     email: staff?.email || '',
     specialty: staff?.specialty || '',
     license_number: staff?.license_number || '',
-    role: staff?.role || 'dentist',
+    role: staff?.role || defaultRole,
     is_active: staff?.is_active ?? true,
   });
 
@@ -2699,7 +2702,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
   const handleDelete = async () => {
     if (!staff?.id) return;
 
-    if (!confirm('¿Estás seguro de eliminar este doctor? Esta acción no se puede deshacer.')) {
+    if (!confirm(`¿Estás seguro de eliminar este ${terms.staffSingular.toLowerCase()}? Esta acción no se puede deshacer.`)) {
       return;
     }
 
@@ -2717,19 +2720,19 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
       if (!response.ok) {
         const errorMessage = result.error || 'Error desconocido';
         if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
-          alert('Error de permisos: No tienes autorización para eliminar este doctor.');
+          alert(`Error de permisos: No tienes autorización para eliminar este ${terms.staffSingular.toLowerCase()}.`);
         } else {
           alert(`Error al eliminar: ${errorMessage}`);
         }
         return;
       }
 
-      console.log('✅ Doctor eliminado correctamente');
+      console.log('✅ Personal eliminado correctamente');
       onSave();
       onClose();
     } catch (error: unknown) {
       console.error('Error deleting staff:', error);
-      alert('Error al eliminar el doctor');
+      alert(`Error al eliminar el ${terms.staffSingular.toLowerCase()}`);
     } finally {
       setSaving(false);
     }
@@ -2787,7 +2790,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
           <Input
             label="Email *"
             type="email"
-            placeholder="Ej: doctor@clinica.com"
+            placeholder="Ej: correo@ejemplo.com"
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           />
@@ -2828,7 +2831,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
               Sucursales Asignadas
             </label>
             <p className="text-xs text-gray-500 mb-3">
-              Selecciona las sucursales donde trabaja este doctor
+              Selecciona las sucursales donde trabaja este {terms.staffSingular.toLowerCase()}
             </p>
 
             {branches.length === 0 ? (
