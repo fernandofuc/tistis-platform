@@ -462,7 +462,7 @@ export function SuppliersTab({
       {sortedSuppliers.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl">
           <Search className="w-10 h-10 mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-500">No se encontraron proveedores con "{search}"</p>
+          <p className="text-slate-500">No se encontraron proveedores con &ldquo;{search}&rdquo;</p>
           <button
             onClick={() => setSearch('')}
             className="mt-2 text-sm text-purple-600 hover:underline"
