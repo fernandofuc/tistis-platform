@@ -6,11 +6,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, CardHeader, CardContent, Badge, Modal } from '@/src/shared/components/ui';
+import { Card, CardHeader, CardContent, Badge, Modal, BranchSelector } from '@/src/shared/components/ui';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
 import { useVerticalTerminology, type ExtendedTerminology } from '@/src/hooks/useVerticalTerminology';
+import { useBranch } from '@/src/shared/stores';
 import type {
   IntegrationConnection,
   IntegrationType,
@@ -1093,6 +1094,7 @@ function DeleteConfirmationModal({ isOpen, onClose, connection, connector, onCon
 interface IntegrationCardProps {
   connection: IntegrationConnection;
   connector: ConnectorDefinition | undefined;
+  branchName?: string;  // Name of the branch this integration belongs to
   onConfigure: () => void;
   onSync: () => void;
   onPause: () => void;
@@ -1100,7 +1102,7 @@ interface IntegrationCardProps {
   isLoading?: boolean;
 }
 
-function IntegrationCard({ connection, connector, onConfigure, onSync, onPause, onDelete, isLoading }: IntegrationCardProps) {
+function IntegrationCard({ connection, connector, branchName, onConfigure, onSync, onPause, onDelete, isLoading }: IntegrationCardProps) {
   const isConnected = connection.status === 'connected' || connection.status === 'syncing';
   const isPaused = connection.status === 'paused' || connection.status === 'disconnected';
   const isConfiguring = connection.status === 'configuring' || connection.status === 'pending';
@@ -1164,8 +1166,18 @@ function IntegrationCard({ connection, connector, onConfigure, onSync, onPause, 
               </span>
               <StatusBadge status={connection.status} />
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {connection.external_account_name || connector?.description}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
+              <span>{connection.external_account_name || connector?.description}</span>
+              {/* Branch badge - show which branch this integration belongs to */}
+              {branchName && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {branchName}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -1400,6 +1412,7 @@ function AddConnectorCard({ connector, onClick, disabled }: AddConnectorCardProp
 export function IntegrationHub() {
   const { staff } = useAuthContext();
   const { terminology } = useVerticalTerminology();
+  const { selectedBranchId, selectedBranch, branches } = useBranch();
   const [connections, setConnections] = useState<IntegrationConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1436,7 +1449,7 @@ export function IntegrationHub() {
     return headers;
   }, []);
 
-  // Load connections
+  // Load connections - filtered by selected branch
   useEffect(() => {
     let isMounted = true;
 
@@ -1448,7 +1461,12 @@ export function IntegrationHub() {
 
       try {
         const headers = await getAuthHeaders();
-        const response = await fetch('/api/integrations', { headers });
+        // Build URL with branch_id filter if a specific branch is selected
+        let url = '/api/integrations';
+        if (selectedBranchId) {
+          url += `?branch_id=${selectedBranchId}`;
+        }
+        const response = await fetch(url, { headers });
         const result = await response.json();
 
         if (!isMounted) return;
@@ -1475,12 +1493,19 @@ export function IntegrationHub() {
     return () => {
       isMounted = false;
     };
-  }, [staff?.tenant_id, getAuthHeaders]);
+  }, [staff?.tenant_id, getAuthHeaders, selectedBranchId]);
 
   // Get connector definition for a connection (uses dynamic catalog)
   const getConnector = useCallback((type: IntegrationType): ConnectorDefinition | undefined => {
     return connectorCatalog.find(c => c.type === type);
   }, [connectorCatalog]);
+
+  // Get branch name by ID (for displaying on cards)
+  const getBranchName = useCallback((branchId: string | undefined | null): string | undefined => {
+    if (!branchId || !branches) return undefined;
+    const branch = branches.find(b => b.id === branchId);
+    return branch?.name;
+  }, [branches]);
 
   // Filter connectors by category (uses dynamic catalog)
   const filteredConnectors = useMemo(() => {
@@ -1557,12 +1582,13 @@ export function IntegrationHub() {
           prev.map(c => c.id === selectedConnection.id ? result.connection : c)
         );
       } else if (selectedConnector) {
-        // Create new connection
+        // Create new connection - associate with selected branch if one is selected
         const response = await fetch('/api/integrations', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             integration_type: selectedConnector.type,
+            branch_id: selectedBranchId || undefined, // Associate with current branch
             ...data,
           }),
         });
@@ -1626,13 +1652,14 @@ export function IntegrationHub() {
           prev.map(c => c.id === selectedConnection.id ? result.connection : c)
         );
       } else {
-        // Create new SoftRestaurant connection
+        // Create new SoftRestaurant connection - associate with selected branch
         const response = await fetch('/api/integrations', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             integration_type: 'softrestaurant',
-            connection_name: 'Soft Restaurant',
+            connection_name: selectedBranch ? `Soft Restaurant - ${selectedBranch.name}` : 'Soft Restaurant',
+            branch_id: selectedBranchId || undefined, // Associate with current branch
             api_key: data.api_key,
             sync_enabled: true,
             sync_products: data.sync_config.sync_menu,
@@ -1800,17 +1827,36 @@ export function IntegrationHub() {
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-tis-coral/10 rounded-lg">
-              <SyncIcon className="w-5 h-5 text-tis-coral" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-tis-coral/10 rounded-lg">
+                <SyncIcon className="w-5 h-5 text-tis-coral" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Integraciones</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Conecta TIS TIS con tus sistemas externos (CRM, POS, software dental)
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Integraciones</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Conecta TIS TIS con tus sistemas externos (CRM, POS, software dental)
-              </p>
-            </div>
+            {/* Branch Selector - positioned top-right as requested */}
+            {branches && branches.length > 1 && (
+              <div className="flex-shrink-0">
+                <BranchSelector className="min-w-[200px]" />
+              </div>
+            )}
           </div>
+          {/* Show current branch context when a specific branch is selected */}
+          {selectedBranchId && selectedBranch && (
+            <div className="mt-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg flex items-center gap-2">
+              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm text-purple-700 dark:text-purple-300">
+                Mostrando integraciones de <strong>{selectedBranch.name}</strong>
+              </span>
+            </div>
+          )}
         </CardHeader>
 
         <CardContent>
@@ -1865,6 +1911,7 @@ export function IntegrationHub() {
                     key={connection.id}
                     connection={connection}
                     connector={getConnector(connection.integration_type)}
+                    branchName={getBranchName(connection.branch_id)}
                     onConfigure={() => handleOpenConfigModal(connection)}
                     onSync={() => handleSync(connection)}
                     onPause={() => handlePause(connection)}

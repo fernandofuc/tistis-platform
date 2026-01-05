@@ -37,6 +37,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const integrationType = searchParams.get('type');
+    const branchId = searchParams.get('branch_id');
+
+    // Validate branch_id if provided
+    if (branchId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(branchId)) {
+        return NextResponse.json(
+          { error: 'Invalid branch_id format' },
+          { status: 400 }
+        );
+      }
+    }
 
     // Build query - Use SAFE_INTEGRATION_FIELDS to exclude sensitive credentials
     let query = supabase
@@ -51,6 +63,11 @@ export async function GET(request: NextRequest) {
     }
     if (integrationType) {
       query = query.eq('integration_type', integrationType);
+    }
+    // Filter by branch - if branch_id provided, show only that branch's integrations
+    // If not provided, show all integrations (tenant-wide view)
+    if (branchId) {
+      query = query.eq('branch_id', branchId);
     }
 
     const { data, error } = await query;
