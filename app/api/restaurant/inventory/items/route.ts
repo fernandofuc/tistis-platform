@@ -60,8 +60,12 @@ export async function GET(request: NextRequest) {
     const { data: items, error } = await query;
 
     if (error) {
-      console.error('[Items API] Error fetching:', error);
-      return errorResponse(`Error al obtener items: ${error.message || 'Unknown'}`, 500);
+      console.error('[Items API] Error fetching:', JSON.stringify(error, null, 2));
+      // Handle table not exists error
+      if (error.code === '42P01') {
+        return errorResponse('Sistema de inventario no configurado - ejecute las migraciones', 500);
+      }
+      return errorResponse(`Error al obtener items: ${error.message || error.code || 'Unknown'}`, 500);
     }
 
     // Filter low stock items manually

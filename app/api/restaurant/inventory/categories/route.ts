@@ -54,8 +54,12 @@ export async function GET(request: NextRequest) {
     const { data: categories, error } = await query;
 
     if (error) {
-      console.error('[Categories API] Error fetching:', error);
-      return errorResponse(`Error al obtener categorías: ${error.message || 'Unknown'}`, 500);
+      console.error('[Categories API] Error fetching:', JSON.stringify(error, null, 2));
+      // Handle table not exists error
+      if (error.code === '42P01') {
+        return errorResponse('Sistema de inventario no configurado - ejecute las migraciones', 500);
+      }
+      return errorResponse(`Error al obtener categorías: ${error.message || error.code || 'Unknown'}`, 500);
     }
 
     return successResponse(categories || []);
@@ -112,7 +116,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('[Categories API] Error creating:', error);
+      console.error('[Categories API] Error creating:', JSON.stringify(error, null, 2));
+      // Handle specific Supabase errors
+      if (error.code === '23505') {
+        return errorResponse('Ya existe una categoría con ese nombre', 400);
+      }
+      if (error.code === '42P01') {
+        return errorResponse('Tabla no encontrada - contacte soporte', 500);
+      }
       return errorResponse(`Error al crear categoría: ${error.message || error.code || 'Unknown'}`, 500);
     }
 
