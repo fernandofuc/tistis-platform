@@ -159,6 +159,7 @@ export interface InventorySupplier {
   email: string | null;
   phone: string | null;
   mobile: string | null;
+  whatsapp: string | null; // WhatsApp number for notifications (critical)
   website: string | null;
   address: string | null;
   city: string | null;
@@ -169,6 +170,8 @@ export interface InventorySupplier {
   credit_limit: number | null;
   currency: string;
   categories: string[];
+  supplied_item_ids: string[]; // IDs of inventory items this supplier provides
+  delivery_branch_ids: string[]; // IDs of branches this supplier delivers to
   rating: number | null;
   notes: string | null;
   is_active: boolean;
@@ -176,6 +179,9 @@ export interface InventorySupplier {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  // Relations (populated when needed)
+  supplied_items?: InventoryItem[];
+  delivery_branches?: { id: string; name: string }[];
 }
 
 // ======================
@@ -333,6 +339,7 @@ export interface SupplierFormData {
   email?: string;
   phone?: string;
   mobile?: string;
+  whatsapp?: string; // WhatsApp number for notifications (critical)
   website?: string;
   address?: string;
   city?: string;
@@ -343,6 +350,8 @@ export interface SupplierFormData {
   credit_limit?: number;
   currency?: string;
   categories?: string[];
+  supplied_item_ids?: string[]; // IDs of inventory items this supplier provides
+  delivery_branch_ids?: string[]; // IDs of branches this supplier delivers to
   rating?: number;
   notes?: string;
   is_active?: boolean;

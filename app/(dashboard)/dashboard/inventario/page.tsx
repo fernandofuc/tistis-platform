@@ -585,6 +585,7 @@ export default function InventarioPage() {
       {showSupplierForm && (
         <SupplierForm
           supplier={editingSupplier || undefined}
+          items={items}
           onSubmit={handleSupplierSubmit}
           onCancel={() => {
             setShowSupplierForm(false);
