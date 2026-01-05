@@ -1,142 +1,159 @@
 // =====================================================
 // TIS TIS PLATFORM - Restaurant Menu Items API - Single Item
-// GET: Get item, PUT: Update item, DELETE: Delete item
+// GET: Get item, PUT: Update item, DELETE: Delete item, PATCH: Quick actions
+// Schema: restaurant_menu_items (088_RESTAURANT_VERTICAL_SCHEMA.sql)
+// IMPORTANT: variants, sizes, add_ons are JSONB columns, NOT separate tables!
 // =====================================================
 
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// Helper to get user and verify permissions
-async function getUserAndVerify(request: NextRequest, itemId: string) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  // Verify item belongs to tenant
-  const { data: item } = await supabase
-    .from('restaurant_menu_items')
-    .select(`
-      *,
-      category:restaurant_menu_categories(id, name, parent_category_id)
-    `)
-    .eq('id', itemId)
-    .eq('tenant_id', userRole.tenant_id)
-    .is('deleted_at', null)
-    .single();
-
-  if (!item) {
-    return { error: 'Item no encontrado', status: 404 };
-  }
-
-  return { user, userRole, item, supabase };
-}
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  canWrite,
+  canDelete,
+  isValidUUID
+} from '@/src/lib/api/auth-helper';
 
 // ======================
 // GET - Get Single Item
+// Schema columns include: variants (JSONB), sizes (JSONB), add_ons (JSONB)
+// NO separate tables for these - they're embedded in the item
 // ======================
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerify(request, params.id);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      return errorResponse('ID de item inválido', 400);
     }
 
-    const { item, supabase } = result;
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
 
-    // Get variants, sizes, and add-ons
-    const [variantsResult, sizesResult, addOnsResult] = await Promise.all([
-      supabase
-        .from('restaurant_menu_item_variants')
-        .select('*')
-        .eq('menu_item_id', item.id)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true }),
-      supabase
-        .from('restaurant_menu_item_sizes')
-        .select('*')
-        .eq('menu_item_id', item.id)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true }),
-      supabase
-        .from('restaurant_menu_item_add_ons')
-        .select('*')
-        .eq('menu_item_id', item.id)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true }),
-    ]);
+    const { userRole, supabase } = auth;
+    const tenantId = userRole.tenant_id;
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...item,
-        variants: variantsResult.data || [],
-        sizes: sizesResult.data || [],
-        add_ons: addOnsResult.data || [],
-      },
-    });
+    // Get item with schema-correct columns
+    // Note: category.parent_id NOT parent_category_id
+    const { data: item, error: itemError } = await supabase
+      .from('restaurant_menu_items')
+      .select(`
+        id,
+        tenant_id,
+        category_id,
+        name,
+        slug,
+        description,
+        short_description,
+        price,
+        price_lunch,
+        price_happy_hour,
+        currency,
+        variants,
+        sizes,
+        add_ons,
+        calories,
+        protein_g,
+        carbs_g,
+        fat_g,
+        allergens,
+        is_vegetarian,
+        is_vegan,
+        is_gluten_free,
+        is_spicy,
+        spice_level,
+        is_new,
+        is_popular,
+        prep_time_minutes,
+        cooking_instructions,
+        image_url,
+        image_gallery,
+        is_available,
+        available_quantity,
+        out_of_stock_until,
+        display_order,
+        is_featured,
+        times_ordered,
+        average_rating,
+        metadata,
+        created_at,
+        updated_at,
+        category:restaurant_menu_categories(id, name, parent_id)
+      `)
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
+      .single();
 
-  } catch (error) {
+    if (itemError || !item) {
+      return errorResponse('Item no encontrado', 404);
+    }
+
+    // variants, sizes, add_ons are already JSONB columns - no extra queries needed!
+    return successResponse(item);
+
+  } catch (error: any) {
     console.error('Get menu item error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
   }
 }
 
 // ======================
 // PUT - Update Item
+// Schema columns - NO sku, NO cost, NO min_per_order, NO max_per_order
+// variants/sizes/add_ons are JSONB columns NOT separate tables
 // ======================
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerify(request, params.id);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      return errorResponse('ID de item inválido', 400);
     }
 
-    const { item, supabase, userRole } = result;
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
 
-    // Check permissions
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para editar items' }, { status: 403 });
+    const { userRole, supabase } = auth;
+
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para editar items', 403);
     }
 
     const tenantId = userRole.tenant_id;
+
+    // Verify item exists
+    const { data: existingItem, error: fetchError } = await supabase
+      .from('restaurant_menu_items')
+      .select('id, category_id')
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
+      .single();
+
+    if (fetchError || !existingItem) {
+      return errorResponse('Item no encontrado', 404);
+    }
+
     const body = await request.json();
 
     // Validate category_id if changing
-    if (body.category_id && body.category_id !== item.category_id) {
-      const { data: category } = await supabase
+    if (body.category_id && body.category_id !== existingItem.category_id) {
+      const { data: category, error: catError } = await supabase
         .from('restaurant_menu_categories')
         .select('id')
         .eq('id', body.category_id)
@@ -144,36 +161,48 @@ export async function PUT(
         .is('deleted_at', null)
         .single();
 
-      if (!category) {
-        return NextResponse.json({ success: false, error: 'Categoría no encontrada' }, { status: 404 });
+      if (catError || !category) {
+        return errorResponse('Categoría no encontrada', 404);
       }
     }
 
-    // Prepare update data
+    // Prepare update data - SCHEMA-CORRECT columns only
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
       'category_id',
       'name',
       'description',
+      'short_description',
       'price',
-      'cost',
-      'sku',
+      'price_lunch',
+      'price_happy_hour',
+      'currency',
       'image_url',
-      'preparation_time_minutes',
+      'image_gallery',
+      'prep_time_minutes',
+      'cooking_instructions',
       'calories',
+      'protein_g',
+      'carbs_g',
+      'fat_g',
       'allergens',
       'is_vegetarian',
       'is_vegan',
       'is_gluten_free',
+      'is_spicy',
       'spice_level',
+      'is_new',
+      'is_popular',
       'is_available',
+      'available_quantity',
+      'out_of_stock_until',
       'is_featured',
-      'available_start_time',
-      'available_end_time',
-      'available_days',
-      'max_per_order',
-      'min_per_order',
       'display_order',
+      'metadata',
+      // JSONB columns - stored directly in the item
+      'variants',
+      'sizes',
+      'add_ons',
     ];
 
     allowedFields.forEach(field => {
@@ -186,121 +215,62 @@ export async function PUT(
     const { data: updatedItem, error: updateError } = await supabase
       .from('restaurant_menu_items')
       .update(updateData)
-      .eq('id', item.id)
+      .eq('id', id)
       .select(`
-        *,
+        id,
+        tenant_id,
+        category_id,
+        name,
+        slug,
+        description,
+        short_description,
+        price,
+        price_lunch,
+        price_happy_hour,
+        currency,
+        variants,
+        sizes,
+        add_ons,
+        calories,
+        protein_g,
+        carbs_g,
+        fat_g,
+        allergens,
+        is_vegetarian,
+        is_vegan,
+        is_gluten_free,
+        is_spicy,
+        spice_level,
+        is_new,
+        is_popular,
+        prep_time_minutes,
+        cooking_instructions,
+        image_url,
+        image_gallery,
+        is_available,
+        available_quantity,
+        out_of_stock_until,
+        display_order,
+        is_featured,
+        times_ordered,
+        average_rating,
+        metadata,
+        created_at,
+        updated_at,
         category:restaurant_menu_categories(id, name)
       `)
       .single();
 
     if (updateError) {
-      console.error('Error updating menu item:', updateError);
-      return NextResponse.json({ success: false, error: 'Error al actualizar item' }, { status: 500 });
+      console.error('Error updating menu item:', JSON.stringify(updateError));
+      return errorResponse(`Error al actualizar item: ${updateError.message}`, 500);
     }
 
-    // Handle variants update if provided
-    if (body.variants !== undefined) {
-      // Delete existing variants
-      await supabase
-        .from('restaurant_menu_item_variants')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('menu_item_id', item.id);
+    return successResponse(updatedItem);
 
-      // Insert new variants
-      if (body.variants.length > 0) {
-        const variantsToInsert = body.variants.map((v: any, index: number) => ({
-          tenant_id: tenantId,
-          menu_item_id: item.id,
-          name: v.name,
-          price_modifier: v.price_modifier || 0,
-          is_default: v.is_default || false,
-          is_available: v.is_available !== false,
-          display_order: v.display_order || index,
-        }));
-
-        await supabase.from('restaurant_menu_item_variants').insert(variantsToInsert);
-      }
-    }
-
-    // Handle sizes update if provided
-    if (body.sizes !== undefined) {
-      await supabase
-        .from('restaurant_menu_item_sizes')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('menu_item_id', item.id);
-
-      if (body.sizes.length > 0) {
-        const sizesToInsert = body.sizes.map((s: any, index: number) => ({
-          tenant_id: tenantId,
-          menu_item_id: item.id,
-          name: s.name,
-          price: s.price,
-          is_default: s.is_default || false,
-          is_available: s.is_available !== false,
-          display_order: s.display_order || index,
-        }));
-
-        await supabase.from('restaurant_menu_item_sizes').insert(sizesToInsert);
-      }
-    }
-
-    // Handle add-ons update if provided
-    if (body.add_ons !== undefined) {
-      await supabase
-        .from('restaurant_menu_item_add_ons')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('menu_item_id', item.id);
-
-      if (body.add_ons.length > 0) {
-        const addOnsToInsert = body.add_ons.map((a: any, index: number) => ({
-          tenant_id: tenantId,
-          menu_item_id: item.id,
-          name: a.name,
-          price: a.price || 0,
-          is_available: a.is_available !== false,
-          max_quantity: a.max_quantity || null,
-          display_order: a.display_order || index,
-        }));
-
-        await supabase.from('restaurant_menu_item_add_ons').insert(addOnsToInsert);
-      }
-    }
-
-    // Fetch complete item with extras
-    const [variantsResult, sizesResult, addOnsResult] = await Promise.all([
-      supabase
-        .from('restaurant_menu_item_variants')
-        .select('*')
-        .eq('menu_item_id', item.id)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true }),
-      supabase
-        .from('restaurant_menu_item_sizes')
-        .select('*')
-        .eq('menu_item_id', item.id)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true }),
-      supabase
-        .from('restaurant_menu_item_add_ons')
-        .select('*')
-        .eq('menu_item_id', item.id)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true }),
-    ]);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...updatedItem,
-        variants: variantsResult.data || [],
-        sizes: sizesResult.data || [],
-        add_ons: addOnsResult.data || [],
-      },
-    });
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update menu item error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
   }
 }
 
@@ -309,53 +279,59 @@ export async function PUT(
 // ======================
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerify(request, params.id);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      return errorResponse('ID de item inválido', 400);
     }
 
-    const { item, supabase, userRole } = result;
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
 
-    // Check permissions
-    if (!['owner', 'admin'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para eliminar items' }, { status: 403 });
+    const { userRole, supabase } = auth;
+
+    if (!canDelete(userRole.role)) {
+      return errorResponse('Sin permisos para eliminar items', 403);
+    }
+
+    const tenantId = userRole.tenant_id;
+
+    // Verify item exists
+    const { data: item, error: fetchError } = await supabase
+      .from('restaurant_menu_items')
+      .select('id')
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
+      .single();
+
+    if (fetchError || !item) {
+      return errorResponse('Item no encontrado', 404);
     }
 
     // Soft delete item
     const { error: deleteError } = await supabase
       .from('restaurant_menu_items')
       .update({ deleted_at: new Date().toISOString() })
-      .eq('id', item.id);
+      .eq('id', id);
 
     if (deleteError) {
-      console.error('Error deleting menu item:', deleteError);
-      return NextResponse.json({ success: false, error: 'Error al eliminar item' }, { status: 500 });
+      console.error('Error deleting menu item:', JSON.stringify(deleteError));
+      return errorResponse(`Error al eliminar item: ${deleteError.message}`, 500);
     }
 
-    // Also soft delete related variants, sizes, and add-ons
-    await Promise.all([
-      supabase
-        .from('restaurant_menu_item_variants')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('menu_item_id', item.id),
-      supabase
-        .from('restaurant_menu_item_sizes')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('menu_item_id', item.id),
-      supabase
-        .from('restaurant_menu_item_add_ons')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('menu_item_id', item.id),
-    ]);
+    // No need to delete variants/sizes/add_ons - they're JSONB columns in the item!
 
-    return NextResponse.json({ success: true });
+    return successResponse({ deleted: true });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete menu item error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
   }
 }
 
@@ -364,19 +340,39 @@ export async function DELETE(
 // ======================
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerify(request, params.id);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      return errorResponse('ID de item inválido', 400);
     }
 
-    const { item, supabase, userRole } = result;
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
 
-    // Check permissions
+    const { userRole, supabase } = auth;
+    const tenantId = userRole.tenant_id;
+
+    // Staff can do quick actions
     if (!['owner', 'admin', 'manager', 'staff'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos' }, { status: 403 });
+      return errorResponse('Sin permisos', 403);
+    }
+
+    // Verify item exists
+    const { data: item, error: fetchError } = await supabase
+      .from('restaurant_menu_items')
+      .select('id, is_available, is_featured')
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
+      .single();
+
+    if (fetchError || !item) {
+      return errorResponse('Item no encontrado', 404);
     }
 
     const body = await request.json();
@@ -398,28 +394,25 @@ export async function PATCH(
         updateData = { is_available: false };
         break;
       default:
-        return NextResponse.json({ success: false, error: 'Acción no válida' }, { status: 400 });
+        return errorResponse('Acción no válida', 400);
     }
 
     const { data: updatedItem, error: updateError } = await supabase
       .from('restaurant_menu_items')
       .update(updateData)
-      .eq('id', item.id)
+      .eq('id', id)
       .select('id, name, is_available, is_featured')
       .single();
 
     if (updateError) {
-      console.error('Error updating menu item:', updateError);
-      return NextResponse.json({ success: false, error: 'Error al actualizar item' }, { status: 500 });
+      console.error('Error updating menu item:', JSON.stringify(updateError));
+      return errorResponse(`Error al actualizar item: ${updateError.message}`, 500);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: updatedItem,
-    });
+    return successResponse(updatedItem);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Patch menu item error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
   }
 }

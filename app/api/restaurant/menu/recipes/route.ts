@@ -6,53 +6,26 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// Helper to get user and tenant
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  canWrite,
+  canDelete
+} from '@/src/lib/api/auth-helper';
 
 // ======================
 // GET - Get Recipe for Menu Item
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
     const tenantId = userRole.tenant_id;
 
     // Parse query params
@@ -60,14 +33,11 @@ export async function GET(request: NextRequest) {
     const menuItemId = searchParams.get('menu_item_id');
 
     if (!menuItemId) {
-      return NextResponse.json({
-        success: false,
-        error: 'menu_item_id es requerido',
-      }, { status: 400 });
+      return errorResponse('menu_item_id es requerido', 400);
     }
 
     // Verify menu item belongs to tenant
-    const { data: menuItem } = await supabase
+    const { data: menuItem, error: menuItemError } = await supabase
       .from('restaurant_menu_items')
       .select('id, name, price')
       .eq('id', menuItemId)
@@ -75,8 +45,8 @@ export async function GET(request: NextRequest) {
       .is('deleted_at', null)
       .single();
 
-    if (!menuItem) {
-      return NextResponse.json({ success: false, error: 'Platillo no encontrado' }, { status: 404 });
+    if (menuItemError || !menuItem) {
+      return errorResponse('Platillo no encontrado', 404);
     }
 
     // Get recipe with ingredients
@@ -104,8 +74,8 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (recipeError && recipeError.code !== 'PGRST116') {
-      console.error('Error fetching recipe:', recipeError);
-      return NextResponse.json({ success: false, error: 'Error al cargar receta' }, { status: 500 });
+      console.error('Error fetching recipe:', JSON.stringify(recipeError));
+      return errorResponse(`Error al cargar receta: ${recipeError.message}`, 500);
     }
 
     // Sort ingredients by display_order
@@ -115,17 +85,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        menu_item: menuItem,
-        recipe: recipe || null,
-      },
+    return successResponse({
+      menu_item: menuItem,
+      recipe: recipe || null,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get recipe error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
   }
 }
 
@@ -134,16 +101,15 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
-    // Check permissions
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para gestionar recetas' }, { status: 403 });
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para gestionar recetas', 403);
     }
 
     const tenantId = userRole.tenant_id;
@@ -161,14 +127,11 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!menu_item_id) {
-      return NextResponse.json({
-        success: false,
-        error: 'menu_item_id es requerido',
-      }, { status: 400 });
+      return errorResponse('menu_item_id es requerido', 400);
     }
 
     // Verify menu item belongs to tenant
-    const { data: menuItem } = await supabase
+    const { data: menuItem, error: menuItemError } = await supabase
       .from('restaurant_menu_items')
       .select('id, name, price')
       .eq('id', menu_item_id)
@@ -176,8 +139,8 @@ export async function POST(request: NextRequest) {
       .is('deleted_at', null)
       .single();
 
-    if (!menuItem) {
-      return NextResponse.json({ success: false, error: 'Platillo no encontrado' }, { status: 404 });
+    if (menuItemError || !menuItem) {
+      return errorResponse('Platillo no encontrado', 404);
     }
 
     // Check if recipe already exists
@@ -206,8 +169,8 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (updateError) {
-        console.error('Error updating recipe:', updateError);
-        return NextResponse.json({ success: false, error: 'Error al actualizar receta' }, { status: 500 });
+        console.error('Error updating recipe:', JSON.stringify(updateError));
+        return errorResponse(`Error al actualizar receta: ${updateError.message}`, 500);
       }
 
       recipeId = updatedRecipe.id;
@@ -234,8 +197,8 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (insertError) {
-        console.error('Error creating recipe:', insertError);
-        return NextResponse.json({ success: false, error: 'Error al crear receta' }, { status: 500 });
+        console.error('Error creating recipe:', JSON.stringify(insertError));
+        return errorResponse(`Error al crear receta: ${insertError.message}`, 500);
       }
 
       recipeId = newRecipe.id;
@@ -286,8 +249,8 @@ export async function POST(request: NextRequest) {
           .insert(ingredientsToInsert);
 
         if (ingredientsError) {
-          console.error('Error inserting ingredients:', ingredientsError);
-          return NextResponse.json({ success: false, error: 'Error al guardar ingredientes' }, { status: 500 });
+          console.error('Error inserting ingredients:', JSON.stringify(ingredientsError));
+          return errorResponse(`Error al guardar ingredientes: ${ingredientsError.message}`, 500);
         }
       }
     }
@@ -321,17 +284,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        menu_item: menuItem,
-        recipe: finalRecipe,
-      },
+    return successResponse({
+      menu_item: menuItem,
+      recipe: finalRecipe,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Save recipe error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
   }
 }
 
@@ -340,16 +300,15 @@ export async function POST(request: NextRequest) {
 // ======================
 export async function DELETE(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
-    // Check permissions
-    if (!['owner', 'admin'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para eliminar recetas' }, { status: 403 });
+    if (!canDelete(userRole.role)) {
+      return errorResponse('Sin permisos para eliminar recetas', 403);
     }
 
     const tenantId = userRole.tenant_id;
@@ -359,22 +318,19 @@ export async function DELETE(request: NextRequest) {
     const menuItemId = searchParams.get('menu_item_id');
 
     if (!menuItemId) {
-      return NextResponse.json({
-        success: false,
-        error: 'menu_item_id es requerido',
-      }, { status: 400 });
+      return errorResponse('menu_item_id es requerido', 400);
     }
 
     // Get recipe
-    const { data: recipe } = await supabase
+    const { data: recipe, error: fetchError } = await supabase
       .from('menu_item_recipes')
       .select('id')
       .eq('menu_item_id', menuItemId)
       .eq('tenant_id', tenantId)
       .single();
 
-    if (!recipe) {
-      return NextResponse.json({ success: false, error: 'Receta no encontrada' }, { status: 404 });
+    if (fetchError || !recipe) {
+      return errorResponse('Receta no encontrada', 404);
     }
 
     // Delete ingredients first
@@ -390,14 +346,14 @@ export async function DELETE(request: NextRequest) {
       .eq('id', recipe.id);
 
     if (deleteError) {
-      console.error('Error deleting recipe:', deleteError);
-      return NextResponse.json({ success: false, error: 'Error al eliminar receta' }, { status: 500 });
+      console.error('Error deleting recipe:', JSON.stringify(deleteError));
+      return errorResponse(`Error al eliminar receta: ${deleteError.message}`, 500);
     }
 
-    return NextResponse.json({ success: true });
+    return successResponse({ deleted: true });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete recipe error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
   }
 }
