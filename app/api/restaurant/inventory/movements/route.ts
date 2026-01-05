@@ -5,53 +5,26 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  isValidUUID,
+} from '@/src/lib/api/auth-helper';
 
 // ======================
 // GET - List Movements
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
     const { searchParams } = new URL(request.url);
 
     const branchId = searchParams.get('branch_id');
@@ -61,8 +34,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('end_date');
     const limit = parseInt(searchParams.get('limit') || '100');
 
-    if (!branchId) {
-      return NextResponse.json({ success: false, error: 'branch_id requerido' }, { status: 400 });
+    if (!branchId || !isValidUUID(branchId)) {
+      return errorResponse('branch_id requerido', 400);
     }
 
     let query = supabase
@@ -77,7 +50,7 @@ export async function GET(request: NextRequest) {
       .order('performed_at', { ascending: false })
       .limit(limit);
 
-    if (itemId) {
+    if (itemId && isValidUUID(itemId)) {
       query = query.eq('item_id', itemId);
     }
 
@@ -97,14 +70,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching movements:', error);
-      return NextResponse.json({ success: false, error: 'Error al obtener movimientos' }, { status: 500 });
+      return errorResponse('Error al obtener movimientos', 500);
     }
 
-    return NextResponse.json({ success: true, data: movements });
+    return successResponse(movements);
 
   } catch (error) {
     console.error('Get movements error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -113,12 +86,12 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { user, userRole, supabase } = result;
+    const { user, userRole, supabase } = auth;
 
     const body = await request.json();
     const {
@@ -134,23 +107,28 @@ export async function POST(request: NextRequest) {
       reference_id,
     } = body;
 
-    if (!branch_id || !item_id || !movement_type || quantity === undefined) {
-      return NextResponse.json({
-        success: false,
-        error: 'branch_id, item_id, movement_type y quantity son requeridos'
-      }, { status: 400 });
+    if (!branch_id || !isValidUUID(branch_id)) {
+      return errorResponse('branch_id inválido', 400);
+    }
+
+    if (!item_id || !isValidUUID(item_id)) {
+      return errorResponse('item_id inválido', 400);
+    }
+
+    if (!movement_type || quantity === undefined) {
+      return errorResponse('movement_type y quantity son requeridos', 400);
     }
 
     // Validate movement type
     const validTypes = ['purchase', 'sale', 'consumption', 'waste', 'adjustment', 'transfer_in', 'transfer_out', 'return', 'production'];
     if (!validTypes.includes(movement_type)) {
-      return NextResponse.json({ success: false, error: 'Tipo de movimiento inválido' }, { status: 400 });
+      return errorResponse('Tipo de movimiento inválido', 400);
     }
 
     // Check permissions for certain movement types
     const restrictedTypes = ['adjustment', 'waste'];
     if (restrictedTypes.includes(movement_type) && !['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para este tipo de movimiento' }, { status: 403 });
+      return errorResponse('Sin permisos para este tipo de movimiento', 403);
     }
 
     // Get current stock
@@ -161,7 +139,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!item) {
-      return NextResponse.json({ success: false, error: 'Item no encontrado' }, { status: 404 });
+      return errorResponse('Item no encontrado', 404);
     }
 
     const previousStock = item.current_stock || 0;
@@ -172,10 +150,7 @@ export async function POST(request: NextRequest) {
 
     // Prevent negative stock
     if (newStock < 0) {
-      return NextResponse.json({
-        success: false,
-        error: `Stock insuficiente. Disponible: ${previousStock}`
-      }, { status: 400 });
+      return errorResponse(`Stock insuficiente. Disponible: ${previousStock}`, 400);
     }
 
     const totalCost = Math.abs(finalQuantity) * (unit_cost || item.unit_cost || 0);
@@ -208,26 +183,35 @@ export async function POST(request: NextRequest) {
 
     if (movementError) {
       console.error('Error creating movement:', movementError);
-      return NextResponse.json({ success: false, error: 'Error al crear movimiento' }, { status: 500 });
+      return errorResponse('Error al crear movimiento', 500);
     }
 
     // Update batch quantity if batch_id provided
-    if (batch_id && finalQuantity < 0) {
-      await supabase
+    if (batch_id && isValidUUID(batch_id) && finalQuantity < 0) {
+      // Get current batch quantity first
+      const { data: batch } = await supabase
         .from('inventory_batches')
-        .update({
-          current_quantity: supabase.rpc('decrement_quantity', {
-            row_id: batch_id,
-            amount: Math.abs(finalQuantity)
+        .select('current_quantity')
+        .eq('id', batch_id)
+        .single();
+
+      if (batch) {
+        const newBatchQuantity = Math.max(0, (batch.current_quantity || 0) - Math.abs(finalQuantity));
+        await supabase
+          .from('inventory_batches')
+          .update({
+            current_quantity: newBatchQuantity,
+            status: newBatchQuantity <= 0 ? 'consumed' : 'available',
+            updated_at: new Date().toISOString(),
           })
-        })
-        .eq('id', batch_id);
+          .eq('id', batch_id);
+      }
     }
 
-    return NextResponse.json({ success: true, data: movement }, { status: 201 });
+    return successResponse(movement, 201);
 
   } catch (error) {
     console.error('Create movement error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }

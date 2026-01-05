@@ -5,50 +5,33 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  isValidUUID,
+} from '@/src/lib/api/auth-helper';
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 });
-    }
-    const token = authHeader.substring(7);
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !user) {
-      return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { data: userRole } = await supabase
-      .from('user_roles')
-      .select('tenant_id, role')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single();
-
-    if (!userRole) {
-      return NextResponse.json({ success: false, error: 'Sin tenant asociado' }, { status: 403 });
-    }
-
+    const { userRole, supabase } = auth;
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('branch_id');
     const station = searchParams.get('station');
 
-    if (!branchId) {
-      return NextResponse.json({ success: false, error: 'branch_id requerido' }, { status: 400 });
+    if (!branchId || !isValidUUID(branchId)) {
+      return errorResponse('branch_id requerido', 400);
     }
 
     // Get active orders with items
-    let query = supabase
+    const query = supabase
       .from('restaurant_orders')
       .select(`
         id,
@@ -91,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching KDS orders:', error);
-      return NextResponse.json({ success: false, error: 'Error al obtener órdenes' }, { status: 500 });
+      return errorResponse('Error al obtener órdenes', 500);
     }
 
     // Transform to KDS view format
@@ -145,10 +128,10 @@ export async function GET(request: NextRequest) {
       };
     }).filter(Boolean);
 
-    return NextResponse.json({ success: true, data: kdsOrders });
+    return successResponse(kdsOrders);
 
   } catch (error) {
     console.error('KDS API error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }

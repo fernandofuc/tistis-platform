@@ -5,59 +5,32 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// Helper to get user and tenant
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  isValidUUID,
+  canWrite,
+} from '@/src/lib/api/auth-helper';
 
 // ======================
 // GET - List Stations
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('branch_id');
 
-    if (!branchId) {
-      return NextResponse.json({ success: false, error: 'branch_id requerido' }, { status: 400 });
+    if (!branchId || !isValidUUID(branchId)) {
+      return errorResponse('branch_id requerido', 400);
     }
 
     const { data: stations, error } = await supabase
@@ -70,14 +43,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching stations:', error);
-      return NextResponse.json({ success: false, error: 'Error al obtener estaciones' }, { status: 500 });
+      return errorResponse('Error al obtener estaciones', 500);
     }
 
-    return NextResponse.json({ success: true, data: stations });
+    return successResponse(stations);
 
   } catch (error) {
     console.error('Get stations error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -86,16 +59,16 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
     // Check permissions
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para crear estaciones' }, { status: 403 });
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para crear estaciones', 403);
     }
 
     const body = await request.json();
@@ -113,8 +86,12 @@ export async function POST(request: NextRequest) {
       default_staff_ids,
     } = body;
 
-    if (!branch_id || !code || !name) {
-      return NextResponse.json({ success: false, error: 'branch_id, code y name son requeridos' }, { status: 400 });
+    if (!branch_id || !isValidUUID(branch_id)) {
+      return errorResponse('branch_id inválido', 400);
+    }
+
+    if (!code || !name) {
+      return errorResponse('code y name son requeridos', 400);
     }
 
     // Check for duplicate code
@@ -127,7 +104,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existing) {
-      return NextResponse.json({ success: false, error: 'Ya existe una estación con ese código' }, { status: 400 });
+      return errorResponse('Ya existe una estación con ese código', 400);
     }
 
     // Get next display order
@@ -164,13 +141,13 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error creating station:', error);
-      return NextResponse.json({ success: false, error: 'Error al crear estación' }, { status: 500 });
+      return errorResponse('Error al crear estación', 500);
     }
 
-    return NextResponse.json({ success: true, data: station }, { status: 201 });
+    return successResponse(station, 201);
 
   } catch (error) {
     console.error('Create station error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }

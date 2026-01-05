@@ -5,54 +5,26 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// Helper to get user and tenant
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  isValidUUID,
+} from '@/src/lib/api/auth-helper';
 
 // ======================
 // GET - List Orders
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
     const { searchParams } = new URL(request.url);
 
     const branchId = searchParams.get('branch_id');
@@ -62,8 +34,8 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('date_to');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    if (!branchId) {
-      return NextResponse.json({ success: false, error: 'branch_id requerido' }, { status: 400 });
+    if (!branchId || !isValidUUID(branchId)) {
+      return errorResponse('branch_id requerido', 400);
     }
 
     let query = supabase
@@ -99,14 +71,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching orders:', error);
-      return NextResponse.json({ success: false, error: 'Error al obtener órdenes' }, { status: 500 });
+      return errorResponse('Error al obtener órdenes', 500);
     }
 
-    return NextResponse.json({ success: true, data: orders });
+    return successResponse(orders);
 
   } catch (error) {
     console.error('Get orders error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -115,12 +87,12 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
     const body = await request.json();
 
     const {
@@ -140,12 +112,12 @@ export async function POST(request: NextRequest) {
       items,
     } = body;
 
-    if (!branch_id) {
-      return NextResponse.json({ success: false, error: 'branch_id requerido' }, { status: 400 });
+    if (!branch_id || !isValidUUID(branch_id)) {
+      return errorResponse('branch_id inválido', 400);
     }
 
     if (!items?.length) {
-      return NextResponse.json({ success: false, error: 'Debe incluir al menos un item' }, { status: 400 });
+      return errorResponse('Debe incluir al menos un item', 400);
     }
 
     // Create order
@@ -173,7 +145,7 @@ export async function POST(request: NextRequest) {
 
     if (orderError) {
       console.error('Error creating order:', orderError);
-      return NextResponse.json({ success: false, error: 'Error al crear orden' }, { status: 500 });
+      return errorResponse('Error al crear orden', 500);
     }
 
     // Create order items
@@ -208,7 +180,7 @@ export async function POST(request: NextRequest) {
       console.error('Error creating order items:', itemsError);
       // Rollback order
       await supabase.from('restaurant_orders').delete().eq('id', order.id);
-      return NextResponse.json({ success: false, error: 'Error al crear items de orden' }, { status: 500 });
+      return errorResponse('Error al crear items de orden', 500);
     }
 
     // Fetch complete order with items
@@ -222,10 +194,10 @@ export async function POST(request: NextRequest) {
       .eq('id', order.id)
       .single();
 
-    return NextResponse.json({ success: true, data: completeOrder }, { status: 201 });
+    return successResponse(completeOrder, 201);
 
   } catch (error) {
     console.error('Create order error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
