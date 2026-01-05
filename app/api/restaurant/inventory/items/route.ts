@@ -90,10 +90,6 @@ export async function GET(request: NextRequest) {
       query = query.eq('item_type', itemType);
     }
 
-    if (lowStockOnly) {
-      query = query.lte('current_stock', supabase.rpc('get_minimum_stock'));
-    }
-
     const { data: items, error } = await query;
 
     if (error) {
@@ -101,7 +97,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Error al obtener items' }, { status: 500 });
     }
 
-    // Filter low stock manually if the RPC approach fails
+    // Filter low stock items manually
     let filteredItems = items;
     if (lowStockOnly) {
       filteredItems = items?.filter(item => item.current_stock <= item.minimum_stock) || [];

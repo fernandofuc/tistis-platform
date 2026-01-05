@@ -54,9 +54,7 @@ export async function GET(request: NextRequest) {
           category:inventory_categories(id, name)
         ),
         suggested_supplier:inventory_suppliers(id, name, whatsapp, phone),
-        associated_order:restock_orders(id, order_number, status),
-        acknowledged_by_user:auth.users!low_stock_alerts_acknowledged_by_fkey(email),
-        resolved_by_user:auth.users!low_stock_alerts_resolved_by_fkey(email)
+        associated_order:restock_orders(id, order_number, status)
       `)
       .eq('tenant_id', userRole.tenant_id)
       .order('created_at', { ascending: false })

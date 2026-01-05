@@ -51,9 +51,7 @@ export async function GET(request: NextRequest) {
           total_cost,
           status,
           item:inventory_items(id, name, sku, unit)
-        ),
-        created_by_user:auth.users!restock_orders_created_by_fkey(email),
-        authorized_by_user:auth.users!restock_orders_authorized_by_fkey(email)
+        )
       `)
       .eq('tenant_id', userRole.tenant_id)
       .is('deleted_at', null)
