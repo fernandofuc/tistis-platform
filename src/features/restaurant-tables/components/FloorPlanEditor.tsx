@@ -77,6 +77,13 @@ interface Position {
   y: number;
 }
 
+interface DragState {
+  tableId: string;
+  startPos: Position;
+  currentPos: Position;
+  offset: Position;
+}
+
 // ======================
 // HELPER FUNCTIONS
 // ======================
@@ -99,6 +106,7 @@ function TableNode({
   table,
   isSelected,
   isDragging,
+  dragPosition,
   zoom,
   showLabels,
   colorBy,
@@ -108,6 +116,7 @@ function TableNode({
   table: RestaurantTable;
   isSelected: boolean;
   isDragging: boolean;
+  dragPosition?: Position;
   zoom: number;
   showLabels: boolean;
   colorBy: 'status' | 'zone';
@@ -118,8 +127,9 @@ function TableNode({
   const color = colorBy === 'status' ? STATUS_COLORS[table.status] : ZONE_COLORS[table.zone];
   const statusConfig = STATUS_CONFIG[table.status];
 
-  const x = table.position_x ?? 100;
-  const y = table.position_y ?? 100;
+  // Use drag position if dragging, otherwise use saved position
+  const x = isDragging && dragPosition ? dragPosition.x : (table.position_x ?? 100);
+  const y = isDragging && dragPosition ? dragPosition.y : (table.position_y ?? 100);
 
   const width = shape === 'rectangle' ? TABLE_SIZE * 1.5 : TABLE_SIZE;
   const height = TABLE_SIZE;
@@ -132,9 +142,20 @@ function TableNode({
         onSelect();
       }}
       onMouseDown={onDragStart}
-      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+      style={{
+        cursor: isDragging ? 'grabbing' : 'grab',
+        // Apply visual feedback during drag
+        filter: isDragging ? 'drop-shadow(0 8px 16px rgba(0,0,0,0.2))' : undefined,
+        opacity: isDragging ? 0.9 : 1,
+      }}
       className="select-none"
     >
+      {/* Drag transform wrapper for scale effect */}
+      <g style={{
+        transform: isDragging ? 'scale(1.05)' : 'scale(1)',
+        transformOrigin: `${width / 2}px ${height / 2}px`,
+        transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+      }}>
       {/* Table shape */}
       {shape === 'circle' ? (
         <circle
@@ -142,10 +163,10 @@ function TableNode({
           cy={TABLE_SIZE / 2}
           r={TABLE_SIZE / 2 - 2}
           fill={color}
-          fillOpacity={0.2}
+          fillOpacity={isDragging ? 0.35 : 0.2}
           stroke={color}
-          strokeWidth={isSelected ? 3 : 2}
-          className="transition-all"
+          strokeWidth={isDragging ? 3 : (isSelected ? 3 : 2)}
+          className={isDragging ? '' : 'transition-all'}
         />
       ) : (
         <rect
@@ -155,10 +176,10 @@ function TableNode({
           y={2}
           rx={shape === 'square' ? 8 : 12}
           fill={color}
-          fillOpacity={0.2}
+          fillOpacity={isDragging ? 0.35 : 0.2}
           stroke={color}
-          strokeWidth={isSelected ? 3 : 2}
-          className="transition-all"
+          strokeWidth={isDragging ? 3 : (isSelected ? 3 : 2)}
+          className={isDragging ? '' : 'transition-all'}
         />
       )}
 
@@ -255,6 +276,7 @@ function TableNode({
           />
         </>
       )}
+      </g>{/* Close drag transform wrapper */}
     </g>
   );
 }
@@ -337,6 +359,7 @@ export function FloorPlanEditor({
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [draggingTableId, setDraggingTableId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
+  const [dragPosition, setDragPosition] = useState<Position | null>(null);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
@@ -426,44 +449,55 @@ export function FloorPlanEditor({
     if (!table) return;
 
     const point = getSvgPoint(e);
+    const tableX = table.position_x ?? 100;
+    const tableY = table.position_y ?? 100;
+
     setDraggingTableId(tableId);
     setDragOffset({
-      x: point.x - (table.position_x ?? 100),
-      y: point.y - (table.position_y ?? 100),
+      x: point.x - tableX,
+      y: point.y - tableY,
     });
+    // Initialize drag position with current table position
+    setDragPosition({ x: tableX, y: tableY });
     setSelectedTableId(tableId);
   }, [tables, isLocked, getSvgPoint]);
 
   const handleTableDragMove = useCallback((e: React.MouseEvent) => {
     if (!draggingTableId) return;
 
-    const table = tables.find(t => t.id === draggingTableId);
-    if (!table) return;
-
     const point = getSvgPoint(e);
     const newX = snapToGrid(point.x - dragOffset.x, showGrid ? GRID_SIZE : 1);
     const newY = snapToGrid(point.y - dragOffset.y, showGrid ? GRID_SIZE : 1);
 
-    // Optimistic update would go here, but we'll update on drop
-  }, [draggingTableId, tables, dragOffset, showGrid, getSvgPoint]);
+    // Update drag position in real-time for visual feedback
+    setDragPosition({
+      x: Math.max(0, newX),
+      y: Math.max(0, newY),
+    });
+  }, [draggingTableId, dragOffset, showGrid, getSvgPoint]);
 
   const handleTableDragEnd = useCallback(async (e: React.MouseEvent) => {
-    if (!draggingTableId) return;
+    if (!draggingTableId || !dragPosition) {
+      setDraggingTableId(null);
+      setDragPosition(null);
+      return;
+    }
 
     const table = tables.find(t => t.id === draggingTableId);
     if (!table) {
       setDraggingTableId(null);
+      setDragPosition(null);
       return;
     }
 
-    const point = getSvgPoint(e);
-    const newX = snapToGrid(point.x - dragOffset.x, showGrid ? GRID_SIZE : 1);
-    const newY = snapToGrid(point.y - dragOffset.y, showGrid ? GRID_SIZE : 1);
+    // Use the final drag position
+    const newX = dragPosition.x;
+    const newY = dragPosition.y;
 
     // Only update if position changed
     if (newX !== table.position_x || newY !== table.position_y) {
       try {
-        await onUpdatePosition(draggingTableId, Math.max(0, newX), Math.max(0, newY));
+        await onUpdatePosition(draggingTableId, newX, newY);
         setHasChanges(true);
       } catch (error) {
         console.error('Error updating position:', error);
@@ -471,7 +505,8 @@ export function FloorPlanEditor({
     }
 
     setDraggingTableId(null);
-  }, [draggingTableId, tables, dragOffset, showGrid, getSvgPoint, onUpdatePosition]);
+    setDragPosition(null);
+  }, [draggingTableId, dragPosition, tables, onUpdatePosition]);
 
   // Wheel zoom
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -702,6 +737,7 @@ export function FloorPlanEditor({
           onMouseLeave={() => {
             handlePanEnd();
             setDraggingTableId(null);
+            setDragPosition(null);
           }}
           onClick={handleBackgroundClick}
         >
@@ -741,6 +777,7 @@ export function FloorPlanEditor({
                 table={table}
                 isSelected={selectedTableId === table.id}
                 isDragging={draggingTableId === table.id}
+                dragPosition={draggingTableId === table.id ? dragPosition ?? undefined : undefined}
                 zoom={zoom}
                 showLabels={showLabels}
                 colorBy={colorBy}
