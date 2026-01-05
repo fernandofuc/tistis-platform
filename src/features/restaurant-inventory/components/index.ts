@@ -11,3 +11,5 @@ export { MovementForm } from './MovementForm';
 export { CategoriesTab } from './CategoriesTab';
 export { SuppliersTab } from './SuppliersTab';
 export { MovementsTab } from './MovementsTab';
+export { RestockOrdersTab } from './RestockOrdersTab';
+export { RestockOrderForm } from './RestockOrderForm';

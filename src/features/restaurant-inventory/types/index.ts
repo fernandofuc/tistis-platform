@@ -474,3 +474,269 @@ export const UNIT_OPTIONS = [
   { value: 'can', label: 'Lata' },
   { value: 'dozen', label: 'Docena' },
 ];
+
+// ======================
+// RESTOCK ORDERS - ENUMS
+// ======================
+export type RestockOrderStatus =
+  | 'draft'
+  | 'pending'
+  | 'authorized'
+  | 'placed'
+  | 'partial'
+  | 'received'
+  | 'cancelled';
+
+export type LowStockAlertType = 'warning' | 'critical';
+
+export type LowStockAlertStatus = 'open' | 'acknowledged' | 'ordered' | 'resolved';
+
+// ======================
+// RESTOCK ORDER
+// ======================
+export interface RestockOrder {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  supplier_id: string;
+  order_number: string;
+  status: RestockOrderStatus;
+  trigger_source: 'auto' | 'manual' | 'alert';
+  triggered_by_alert_ids: string[];
+  created_by: string | null;
+  authorized_by: string | null;
+  authorized_at: string | null;
+  whatsapp_sent: boolean;
+  whatsapp_sent_at: string | null;
+  whatsapp_message_id: string | null;
+  supplier_confirmation: string | null;
+  expected_delivery_date: string | null;
+  actual_delivery_date: string | null;
+  received_by: string | null;
+  received_at: string | null;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  currency: string;
+  internal_notes: string | null;
+  supplier_notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  // Relations
+  supplier?: InventorySupplier;
+  branch?: { id: string; name: string };
+  items?: RestockOrderItem[];
+  created_by_user?: { id: string; email: string };
+  authorized_by_user?: { id: string; email: string };
+}
+
+// ======================
+// RESTOCK ORDER ITEM
+// ======================
+export interface RestockOrderItem {
+  id: string;
+  tenant_id: string;
+  restock_order_id: string;
+  inventory_item_id: string;
+  quantity_requested: number;
+  quantity_received: number;
+  unit: string;
+  unit_cost: number;
+  total_cost: number;
+  status: 'pending' | 'partial' | 'received' | 'cancelled';
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Relations
+  inventory_item?: InventoryItem;
+}
+
+// ======================
+// LOW STOCK ALERT
+// ======================
+export interface LowStockAlert {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  item_id: string;
+  alert_type: LowStockAlertType;
+  status: LowStockAlertStatus;
+  current_stock: number;
+  minimum_stock: number;
+  deficit_quantity: number;
+  suggested_supplier_id: string | null;
+  suggested_quantity: number | null;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  associated_order_id: string | null;
+  auto_created_order: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  // Relations
+  item?: InventoryItem;
+  branch?: { id: string; name: string };
+  suggested_supplier?: InventorySupplier;
+  associated_order?: RestockOrder;
+}
+
+// ======================
+// RESTOCK NOTIFICATION PREFERENCES
+// ======================
+export interface RestockNotificationPreferences {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  warning_threshold_percent: number;
+  critical_threshold_percent: number;
+  notify_via_app: boolean;
+  notify_via_email: boolean;
+  notify_via_whatsapp: boolean;
+  manager_emails: string[];
+  auto_create_alerts: boolean;
+  auto_create_orders: boolean;
+  auto_send_to_supplier: boolean;
+  check_frequency_hours: number;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+// ======================
+// RESTOCK FORM DATA
+// ======================
+export interface RestockOrderFormData {
+  supplier_id: string;
+  branch_id: string;
+  trigger_source?: 'auto' | 'manual' | 'alert';
+  triggered_by_alert_ids?: string[];
+  expected_delivery_date?: string;
+  internal_notes?: string;
+  supplier_notes?: string;
+  items: Array<{
+    inventory_item_id: string;
+    quantity_requested: number;
+    unit: string;
+    unit_cost: number;
+    notes?: string;
+  }>;
+}
+
+export interface LowStockAlertFormData {
+  item_id: string;
+  branch_id: string;
+  alert_type?: LowStockAlertType;
+  suggested_supplier_id?: string;
+  suggested_quantity?: number;
+}
+
+export interface RestockPreferencesFormData {
+  branch_id?: string;
+  warning_threshold_percent?: number;
+  critical_threshold_percent?: number;
+  notify_via_app?: boolean;
+  notify_via_email?: boolean;
+  notify_via_whatsapp?: boolean;
+  manager_emails?: string[];
+  auto_create_alerts?: boolean;
+  auto_create_orders?: boolean;
+  auto_send_to_supplier?: boolean;
+  check_frequency_hours?: number;
+  quiet_hours_start?: string;
+  quiet_hours_end?: string;
+}
+
+// ======================
+// RESTOCK API RESPONSES
+// ======================
+export interface RestockOrdersResponse {
+  success: boolean;
+  data: RestockOrder[];
+  error?: string;
+}
+
+export interface RestockOrderResponse {
+  success: boolean;
+  data: RestockOrder;
+  error?: string;
+}
+
+export interface LowStockAlertsResponse {
+  success: boolean;
+  data: LowStockAlert[];
+  error?: string;
+}
+
+export interface LowStockAlertResponse {
+  success: boolean;
+  data: LowStockAlert;
+  error?: string;
+}
+
+export interface RestockPreferencesResponse {
+  success: boolean;
+  data: RestockNotificationPreferences;
+  error?: string;
+}
+
+// ======================
+// RESTOCK DASHBOARD STATS
+// ======================
+export interface RestockDashboardStats {
+  open_alerts_count: number;
+  pending_orders_count: number;
+  orders_this_month: number;
+  total_spent_this_month: number;
+  critical_items: Array<{
+    item_id: string;
+    item_name: string;
+    current_stock: number;
+    minimum_stock: number;
+    unit: string;
+  }>;
+}
+
+// ======================
+// RESTOCK STATUS CONFIG
+// ======================
+export const RESTOCK_ORDER_STATUS_CONFIG: Record<RestockOrderStatus, {
+  label: string;
+  color: string;
+  bgColor: string;
+  icon: string;
+}> = {
+  draft: { label: 'Borrador', color: 'text-slate-600', bgColor: 'bg-slate-100', icon: 'FileEdit' },
+  pending: { label: 'Pendiente', color: 'text-amber-600', bgColor: 'bg-amber-100', icon: 'Clock' },
+  authorized: { label: 'Autorizado', color: 'text-blue-600', bgColor: 'bg-blue-100', icon: 'CheckCircle' },
+  placed: { label: 'Enviado', color: 'text-purple-600', bgColor: 'bg-purple-100', icon: 'Send' },
+  partial: { label: 'Parcial', color: 'text-orange-600', bgColor: 'bg-orange-100', icon: 'PackageCheck' },
+  received: { label: 'Recibido', color: 'text-emerald-600', bgColor: 'bg-emerald-100', icon: 'CheckCheck' },
+  cancelled: { label: 'Cancelado', color: 'text-red-600', bgColor: 'bg-red-100', icon: 'XCircle' },
+};
+
+export const LOW_STOCK_ALERT_TYPE_CONFIG: Record<LowStockAlertType, {
+  label: string;
+  color: string;
+  bgColor: string;
+  icon: string;
+}> = {
+  warning: { label: 'Advertencia', color: 'text-amber-600', bgColor: 'bg-amber-100', icon: 'AlertTriangle' },
+  critical: { label: 'Critico', color: 'text-red-600', bgColor: 'bg-red-100', icon: 'AlertOctagon' },
+};
+
+export const LOW_STOCK_ALERT_STATUS_CONFIG: Record<LowStockAlertStatus, {
+  label: string;
+  color: string;
+  bgColor: string;
+}> = {
+  open: { label: 'Abierta', color: 'text-red-600', bgColor: 'bg-red-100' },
+  acknowledged: { label: 'Vista', color: 'text-amber-600', bgColor: 'bg-amber-100' },
+  ordered: { label: 'Ordenado', color: 'text-blue-600', bgColor: 'bg-blue-100' },
+  resolved: { label: 'Resuelta', color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
+};

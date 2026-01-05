@@ -212,13 +212,13 @@ function AutoRestockBanner() {
         <div className="flex-1">
           <h3 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
             Reabastecimiento Automático
-            <span className="px-2 py-0.5 text-xs font-medium bg-tis-coral/10 text-tis-coral rounded-full">
-              Próximamente
+            <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
+              Activo
             </span>
           </h3>
           <p className="text-sm text-slate-600 leading-relaxed mb-3">
-            Cuando TIS TIS detecte productos en <strong>punto crítico de stock</strong>, enviará automáticamente
-            una notificación al encargado de cada sucursal para autorizar pedidos a estos proveedores.
+            Configura tus proveedores y TIS TIS detectará automáticamente cuando los productos estén en
+            <strong> punto crítico de stock</strong>, permitiéndote crear órdenes de reabastecimiento con un clic.
           </p>
           <div className="flex flex-wrap gap-2">
             <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-white/60 px-3 py-1.5 rounded-full">

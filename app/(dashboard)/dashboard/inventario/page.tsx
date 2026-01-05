@@ -21,7 +21,11 @@ import {
   CategoryForm,
   SupplierForm,
   MovementForm,
+  RestockOrdersTab,
+  RestockOrderForm,
 } from '@/src/features/restaurant-inventory/components';
+import { createRestockOrder } from '@/src/features/restaurant-inventory/services/restock.service';
+import type { RestockOrderFormData, RestockOrder } from '@/src/features/restaurant-inventory/types';
 import type {
   InventoryItem,
   InventoryCategory,
@@ -36,7 +40,7 @@ import { ITEM_TYPE_CONFIG, STORAGE_TYPE_CONFIG } from '@/src/features/restaurant
 // ======================
 // TYPES
 // ======================
-type TabId = 'overview' | 'items' | 'categories' | 'suppliers' | 'movements';
+type TabId = 'overview' | 'items' | 'categories' | 'suppliers' | 'restock' | 'movements';
 
 interface Tab {
   id: TabId;
@@ -49,6 +53,7 @@ const TABS: Tab[] = [
   { id: 'items', name: 'Productos', description: 'Gestionar ingredientes y suministros' },
   { id: 'categories', name: 'Categorías', description: 'Organizar productos' },
   { id: 'suppliers', name: 'Proveedores', description: 'Gestionar proveedores' },
+  { id: 'restock', name: 'Reabastecimiento', description: 'Órdenes de reabastecimiento' },
   { id: 'movements', name: 'Movimientos', description: 'Historial de movimientos' },
 ];
 
@@ -327,9 +332,12 @@ export default function InventarioPage() {
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [showMovementForm, setShowMovementForm] = useState(false);
+  const [showRestockForm, setShowRestockForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
+  const [preSelectedAlertIds, setPreSelectedAlertIds] = useState<string[]>([]);
   const [formLoading, setFormLoading] = useState(false);
+  const [restockRefreshKey, setRestockRefreshKey] = useState(0);
 
   // Get active branch
   const activeBranchId = currentBranchId || branches?.[0]?.id;
@@ -449,6 +457,29 @@ export default function InventarioPage() {
     }
   }, [recordMovement]);
 
+  // Restock handlers
+  const handleCreateRestockOrder = useCallback((alertIds?: string[]) => {
+    setPreSelectedAlertIds(alertIds || []);
+    setShowRestockForm(true);
+  }, []);
+
+  const handleViewRestockOrder = useCallback((order: RestockOrder) => {
+    // TODO: Open order detail modal
+    console.log('View order:', order);
+  }, []);
+
+  const handleRestockOrderSubmit = useCallback(async (data: RestockOrderFormData) => {
+    setFormLoading(true);
+    try {
+      await createRestockOrder(data);
+      setShowRestockForm(false);
+      setPreSelectedAlertIds([]);
+      setRestockRefreshKey(prev => prev + 1);
+    } finally {
+      setFormLoading(false);
+    }
+  }, []);
+
   // Loading state
   if (tenantLoading || flagsLoading) {
     return (
@@ -506,6 +537,16 @@ export default function InventarioPage() {
             onDeleteSupplier={handleDeleteSupplier}
           />
         );
+      case 'restock':
+        return activeBranchId ? (
+          <RestockOrdersTab
+            key={restockRefreshKey}
+            branchId={activeBranchId}
+            suppliers={suppliers}
+            onCreateOrder={handleCreateRestockOrder}
+            onViewOrder={handleViewRestockOrder}
+          />
+        ) : null;
       case 'movements':
         return (
           <MovementsTab
@@ -601,6 +642,22 @@ export default function InventarioPage() {
           items={items}
           onSubmit={handleMovementSubmit}
           onCancel={() => setShowMovementForm(false)}
+          isLoading={formLoading}
+        />
+      )}
+
+      {/* Restock Order Form Modal */}
+      {showRestockForm && activeBranchId && (
+        <RestockOrderForm
+          branchId={activeBranchId}
+          suppliers={suppliers}
+          items={items}
+          preSelectedAlertIds={preSelectedAlertIds}
+          onSubmit={handleRestockOrderSubmit}
+          onCancel={() => {
+            setShowRestockForm(false);
+            setPreSelectedAlertIds([]);
+          }}
           isLoading={formLoading}
         />
       )}
