@@ -5,46 +5,18 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
-
-function isValidUUID(str: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  successMessage,
+  isValidUUID,
+  canWrite,
+  canDelete,
+  hasMinRole,
+} from '@/src/lib/api/auth-helper';
 
 // ======================
 // GET - Get Restock Order
@@ -57,15 +29,15 @@ export async function GET(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de orden inválido' }, { status: 400 });
+      return errorResponse('ID de orden inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
     const { data: order, error } = await supabase
       .from('restock_orders')
@@ -92,14 +64,14 @@ export async function GET(
       .single();
 
     if (error || !order) {
-      return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 });
+      return errorResponse('Orden no encontrada', 404);
     }
 
-    return NextResponse.json({ success: true, data: order });
+    return successResponse(order);
 
   } catch (error) {
     console.error('Get restock order error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -114,18 +86,18 @@ export async function PUT(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de orden inválido' }, { status: 400 });
+      return errorResponse('ID de orden inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { user, userRole, supabase } = result;
+    const { user, userRole, supabase } = auth;
 
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para actualizar órdenes' }, { status: 403 });
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para actualizar órdenes', 403);
     }
 
     const body = await request.json();
@@ -141,15 +113,15 @@ export async function PUT(
       .single();
 
     if (fetchError || !currentOrder) {
-      return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 });
+      return errorResponse('Orden no encontrada', 404);
     }
 
     // Manejar acciones específicas
     if (action) {
       switch (action) {
         case 'authorize':
-          if (!['owner', 'admin'].includes(userRole.role)) {
-            return NextResponse.json({ success: false, error: 'Sin permisos para autorizar órdenes' }, { status: 403 });
+          if (!hasMinRole(userRole.role, 'admin')) {
+            return errorResponse('Sin permisos para autorizar órdenes', 403);
           }
           updateData.status = 'authorized';
           updateData.authorized_by = user.id;
@@ -158,7 +130,7 @@ export async function PUT(
 
         case 'place':
           if (currentOrder.status !== 'authorized') {
-            return NextResponse.json({ success: false, error: 'La orden debe estar autorizada para enviarla' }, { status: 400 });
+            return errorResponse('La orden debe estar autorizada para enviarla', 400);
           }
           updateData.status = 'placed';
           break;
@@ -184,16 +156,17 @@ export async function PUT(
 
         case 'cancel':
           if (!['draft', 'pending', 'authorized'].includes(currentOrder.status)) {
-            return NextResponse.json({ success: false, error: 'No se puede cancelar una orden ya enviada' }, { status: 400 });
+            return errorResponse('No se puede cancelar una orden ya enviada', 400);
           }
           updateData.status = 'cancelled';
           break;
 
         default:
-          return NextResponse.json({ success: false, error: 'Acción no válida' }, { status: 400 });
+          return errorResponse('Acción no válida', 400);
       }
     }
 
+    // Actualizar la orden
     const { data: order, error } = await supabase
       .from('restock_orders')
       .update({
@@ -222,10 +195,10 @@ export async function PUT(
 
     if (error || !order) {
       console.error('Error updating restock order:', error);
-      return NextResponse.json({ success: false, error: 'Error al actualizar orden' }, { status: 500 });
+      return errorResponse('Error al actualizar orden', 500);
     }
 
-    // Si se recibió la orden, actualizar el inventario
+    // Si se recibió la orden, actualizar el inventario usando RPC transaccional
     if (action === 'receive') {
       const { data: items } = await supabase
         .from('restock_order_items')
@@ -233,46 +206,32 @@ export async function PUT(
         .eq('restock_order_id', id);
 
       if (items && items.length > 0) {
-        for (const item of items) {
-          // Crear movimiento de inventario por cada item
-          await supabase.from('inventory_movements').insert({
-            tenant_id: userRole.tenant_id,
-            branch_id: currentOrder.branch_id,
-            item_id: item.inventory_item_id,
-            movement_type: 'purchase',
-            quantity: item.quantity_requested,
-            unit_cost: item.unit_cost,
-            reference_type: 'restock_order',
-            reference_id: id,
-            performed_by: user.id,
-          });
+        // Usar RPC para procesar la recepción de forma transaccional
+        const { error: receiveError } = await supabase.rpc('process_restock_order_receipt', {
+          p_order_id: id,
+          p_tenant_id: userRole.tenant_id,
+          p_branch_id: currentOrder.branch_id,
+          p_user_id: user.id,
+          p_alert_ids: currentOrder.triggered_by_alert_ids || [],
+        });
 
-          // Actualizar stock del item
-          await supabase.rpc('update_inventory_stock', {
-            p_item_id: item.inventory_item_id,
-            p_quantity_change: item.quantity_requested,
-          });
+        if (receiveError) {
+          console.error('Error processing order receipt:', receiveError);
+          // Revertir el estado de la orden si falla
+          await supabase
+            .from('restock_orders')
+            .update({ status: currentOrder.status })
+            .eq('id', id);
+          return errorResponse('Error al procesar recepción de inventario', 500);
         }
-      }
-
-      // Resolver alertas asociadas
-      if (currentOrder.triggered_by_alert_ids && currentOrder.triggered_by_alert_ids.length > 0) {
-        await supabase
-          .from('low_stock_alerts')
-          .update({
-            status: 'resolved',
-            resolved_by: user.id,
-            resolved_at: new Date().toISOString(),
-          })
-          .in('id', currentOrder.triggered_by_alert_ids);
       }
     }
 
-    return NextResponse.json({ success: true, data: order });
+    return successResponse(order);
 
   } catch (error) {
     console.error('Update restock order error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -287,18 +246,18 @@ export async function DELETE(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de orden inválido' }, { status: 400 });
+      return errorResponse('ID de orden inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
-    if (!['owner', 'admin'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para eliminar órdenes' }, { status: 403 });
+    if (!canDelete(userRole.role)) {
+      return errorResponse('Sin permisos para eliminar órdenes', 403);
     }
 
     // Verificar que la orden existe y está en estado eliminable
@@ -311,11 +270,11 @@ export async function DELETE(
       .single();
 
     if (fetchError || !currentOrder) {
-      return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 });
+      return errorResponse('Orden no encontrada', 404);
     }
 
     if (!['draft', 'cancelled'].includes(currentOrder.status)) {
-      return NextResponse.json({ success: false, error: 'Solo se pueden eliminar órdenes en borrador o canceladas' }, { status: 400 });
+      return errorResponse('Solo se pueden eliminar órdenes en borrador o canceladas', 400);
     }
 
     const { error } = await supabase
@@ -328,13 +287,13 @@ export async function DELETE(
 
     if (error) {
       console.error('Error deleting restock order:', error);
-      return NextResponse.json({ success: false, error: 'Error al eliminar orden' }, { status: 500 });
+      return errorResponse('Error al eliminar orden', 500);
     }
 
-    return NextResponse.json({ success: true, message: 'Orden eliminada' });
+    return successMessage('Orden eliminada');
 
   } catch (error) {
     console.error('Delete restock order error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }

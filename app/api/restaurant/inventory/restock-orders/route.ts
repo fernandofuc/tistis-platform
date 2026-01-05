@@ -6,52 +6,26 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  isValidUUID,
+  canWrite,
+} from '@/src/lib/api/auth-helper';
 
 // ======================
 // GET - List Restock Orders
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
     const { searchParams } = new URL(request.url);
 
     const branchId = searchParams.get('branch_id');
@@ -114,14 +88,14 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching restock orders:', error);
-      return NextResponse.json({ success: false, error: 'Error al obtener órdenes de reabastecimiento' }, { status: 500 });
+      return errorResponse('Error al obtener órdenes de reabastecimiento', 500);
     }
 
-    return NextResponse.json({ success: true, data: orders });
+    return successResponse(orders);
 
   } catch (error) {
     console.error('Get restock orders error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -130,15 +104,15 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { user, userRole, supabase } = result;
+    const { user, userRole, supabase } = auth;
 
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para crear órdenes de reabastecimiento' }, { status: 403 });
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para crear órdenes de reabastecimiento', 403);
     }
 
     const body = await request.json();
@@ -153,17 +127,32 @@ export async function POST(request: NextRequest) {
       items = [],
     } = body;
 
-    // Validaciones
-    if (!branch_id) {
-      return NextResponse.json({ success: false, error: 'La sucursal es requerida' }, { status: 400 });
+    // Validaciones robustas
+    if (!branch_id || !isValidUUID(branch_id)) {
+      return errorResponse('ID de sucursal inválido', 400);
     }
 
-    if (!supplier_id) {
-      return NextResponse.json({ success: false, error: 'El proveedor es requerido' }, { status: 400 });
+    if (!supplier_id || !isValidUUID(supplier_id)) {
+      return errorResponse('ID de proveedor inválido', 400);
     }
 
-    if (!items || items.length === 0) {
-      return NextResponse.json({ success: false, error: 'Se requiere al menos un artículo' }, { status: 400 });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return errorResponse('Se requiere al menos un artículo', 400);
+    }
+
+    // Validar cada item
+    for (const item of items) {
+      if (!item.inventory_item_id || !isValidUUID(item.inventory_item_id)) {
+        return errorResponse('ID de artículo inválido en la lista', 400);
+      }
+      if (typeof item.quantity_requested !== 'number' || item.quantity_requested <= 0) {
+        return errorResponse('Cantidad solicitada debe ser un número positivo', 400);
+      }
+    }
+
+    // Validar trigger_source
+    if (!['auto', 'manual', 'alert'].includes(trigger_source)) {
+      return errorResponse('Fuente de orden inválida', 400);
     }
 
     // Crear la orden (order_number se genera automáticamente via trigger)
@@ -186,7 +175,7 @@ export async function POST(request: NextRequest) {
 
     if (orderError || !order) {
       console.error('Error creating restock order:', orderError);
-      return NextResponse.json({ success: false, error: 'Error al crear orden de reabastecimiento' }, { status: 500 });
+      return errorResponse('Error al crear orden de reabastecimiento', 500);
     }
 
     // Insertar los items de la orden
@@ -214,7 +203,7 @@ export async function POST(request: NextRequest) {
       console.error('Error creating order items:', itemsError);
       // Intentar eliminar la orden creada
       await supabase.from('restock_orders').delete().eq('id', order.id);
-      return NextResponse.json({ success: false, error: 'Error al crear artículos de la orden' }, { status: 500 });
+      return errorResponse('Error al crear artículos de la orden', 500);
     }
 
     // Si vino de alertas, actualizar el estado de las alertas
@@ -253,13 +242,13 @@ export async function POST(request: NextRequest) {
     if (fetchError) {
       console.error('Error fetching created order:', fetchError);
       // La orden se creó, devolver lo que tenemos
-      return NextResponse.json({ success: true, data: order }, { status: 201 });
+      return successResponse(order, 201);
     }
 
-    return NextResponse.json({ success: true, data: fullOrder }, { status: 201 });
+    return successResponse(fullOrder, 201);
 
   } catch (error) {
     console.error('Create restock order error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }

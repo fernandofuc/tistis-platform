@@ -45,6 +45,7 @@ import {
   placeOrder,
   cancelOrder,
   receiveOrder,
+  markWhatsAppSent,
   generateWhatsAppMessage,
   getWhatsAppUrl,
   getLowStockAlerts,
@@ -659,13 +660,21 @@ export function RestockOrdersTab({
     }
   }, [loadData]);
 
-  const handleSendWhatsApp = useCallback((order: RestockOrder) => {
+  const handleSendWhatsApp = useCallback(async (order: RestockOrder) => {
     if (!order.supplier?.whatsapp) return;
 
     const message = generateWhatsAppMessage(order);
     const url = getWhatsAppUrl(order.supplier.whatsapp, message);
     window.open(url, '_blank');
-  }, []);
+
+    // Auto-marcar como enviado por WhatsApp
+    try {
+      await markWhatsAppSent(order.id);
+      await loadData();
+    } catch (error) {
+      console.error('Error marking WhatsApp as sent:', error);
+    }
+  }, [loadData]);
 
   const handleCreateOrderFromAlerts = useCallback((alertIds: string[]) => {
     onCreateOrder(alertIds);

@@ -238,19 +238,26 @@ CREATE INDEX IF NOT EXISTS idx_restock_prefs_tenant ON restock_notification_pref
 -- TRIGGERS
 -- ======================
 
--- Auto-generate order number
+-- Auto-generate order number (uses advisory lock to prevent race conditions)
 CREATE OR REPLACE FUNCTION generate_restock_order_number()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
   v_count INT;
+  v_date_part TEXT;
 BEGIN
+  -- Use advisory lock to prevent race conditions
+  PERFORM pg_advisory_xact_lock(hashtext('order_number_' || NEW.tenant_id::text));
+
+  v_date_part := TO_CHAR(NOW(), 'YYMMDD');
+
   SELECT COUNT(*) + 1 INTO v_count
   FROM restock_orders
-  WHERE tenant_id = NEW.tenant_id;
+  WHERE tenant_id = NEW.tenant_id
+    AND order_number LIKE 'ORD-' || v_date_part || '-%';
 
-  NEW.order_number := 'ORD-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(v_count::TEXT, 4, '0');
+  NEW.order_number := 'ORD-' || v_date_part || '-' || LPAD(v_count::TEXT, 4, '0');
   RETURN NEW;
 END;
 $$;
@@ -503,7 +510,122 @@ GRANT EXECUTE ON FUNCTION get_pending_orders_count(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION create_low_stock_alert(UUID, UUID, UUID, DECIMAL, DECIMAL) TO authenticated;
 
 -- ======================
+-- CRITICAL FUNCTIONS
+-- ======================
+
+-- Update inventory stock (used when receiving orders)
+CREATE OR REPLACE FUNCTION update_inventory_stock(
+  p_item_id UUID,
+  p_quantity_change DECIMAL
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE inventory_items
+  SET
+    current_stock = current_stock + p_quantity_change,
+    updated_at = NOW()
+  WHERE id = p_item_id;
+END;
+$$;
+
+-- Process restock order receipt transactionally
+-- This function handles all receipt operations atomically
+CREATE OR REPLACE FUNCTION process_restock_order_receipt(
+  p_order_id UUID,
+  p_tenant_id UUID,
+  p_branch_id UUID,
+  p_user_id UUID,
+  p_alert_ids UUID[]
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_item RECORD;
+BEGIN
+  -- Process each item in the order
+  FOR v_item IN
+    SELECT inventory_item_id, quantity_requested, unit_cost
+    FROM restock_order_items
+    WHERE restock_order_id = p_order_id
+  LOOP
+    -- Create inventory movement
+    INSERT INTO inventory_movements (
+      tenant_id,
+      branch_id,
+      item_id,
+      movement_type,
+      quantity,
+      unit_cost,
+      reference_type,
+      reference_id,
+      performed_by
+    ) VALUES (
+      p_tenant_id,
+      p_branch_id,
+      v_item.inventory_item_id,
+      'purchase',
+      v_item.quantity_requested,
+      v_item.unit_cost,
+      'restock_order',
+      p_order_id,
+      p_user_id
+    );
+
+    -- Update stock
+    UPDATE inventory_items
+    SET
+      current_stock = current_stock + v_item.quantity_requested,
+      updated_at = NOW()
+    WHERE id = v_item.inventory_item_id;
+  END LOOP;
+
+  -- Resolve associated alerts
+  IF array_length(p_alert_ids, 1) > 0 THEN
+    UPDATE low_stock_alerts
+    SET
+      status = 'resolved',
+      resolved_by = p_user_id,
+      resolved_at = NOW()
+    WHERE id = ANY(p_alert_ids);
+  END IF;
+END;
+$$;
+
+-- Get next order number atomically (fixes race condition)
+CREATE OR REPLACE FUNCTION get_next_order_number(p_tenant_id UUID)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_count INT;
+  v_date_part TEXT;
+BEGIN
+  -- Lock to prevent concurrent access
+  PERFORM pg_advisory_xact_lock(hashtext('order_number_' || p_tenant_id::text));
+
+  v_date_part := TO_CHAR(NOW(), 'YYMMDD');
+
+  SELECT COUNT(*) + 1 INTO v_count
+  FROM restock_orders
+  WHERE tenant_id = p_tenant_id
+    AND order_number LIKE 'ORD-' || v_date_part || '-%';
+
+  RETURN 'ORD-' || v_date_part || '-' || LPAD(v_count::TEXT, 4, '0');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_inventory_stock(UUID, DECIMAL) TO authenticated;
+GRANT EXECUTE ON FUNCTION process_restock_order_receipt(UUID, UUID, UUID, UUID, UUID[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_next_order_number(UUID) TO authenticated;
+
+-- ======================
 -- SUCCESS: Migration 100 completed
 -- Tables: restock_orders, restock_order_items, low_stock_alerts, restock_notification_preferences
--- Functions: get_open_alerts_count, get_pending_orders_count, create_low_stock_alert
+-- Functions: get_open_alerts_count, get_pending_orders_count, create_low_stock_alert,
+--            update_inventory_stock, process_restock_order_receipt, get_next_order_number
 -- =====================================================

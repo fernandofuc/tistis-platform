@@ -5,41 +5,15 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  isValidUUID,
+  canWrite,
+} from '@/src/lib/api/auth-helper';
 
 // Configuración por defecto
 const DEFAULT_PREFERENCES = {
@@ -62,14 +36,19 @@ const DEFAULT_PREFERENCES = {
 // ======================
 export async function GET(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('branch_id');
+
+    // Validate branch_id if provided
+    if (branchId && !isValidUUID(branchId)) {
+      return errorResponse('ID de sucursal inválido', 400);
+    }
 
     // Buscar preferencias específicas de sucursal o a nivel tenant
     let query = supabase
@@ -89,27 +68,24 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching preferences:', error);
-      return NextResponse.json({ success: false, error: 'Error al obtener preferencias' }, { status: 500 });
+      return errorResponse('Error al obtener preferencias', 500);
     }
 
     // Si no existen preferencias, devolver valores por defecto
     if (!preferences) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          ...DEFAULT_PREFERENCES,
-          tenant_id: userRole.tenant_id,
-          branch_id: branchId || null,
-          is_default: true,
-        },
+      return successResponse({
+        ...DEFAULT_PREFERENCES,
+        tenant_id: userRole.tenant_id,
+        branch_id: branchId || null,
+        is_default: true,
       });
     }
 
-    return NextResponse.json({ success: true, data: { ...preferences, is_default: false } });
+    return successResponse({ ...preferences, is_default: false });
 
   } catch (error) {
     console.error('Get preferences error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -118,15 +94,15 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function POST(request: NextRequest) {
   try {
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para modificar preferencias' }, { status: 403 });
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para modificar preferencias', 403);
     }
 
     const body = await request.json();
@@ -145,6 +121,11 @@ export async function POST(request: NextRequest) {
       quiet_hours_start,
       quiet_hours_end,
     } = body;
+
+    // Validate branch_id if provided
+    if (branch_id && !isValidUUID(branch_id)) {
+      return errorResponse('ID de sucursal inválido', 400);
+    }
 
     // Verificar si ya existen preferencias
     let existingQuery = supabase
@@ -207,18 +188,17 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error saving preferences:', error);
-      return NextResponse.json({ success: false, error: 'Error al guardar preferencias' }, { status: 500 });
+      return errorResponse('Error al guardar preferencias', 500);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: preferences,
-      message: existing ? 'Preferencias actualizadas' : 'Preferencias creadas',
-    }, { status: existing ? 200 : 201 });
+    return successResponse(
+      { ...preferences, message: existing ? 'Preferencias actualizadas' : 'Preferencias creadas' },
+      existing ? 200 : 201
+    );
 
   } catch (error) {
     console.error('Save preferences error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
