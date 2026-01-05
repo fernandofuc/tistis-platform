@@ -50,11 +50,25 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 export async function getCategories(includeInactive: boolean = false): Promise<CategoriesResponse> {
   const params = new URLSearchParams();
   if (includeInactive) params.set('include_inactive', 'true');
+  params.set('include_items', 'true'); // Get item counts
 
   const queryString = params.toString();
   const url = `/api/restaurant/menu/categories${queryString ? `?${queryString}` : ''}`;
 
-  return fetchWithAuth(url);
+  const response = await fetchWithAuth(url);
+
+  // API returns { success, data: { categories, tree } } but we need { success, data: MenuCategory[] }
+  if (response.success && response.data?.categories) {
+    return {
+      success: true,
+      data: response.data.categories.map((cat: Record<string, unknown>) => ({
+        ...cat,
+        items_count: cat.item_count || 0,
+      })),
+    };
+  }
+
+  return response;
 }
 
 export async function getCategory(id: string): Promise<CategoryResponse> {
@@ -62,16 +76,44 @@ export async function getCategory(id: string): Promise<CategoryResponse> {
 }
 
 export async function createCategory(data: CategoryFormData): Promise<CategoryResponse> {
+  // Send data to API - API now uses parent_id directly
+  const apiData = {
+    branch_id: data.branch_id,
+    name: data.name,
+    description: data.description,
+    parent_id: data.parent_id || null,
+    image_url: data.image_url,
+    is_active: data.is_active ?? true,
+    is_featured: data.is_featured ?? false,
+    available_days: data.available_days,
+    available_start_time: data.available_times?.start_time || null,
+    available_end_time: data.available_times?.end_time || null,
+  };
+
   return fetchWithAuth('/api/restaurant/menu/categories', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(apiData),
   });
 }
 
 export async function updateCategory(id: string, data: Partial<CategoryFormData>): Promise<CategoryResponse> {
+  // Send data to API - API now uses parent_id directly
+  const apiData: Record<string, unknown> = {};
+
+  if (data.branch_id !== undefined) apiData.branch_id = data.branch_id;
+  if (data.name !== undefined) apiData.name = data.name;
+  if (data.description !== undefined) apiData.description = data.description;
+  if (data.parent_id !== undefined) apiData.parent_id = data.parent_id;
+  if (data.image_url !== undefined) apiData.image_url = data.image_url;
+  if (data.is_active !== undefined) apiData.is_active = data.is_active;
+  if (data.is_featured !== undefined) apiData.is_featured = data.is_featured;
+  if (data.available_days !== undefined) apiData.available_days = data.available_days;
+  if (data.available_times?.start_time !== undefined) apiData.available_start_time = data.available_times.start_time;
+  if (data.available_times?.end_time !== undefined) apiData.available_end_time = data.available_times.end_time;
+
   return fetchWithAuth(`/api/restaurant/menu/categories/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify(apiData),
   });
 }
 

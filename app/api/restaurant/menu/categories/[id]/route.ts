@@ -45,7 +45,7 @@ async function getUserAndVerify(request: NextRequest, categoryId: string) {
     .select(`
       *,
       branch:branches(id, name),
-      parent:restaurant_menu_categories!parent_category_id(id, name)
+      parent:restaurant_menu_categories!parent_id(id, name)
     `)
     .eq('id', categoryId)
     .eq('tenant_id', userRole.tenant_id)
@@ -64,10 +64,11 @@ async function getUserAndVerify(request: NextRequest, categoryId: string) {
 // ======================
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerify(request, params.id);
+    const { id } = await params;
+    const result = await getUserAndVerify(request, id);
     if ('error' in result) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
@@ -78,7 +79,7 @@ export async function GET(
     const { data: children } = await supabase
       .from('restaurant_menu_categories')
       .select('id, name, display_order, is_active')
-      .eq('parent_category_id', category.id)
+      .eq('parent_id', category.id)
       .is('deleted_at', null)
       .order('display_order', { ascending: true });
 
@@ -120,10 +121,11 @@ export async function GET(
 // ======================
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerify(request, params.id);
+    const { id } = await params;
+    const result = await getUserAndVerify(request, id);
     if ('error' in result) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
@@ -137,11 +139,14 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Validate parent_category_id if changing
-    if (body.parent_category_id !== undefined && body.parent_category_id !== category.parent_category_id) {
-      if (body.parent_category_id) {
+    // Support both parent_id and parent_category_id from frontend
+    const newParentId = body.parent_id ?? body.parent_category_id;
+
+    // Validate parent_id if changing
+    if (newParentId !== undefined && newParentId !== category.parent_id) {
+      if (newParentId) {
         // Can't be its own parent
-        if (body.parent_category_id === category.id) {
+        if (newParentId === category.id) {
           return NextResponse.json({
             success: false,
             error: 'Una categoría no puede ser su propio padre',
@@ -151,8 +156,8 @@ export async function PUT(
         // Verify parent exists
         const { data: parentCategory } = await supabase
           .from('restaurant_menu_categories')
-          .select('id, parent_category_id')
-          .eq('id', body.parent_category_id)
+          .select('id, parent_id')
+          .eq('id', newParentId)
           .eq('tenant_id', userRole.tenant_id)
           .is('deleted_at', null)
           .single();
@@ -162,13 +167,14 @@ export async function PUT(
         }
 
         // Prevent circular reference (parent can't be a child of this category)
-        if (parentCategory.parent_category_id === category.id) {
+        if (parentCategory.parent_id === category.id) {
           return NextResponse.json({
             success: false,
             error: 'Referencia circular detectada',
           }, { status: 400 });
         }
       }
+      body.parent_id = newParentId;
     }
 
     // Prepare update data
@@ -176,10 +182,11 @@ export async function PUT(
     const allowedFields = [
       'name',
       'description',
-      'parent_category_id',
+      'parent_id',
       'image_url',
       'display_order',
       'is_active',
+      'is_featured',
       'available_days',
       'available_start_time',
       'available_end_time',
@@ -199,7 +206,7 @@ export async function PUT(
       .select(`
         *,
         branch:branches(id, name),
-        parent:restaurant_menu_categories!parent_category_id(id, name)
+        parent:restaurant_menu_categories!parent_id(id, name)
       `)
       .single();
 
@@ -224,10 +231,11 @@ export async function PUT(
 // ======================
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerify(request, params.id);
+    const { id } = await params;
+    const result = await getUserAndVerify(request, id);
     if ('error' in result) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
@@ -243,7 +251,7 @@ export async function DELETE(
     const { count: childrenCount } = await supabase
       .from('restaurant_menu_categories')
       .select('*', { count: 'exact', head: true })
-      .eq('parent_category_id', category.id)
+      .eq('parent_id', category.id)
       .is('deleted_at', null);
 
     if (childrenCount && childrenCount > 0) {

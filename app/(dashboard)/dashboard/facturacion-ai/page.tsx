@@ -179,26 +179,12 @@ function LoadingState() {
   return (
     <PageWrapper
       title="Facturacion AI"
-      subtitle="Cargando configuracion..."
+      subtitle="Cargando..."
     >
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="w-20 h-20 bg-gradient-to-br from-tis-coral to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg"
-          >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              className="text-white"
-            >
-              {icons.receiptLarge}
-            </motion.div>
-          </motion.div>
-          <p className="text-slate-600 font-medium">Cargando configuracion...</p>
-          <p className="text-sm text-slate-400 mt-1">Preparando facturacion automatica</p>
+          <div className="w-8 h-8 border-2 border-tis-coral border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-600">Cargando insights...</p>
         </div>
       </div>
     </PageWrapper>

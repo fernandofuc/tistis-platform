@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         branch:branches(id, name),
-        parent:restaurant_menu_categories!parent_category_id(id, name)
+        parent:restaurant_menu_categories!parent_id(id, name)
       `)
       .eq('tenant_id', tenantId)
       .is('deleted_at', null)
@@ -80,9 +80,9 @@ export async function GET(request: NextRequest) {
       query = query.eq('branch_id', branchId);
     }
     if (parentId === 'null') {
-      query = query.is('parent_category_id', null);
+      query = query.is('parent_id', null);
     } else if (parentId) {
-      query = query.eq('parent_category_id', parentId);
+      query = query.eq('parent_id', parentId);
     }
     if (isActive === 'true') {
       query = query.eq('is_active', true);
@@ -117,12 +117,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Build tree structure
-    const rootCategories = categoriesWithCount.filter(c => !c.parent_category_id);
-    const childCategories = categoriesWithCount.filter(c => c.parent_category_id);
+    const rootCategories = categoriesWithCount.filter(c => !c.parent_id);
+    const childCategories = categoriesWithCount.filter(c => c.parent_id);
 
     const categoriesTree = rootCategories.map(parent => ({
       ...parent,
-      children: childCategories.filter(c => c.parent_category_id === parent.id),
+      children: childCategories.filter(c => c.parent_id === parent.id),
     }));
 
     return NextResponse.json({
@@ -165,13 +165,18 @@ export async function POST(request: NextRequest) {
       name,
       description,
       parent_category_id,
+      parent_id, // Support both names
       image_url,
       display_order,
       is_active = true,
+      is_featured = false,
       available_days,
       available_start_time,
       available_end_time,
     } = body;
+
+    // Support both parent_id and parent_category_id
+    const finalParentId = parent_category_id || parent_id || null;
 
     // Validate required fields
     if (!branch_id || !name) {
@@ -194,11 +199,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify parent category if provided
-    if (parent_category_id) {
+    if (finalParentId) {
       const { data: parentCategory } = await supabase
         .from('restaurant_menu_categories')
         .select('id')
-        .eq('id', parent_category_id)
+        .eq('id', finalParentId)
         .eq('tenant_id', tenantId)
         .is('deleted_at', null)
         .single();
@@ -206,6 +211,30 @@ export async function POST(request: NextRequest) {
       if (!parentCategory) {
         return NextResponse.json({ success: false, error: 'Categoría padre no encontrada' }, { status: 404 });
       }
+    }
+
+    // Generate slug from name
+    const baseSlug = name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    // Make slug unique by appending number if needed
+    let slug = baseSlug;
+    let slugCounter = 1;
+    while (true) {
+      const { data: existingSlug } = await supabase
+        .from('restaurant_menu_categories')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('slug', slug)
+        .is('deleted_at', null)
+        .single();
+
+      if (!existingSlug) break;
+      slug = `${baseSlug}-${slugCounter++}`;
     }
 
     // Get max display_order if not provided
@@ -229,11 +258,13 @@ export async function POST(request: NextRequest) {
         tenant_id: tenantId,
         branch_id,
         name,
+        slug,
         description: description || null,
-        parent_category_id: parent_category_id || null,
+        parent_id: finalParentId,
         image_url: image_url || null,
         display_order: finalDisplayOrder,
         is_active,
+        is_featured,
         available_days: available_days || null,
         available_start_time: available_start_time || null,
         available_end_time: available_end_time || null,
@@ -241,7 +272,7 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         branch:branches(id, name),
-        parent:restaurant_menu_categories!parent_category_id(id, name)
+        parent:restaurant_menu_categories!parent_id(id, name)
       `)
       .single();
 
