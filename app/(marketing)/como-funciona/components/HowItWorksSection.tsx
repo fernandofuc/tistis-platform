@@ -12,24 +12,24 @@ const steps = [
   {
     number: '01',
     icon: MessageSquare,
-    title: 'Describe tu negocio',
-    description: 'Cuéntanos qué hace tu negocio, cuántas sucursales tienes y qué quieres automatizar. Nuestra IA entiende tu contexto.',
+    title: 'Conecta tus canales en 5 minutos',
+    description: 'Vincula WhatsApp Business, Instagram y Facebook. Sin codigo, sin configuraciones complicadas. Solo escanea un QR y listo.',
     color: 'tis-coral',
     gradient: 'from-tis-coral to-tis-pink',
   },
   {
     number: '02',
     icon: Cpu,
-    title: 'TIS TIS configura todo',
-    description: 'En minutos, configuramos tu dashboard personalizado, conectamos WhatsApp y entrenamos la IA con la información de tu negocio.',
+    title: 'La IA aprende de tu negocio',
+    description: 'Sube tu menu, servicios o catalogo. TIS TIS entrena agentes especializados que conocen tus precios, horarios y politicas mejor que un empleado nuevo.',
     color: 'tis-purple',
     gradient: 'from-tis-purple to-tis-purple-dark',
   },
   {
     number: '03',
     icon: Rocket,
-    title: 'Tu negocio en piloto automático',
-    description: 'Leads clasificados, citas agendadas, clientes respondidos. Todo automático mientras tú te enfocas en crecer.',
+    title: 'Convierte clientes mientras duermes',
+    description: 'Respuestas instantaneas 24/7. Citas agendadas automaticamente. Facturas generadas por WhatsApp. Leads calificados y priorizados para que vendas mas.',
     color: 'tis-green',
     gradient: 'from-tis-green to-tis-green-600',
   },
@@ -135,17 +135,19 @@ export default function HowItWorksSection() {
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-tis-purple/10 text-tis-purple rounded-full text-sm font-medium mb-4">
             <Cpu className="w-4 h-4" />
-            Proceso simple
+            Implementacion en minutos, no semanas
           </div>
 
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
-            Cómo funciona{' '}
+            De cero a{' '}
             <span className="bg-gradient-primary bg-clip-text text-transparent">
-              TIS TIS
+              automatizado
             </span>
+            {' '}en 3 pasos
           </h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            En 3 simples pasos, tu negocio estará funcionando en piloto automático.
+            Sin equipos de TI. Sin consultores caros. Sin semanas de implementacion.
+            <span className="font-medium text-slate-700"> Tu negocio empieza a trabajar solo desde el primer dia.</span>
           </p>
         </div>
 
@@ -164,13 +166,13 @@ export default function HowItWorksSection() {
           `}
         >
           <p className="text-slate-600 mb-4">
-            ¿Listo para automatizar tu negocio?
+            Negocios como el tuyo ya estan ahorrando +20 horas a la semana
           </p>
           <button
             onClick={() => window.location.href = '/'}
             className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-coral text-white font-semibold rounded-xl shadow-coral hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
           >
-            Empieza ahora
+            Prueba 10 dias gratis
             <Rocket className="w-5 h-5" />
           </button>
         </div>

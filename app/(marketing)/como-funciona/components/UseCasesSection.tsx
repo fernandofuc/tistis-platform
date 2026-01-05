@@ -19,14 +19,13 @@ const useCases = [
   {
     id: 'dental',
     icon: Stethoscope,
-    title: 'Clínicas Dentales',
-    subtitle: 'ESVA Dental Clinic',
-    description: 'Gestiona pacientes, agenda citas automáticamente y responde consultas por WhatsApp 24/7. El sistema clasifica leads y prioriza los más interesados.',
-    features: ['Historial clínico digital', 'Recordatorios automáticos', 'Cotizaciones instantáneas'],
-    // Placeholder - Será reemplazado por screenshot real
+    title: 'Clinicas Dentales',
+    subtitle: 'Caso: ESVA Dental Clinic',
+    description: 'Antes tardaban 2 horas en responder mensajes. Ahora la IA responde en 3 segundos, agenda citas y envia cotizaciones. Resultado: +40% citas agendadas, 0 leads perdidos por no contestar.',
+    features: ['Cotizaciones automaticas por WhatsApp', 'Recordatorios que reducen no-shows 60%', 'Historial clinico siempre disponible'],
     screenshotPlaceholder: {
       type: 'dashboard',
-      label: 'Dashboard Clínica Dental',
+      label: 'Dashboard Clinica Dental',
       aspectRatio: '16/10',
     },
   },
@@ -34,9 +33,9 @@ const useCases = [
     id: 'restaurant',
     icon: UtensilsCrossed,
     title: 'Restaurantes',
-    subtitle: 'Multi-sucursal',
-    description: 'Reservaciones automáticas, gestión de mesas y pedidos. Responde preguntas sobre el menú y horarios sin intervención humana.',
-    features: ['Reservas por WhatsApp', 'Gestión de mesas', 'Menú digital integrado'],
+    subtitle: 'Gestion multi-sucursal',
+    description: 'Cocina Display System en tiempo real, reservaciones por WhatsApp y facturacion automatica desde ticket. La IA contesta sobre menu, horarios y disponibilidad mientras tu equipo atiende mesas.',
+    features: ['KDS para cocina en tiempo real', 'Inventario con alertas automaticas', 'Facturacion AI por foto de ticket'],
     screenshotPlaceholder: {
       type: 'dashboard',
       label: 'Dashboard Restaurante',
@@ -46,10 +45,10 @@ const useCases = [
   {
     id: 'retail',
     icon: ShoppingBag,
-    title: 'Tiendas de Ropa',
-    subtitle: 'E-commerce + Físico',
-    description: 'Control de inventario en tiempo real, atención al cliente automatizada y seguimiento de ventas por sucursal.',
-    features: ['Inventario multi-sucursal', 'Catálogo por WhatsApp', 'Reportes de ventas'],
+    title: 'Tiendas y Retail',
+    subtitle: 'Fisico + Online unificado',
+    description: 'Tu cliente pregunta por disponibilidad, la IA consulta inventario real y contesta al instante. Programa lealtad que fideliza automaticamente con puntos y recompensas.',
+    features: ['Inventario multi-sucursal sincronizado', 'Programa de lealtad automatizado', 'Catalogo interactivo por WhatsApp'],
     screenshotPlaceholder: {
       type: 'dashboard',
       label: 'Dashboard Retail',
@@ -60,9 +59,9 @@ const useCases = [
     id: 'services',
     icon: Building2,
     title: 'Servicios Profesionales',
-    subtitle: 'Consultorías, Agencias',
-    description: 'Agenda reuniones, califica prospectos automáticamente y mantén seguimiento de cada oportunidad de negocio.',
-    features: ['CRM inteligente', 'Scoring de leads', 'Pipeline de ventas'],
+    subtitle: 'Consultorias y Agencias',
+    description: 'Cada lead se califica automaticamente por probabilidad de cierre. La IA agenda llamadas de seguimiento y tu equipo de ventas solo habla con prospectos calificados.',
+    features: ['Lead scoring con IA', 'Agenda automatica de llamadas', 'Pipeline visual de oportunidades'],
     screenshotPlaceholder: {
       type: 'dashboard',
       label: 'Dashboard Servicios',
@@ -81,13 +80,14 @@ export default function UseCasesSection() {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
-            Un cerebro para{' '}
+            Hecho para{' '}
             <span className="bg-gradient-coral bg-clip-text text-transparent">
-              cada tipo de negocio
+              tu tipo de negocio
             </span>
           </h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            TIS TIS se adapta a tu industria. Mira cómo funciona en diferentes sectores.
+            No es una solucion generica. TIS TIS entiende la terminologia, flujos y necesidades especificas de cada industria.
+            <span className="font-medium text-slate-700"> La IA habla como habla tu negocio.</span>
           </p>
         </div>
 

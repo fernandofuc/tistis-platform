@@ -11,11 +11,11 @@ import FeaturesSection from './components/FeaturesSection';
 import CTASection from './components/CTASection';
 
 export const metadata: Metadata = {
-  title: 'Cómo Funciona | TIS TIS - El Cerebro Digital para tu Negocio',
-  description: 'Descubre cómo TIS TIS automatiza tu negocio con IA. Gestión de leads, WhatsApp automático, citas y más. Todo en piloto automático.',
+  title: 'Como Funciona | TIS TIS - IA que Aprende tu Negocio',
+  description: 'Sistema de agentes IA que responde WhatsApp 24/7, agenda citas, califica leads y genera facturas. Potenciado por GPT-5, Gemini y Claude. Prueba 10 dias gratis.',
   openGraph: {
-    title: 'Cómo Funciona | TIS TIS',
-    description: 'Descubre cómo TIS TIS automatiza tu negocio con IA.',
+    title: 'Como Funciona TIS TIS | IA para tu Negocio',
+    description: 'La IA que aprende tu negocio y trabaja por ti 24/7. Respuestas en 3 segundos, 0 leads perdidos.',
   },
 };
 

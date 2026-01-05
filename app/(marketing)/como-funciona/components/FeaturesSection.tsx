@@ -20,50 +20,50 @@ import {
 const features = [
   {
     icon: MessageCircle,
-    title: 'WhatsApp 24/7',
-    description: 'Responde automáticamente a tus clientes en WhatsApp, Instagram y Facebook. Nunca pierdas un lead.',
+    title: 'Respuestas en segundos, no horas',
+    description: 'Mientras tu competencia tarda horas en contestar, TIS TIS responde al instante. Cada minuto perdido es un cliente que se va con otro.',
     color: '#25D366', // WhatsApp green
   },
   {
     icon: Users,
-    title: 'CRM Inteligente',
-    description: 'Clasifica leads automáticamente por interés. Prioriza los que tienen más probabilidad de comprar.',
+    title: 'Leads que se califican solos',
+    description: 'La IA detecta quien esta listo para comprar y quien solo pregunta. Tu equipo se enfoca en cerrar, no en filtrar.',
     color: 'rgb(223, 115, 115)', // tis-coral
   },
   {
     icon: Calendar,
-    title: 'Agenda Automática',
-    description: 'Los clientes agendan citas directamente por WhatsApp. Sin llamadas, sin esperas.',
+    title: 'Citas sin llamadas, sin esperas',
+    description: 'El cliente escribe, el agente agenda. Sin transferencias, sin "te marco despues". La cita queda confirmada en el momento.',
     color: 'rgb(102, 126, 234)', // tis-purple
   },
   {
     icon: BarChart3,
-    title: 'Analytics en Tiempo Real',
-    description: 'Métricas de conversión, leads por canal, rendimiento por sucursal. Todo en un dashboard.',
+    title: 'Insights de IA, no solo graficas',
+    description: 'Gemini analiza tus conversaciones y te dice que servicios vender, cuando hay mas demanda y donde pierdes clientes.',
     color: 'rgb(157, 184, 161)', // tis-green
   },
   {
     icon: Shield,
-    title: 'Multi-Tenant Seguro',
-    description: 'Cada sucursal tiene acceso solo a sus datos. Seguridad empresarial desde el día uno.',
+    title: 'Una cuenta, todas tus sucursales',
+    description: 'Cada ubicacion ve solo sus datos. Reportes consolidados para ti. Sin mezclar informacion ni perder control.',
     color: '#1e293b', // slate-800
   },
   {
     icon: Zap,
-    title: 'IA de Claude',
-    description: 'Potenciado por Claude AI de Anthropic. Respuestas naturales que entienden contexto.',
+    title: 'Triple IA: GPT-5 + Gemini + Claude',
+    description: 'No dependemos de un solo modelo. Usamos el mejor para cada tarea: velocidad, analisis o conversacion natural.',
     color: '#f59e0b', // amber
   },
   {
     icon: Globe,
-    title: 'Multi-Canal',
-    description: 'WhatsApp, Instagram, Facebook, TikTok. Todos tus canales en una sola bandeja de entrada.',
+    title: 'Donde estan tus clientes, ahi esta TIS TIS',
+    description: 'WhatsApp, Instagram DM, Facebook Messenger, TikTok y llamadas telefonicas. Todo llega a una sola bandeja.',
     color: '#ec4899', // pink
   },
   {
     icon: Clock,
-    title: 'Setup en Minutos',
-    description: 'No necesitas semanas de implementación. Conecta tu WhatsApp y empieza hoy mismo.',
+    title: 'Funciona desde el dia 1',
+    description: 'Otros sistemas tardan semanas en implementar. Con TIS TIS conectas tu WhatsApp hoy y mañana ya tienes tu IA contestando.',
     color: '#06b6d4', // cyan
   },
 ];
@@ -151,13 +151,14 @@ export default function FeaturesSection() {
           `}
         >
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
-            Todo lo que necesitas,{' '}
+            Por que TIS TIS{' '}
             <span className="bg-gradient-coral bg-clip-text text-transparent">
-              en un solo lugar
+              es diferente
             </span>
           </h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            Herramientas potentes diseñadas para que tu negocio crezca sin fricción.
+            No es solo un chatbot. Es un sistema de agentes IA que trabaja como un empleado estrella:
+            <span className="font-medium text-slate-700"> nunca descansa, nunca olvida, siempre mejora.</span>
           </p>
         </div>
 
@@ -178,10 +179,10 @@ export default function FeaturesSection() {
           `}
         >
           {[
-            { value: '500+', label: 'Negocios activos' },
-            { value: '1M+', label: 'Mensajes procesados' },
-            { value: '24/7', label: 'Disponibilidad' },
-            { value: '< 5min', label: 'Tiempo de respuesta' },
+            { value: '50', label: 'Cupos disponibles este mes' },
+            { value: '1M+', label: 'Conversaciones gestionadas' },
+            { value: '24/7', label: 'Sin interrupciones' },
+            { value: '<3 seg', label: 'Tiempo de respuesta' },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="text-3xl sm:text-4xl font-bold bg-gradient-coral bg-clip-text text-transparent">

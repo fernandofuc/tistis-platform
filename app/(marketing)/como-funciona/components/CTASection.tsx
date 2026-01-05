@@ -51,20 +51,20 @@ export default function CTASection() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/80 text-sm font-medium mb-6">
               <Sparkles className="w-4 h-4" />
-              Empieza gratis, sin tarjeta de crédito
+              10 dias gratis - Solo 50 cupos este mes
             </div>
 
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4 leading-tight">
-              ¿Listo para poner tu negocio
+              Cada minuto sin TIS TIS
               <br />
               <span className="bg-gradient-to-r from-tis-coral to-tis-pink bg-clip-text text-transparent">
-                en piloto automático?
+                es un cliente que se va
               </span>
             </h2>
 
             <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto mb-8 leading-relaxed">
-              Negocios como el tuyo ya están automatizando su atención al cliente
-              y multiplicando sus ventas. No te quedes atrás.
+              Mientras lees esto, tu competencia ya esta contestando en segundos con IA.
+              <span className="text-white font-medium"> El que responde primero, cierra primero.</span>
             </p>
 
             {/* CTAs */}
@@ -73,7 +73,7 @@ export default function CTASection() {
                 onClick={() => router.push('/')}
                 className="group flex items-center gap-2 px-8 py-4 bg-gradient-coral text-white font-semibold rounded-xl shadow-coral hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
               >
-                Empieza Gratis
+                Empieza tu prueba gratuita
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
 
@@ -81,13 +81,13 @@ export default function CTASection() {
                 onClick={() => router.push('/pricing')}
                 className="flex items-center gap-2 px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-xl border border-white/20 hover:bg-white/20 transition-all duration-300"
               >
-                Ver Planes y Precios
+                Ver planes desde $499/mes
               </button>
             </div>
 
             {/* Trust text */}
             <p className="mt-8 text-sm text-slate-400">
-              Sin compromiso a largo plazo. Cancela cuando quieras.
+              Implementacion en minutos. Sin contratos. Cancela cuando quieras.
             </p>
           </div>
 
