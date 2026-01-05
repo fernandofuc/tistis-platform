@@ -17,6 +17,10 @@ import type {
   ChannelConnection,
 } from '@/src/shared/types/whatsapp';
 import crypto from 'crypto';
+import {
+  processHighPriorityPatterns,
+  queueMessageForLearning,
+} from '@/src/features/ai/services/message-learning.service';
 
 // ======================
 // TYPES
@@ -26,6 +30,7 @@ interface TenantContext {
   tenant_id: string;
   tenant_slug: string;
   tenant_name: string;
+  tenant_vertical: string;
   branch_id: string | null;
   channel_connection: ChannelConnection;
   ai_enabled: boolean;
@@ -225,10 +230,10 @@ export async function getTenantContext(
 ): Promise<TenantContext | null> {
   const supabase = createServerClient();
 
-  // Buscar tenant por slug
+  // Buscar tenant por slug (incluyendo vertical para AI learning)
   const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
-    .select('id, name, slug')
+    .select('id, name, slug, vertical')
     .eq('slug', tenantSlug)
     .eq('status', 'active')
     .single();
@@ -259,6 +264,7 @@ export async function getTenantContext(
     tenant_id: tenant.id,
     tenant_slug: tenant.slug,
     tenant_name: tenant.name,
+    tenant_vertical: tenant.vertical || 'general',
     branch_id: connection.branch_id,
     channel_connection: connection as ChannelConnection,
     ai_enabled: connection.ai_enabled,
@@ -789,7 +795,59 @@ async function processIncomingMessage(
     parsedMessage
   );
 
-  // 5. Encolar trabajo de AI si está habilitado
+  // 5. AI Learning: Solo para verticales soportadas (dental y restaurant)
+  // Variables para pasar contexto al AI job
+  let detectedHighPriorityAction: string | null = null;
+
+  if (context.tenant_vertical === 'dental' || context.tenant_vertical === 'restaurant') {
+    // 5a. Procesar patrones de ALTA PRIORIDAD en tiempo real
+    // Detecta urgencias, quejas, objeciones ANTES de que la IA responda
+    // NO consume tokens de LLM - solo usa regex
+    try {
+      const highPriorityResult = await processHighPriorityPatterns(
+        context.tenant_id,
+        parsedMessage.content,
+        context.tenant_vertical,
+        {
+          conversationId: conversation.id,
+          leadId: lead.id,
+          channel: 'whatsapp',
+        }
+      );
+
+      if (highPriorityResult.requires_immediate_action) {
+        detectedHighPriorityAction = highPriorityResult.action_type || null;
+        console.log(
+          `[WhatsApp] High priority patterns detected: ${highPriorityResult.action_type} ` +
+          `(${highPriorityResult.high_priority_patterns.length} patterns, ${highPriorityResult.processing_time_ms}ms)`
+        );
+      }
+    } catch (error) {
+      // No bloquear el flujo si falla el procesamiento de patrones
+      console.warn('[WhatsApp] High priority pattern processing failed:', error);
+    }
+
+    // 5b. Encolar mensaje para aprendizaje diferido (CRON)
+    // Aprende vocabulario y patrones de manera asíncrona
+    try {
+      await queueMessageForLearning(
+        context.tenant_id,
+        conversation.id,
+        messageId,
+        parsedMessage.content,
+        'lead',
+        {
+          channel: 'whatsapp',
+          leadId: lead.id,
+        }
+      );
+    } catch (error) {
+      // No bloquear el flujo si falla el encolado
+      console.warn('[WhatsApp] Failed to queue message for learning:', error);
+    }
+  }
+
+  // 6. Encolar trabajo de AI si está habilitado
   if (context.ai_enabled) {
     const conn = context.channel_connection;
 
@@ -819,7 +877,9 @@ async function processIncomingMessage(
   }
 
   console.log(
-    `[WhatsApp] Message processed: lead=${lead.id}, conv=${conversation.id}, msg=${messageId}, ai_queued=${context.ai_enabled}`
+    `[WhatsApp] Message processed: lead=${lead.id}, conv=${conversation.id}, msg=${messageId}, ` +
+    `vertical=${context.tenant_vertical}, ai_queued=${context.ai_enabled}` +
+    (detectedHighPriorityAction ? `, priority_action=${detectedHighPriorityAction}` : '')
   );
 }
 

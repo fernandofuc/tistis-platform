@@ -125,6 +125,10 @@ const PATTERN_DETECTORS: Record<string, RegExp[]> = {
 
 /**
  * Extrae patrones de un mensaje
+ *
+ * NOTA: El parámetro `vertical` está reservado para uso futuro
+ * cuando se añadan patrones específicos por vertical.
+ * Actualmente se usan los patrones generales para todos.
  */
 export function extractPatterns(
   message: string,
@@ -144,6 +148,9 @@ export function extractPatterns(
   const patterns: ExtractedPattern[] = [];
   const messageLower = truncatedMessage.toLowerCase();
   const MAX_PATTERNS_PER_TYPE = 10; // Límite de patrones por tipo
+
+  // Set para evitar duplicados (clave: type + value normalizado)
+  const seenPatterns = new Set<string>();
 
   for (const [patternType, regexes] of Object.entries(PATTERN_DETECTORS)) {
     let patternsOfType = 0;
@@ -171,8 +178,12 @@ export function extractPatterns(
         // El valor capturado es el primer grupo o el match completo
         const value = (match[1] || match[0]).trim();
 
-        // Evitar valores muy cortos o muy largos
-        if (value.length >= 3 && value.length <= 100) {
+        // Clave de deduplicación: tipo + valor normalizado
+        const dedupeKey = `${patternType}:${value.toLowerCase()}`;
+
+        // Evitar valores muy cortos, muy largos, o duplicados
+        if (value.length >= 3 && value.length <= 100 && !seenPatterns.has(dedupeKey)) {
+          seenPatterns.add(dedupeKey);
           patterns.push({
             type: patternType,
             value: value,
@@ -226,31 +237,112 @@ function detectSentiment(message: string): number {
  * Categorías de vocabulario por vertical
  */
 const VOCABULARY_CATEGORIES: Record<string, Record<string, RegExp[]>> = {
+  // ======================
+  // DENTAL VOCABULARY
+  // ======================
   dental: {
+    // Síntomas y condiciones
     symptom: [
       /(dolor de muelas?|sensibilidad|sangrado de encías?|mal aliento|bruxismo)/gi,
-      /(caries|infección|absceso|flemón)/gi,
+      /(caries|infección|absceso|flemón|gingivitis|periodontitis)/gi,
+      /(hinchazón|inflamación|molestia|punzada|pulsación)/gi,
+      /(diente flojo|diente roto|diente astillado|fractura dental)/gi,
     ],
+    // Procedimientos y tratamientos
     procedure: [
       /(limpieza|blanqueamiento|extracción|endodoncia|ortodoncia|implante)/gi,
-      /(corona|puente|carilla|resina|amalgama)/gi,
+      /(corona|puente|carilla|resina|amalgama|empaste|obturación)/gi,
+      /(radiografía|rayos x|panorámica|tomografía)/gi,
+      /(profilaxis|curetaje|raspado|alisado radicular)/gi,
+      /(prótesis|dentadura|placa|retenedor|guarda oclusal)/gi,
     ],
+    // Términos técnicos/anatómicos
     technical: [
       /(molar|premolar|incisivo|canino|cordal|muela del juicio)/gi,
-      /(encía|esmalte|dentina|pulpa|raíz)/gi,
+      /(encía|esmalte|dentina|pulpa|raíz|nervio)/gi,
+      /(mandíbula|maxilar|paladar|lengua|mejilla)/gi,
+      /(oclusión|mordida|articulación temporomandibular|atm)/gi,
+    ],
+    // Urgencias dentales
+    urgency: [
+      /(emergencia|urgencia|urgente|dolor severo|dolor intenso)/gi,
+      /(no puedo dormir|insoportable|no aguanto|muy fuerte)/gi,
+      /(golpe|trauma|accidente|caída|se cayó el diente)/gi,
     ],
   },
+
+  // ======================
+  // RESTAURANT VOCABULARY
+  // ======================
   restaurant: {
+    // Tipos de servicio
     service: [
-      /(mesa|reservación|evento|catering|delivery|para llevar)/gi,
+      /(mesa|reservación|reserva|evento|catering|delivery|para llevar)/gi,
+      /(pickup|recoger|a domicilio|envío|servicio a mesa)/gi,
+      /(privado|terraza|salón|barra|jardín|interior|exterior)/gi,
     ],
-    time: [
-      /(desayuno|comida|almuerzo|cena|brunch)/gi,
+    // Tiempos de comida
+    meal_time: [
+      /(desayuno|comida|almuerzo|cena|brunch|merienda)/gi,
+      /(happy hour|hora feliz|after office|madrugada)/gi,
+    ],
+    // Tipos de platillos/categorías
+    // NOTA: vegetariano/vegano están en "preference" - aquí solo categorías de ingredientes principales
+    food_category: [
+      /(entrada|plato fuerte|postre|guarnición|aperitivo|botana)/gi,
+      /(ensalada|sopa|crema|pasta|pizza|hamburguesa|taco)/gi,
+      /(mariscos|carnes|pollo|pescado|res|cerdo|cordero)/gi,
+      /(bebida|refresco|cerveza|vino|coctel|café|té)/gi,
+    ],
+    // Preferencias y restricciones
+    preference: [
+      /(sin gluten|gluten free|vegetariano|vegano|kosher|halal)/gi,
+      /(alergia|alérgico|intolerancia|sin lácteos|sin nueces)/gi,
+      /(picante|sin picante|término medio|bien cocido|crudo)/gi,
+      // Modificadores de platillos (con contexto para evitar falsos positivos)
+      /(?:quiero|pido|con|sin)\s+(extra|poco|mucho|doble|mitad)\s+\w+/gi,
+    ],
+    // Ocasiones especiales
+    occasion: [
+      /(cumpleaños|aniversario|graduación|boda|despedida)/gi,
+      /(reunión|junta|celebración|fiesta|evento especial)/gi,
+      /(cita romántica|primera cita|propuesta|compromiso)/gi,
+    ],
+    // Facturación (específico México)
+    billing: [
+      /(factura|facturar|cfdi|rfc|razón social|régimen fiscal)/gi,
+      /(ticket|cuenta|nota|recibo|comprobante)/gi,
+      /(propina|servicio incluido|iva|impuesto)/gi,
+    ],
+    // Quejas comunes en restaurantes
+    // NOTA: Evitar palabras ambiguas como "crudo" (puede ser preferencia) o "frío" (puede ser pedido)
+    complaint: [
+      /(tardaron|esperé mucho|lento|demasiado tiempo|nunca llegó)/gi,
+      /(estaba frío|llegó frío|mal sabor|feo sabor|podrido|echado a perder)/gi,
+      /(sucio|mosca|cabello|pelo|mal servicio|grosero|maleducado)/gi,
+      /(equivocaron|no era lo que pedí|incorrecto|faltó|cobro de más|me cobraron mal)/gi,
+    ],
+    // Elogios comunes
+    compliment: [
+      /(delicioso|exquisito|excelente|rico|sabroso|increíble)/gi,
+      /(buena atención|buen servicio|rápido|amable|recomiendo)/gi,
+      /(volveré|volvería|favorito|el mejor|cinco estrellas)/gi,
     ],
   },
+
+  // ======================
+  // GENERAL VOCABULARY (aplica a todos)
+  // ======================
   general: {
     time: [
-      /(cita|consulta|valoración|sesión|turno)/gi,
+      /(cita|consulta|valoración|sesión|turno|appointment)/gi,
+    ],
+    contact: [
+      /(teléfono|celular|whatsapp|correo|email|dirección)/gi,
+    ],
+    payment: [
+      /(precio|costo|pago|tarjeta|efectivo|transferencia)/gi,
+      /(promoción|descuento|oferta|paquete|mensualidad)/gi,
     ],
   },
 };
@@ -319,6 +411,282 @@ export function extractVocabulary(
   }
 
   return vocabulary;
+}
+
+// ======================
+// HIGH PRIORITY PATTERNS (Tiempo Real)
+// ======================
+
+/**
+ * Patrones de alta prioridad que se procesan INMEDIATAMENTE
+ * No esperan al CRON job porque requieren acción rápida
+ *
+ * IMPORTANTE: Esto NO consume tokens de LLM - solo usa regex
+ */
+const HIGH_PRIORITY_PATTERN_TYPES = [
+  'urgency_indicator',  // Urgencias (dental, médico)
+  'objection',          // Objeciones de precio/competencia
+  'complaint',          // Quejas (requieren atención inmediata)
+  'satisfaction',       // Satisfacción (feedback positivo)
+  'pain_point',         // Puntos de dolor (síntomas)
+] as const;
+
+type HighPriorityPatternType = typeof HIGH_PRIORITY_PATTERN_TYPES[number];
+
+export interface RealTimeProcessingResult {
+  processed: boolean;
+  high_priority_patterns: ExtractedPattern[];
+  requires_immediate_action: boolean;
+  action_type?: 'urgent_booking' | 'escalation' | 'retention' | 'feedback';
+  processing_time_ms: number;
+}
+
+/**
+ * Procesa patrones de ALTA PRIORIDAD en tiempo real
+ *
+ * Esta función se llama SÍNCRONAMENTE después de cada mensaje
+ * para detectar patrones que requieren acción inmediata.
+ *
+ * NO consume tokens de LLM - solo usa regex.
+ * NO reemplaza el CRON - solo procesa patrones críticos inmediatamente.
+ *
+ * Casos de uso:
+ * - Dental: Detectar urgencia para priorizar booking
+ * - Restaurant: Detectar queja para escalación inmediata
+ * - Todos: Detectar objeciones de precio para retención
+ */
+export async function processHighPriorityPatterns(
+  tenantId: string,
+  messageContent: string,
+  vertical: string = 'general',
+  options?: {
+    conversationId?: string;
+    leadId?: string;
+    channel?: string;
+  }
+): Promise<RealTimeProcessingResult> {
+  const startTime = Date.now();
+
+  // 1. Extraer TODOS los patrones (rápido, solo regex)
+  const allPatterns = extractPatterns(messageContent, vertical);
+
+  // 2. Filtrar solo los de alta prioridad
+  const highPriorityPatterns = allPatterns.filter(
+    p => (HIGH_PRIORITY_PATTERN_TYPES as readonly string[]).includes(p.type)
+  );
+
+  // Si no hay patrones de alta prioridad, retornar rápido
+  if (highPriorityPatterns.length === 0) {
+    return {
+      processed: true,
+      high_priority_patterns: [],
+      requires_immediate_action: false,
+      processing_time_ms: Date.now() - startTime,
+    };
+  }
+
+  // 3. Determinar si requiere acción inmediata y qué tipo
+  let requiresImmediateAction = false;
+  let actionType: RealTimeProcessingResult['action_type'];
+
+  // Prioridad de acciones (de mayor a menor urgencia)
+  const hasUrgency = highPriorityPatterns.some(p => p.type === 'urgency_indicator');
+  const hasPainPoint = highPriorityPatterns.some(p => p.type === 'pain_point');
+  const hasComplaint = highPriorityPatterns.some(p => p.type === 'complaint');
+  const hasObjection = highPriorityPatterns.some(p => p.type === 'objection');
+  const hasSatisfaction = highPriorityPatterns.some(p => p.type === 'satisfaction');
+
+  // Determinar acción basada en patrones detectados
+  if (hasUrgency || (hasPainPoint && vertical === 'dental')) {
+    requiresImmediateAction = true;
+    actionType = 'urgent_booking';
+  } else if (hasComplaint) {
+    requiresImmediateAction = true;
+    actionType = 'escalation';
+  } else if (hasObjection) {
+    requiresImmediateAction = true;
+    actionType = 'retention';
+  } else if (hasSatisfaction) {
+    // Satisfacción no requiere acción urgente pero sí se registra
+    requiresImmediateAction = false;
+    actionType = 'feedback';
+  }
+
+  // 4. Guardar patrones de alta prioridad INMEDIATAMENTE en BD
+  // Esto permite que el equipo vea alertas en tiempo real
+  const supabase = createServerClient();
+
+  try {
+    // Ejecutar todas las inserciones en paralelo para mejor rendimiento
+    // En lugar de N queries secuenciales, hacemos N queries paralelas
+    const patternPromises = highPriorityPatterns.map(pattern =>
+      supabase.rpc('upsert_message_pattern', {
+        p_tenant_id: tenantId,
+        p_pattern_type: pattern.type,
+        p_pattern_value: pattern.value,
+        p_context_example: pattern.context,
+        p_sentiment: pattern.sentiment,
+        p_metadata: {
+          ...(pattern.metadata || {}),
+          processed_realtime: true,
+          conversation_id: options?.conversationId,
+          lead_id: options?.leadId,
+          channel: options?.channel,
+          requires_action: requiresImmediateAction,
+          action_type: actionType,
+        },
+      })
+    );
+
+    // Esperar todas las promesas, pero no fallar si alguna falla
+    await Promise.allSettled(patternPromises);
+
+    // 5. Si requiere acción, crear alerta para el equipo
+    if (requiresImmediateAction && options?.leadId) {
+      await createHighPriorityAlert(supabase, {
+        tenantId,
+        leadId: options.leadId,
+        conversationId: options.conversationId,
+        actionType: actionType!,
+        patterns: highPriorityPatterns,
+        channel: options.channel,
+      });
+    }
+  } catch (error) {
+    // Log pero no fallar - el procesamiento de patrones no debe bloquear el flujo
+    console.warn('[Learning Service] Error saving high priority patterns:', error);
+  }
+
+  return {
+    processed: true,
+    high_priority_patterns: highPriorityPatterns,
+    requires_immediate_action: requiresImmediateAction,
+    action_type: actionType,
+    processing_time_ms: Date.now() - startTime,
+  };
+}
+
+/**
+ * Crea una alerta de alta prioridad para el equipo
+ * Se muestra en el dashboard usando el sistema de notificaciones existente
+ */
+async function createHighPriorityAlert(
+  supabase: ReturnType<typeof createServerClient>,
+  params: {
+    tenantId: string;
+    leadId: string;
+    conversationId?: string;
+    actionType: NonNullable<RealTimeProcessingResult['action_type']>;
+    patterns: ExtractedPattern[];
+    channel?: string;
+  }
+): Promise<void> {
+  const { tenantId, leadId, conversationId, actionType, patterns, channel } = params;
+
+  // Mapear tipo de acción a configuración de notificación
+  // Usamos tipos compatibles con el sistema de notificaciones existente
+  const alertConfig: Record<string, {
+    type: 'lead_hot' | 'conversation_escalated' | 'system_alert';
+    priority: 'urgent' | 'high' | 'normal';
+    title: string;
+    actionLabel: string;
+  }> = {
+    urgent_booking: {
+      type: 'lead_hot',
+      priority: 'urgent',
+      title: '🚨 Solicitud de cita URGENTE',
+      actionLabel: 'Ver Lead',
+    },
+    escalation: {
+      type: 'conversation_escalated',
+      priority: 'high',
+      title: '⚠️ Queja detectada - Requiere atención',
+      actionLabel: 'Ver Conversación',
+    },
+    retention: {
+      type: 'system_alert',
+      priority: 'high',
+      title: '💰 Objeción de precio detectada',
+      actionLabel: 'Ver Lead',
+    },
+    feedback: {
+      type: 'system_alert',
+      priority: 'normal',
+      title: '⭐ Feedback positivo recibido',
+      actionLabel: 'Ver Lead',
+    },
+  };
+
+  const config = alertConfig[actionType];
+  if (!config) return;
+
+  // Construir descripción con los patrones detectados
+  const patternsSummary = patterns
+    .map(p => `${p.type}: "${p.value}"`)
+    .slice(0, 3) // Limitar a 3 patrones para no saturar el mensaje
+    .join(', ');
+
+  try {
+    // Obtener user_ids del staff del tenant (owner, admin, manager)
+    const { data: staffUsers } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('tenant_id', tenantId)
+      .in('role', ['owner', 'admin', 'manager']);
+
+    if (!staffUsers || staffUsers.length === 0) {
+      console.log('[Learning Service] No staff users found for tenant, skipping alert');
+      return;
+    }
+
+    const userIds = staffUsers.map(u => u.user_id);
+
+    // Usar broadcast_notification RPC para enviar a todos los usuarios relevantes
+    await supabase.rpc('broadcast_notification', {
+      p_tenant_id: tenantId,
+      p_user_ids: userIds,
+      p_type: config.type,
+      p_title: config.title,
+      p_message: `Patrones detectados: ${patternsSummary}`,
+      p_priority: config.priority,
+      p_related_entity_type: 'lead',
+      p_related_entity_id: leadId,
+      p_action_url: conversationId
+        ? `/dashboard/conversations/${conversationId}`
+        : `/dashboard/leads/${leadId}`,
+      p_action_label: config.actionLabel,
+      p_metadata: {
+        lead_id: leadId,
+        conversation_id: conversationId,
+        patterns: patterns.map(p => ({ type: p.type, value: p.value })),
+        channel: channel,
+        detected_at: new Date().toISOString(),
+        source: 'ai_learning_realtime',
+      },
+    });
+  } catch (error) {
+    // No fallar silenciosamente - loguear el error pero no bloquear el flujo
+    console.warn('[Learning Service] Error creating high priority alert:', error);
+  }
+}
+
+/**
+ * Verifica rápidamente si un mensaje tiene patrones de alta prioridad
+ * Sin guardar en BD - solo detección rápida
+ */
+export function hasHighPriorityPatterns(
+  messageContent: string,
+  vertical: string = 'general'
+): { hasHighPriority: boolean; types: string[] } {
+  const patterns = extractPatterns(messageContent, vertical);
+  const highPriorityTypes = patterns
+    .filter(p => (HIGH_PRIORITY_PATTERN_TYPES as readonly string[]).includes(p.type))
+    .map(p => p.type);
+
+  return {
+    hasHighPriority: highPriorityTypes.length > 0,
+    types: [...new Set(highPriorityTypes)], // Únicos
+  };
 }
 
 // ======================
@@ -673,10 +1041,19 @@ export const MessageLearningService = {
   processLearningMessage,
   processLearningQueue,
 
+  // Real-time High Priority Processing (NO consume tokens LLM)
+  processHighPriorityPatterns,
+  hasHighPriorityPatterns,
+
   // Extraction
   extractPatterns,
   extractVocabulary,
 
   // Context
   getLearningContext,
+};
+
+// Re-export types for convenience
+export type {
+  HighPriorityPatternType,
 };

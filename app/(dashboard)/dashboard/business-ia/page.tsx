@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Business IA Page (Premium Design)
 // Dashboard de insights de negocio generados por IA
+// Incluye: Insights generados por Gemini + AI Learning (patrones detectados)
 // =====================================================
 
 'use client';
@@ -101,6 +102,37 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
     </svg>
   ),
+  brain: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    </svg>
+  ),
+  chat: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  ),
+  tag: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+    </svg>
+  ),
+  fire: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+    </svg>
+  ),
+  exclamation: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  book: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  ),
 };
 
 // ======================
@@ -136,6 +168,44 @@ interface InsightsResponse {
   };
 }
 
+interface MessagePattern {
+  id: string;
+  pattern_type: string;
+  pattern_type_label: string;
+  pattern_value: string;
+  occurrence_count: number;
+  last_occurrence: string;
+  context_examples: string[];
+  is_high_priority: boolean;
+}
+
+interface LearnedVocabulary {
+  id: string;
+  term: string;
+  meaning: string | null;
+  category: string;
+  usage_count: number;
+}
+
+interface AILearningStats {
+  total_patterns: number;
+  total_vocabulary: number;
+  patterns_by_type: Record<string, number>;
+  high_priority_patterns: number;
+  last_learning_run: string | null;
+}
+
+interface AILearningResponse {
+  success: boolean;
+  status: 'active' | 'inactive' | 'blocked' | 'not_applicable';
+  reason?: string;
+  plan: string;
+  vertical: string;
+  patterns: MessagePattern[];
+  vocabulary: LearnedVocabulary[];
+  stats: AILearningStats | null;
+}
+
 // ======================
 // INSIGHT TYPE CONFIG
 // ======================
@@ -152,6 +222,31 @@ const INSIGHT_TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string
   response_improvement: { icon: icons.lightbulb, color: 'text-tis-coral', bgColor: 'bg-tis-coral-100', label: 'Mejora de Respuesta' },
   booking_pattern: { icon: icons.clock, color: 'text-cyan-500', bgColor: 'bg-cyan-50', label: 'Patron de Reservas' },
   satisfaction_trend: { icon: icons.thumbsUp, color: 'text-tis-green', bgColor: 'bg-tis-green-100', label: 'Tendencia de Satisfaccion' },
+};
+
+// Pattern type config for AI Learning
+const PATTERN_TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bgColor: string }> = {
+  urgency_indicator: { icon: icons.fire, color: 'text-red-500', bgColor: 'bg-red-50' },
+  complaint: { icon: icons.exclamation, color: 'text-amber-600', bgColor: 'bg-amber-50' },
+  objection: { icon: icons.alert, color: 'text-orange-500', bgColor: 'bg-orange-50' },
+  pain_point: { icon: icons.alert, color: 'text-rose-500', bgColor: 'bg-rose-50' },
+  satisfaction: { icon: icons.thumbsUp, color: 'text-tis-green', bgColor: 'bg-tis-green-100' },
+  service_request: { icon: icons.tag, color: 'text-tis-purple', bgColor: 'bg-tis-purple/10' },
+  scheduling_preference: { icon: icons.clock, color: 'text-cyan-500', bgColor: 'bg-cyan-50' },
+  pricing_inquiry: { icon: icons.dollar, color: 'text-tis-coral', bgColor: 'bg-tis-coral-100' },
+};
+
+// Vocabulary category config
+const VOCABULARY_CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
+  service: { label: 'Servicio', color: 'bg-tis-purple/10 text-tis-purple' },
+  procedure: { label: 'Procedimiento', color: 'bg-cyan-50 text-cyan-600' },
+  symptom: { label: 'Sintoma', color: 'bg-rose-50 text-rose-600' },
+  staff: { label: 'Personal', color: 'bg-indigo-50 text-indigo-600' },
+  time: { label: 'Tiempo', color: 'bg-amber-50 text-amber-600' },
+  price: { label: 'Precio', color: 'bg-tis-green-100 text-tis-green' },
+  informal: { label: 'Informal', color: 'bg-slate-100 text-slate-600' },
+  brand: { label: 'Marca', color: 'bg-tis-coral-100 text-tis-coral' },
+  other: { label: 'Otro', color: 'bg-slate-100 text-slate-500' },
 };
 
 // ======================
@@ -278,6 +373,301 @@ function InsightCard({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// ======================
+// AI LEARNING SECTION COMPONENT
+// ======================
+
+function AILearningSection({
+  learningData,
+  loading,
+}: {
+  learningData: AILearningResponse | null;
+  loading: boolean;
+}) {
+  const [activeTab, setActiveTab] = useState<'patterns' | 'vocabulary'>('patterns');
+
+  if (loading) {
+    return (
+      <Card variant="bordered" className="mt-8">
+        <CardContent className="py-8">
+          <div className="flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-tis-purple border-t-transparent rounded-full animate-spin mr-3" />
+            <span className="text-slate-600">Cargando datos de aprendizaje...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!learningData || learningData.status === 'blocked' || learningData.status === 'not_applicable') {
+    return null;
+  }
+
+  if (!learningData.stats || (learningData.stats.total_patterns === 0 && learningData.stats.total_vocabulary === 0)) {
+    return (
+      <Card variant="bordered" className="mt-8">
+        <CardHeader
+          title="Aprendizaje Automatico"
+          subtitle="La IA aprende de las conversaciones con tus clientes"
+        />
+        <CardContent>
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-tis-purple/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-tis-purple w-8 h-8">{icons.brain}</span>
+            </div>
+            <p className="text-slate-600 mb-2">
+              Aun no hay suficientes datos de aprendizaje
+            </p>
+            <p className="text-sm text-slate-500">
+              El sistema aprendera automaticamente conforme recibas mas conversaciones
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const highPriorityPatterns = learningData.patterns.filter(p => p.is_high_priority);
+  const regularPatterns = learningData.patterns.filter(p => !p.is_high_priority);
+
+  return (
+    <div className="mt-8 space-y-6">
+      {/* Section Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <span className="text-tis-purple">{icons.brain}</span>
+            Aprendizaje Automatico
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Patrones y vocabulario detectados en las conversaciones de tus clientes
+          </p>
+        </div>
+        {learningData.stats.last_learning_run && (
+          <span className="text-xs text-slate-400">
+            Ultimo analisis: {new Date(learningData.stats.last_learning_run).toLocaleDateString('es-MX')}
+          </span>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-4 border border-slate-100">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-tis-purple">{icons.chat}</span>
+            <span className="text-xs font-medium text-slate-500">Patrones</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{learningData.stats.total_patterns}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-100">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-amber-500">{icons.fire}</span>
+            <span className="text-xs font-medium text-slate-500">Alta Prioridad</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{learningData.stats.high_priority_patterns}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-100">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-tis-green">{icons.book}</span>
+            <span className="text-xs font-medium text-slate-500">Vocabulario</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{learningData.stats.total_vocabulary}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-100">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-tis-coral">{icons.tag}</span>
+            <span className="text-xs font-medium text-slate-500">Tipos</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">
+            {Object.keys(learningData.stats.patterns_by_type).length}
+          </p>
+        </div>
+      </div>
+
+      {/* High Priority Patterns Alert */}
+      {highPriorityPatterns.length > 0 && (
+        <Card variant="bordered" className="border-amber-200 bg-amber-50/50">
+          <CardHeader
+            title={
+              <span className="flex items-center gap-2 text-amber-700">
+                {icons.fire}
+                Patrones de Alta Prioridad ({highPriorityPatterns.length})
+              </span>
+            }
+            subtitle="Urgencias, quejas y objeciones detectadas que requieren atencion"
+          />
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {highPriorityPatterns.slice(0, 6).map((pattern) => {
+                const config = PATTERN_TYPE_CONFIG[pattern.pattern_type] || {
+                  icon: icons.alert,
+                  color: 'text-slate-500',
+                  bgColor: 'bg-slate-100',
+                };
+                return (
+                  <div
+                    key={pattern.id}
+                    className="bg-white rounded-lg p-3 border border-amber-200"
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className={`p-1.5 rounded-lg ${config.bgColor} ${config.color} flex-shrink-0`}>
+                        {config.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 truncate">
+                          {pattern.pattern_value}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {pattern.pattern_type_label} - {pattern.occurrence_count}x
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {highPriorityPatterns.length > 6 && (
+              <p className="text-sm text-amber-700 mt-3 text-center">
+                +{highPriorityPatterns.length - 6} patrones mas detectados
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('patterns')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'patterns'
+              ? 'border-tis-purple text-tis-purple'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Patrones Detectados
+        </button>
+        <button
+          onClick={() => setActiveTab('vocabulary')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'vocabulary'
+              ? 'border-tis-purple text-tis-purple'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Vocabulario Aprendido
+        </button>
+      </div>
+
+      {/* Content */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'patterns' && (
+          <motion.div
+            key="patterns"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <Card variant="bordered">
+              <CardContent className="p-0">
+                <div className="divide-y divide-slate-100">
+                  {regularPatterns.slice(0, 15).map((pattern) => {
+                    const config = PATTERN_TYPE_CONFIG[pattern.pattern_type] || {
+                      icon: icons.tag,
+                      color: 'text-slate-500',
+                      bgColor: 'bg-slate-100',
+                    };
+                    return (
+                      <div
+                        key={pattern.id}
+                        className="p-4 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${config.bgColor} ${config.color}`}>
+                              {config.icon}
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900">
+                                {pattern.pattern_value}
+                              </p>
+                              <p className="text-sm text-slate-500">
+                                {pattern.pattern_type_label}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold text-slate-900">
+                              {pattern.occurrence_count}x
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {new Date(pattern.last_occurrence).toLocaleDateString('es-MX')}
+                            </p>
+                          </div>
+                        </div>
+                        {pattern.context_examples && pattern.context_examples.length > 0 && (
+                          <div className="mt-2 pl-11">
+                            <p className="text-xs text-slate-400 italic">
+                              &quot;{pattern.context_examples[0]}&quot;
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {regularPatterns.length === 0 && (
+                  <div className="p-8 text-center text-slate-500">
+                    No hay patrones regulares detectados aun
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {activeTab === 'vocabulary' && (
+          <motion.div
+            key="vocabulary"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <Card variant="bordered">
+              <CardContent>
+                {learningData.vocabulary.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {learningData.vocabulary.map((vocab) => {
+                      const catConfig = VOCABULARY_CATEGORY_CONFIG[vocab.category] ||
+                        VOCABULARY_CATEGORY_CONFIG.other;
+                      return (
+                        <div
+                          key={vocab.id}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium ${catConfig.color} flex items-center gap-2`}
+                          title={vocab.meaning || vocab.term}
+                        >
+                          <span>{vocab.term}</span>
+                          <span className="text-xs opacity-70">
+                            {vocab.usage_count}x
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-500">
+                    No hay vocabulario aprendido aun
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -438,7 +828,9 @@ function BlockedState() {
 export default function BusinessIAPage() {
   const { session } = useAuth();
   const [data, setData] = useState<InsightsResponse | null>(null);
+  const [learningData, setLearningData] = useState<AILearningResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [learningLoading, setLearningLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const accessToken = session?.access_token;
@@ -469,9 +861,32 @@ export default function BusinessIAPage() {
     }
   }, [accessToken]);
 
+  const fetchLearningData = useCallback(async () => {
+    if (!accessToken) return;
+
+    try {
+      setLearningLoading(true);
+      const response = await fetch('/api/ai-learning', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setLearningData(result);
+      }
+    } catch (err) {
+      console.error('Error fetching AI learning data:', err);
+    } finally {
+      setLearningLoading(false);
+    }
+  }, [accessToken]);
+
   useEffect(() => {
     fetchInsights();
-  }, [fetchInsights]);
+    fetchLearningData();
+  }, [fetchInsights, fetchLearningData]);
 
   const handleAction = async (insightId: string, action: string) => {
     if (!accessToken) return;
@@ -492,6 +907,11 @@ export default function BusinessIAPage() {
     } catch (err) {
       console.error('Error updating insight:', err);
     }
+  };
+
+  const handleRefresh = () => {
+    fetchInsights();
+    fetchLearningData();
   };
 
   // Handle unauthenticated state
@@ -562,7 +982,7 @@ export default function BusinessIAPage() {
         <Button
           variant="ghost"
           leftIcon={icons.refresh}
-          onClick={fetchInsights}
+          onClick={handleRefresh}
         >
           Actualizar
         </Button>
@@ -621,6 +1041,9 @@ export default function BusinessIAPage() {
           </Card>
         )}
       </div>
+
+      {/* AI Learning Section */}
+      <AILearningSection learningData={learningData} loading={learningLoading} />
     </PageWrapper>
   );
 }
