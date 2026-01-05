@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { X, UtensilsCrossed, Plus, Trash2, DollarSign, Clock, Flame, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, UtensilsCrossed, Plus, Trash2, DollarSign, Clock, Flame, AlertTriangle, ChefHat } from 'lucide-react';
 import type { MenuItem, MenuCategory, MenuItemFormData, Allergen, MenuItemVariant, MenuItemSize, MenuItemAddOn } from '../types';
 import { ALLERGEN_CONFIG, SPICE_LEVELS } from '../types';
+import { RecipeEditor } from './RecipeEditor';
 
 // ======================
 // TYPES
@@ -364,7 +365,13 @@ export function MenuItemFormModal({
   branchId,
   isLoading = false,
 }: MenuItemFormModalProps) {
-  const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'variants'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'variants' | 'recipe'>('basic');
+  const [recipeCost, setRecipeCost] = useState<number>(0);
+
+  // Callback for recipe cost updates
+  const handleRecipeCostCalculated = useCallback((cost: number) => {
+    setRecipeCost(cost);
+  }, []);
   const [formData, setFormData] = useState<MenuItemFormData>({
     category_id: '',
     name: '',
@@ -465,6 +472,7 @@ export function MenuItemFormModal({
     { id: 'basic', label: 'Básico' },
     { id: 'details', label: 'Detalles' },
     { id: 'variants', label: 'Variantes' },
+    { id: 'recipe', label: 'Receta', icon: ChefHat },
   ] as const;
 
   return (
@@ -495,20 +503,24 @@ export function MenuItemFormModal({
           {/* Tabs */}
           <div className="px-6 pt-4 border-b border-slate-100">
             <div className="flex gap-1">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors
-                    ${activeTab === tab.id
-                      ? 'bg-white text-tis-coral border-b-2 border-tis-coral -mb-px'
-                      : 'text-slate-500 hover:text-slate-700'
-                    }
-                  `}
-                >
-                  {tab.label}
-                </button>
-              ))}
+              {tabs.map(tab => {
+                const Icon = 'icon' in tab ? tab.icon : null;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1.5
+                      ${activeTab === tab.id
+                        ? 'bg-white text-tis-coral border-b-2 border-tis-coral -mb-px'
+                        : 'text-slate-500 hover:text-slate-700'
+                      }
+                    `}
+                  >
+                    {Icon && <Icon className="w-4 h-4" />}
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -688,6 +700,40 @@ export function MenuItemFormModal({
                 <AddOnsEditor
                   addOns={formData.add_ons ?? []}
                   onChange={(add_ons) => setFormData(prev => ({ ...prev, add_ons }))}
+                />
+              </div>
+            )}
+
+            {activeTab === 'recipe' && (
+              <div className="space-y-5">
+                {/* Recipe Cost vs Price Info */}
+                {item && recipeCost > 0 && (
+                  <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
+                    <div className="flex-1">
+                      <p className="text-xs text-slate-500 mb-1">Precio de venta</p>
+                      <p className="text-lg font-semibold text-slate-800">${formData.price.toFixed(2)}</p>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-slate-500 mb-1">Costo de producción</p>
+                      <p className="text-lg font-semibold text-tis-coral">${recipeCost.toFixed(2)}</p>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-slate-500 mb-1">Margen</p>
+                      <p className={`text-lg font-semibold ${
+                        formData.price > recipeCost ? 'text-emerald-600' : 'text-red-600'
+                      }`}>
+                        {formData.price > 0
+                          ? `${(((formData.price - recipeCost) / formData.price) * 100).toFixed(1)}%`
+                          : '0%'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <RecipeEditor
+                  menuItemId={item?.id || null}
+                  branchId={branchId}
+                  onCostCalculated={handleRecipeCostCalculated}
                 />
               </div>
             )}

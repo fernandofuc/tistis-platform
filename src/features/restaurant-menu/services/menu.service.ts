@@ -16,6 +16,8 @@ import type {
   MenuItemsResponse,
   MenuItemResponse,
   MenuStatsResponse,
+  RecipeFormData,
+  RecipeResponse,
 } from '../types';
 
 // ======================
@@ -319,5 +321,26 @@ export async function toggleItemFeatured(id: string, isFeatured: boolean): Promi
   return fetchWithAuth(`/api/restaurant/menu/items/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ is_featured: isFeatured }),
+  });
+}
+
+// ======================
+// RECIPES
+// ======================
+
+export async function getRecipe(menuItemId: string): Promise<RecipeResponse> {
+  return fetchWithAuth(`/api/restaurant/menu/recipes?menu_item_id=${menuItemId}`);
+}
+
+export async function saveRecipe(data: RecipeFormData): Promise<RecipeResponse> {
+  return fetchWithAuth('/api/restaurant/menu/recipes', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRecipe(menuItemId: string): Promise<{ success: boolean }> {
+  return fetchWithAuth(`/api/restaurant/menu/recipes?menu_item_id=${menuItemId}`, {
+    method: 'DELETE',
   });
 }

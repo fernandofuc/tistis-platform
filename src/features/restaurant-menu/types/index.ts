@@ -203,6 +203,74 @@ export interface MenuFilters {
 }
 
 // ======================
+// RECIPE / INGREDIENTS
+// ======================
+export interface RecipeIngredient {
+  id: string;
+  tenant_id: string;
+  recipe_id: string;
+  inventory_item_id: string;
+  quantity: number;
+  unit: string;
+  unit_cost: number;
+  total_cost: number;
+  preparation_notes: string | null;
+  is_optional: boolean;
+  display_order: number;
+  inventory_item?: {
+    id: string;
+    name: string;
+    sku: string | null;
+    unit: string;
+    unit_cost: number | null;
+    current_stock: number;
+    minimum_stock: number | null;
+    image_url: string | null;
+  };
+}
+
+export interface MenuItemRecipe {
+  id: string;
+  tenant_id: string;
+  menu_item_id: string;
+  yield_quantity: number;
+  yield_unit: string;
+  total_cost: number;
+  cost_per_portion: number;
+  is_active: boolean;
+  preparation_notes: string | null;
+  storage_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  ingredients?: RecipeIngredient[];
+}
+
+export interface RecipeFormData {
+  menu_item_id: string;
+  yield_quantity?: number;
+  yield_unit?: string;
+  preparation_notes?: string;
+  storage_notes?: string;
+  ingredients: Array<{
+    inventory_item_id: string;
+    quantity: number;
+    unit: string;
+    preparation_notes?: string;
+    is_optional?: boolean;
+    display_order?: number;
+  }>;
+}
+
+export interface RecipeResponse {
+  success: boolean;
+  data: {
+    menu_item: { id: string; name: string; price: number };
+    recipe: MenuItemRecipe | null;
+  };
+  error?: string;
+}
+
+// ======================
 // STATS
 // ======================
 export interface MenuStats {
