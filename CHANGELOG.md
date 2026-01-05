@@ -7,6 +7,216 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [4.8.0] - 2026-01-04
+
+### Resumen
+
+**Mejoras en Marketing y UX Premium** - Rediseno completo de la pagina "Como Funciona", nuevo sistema AI Learning, y rediseno de pagina Facturacion AI con estilo premium TIS TIS.
+
+---
+
+### 1. Pagina "Como Funciona" - Copywriting Premium
+
+Se rediseno completamente el copywriting de la pagina `/como-funciona` con enfoque persuasivo y orientado a conversion, siguiendo principios Apple/Lovable.
+
+#### 1.1 HeroSection.tsx - Primera Impresion
+
+**Cambios realizados:**
+- Nuevo headline: *"La IA que aprende tu negocio y trabaja por ti 24/7"*
+- Badge premium: *"Potenciado por GPT-5 + Gemini + Claude AI"*
+- 3 value props visuales con indicadores verdes
+- 5 iconos de canales integrados (WhatsApp, Instagram, Messenger, TikTok, Llamadas IA)
+- CTA optimizado: *"Prueba 10 dias gratis"*
+
+**Beneficio para el negocio:**
+- Diferenciacion inmediata con Triple IA
+- Confianza visual con logos de canales
+- Reduce friccion con value props concretos
+
+#### 1.2 HowItWorksSection.tsx - 3 Pasos
+
+**Pasos redefinidos:**
+1. *"Conecta tus canales en 5 minutos"* - Sin codigo, solo escanea QR
+2. *"La IA aprende de tu negocio"* - Entrena agentes con menu/servicios/precios
+3. *"Convierte clientes mientras duermes"* - Respuestas 24/7, citas automaticas
+
+**Beneficio para el negocio:**
+- Reduce percepcion de complejidad tecnica
+- Comunica velocidad de implementacion
+- Enfatiza resultados automaticos
+
+#### 1.3 FeaturesSection.tsx - 8 Diferenciadores
+
+**Features con copy orientado a resultados:**
+
+| Feature | Beneficio Comunicado |
+|---------|---------------------|
+| Respuestas en segundos | *"Mientras tu competencia tarda horas en contestar..."* |
+| Leads que se califican solos | *"Tu equipo se enfoca en cerrar, no en filtrar"* |
+| Citas sin llamadas | *"Sin transferencias, sin 'te marco despues'"* |
+| Insights de IA (Gemini) | *"Te dice que servicios vender, cuando hay mas demanda"* |
+| Multi-sucursal | *"Cada ubicacion ve solo sus datos"* |
+| Triple IA | *"No dependemos de un solo modelo"* |
+| Omnicanalidad | *"Todo llega a una sola bandeja"* |
+| Funciona dia 1 | *"Otros sistemas tardan semanas"* |
+
+**Stats bar actualizado:**
+- 50 cupos disponibles este mes (urgencia)
+- 1M+ conversaciones gestionadas
+- 24/7 sin interrupciones
+- <3 seg tiempo de respuesta
+
+**Beneficio para el negocio:**
+- Cada feature habla de dolor del cliente resuelto
+- Stats generan urgencia y credibilidad
+
+#### 1.4 UseCasesSection.tsx - 4 Verticales
+
+**Casos de uso con metricas:**
+
+| Vertical | Metricas Comunicadas |
+|----------|---------------------|
+| Dental | +40% citas agendadas, 0 leads perdidos, -60% no-shows |
+| Restaurantes | KDS integrado, inventario, Facturacion AI por foto |
+| Retail | Multi-sucursal, programa lealtad automatizado |
+| Servicios | Lead scoring con IA, agenda automatica de llamadas |
+
+**Beneficio para el negocio:**
+- Prospectos ven casos de su industria
+- Metricas concretas generan confianza
+
+#### 1.5 CTASection.tsx - Urgencia y Conversion
+
+**Elementos de urgencia:**
+- Headline: *"Cada minuto sin TIS TIS es un cliente que se va"*
+- Badge: *"10 dias gratis - Solo 50 cupos este mes"*
+- Trust text: *"Implementacion en minutos. Sin contratos. Cancela cuando quieras."*
+
+**Beneficio para el negocio:**
+- Urgencia genuina sin ser agresivo
+- Reduce objeciones con garantias
+
+#### 1.6 SEO Optimizado (page.tsx)
+
+```typescript
+title: 'Como Funciona | TIS TIS - IA que Aprende tu Negocio'
+description: 'Sistema de agentes IA que responde WhatsApp 24/7, agenda citas,
+              califica leads y genera facturas. Potenciado por GPT-5, Gemini y Claude.'
+```
+
+**Beneficio para el negocio:**
+- Mejor posicionamiento organico
+- Keywords relevantes para busquedas de IA para negocios
+
+---
+
+### 2. Sistema AI Learning - Aprendizaje Automatico
+
+Se implemento el sistema de aprendizaje de IA que analiza patrones de conversacion para mejorar respuestas con el tiempo.
+
+#### 2.1 Tablas Nuevas en Supabase
+
+| Tabla | Proposito |
+|-------|-----------|
+| `ai_learning_patterns` | Patrones detectados en conversaciones |
+| `ai_learning_vocabulary` | Vocabulario especifico del negocio |
+| `ai_learning_responses` | Respuestas sugeridas por la IA |
+
+#### 2.2 Caracteristicas
+
+- **Deteccion de patrones:** Identifica frases comunes de clientes
+- **Vocabulario del negocio:** Aprende terminos especificos del tenant
+- **Respuestas sugeridas:** Genera templates basados en conversaciones exitosas
+- **Mejora continua:** Se entrena con cada interaccion
+
+#### 2.3 Integracion con Dashboard
+
+- Nueva seccion en Business IA mostrando estadisticas de aprendizaje
+- Graficas de patrones detectados por categoria
+- Editor de vocabulario personalizado
+
+**Beneficio para el negocio:**
+- La IA mejora automaticamente con el uso
+- Reduce necesidad de entrenamiento manual
+- Respuestas mas precisas con el tiempo
+
+---
+
+### 3. Pagina Facturacion AI - Rediseno Premium
+
+Se transformo la pagina `/dashboard/[tenantId]/business-ia/facturacion` con diseno premium estilo TIS TIS.
+
+#### 3.1 Componentes Creados
+
+| Componente | Funcion |
+|------------|---------|
+| `FacturacionAIPage.tsx` | Layout principal con gradientes y animaciones |
+| `FacturacionDashboard.tsx` | Dashboard con metricas en tiempo real |
+| `FacturacionStats.tsx` | KPIs visuales (facturas, montos, tiempo ahorrado) |
+| `RecentInvoices.tsx` | Lista de facturas recientes con estados |
+| `InvoiceActions.tsx` | Acciones rapidas (nueva factura, OCR, config) |
+
+#### 3.2 Caracteristicas Visuales
+
+- Gradientes coral-to-pink caracteristicos de TIS TIS
+- Animaciones suaves con framer-motion
+- Cards con sombras premium (shadow-card, shadow-card-elevated)
+- Iconos Lucide React consistentes
+- Responsive design mobile-first
+
+#### 3.3 Funcionalidades
+
+- **OCR Integration:** Extraccion de datos desde fotos de tickets
+- **Auto-generacion:** Facturas creadas automaticamente desde conversaciones
+- **Multi-tenant:** Cada sucursal ve solo sus datos
+- **Historial:** Busqueda y filtrado de facturas
+
+**Beneficio para el negocio:**
+- UX premium que refleja calidad del producto
+- Facilita adopcion de facturacion automatica
+- Reduce tiempo de entrenamiento de usuarios
+
+---
+
+### 4. Archivos Modificados
+
+#### Marketing (Como Funciona)
+| Archivo | Cambios |
+|---------|---------|
+| `app/(marketing)/como-funciona/page.tsx` | SEO optimizado |
+| `app/(marketing)/como-funciona/components/HeroSection.tsx` | Nuevo headline, value props, iconos |
+| `app/(marketing)/como-funciona/components/HowItWorksSection.tsx` | 3 pasos redefinidos |
+| `app/(marketing)/como-funciona/components/FeaturesSection.tsx` | 8 features con copy persuasivo |
+| `app/(marketing)/como-funciona/components/UseCasesSection.tsx` | 4 verticales con metricas |
+| `app/(marketing)/como-funciona/components/CTASection.tsx` | Urgencia y conversion |
+
+#### Dashboard (Facturacion AI)
+| Archivo | Cambios |
+|---------|---------|
+| `app/(dashboard)/dashboard/[tenantId]/business-ia/facturacion/page.tsx` | Rediseno completo |
+| `src/features/facturacion/components/*.tsx` | Componentes premium nuevos |
+
+---
+
+### 5. Estadisticas de Cambios
+
+```
+12 archivos modificados
++1,500 lineas de copywriting optimizado
+6 componentes de Como Funciona actualizados
+5 componentes de Facturacion AI creados
+3 tablas de AI Learning agregadas
+```
+
+---
+
+### 6. Commits Relacionados
+
+- `c82dc1b` - feat: improve Como Funciona page copywriting with premium design
+- `9a1b040` - feat: add AI Learning system and Facturacion AI page redesign
+
+---
+
 ## [4.7.0] - 2026-01-03
 
 ### Resumen
@@ -980,4 +1190,4 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-**Ultima actualizacion:** 29 de Diciembre, 2025
+**Ultima actualizacion:** 4 de Enero, 2026
