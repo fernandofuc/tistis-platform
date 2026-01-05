@@ -13,6 +13,7 @@ import type {
   RestockOrderStatus,
   LowStockAlertStatus,
 } from '../types';
+import { supabase } from '@/src/shared/lib/supabase';
 
 const API_BASE = '/api/restaurant/inventory';
 
@@ -21,12 +22,11 @@ const API_BASE = '/api/restaurant/inventory';
 // ======================
 
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const { createBrowserClient } = await import('@supabase/ssr');
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
   const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    console.warn('[restock.service] No session found - requests may fail with 401');
+  }
 
   return {
     'Content-Type': 'application/json',

@@ -3,6 +3,7 @@
 // API service for Inventory Management operations
 // =====================================================
 
+import { supabase } from '@/src/shared/lib/supabase';
 import type {
   InventoryItem,
   InventoryCategory,
@@ -24,13 +25,16 @@ const API_BASE = '/api/restaurant/inventory';
 // HELPERS
 // ======================
 
+/**
+ * Get auth headers using the shared Supabase client
+ * This prevents multiple GoTrueClient instances
+ */
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const { createBrowserClient } = await import('@supabase/ssr');
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
   const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    console.warn('[inventory.service] No session found - requests may fail with 401');
+  }
 
   return {
     'Content-Type': 'application/json',

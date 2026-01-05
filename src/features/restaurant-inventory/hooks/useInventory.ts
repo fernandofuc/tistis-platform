@@ -6,7 +6,7 @@
 // =====================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '@/src/shared/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type {
   InventoryItem,
@@ -93,7 +93,6 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createClientComponentClient();
   const channelsRef = useRef<RealtimeChannel[]>([]);
 
   // ======================
@@ -210,7 +209,7 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
       });
       channelsRef.current = [];
     };
-  }, [branch_id, enableRealtime, supabase, fetchData]);
+  }, [branch_id, enableRealtime, fetchData]);
 
   // ======================
   // AUTO REFRESH

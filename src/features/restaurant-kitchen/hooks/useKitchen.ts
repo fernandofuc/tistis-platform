@@ -5,8 +5,8 @@
 // React hook for Kitchen Display System state management
 // =====================================================
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/src/shared/lib/supabase';
 import type {
   RestaurantOrder,
   RestaurantOrderItem,
@@ -83,13 +83,6 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
   const [stats, setStats] = useState<KDSStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const supabase = useMemo(() => {
-    return createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-  }, []);
 
   // ======================
   // DATA FETCHING
@@ -182,7 +175,7 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
       supabase.removeChannel(ordersChannel);
       supabase.removeChannel(itemsChannel);
     };
-  }, [branch_id, supabase, fetchData]);
+  }, [branch_id, fetchData]);
 
   // ======================
   // ORDER ACTIONS
