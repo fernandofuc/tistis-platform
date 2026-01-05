@@ -133,6 +133,7 @@ export interface MenuItemAddOn {
 // FORM DATA
 // ======================
 export interface CategoryFormData {
+  branch_id: string;  // Required for API
   name: string;
   slug?: string;
   description?: string;

@@ -5,6 +5,7 @@
 
 // Components
 export { IntegrationHub } from './components/IntegrationHub';
+export { SoftRestaurantConfigModal } from './components/SoftRestaurantConfigModal';
 
 // Types
 export * from './types/integration.types';

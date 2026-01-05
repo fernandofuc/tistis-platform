@@ -212,7 +212,14 @@ export function CategoryFormModal({
 
     if (!validateForm()) return;
 
+    // Validate branchId is provided
+    if (!branchId) {
+      setErrors({ name: 'Error: No se encontró la sucursal' });
+      return;
+    }
+
     const submitData: CategoryFormData = {
+      branch_id: branchId,  // Include branch_id for the API
       name: formState.name,
       description: formState.description || undefined,
       parent_id: formState.parent_id || null,

@@ -24,7 +24,8 @@ export type IntegrationType =
   | 'toast'
   | 'clover'
   | 'lightspeed'
-  | 'softrestaurant_import'
+  | 'softrestaurant'        // Main SoftRestaurant integration
+  | 'softrestaurant_import' // Legacy import type
   // Calendar
   | 'google_calendar'
   | 'calendly'
@@ -515,4 +516,268 @@ export interface TenantExternalData {
   }>;
   external_appointments_count: number;
   last_sync_at?: string;
+}
+
+// ======================
+// SOFTRESTAURANT SPECIFIC TYPES
+// ======================
+
+/**
+ * SoftRestaurant Recipe Ingredient with gramaje (weight/portion)
+ * Maps to SR's "explosión de insumos" feature
+ */
+export interface SRRecipeIngredient {
+  id: string;
+  name: string;
+  quantity: number;        // Amount needed
+  unit: string;            // g, kg, ml, L, pz, etc.
+  unit_cost: number;       // Cost per unit
+  total_cost: number;      // quantity * unit_cost
+  category?: string;       // Ingredient category
+  sku?: string;            // External SKU
+  is_primary: boolean;     // Main ingredient flag
+  waste_percentage?: number; // Merma %
+}
+
+/**
+ * SoftRestaurant Product/Menu Item with full recipe
+ */
+export interface SRMenuItem {
+  id: string;
+  external_id: string;
+  name: string;
+  description?: string;
+  category: string;
+  subcategory?: string;
+
+  // Pricing
+  price: number;
+  cost: number;            // Calculated from recipe
+  profit_margin: number;   // (price - cost) / price * 100
+  currency: string;
+
+  // Recipe with gramaje
+  has_recipe: boolean;
+  recipe_yield: number;    // Portions per recipe
+  recipe_yield_unit: string;
+  ingredients: SRRecipeIngredient[];
+  total_recipe_cost: number;
+  cost_per_portion: number;
+
+  // Attributes
+  is_available: boolean;
+  preparation_time_minutes?: number;
+  calories?: number;
+  allergens?: string[];
+
+  // Modifiers (extras, sizes)
+  modifiers: Array<{
+    name: string;
+    options: Array<{
+      name: string;
+      price_adjustment: number;
+    }>;
+    required: boolean;
+    max_selections?: number;
+  }>;
+
+  // Images
+  image_url?: string;
+
+  // Metadata
+  display_order: number;
+  is_featured: boolean;
+  tags?: string[];
+}
+
+/**
+ * SoftRestaurant Table for floor plan sync
+ */
+export interface SRTable {
+  id: string;
+  external_id: string;
+  table_number: string;
+  name?: string;
+  zone: string;            // Terraza, Interior, Barra, etc.
+  capacity: number;
+  min_capacity?: number;
+
+  // Position for floor plan
+  position_x?: number;
+  position_y?: number;
+  width?: number;
+  height?: number;
+  shape?: 'square' | 'round' | 'rectangle';
+  rotation?: number;
+
+  // Status (from SR)
+  status: 'available' | 'occupied' | 'reserved' | 'blocked';
+  current_ticket_id?: string;
+  current_ticket_total?: number;
+  occupied_since?: string;
+
+  // Features
+  features: string[];      // window, outdoor, booth, etc.
+  is_active: boolean;
+}
+
+/**
+ * SoftRestaurant Reservation sync
+ */
+export interface SRReservation {
+  id: string;
+  external_id: string;
+
+  // Guest info
+  guest_name: string;
+  guest_phone?: string;
+  guest_email?: string;
+  party_size: number;
+
+  // Timing
+  scheduled_at: string;
+  duration_minutes: number;
+
+  // Table assignment
+  table_id?: string;
+  table_number?: string;
+  zone?: string;
+
+  // Status
+  status: 'pending' | 'confirmed' | 'seated' | 'completed' | 'cancelled' | 'no_show';
+  confirmation_code?: string;
+
+  // Notes
+  special_requests?: string;
+  internal_notes?: string;
+
+  // Source
+  source: 'sr_direct' | 'sr_online' | 'tistis' | 'phone' | 'walkin';
+}
+
+/**
+ * SoftRestaurant Inventory Item with stock levels
+ */
+export interface SRInventoryItem {
+  id: string;
+  external_id: string;
+  sku?: string;
+  name: string;
+  description?: string;
+  category: string;
+
+  // Stock
+  quantity_on_hand: number;
+  unit: string;
+  minimum_stock: number;
+  maximum_stock?: number;
+  reorder_point: number;
+  reorder_quantity?: number;
+
+  // Cost
+  unit_cost: number;
+  total_value: number;     // quantity * unit_cost
+  currency: string;
+
+  // Status
+  is_low_stock: boolean;
+  is_critical: boolean;    // Below 25% of minimum
+  last_purchase_date?: string;
+  last_purchase_cost?: number;
+
+  // Supplier
+  preferred_supplier_id?: string;
+  preferred_supplier_name?: string;
+
+  // Storage
+  storage_type: 'dry' | 'refrigerated' | 'frozen';
+  expiration_tracking: boolean;
+  default_shelf_life_days?: number;
+}
+
+/**
+ * SoftRestaurant Sale/Order for analytics
+ */
+export interface SRSale {
+  id: string;
+  external_id: string;
+  ticket_number: string;
+
+  // Table info
+  table_id?: string;
+  table_number?: string;
+
+  // Timing
+  opened_at: string;
+  closed_at?: string;
+  duration_minutes?: number;
+
+  // Totals
+  subtotal: number;
+  tax: number;
+  tip?: number;
+  discount?: number;
+  total: number;
+  currency: string;
+
+  // Payment
+  payment_method?: string;
+  is_paid: boolean;
+
+  // Items
+  items: Array<{
+    product_id: string;
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+    modifiers?: string[];
+    subtotal: number;
+  }>;
+
+  // Staff
+  server_id?: string;
+  server_name?: string;
+
+  // Guest count
+  guest_count: number;
+  per_person_average: number;
+
+  // Metadata
+  source: 'dine_in' | 'takeout' | 'delivery';
+  delivery_platform?: string; // Rappi, Uber Eats, etc.
+}
+
+/**
+ * SoftRestaurant sync configuration
+ */
+export interface SRSyncConfig {
+  // What to sync
+  sync_menu: boolean;
+  sync_recipes: boolean;      // Include gramaje/ingredients
+  sync_inventory: boolean;
+  sync_tables: boolean;
+  sync_reservations: boolean;
+  sync_sales: boolean;
+
+  // Direction
+  menu_direction: 'sr_to_tistis' | 'tistis_to_sr' | 'bidirectional';
+  inventory_direction: 'sr_to_tistis' | 'tistis_to_sr' | 'bidirectional';
+  reservations_direction: 'sr_to_tistis' | 'tistis_to_sr' | 'bidirectional';
+
+  // Frequency
+  sync_frequency_minutes: number;
+
+  // Filters
+  include_inactive_products: boolean;
+  sales_history_days: number;  // How many days of sales to sync
+
+  // Mapping
+  default_branch_id?: string;
+  category_mapping: Record<string, string>;  // SR category -> TIS TIS category
+
+  // Features
+  auto_create_categories: boolean;
+  auto_update_prices: boolean;
+  alert_on_low_stock: boolean;
+  alert_on_price_change: boolean;
 }

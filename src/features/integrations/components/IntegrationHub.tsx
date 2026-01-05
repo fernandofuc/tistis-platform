@@ -16,7 +16,9 @@ import type {
   IntegrationType,
   IntegrationStatus,
   ConnectorDefinition,
+  SRSyncConfig,
 } from '../types/integration.types';
+import { SoftRestaurantConfigModal } from './SoftRestaurantConfigModal';
 
 // ======================
 // CONNECTOR DEFINITIONS
@@ -133,6 +135,42 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
       orders: false,
     },
   },
+  {
+    type: 'eaglesoft',
+    name: 'Eaglesoft',
+    description: 'Patterson Dental: gestión integral de clínicas',
+    icon: 'eaglesoft',
+    category: 'dental',
+    auth_type: 'api_key',
+    supports_oauth: false,
+    supports_webhook: true,
+    supports_csv_import: true,
+    sync_capabilities: {
+      contacts: true,
+      appointments: true,
+      products: true,
+      inventory: true,
+      orders: false,
+    },
+  },
+  {
+    type: 'curve_dental',
+    name: 'Curve Dental',
+    description: 'Software dental 100% en la nube',
+    icon: 'curvedental',
+    category: 'dental',
+    auth_type: 'api_key',
+    supports_oauth: false,
+    supports_webhook: true,
+    supports_csv_import: true,
+    sync_capabilities: {
+      contacts: true,
+      appointments: true,
+      products: true,
+      inventory: false,
+      orders: false,
+    },
+  },
   // POS Systems
   {
     type: 'square',
@@ -165,6 +203,60 @@ const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     sync_capabilities: {
       contacts: false,
       appointments: false,
+      products: true,
+      inventory: true,
+      orders: true,
+    },
+  },
+  {
+    type: 'softrestaurant',
+    name: 'Soft Restaurant',
+    description: 'POS #1 en México: menú, inventario con gramaje, mesas y ventas',
+    icon: 'softrestaurant',
+    category: 'pos',
+    auth_type: 'api_key',
+    supports_oauth: false,
+    supports_webhook: true,
+    supports_csv_import: true,
+    sync_capabilities: {
+      contacts: false,
+      appointments: true, // Reservaciones
+      products: true,     // Menú completo
+      inventory: true,    // Stock con gramaje
+      orders: true,       // Ventas
+    },
+  },
+  {
+    type: 'clover',
+    name: 'Clover',
+    description: 'POS versátil para comercios y restaurantes',
+    icon: 'clover',
+    category: 'pos',
+    auth_type: 'oauth2',
+    supports_oauth: true,
+    supports_webhook: true,
+    supports_csv_import: false,
+    sync_capabilities: {
+      contacts: true,
+      appointments: false,
+      products: true,
+      inventory: true,
+      orders: true,
+    },
+  },
+  {
+    type: 'lightspeed',
+    name: 'Lightspeed',
+    description: 'POS avanzado para retail y hospitalidad',
+    icon: 'lightspeed',
+    category: 'pos',
+    auth_type: 'oauth2',
+    supports_oauth: true,
+    supports_webhook: true,
+    supports_csv_import: false,
+    sync_capabilities: {
+      contacts: true,
+      appointments: true,
       products: true,
       inventory: true,
       orders: true,
@@ -428,6 +520,49 @@ function CopyIcon({ className }: { className?: string }) {
 }
 
 // ======================
+// POS ICONS
+// ======================
+
+function SoftRestaurantIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+    </svg>
+  );
+}
+
+function POSIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <line x1="2" y1="7" x2="22" y2="7" />
+      <rect x="5" y="10" width="3" height="2" rx="0.5" />
+      <rect x="10" y="10" width="3" height="2" rx="0.5" />
+      <rect x="15" y="10" width="3" height="2" rx="0.5" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+}
+
+function DentalIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C9.5 2 7.5 3 6.5 5C5.5 7 5 9.5 5 12C5 14.5 5.5 17 6.5 19C7.5 21 9.5 22 12 22C14.5 22 16.5 21 17.5 19C18.5 17 19 14.5 19 12C19 9.5 18.5 7 17.5 5C16.5 3 14.5 2 12 2ZM12 4C13.5 4 14.5 4.5 15.5 6C16.5 7.5 17 9.5 17 12C17 14.5 16.5 16.5 15.5 18C14.5 19.5 13.5 20 12 20C10.5 20 9.5 19.5 8.5 18C7.5 16.5 7 14.5 7 12C7 9.5 7.5 7.5 8.5 6C9.5 4.5 10.5 4 12 4Z"/>
+      <circle cx="12" cy="8" r="1.5"/>
+    </svg>
+  );
+}
+
+function RestaurantIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
+    </svg>
+  );
+}
+
+// ======================
 // CONNECTOR ICON
 // ======================
 
@@ -441,6 +576,20 @@ function ConnectorIcon({ type, className }: { type: string; className?: string }
     case 'csv':
     case 'csv_import':
       return <CSVIcon className={className} />;
+    case 'softrestaurant':
+    case 'softrestaurant_import':
+      return <RestaurantIcon className={className} />;
+    case 'square':
+    case 'toast':
+    case 'clover':
+    case 'lightspeed':
+      return <POSIcon className={className} />;
+    case 'dentrix':
+    case 'open_dental':
+    case 'eaglesoft':
+    case 'curve_dental':
+    case 'curvedental':
+      return <DentalIcon className={className} />;
     default:
       return <CloudIcon className={className} />;
   }
@@ -1260,6 +1409,7 @@ export function IntegrationHub() {
   // Modal states
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [srConfigModalOpen, setSrConfigModalOpen] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<IntegrationConnection | null>(null);
   const [selectedConnector, setSelectedConnector] = useState<ConnectorDefinition | null>(null);
 
@@ -1351,14 +1501,26 @@ export function IntegrationHub() {
   const handleOpenAddModal = (connector: ConnectorDefinition) => {
     setSelectedConnection(null);
     setSelectedConnector(connector);
-    setConfigModalOpen(true);
+
+    // Use specialized modal for SoftRestaurant
+    if (connector.type === 'softrestaurant') {
+      setSrConfigModalOpen(true);
+    } else {
+      setConfigModalOpen(true);
+    }
   };
 
   // Open configure modal for existing connection
   const handleOpenConfigModal = (connection: IntegrationConnection) => {
     setSelectedConnection(connection);
     setSelectedConnector(getConnector(connection.integration_type) || null);
-    setConfigModalOpen(true);
+
+    // Use specialized modal for SoftRestaurant
+    if (connection.integration_type === 'softrestaurant') {
+      setSrConfigModalOpen(true);
+    } else {
+      setConfigModalOpen(true);
+    }
   };
 
   // Open delete confirmation modal
@@ -1417,6 +1579,85 @@ export function IntegrationHub() {
       setConfigModalOpen(false);
     } catch (err: unknown) {
       console.error('[IntegrationHub] Error saving config:', err);
+      const message = err instanceof Error ? err.message : 'Error al guardar';
+      setError(message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Save SoftRestaurant configuration
+  const handleSaveSRConfig = async (data: { api_key: string; sync_config: SRSyncConfig }) => {
+    if (!staff?.tenant_id) return;
+
+    setActionLoading(selectedConnection?.id || 'creating_sr');
+
+    try {
+      const headers = await getAuthHeaders();
+
+      if (selectedConnection) {
+        // Update existing SoftRestaurant connection
+        // Merge with existing metadata to preserve other settings
+        const existingMetadata = (selectedConnection.metadata as Record<string, unknown>) || {};
+        const response = await fetch(`/api/integrations/${selectedConnection.id}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            sync_enabled: true,
+            sync_products: data.sync_config.sync_menu,
+            sync_inventory: data.sync_config.sync_inventory,
+            sync_appointments: data.sync_config.sync_reservations,
+            sync_orders: data.sync_config.sync_sales,
+            sync_frequency_minutes: data.sync_config.sync_frequency_minutes,
+            metadata: {
+              ...existingMetadata,
+              sync_config: data.sync_config,
+            },
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Error al actualizar integración');
+        }
+
+        setConnections(prev =>
+          prev.map(c => c.id === selectedConnection.id ? result.connection : c)
+        );
+      } else {
+        // Create new SoftRestaurant connection
+        const response = await fetch('/api/integrations', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            integration_type: 'softrestaurant',
+            connection_name: 'Soft Restaurant',
+            api_key: data.api_key,
+            sync_enabled: true,
+            sync_products: data.sync_config.sync_menu,
+            sync_inventory: data.sync_config.sync_inventory,
+            sync_appointments: data.sync_config.sync_reservations,
+            sync_orders: data.sync_config.sync_sales,
+            sync_frequency_minutes: data.sync_config.sync_frequency_minutes,
+            metadata: {
+              sync_config: data.sync_config,
+            },
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Error al crear integración');
+        }
+
+        setConnections(prev => [result.connection, ...prev]);
+      }
+
+      setSrConfigModalOpen(false);
+    } catch (err: unknown) {
+      console.error('[IntegrationHub] Error saving SR config:', err);
       const message = err instanceof Error ? err.message : 'Error al guardar';
       setError(message);
     } finally {
@@ -1720,6 +1961,15 @@ export function IntegrationHub() {
         connection={selectedConnection}
         connector={selectedConnector || undefined}
         onConfirm={handleDelete}
+        isLoading={actionLoading !== null}
+      />
+
+      {/* SoftRestaurant Specialized Config Modal */}
+      <SoftRestaurantConfigModal
+        isOpen={srConfigModalOpen}
+        onClose={() => setSrConfigModalOpen(false)}
+        connection={selectedConnection}
+        onSave={handleSaveSRConfig}
         isLoading={actionLoading !== null}
       />
     </>

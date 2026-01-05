@@ -79,11 +79,11 @@ export function useTables(filters: TableFilters = {}) {
   }, [fetchTables]);
 
   // Create table
+  // Note: Don't add to state here - the real-time subscription will handle it
+  // This prevents duplicate entries when both callback and subscription fire
   const createTable = useCallback(async (data: TableFormData, branchId: string) => {
     const response = await tablesService.createTable(data, branchId);
-    if (response.success) {
-      setTables((prev) => [...prev, response.data]);
-    }
+    // Real-time subscription will automatically add the new table to state
     return response;
   }, []);
 
@@ -97,11 +97,10 @@ export function useTables(filters: TableFilters = {}) {
   }, []);
 
   // Delete table
+  // Note: Real-time subscription handles state update to prevent race conditions
   const deleteTable = useCallback(async (id: string) => {
     const response = await tablesService.deleteTable(id);
-    if (response.success) {
-      setTables((prev) => prev.filter((t) => t.id !== id));
-    }
+    // Real-time subscription will automatically remove the table from state
     return response;
   }, []);
 
