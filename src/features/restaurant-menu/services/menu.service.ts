@@ -78,19 +78,29 @@ export async function getCategory(id: string): Promise<CategoryResponse> {
 }
 
 export async function createCategory(data: CategoryFormData): Promise<CategoryResponse> {
-  // Send data to API - API now uses parent_id directly
-  const apiData = {
-    branch_id: data.branch_id,
+  // Send data to API - Schema uses available_times (JSONB) and available_days (TEXT[])
+  const apiData: Record<string, unknown> = {
     name: data.name,
-    description: data.description,
-    parent_id: data.parent_id || null,
-    image_url: data.image_url,
     is_active: data.is_active ?? true,
     is_featured: data.is_featured ?? false,
-    available_days: data.available_days,
-    available_start_time: data.available_times?.start_time || null,
-    available_end_time: data.available_times?.end_time || null,
   };
+
+  // Optional fields
+  if (data.branch_id) apiData.branch_id = data.branch_id;
+  if (data.description) apiData.description = data.description;
+  if (data.parent_id) apiData.parent_id = data.parent_id;
+  if (data.image_url) apiData.image_url = data.image_url;
+  if (data.icon) apiData.icon = data.icon;
+
+  // Convert available_times from form format to schema format (JSONB)
+  if (data.available_times) {
+    apiData.available_times = data.available_times;
+  }
+
+  // available_days is already TEXT[]
+  if (data.available_days && data.available_days.length > 0) {
+    apiData.available_days = data.available_days;
+  }
 
   return fetchWithAuth('/api/restaurant/menu/categories', {
     method: 'POST',
@@ -99,7 +109,7 @@ export async function createCategory(data: CategoryFormData): Promise<CategoryRe
 }
 
 export async function updateCategory(id: string, data: Partial<CategoryFormData>): Promise<CategoryResponse> {
-  // Send data to API - API now uses parent_id directly
+  // Send data to API - Schema uses available_times (JSONB) and available_days (TEXT[])
   const apiData: Record<string, unknown> = {};
 
   if (data.branch_id !== undefined) apiData.branch_id = data.branch_id;
@@ -107,11 +117,19 @@ export async function updateCategory(id: string, data: Partial<CategoryFormData>
   if (data.description !== undefined) apiData.description = data.description;
   if (data.parent_id !== undefined) apiData.parent_id = data.parent_id;
   if (data.image_url !== undefined) apiData.image_url = data.image_url;
+  if (data.icon !== undefined) apiData.icon = data.icon;
   if (data.is_active !== undefined) apiData.is_active = data.is_active;
   if (data.is_featured !== undefined) apiData.is_featured = data.is_featured;
-  if (data.available_days !== undefined) apiData.available_days = data.available_days;
-  if (data.available_times?.start_time !== undefined) apiData.available_start_time = data.available_times.start_time;
-  if (data.available_times?.end_time !== undefined) apiData.available_end_time = data.available_times.end_time;
+
+  // available_times is JSONB - send the whole object
+  if (data.available_times !== undefined) {
+    apiData.available_times = data.available_times;
+  }
+
+  // available_days is TEXT[]
+  if (data.available_days !== undefined) {
+    apiData.available_days = data.available_days;
+  }
 
   return fetchWithAuth(`/api/restaurant/menu/categories/${id}`, {
     method: 'PUT',
@@ -144,8 +162,10 @@ export async function getMenuItems(
   limit: number = 50
 ): Promise<MenuItemsResponse> {
   const params = new URLSearchParams();
-  params.set('page', page.toString());
+  // API uses offset-based pagination
+  const offset = (page - 1) * limit;
   params.set('limit', limit.toString());
+  params.set('offset', offset.toString());
 
   if (filters.category_id) params.set('category_id', filters.category_id);
   if (filters.search) params.set('search', filters.search);
@@ -157,7 +177,38 @@ export async function getMenuItems(
   if (filters.max_price) params.set('max_price', filters.max_price.toString());
   if (filters.is_featured) params.set('is_featured', 'true');
 
-  return fetchWithAuth(`/api/restaurant/menu/items?${params}`);
+  const response = await fetchWithAuth(`/api/restaurant/menu/items?${params}`);
+
+  // API returns { success, data: { items, total, limit, offset } }
+  // Transform to expected format with pagination object
+  if (response.success && response.data) {
+    const { items, total, limit: respLimit, offset: respOffset } = response.data;
+    const totalPages = Math.ceil(total / respLimit);
+    const currentPage = Math.floor(respOffset / respLimit) + 1;
+
+    return {
+      success: true,
+      data: {
+        items: items || [],
+        pagination: {
+          page: currentPage,
+          limit: respLimit,
+          total,
+          totalPages,
+        },
+      },
+    };
+  }
+
+  // Fallback for error responses
+  return {
+    success: false,
+    data: {
+      items: [],
+      pagination: { page: 1, limit, total: 0, totalPages: 0 },
+    },
+    error: response.error || 'Error al cargar items',
+  };
 }
 
 export async function getMenuItem(id: string): Promise<MenuItemResponse> {
