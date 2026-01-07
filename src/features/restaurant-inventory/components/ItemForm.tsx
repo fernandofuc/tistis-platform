@@ -138,12 +138,17 @@ export function ItemForm({
 
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : type === 'number' ? parseFloat(value) || 0 : value,
+      [name]: type === 'checkbox' ? checked : type === 'number' ? (value === '' ? 0 : parseFloat(value)) : value,
     }));
 
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+  };
+
+  // Handle focus on numeric inputs - select all text for easy replacement
+  const handleNumericFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
   };
 
   const toggleAllergen = (allergen: string) => {
@@ -297,6 +302,7 @@ export function ItemForm({
                     name="unit_cost"
                     value={formData.unit_cost}
                     onChange={handleChange}
+                    onFocus={handleNumericFocus}
                     min="0"
                     step="0.01"
                     className={cn(
@@ -315,6 +321,7 @@ export function ItemForm({
                     name="minimum_stock"
                     value={formData.minimum_stock}
                     onChange={handleChange}
+                    onFocus={handleNumericFocus}
                     min="0"
                     step="0.01"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -330,6 +337,7 @@ export function ItemForm({
                     name="maximum_stock"
                     value={formData.maximum_stock || ''}
                     onChange={handleChange}
+                    onFocus={handleNumericFocus}
                     min="0"
                     step="0.01"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -345,6 +353,7 @@ export function ItemForm({
                     name="reorder_quantity"
                     value={formData.reorder_quantity || ''}
                     onChange={handleChange}
+                    onFocus={handleNumericFocus}
                     min="0"
                     step="0.01"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -417,6 +426,7 @@ export function ItemForm({
                     name="default_shelf_life_days"
                     value={formData.default_shelf_life_days || ''}
                     onChange={handleChange}
+                    onFocus={handleNumericFocus}
                     min="1"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
