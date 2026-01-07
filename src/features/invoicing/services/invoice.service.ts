@@ -77,24 +77,62 @@ export class InvoiceService {
 
   /**
    * Create or update invoice configuration
+   * Note: Can't use upsert with onConflict when branch_id is NULL because NULL != NULL in PostgreSQL
+   * So we manually check if config exists first, then insert or update accordingly
    */
   async upsertConfig(config: Partial<InvoiceConfig> & { tenant_id: string }): Promise<InvoiceConfig> {
-    const { data, error } = await this.supabase
-      .from('restaurant_invoice_config')
-      .upsert(
-        {
-          ...config,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'tenant_id,branch_id',
-        }
-      )
-      .select()
-      .single();
+    const branchId = config.branch_id || null;
 
-    if (error) throw new Error(`Error saving invoice config: ${error.message}`);
-    return data as InvoiceConfig;
+    // First, check if a config already exists for this tenant/branch
+    let existingConfig: InvoiceConfig | null = null;
+
+    if (branchId) {
+      const { data } = await this.supabase
+        .from('restaurant_invoice_config')
+        .select('id')
+        .eq('tenant_id', config.tenant_id)
+        .eq('branch_id', branchId)
+        .maybeSingle();
+      existingConfig = data as InvoiceConfig | null;
+    } else {
+      // For NULL branch_id, use .is() instead of .eq()
+      const { data } = await this.supabase
+        .from('restaurant_invoice_config')
+        .select('id')
+        .eq('tenant_id', config.tenant_id)
+        .is('branch_id', null)
+        .maybeSingle();
+      existingConfig = data as InvoiceConfig | null;
+    }
+
+    const configData = {
+      ...config,
+      branch_id: branchId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingConfig?.id) {
+      // Update existing config
+      const { data, error } = await this.supabase
+        .from('restaurant_invoice_config')
+        .update(configData)
+        .eq('id', existingConfig.id)
+        .select()
+        .single();
+
+      if (error) throw new Error(`Error updating invoice config: ${error.message}`);
+      return data as InvoiceConfig;
+    } else {
+      // Insert new config
+      const { data, error } = await this.supabase
+        .from('restaurant_invoice_config')
+        .insert(configData)
+        .select()
+        .single();
+
+      if (error) throw new Error(`Error creating invoice config: ${error.message}`);
+      return data as InvoiceConfig;
+    }
   }
 
   // ======================

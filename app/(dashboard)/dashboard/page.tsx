@@ -200,6 +200,18 @@ function RestaurantDashboard() {
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
       const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
 
+      // Build orders query - only if branch is selected (restaurant_orders requires branch_id)
+      const ordersPromise = selectedBranchId
+        ? supabase
+            .from('restaurant_orders')
+            .select('id, status, total_amount, order_type, created_at')
+            .eq('tenant_id', tenant.id)
+            .eq('branch_id', selectedBranchId)
+            .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+            .order('created_at', { ascending: false })
+            .limit(10)
+        : Promise.resolve({ data: [], error: null });
+
       // Execute all queries in parallel
       const [
         tablesResult,
@@ -230,15 +242,8 @@ function RestaurantDashboard() {
           .match(branchFilter)
           .order('scheduled_at'),
 
-        // 3. Active orders
-        supabase
-          .from('restaurant_orders')
-          .select('id, status, total_amount, order_type, created_at')
-          .eq('tenant_id', tenant.id)
-          .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
-          .match(branchFilter)
-          .order('created_at', { ascending: false })
-          .limit(10),
+        // 3. Active orders (only with branch_id)
+        ordersPromise,
 
         // 4. Low stock items
         supabase
