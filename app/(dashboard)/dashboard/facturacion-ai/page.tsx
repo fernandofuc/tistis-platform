@@ -146,7 +146,6 @@ interface InvoiceConfig {
   razon_social: string;
   regimen_fiscal: string;
   codigo_postal: string;
-  domicilio_fiscal: string;
   serie: string;
   folio_actual: number;
   tasa_iva: number;
@@ -429,7 +428,6 @@ export default function FacturacionAIConfigPage() {
     razon_social: '',
     regimen_fiscal: '601',
     codigo_postal: '',
-    domicilio_fiscal: '',
     serie: 'FAC',
     folio_actual: 0,
     tasa_iva: 0.16,
@@ -703,17 +701,6 @@ export default function FacturacionAIConfigPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Domicilio Fiscal
-              </label>
-              <Input
-                placeholder="Av. Reforma 123, Col. Juarez, CDMX"
-                value={config.domicilio_fiscal}
-                onChange={(e) => setConfig({ ...config, domicilio_fiscal: e.target.value })}
-              />
-              <p className="text-xs text-slate-500 mt-1">Aparecera en el PDF de la factura</p>
-            </div>
           </div>
         </FormSectionCard>
 

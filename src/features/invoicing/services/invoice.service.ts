@@ -41,18 +41,16 @@ export class InvoiceService {
 
   /**
    * Get invoice configuration for a tenant/branch
+   * Note: restaurant_invoice_config does NOT have deleted_at column
    */
   async getConfig(tenantId: string, branchId?: string): Promise<InvoiceConfig | null> {
     // Try to get branch-specific config first, then fall back to tenant-wide config
-    let query = this.supabase
-      .from('restaurant_invoice_config')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .is('deleted_at', null);
-
     if (branchId) {
       // Try branch-specific config first
-      const { data: branchConfig, error: branchError } = await query
+      const { data: branchConfig, error: branchError } = await this.supabase
+        .from('restaurant_invoice_config')
+        .select('*')
+        .eq('tenant_id', tenantId)
         .eq('branch_id', branchId)
         .maybeSingle();
 
@@ -67,14 +65,14 @@ export class InvoiceService {
       .select('*')
       .eq('tenant_id', tenantId)
       .is('branch_id', null)
-      .is('deleted_at', null)
       .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
+      console.error('Error fetching invoice config:', error);
       return null;
     }
 
-    return data as InvoiceConfig;
+    return data as InvoiceConfig | null;
   }
 
   /**
@@ -538,11 +536,11 @@ export class InvoiceService {
     }
   ): Promise<InvoiceStatistics> {
     // Build query for invoice stats
+    // Note: restaurant_invoices does NOT have deleted_at column
     let query = this.supabase
       .from('restaurant_invoices')
       .select('id, total, status, receptor_rfc, receptor_nombre', { count: 'exact' })
-      .eq('tenant_id', tenantId)
-      .is('deleted_at', null);
+      .eq('tenant_id', tenantId);
 
     if (options?.branch_id) {
       query = query.eq('branch_id', options.branch_id);
