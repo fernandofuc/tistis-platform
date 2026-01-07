@@ -23,6 +23,7 @@ import {
   MovementForm,
   RestockOrdersTab,
   RestockOrderForm,
+  ItemForm,
 } from '@/src/features/restaurant-inventory/components';
 import { createRestockOrder } from '@/src/features/restaurant-inventory/services/restock.service';
 import type { RestockOrderFormData, RestockOrder } from '@/src/features/restaurant-inventory/types';
@@ -34,6 +35,7 @@ import type {
   CategoryFormData,
   SupplierFormData,
   MovementFormData,
+  ItemFormData,
 } from '@/src/features/restaurant-inventory/types';
 import { ITEM_TYPE_CONFIG, STORAGE_TYPE_CONFIG } from '@/src/features/restaurant-inventory/types';
 
@@ -329,10 +331,12 @@ export default function InventarioPage() {
   const { isEnabled, flagsLoading } = useFeatureFlags();
 
   // Modal states
+  const [showItemForm, setShowItemForm] = useState(false);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [showMovementForm, setShowMovementForm] = useState(false);
   const [showRestockForm, setShowRestockForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
   const [preSelectedAlertIds, setPreSelectedAlertIds] = useState<string[]>([]);
@@ -368,9 +372,20 @@ export default function InventarioPage() {
 
   // Handlers
   const handleAddItem = useCallback(() => {
-    // TODO: Open add item modal
-    console.log('Add item');
+    setEditingItem(null);
+    setShowItemForm(true);
   }, []);
+
+  const handleItemSubmit = useCallback(async (data: ItemFormData) => {
+    setFormLoading(true);
+    try {
+      await createItem(data);
+      setShowItemForm(false);
+      setEditingItem(null);
+    } finally {
+      setFormLoading(false);
+    }
+  }, [createItem]);
 
   const handleViewLowStock = useCallback(() => {
     setActiveTab('items');
@@ -607,6 +622,21 @@ export default function InventarioPage() {
       <div className="mt-6">
         {renderTabContent()}
       </div>
+
+      {/* Item Form Modal */}
+      {showItemForm && (
+        <ItemForm
+          item={editingItem || undefined}
+          categories={categories}
+          suppliers={suppliers}
+          onSubmit={handleItemSubmit}
+          onCancel={() => {
+            setShowItemForm(false);
+            setEditingItem(null);
+          }}
+          isLoading={formLoading}
+        />
+      )}
 
       {/* Category Form Modal */}
       {showCategoryForm && (
