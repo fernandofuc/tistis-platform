@@ -51,7 +51,11 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
 export async function getCategories(includeInactive: boolean = false): Promise<CategoriesResponse> {
   const params = new URLSearchParams();
-  if (includeInactive) params.set('include_inactive', 'true');
+  // API expects is_active param: 'true' for active only, 'false' for inactive only, omit for all
+  if (!includeInactive) {
+    params.set('is_active', 'true'); // Only active categories
+  }
+  // If includeInactive=true, don't set is_active to get ALL categories
   params.set('include_items', 'true'); // Get item counts
 
   const queryString = params.toString();
