@@ -201,10 +201,11 @@ function RestaurantDashboard() {
       const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
 
       // Build orders query - only if branch is selected (restaurant_orders requires branch_id)
+      // Note: column is 'total' not 'total_amount' per schema 089_RESTAURANT_ORDERS_KDS.sql
       const ordersPromise = selectedBranchId
         ? supabase
             .from('restaurant_orders')
-            .select('id, status, total_amount, order_type, created_at')
+            .select('id, status, total, order_type, created_at')
             .eq('tenant_id', tenant.id)
             .eq('branch_id', selectedBranchId)
             .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
@@ -292,7 +293,7 @@ function RestaurantDashboard() {
         preparingOrders,
         lowStockItems,
         vipCustomersToday: vipLeads.length,
-        todayRevenue: orders.reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0),
+        todayRevenue: orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0),
       });
 
       setRecentOrders(orders.slice(0, 5));
@@ -610,7 +611,7 @@ function RestaurantDashboard() {
                           </span>
                         </div>
                         <p className="text-sm text-slate-500">
-                          {formatCurrency(order.total_amount || 0)}
+                          {formatCurrency(order.total || 0)}
                         </p>
                       </div>
 

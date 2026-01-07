@@ -91,7 +91,6 @@ export async function GET(request: NextRequest) {
         razon_social: '',
         regimen_fiscal: '601',
         codigo_postal: '',
-        domicilio_fiscal: '',
         serie: 'FAC',
         folio_actual: 0,
         tasa_iva: 0.16,
