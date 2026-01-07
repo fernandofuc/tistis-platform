@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { cn } from '@/shared/utils';
 import type { MenuItem, Allergen } from '../types';
@@ -168,11 +168,26 @@ function ItemCardMenu({
   onDelete,
 }: ItemCardMenuProps) {
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const handleOpen = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      // Position menu to the left of the button
+      setMenuPosition({
+        top: rect.top,
+        left: rect.left - 180 - 8, // menu width (w-44 = 176px) + gap
+      });
+    }
+    setOpen(!open);
+  };
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(!open)}
+        ref={buttonRef}
+        onClick={handleOpen}
         className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
       >
         <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,8 +202,14 @@ function ItemCardMenu({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-20 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 overflow-hidden">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="fixed z-50 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1"
+            style={{
+              top: menuPosition.top,
+              left: menuPosition.left,
+            }}
+          >
             <button
               onClick={() => { onEdit(); setOpen(false); }}
               className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
