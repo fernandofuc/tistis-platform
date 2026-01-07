@@ -43,18 +43,38 @@ export class InvoiceService {
    * Get invoice configuration for a tenant/branch
    */
   async getConfig(tenantId: string, branchId?: string): Promise<InvoiceConfig | null> {
+    // Try to get branch-specific config first, then fall back to tenant-wide config
+    let query = this.supabase
+      .from('restaurant_invoice_config')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null);
+
+    if (branchId) {
+      // Try branch-specific config first
+      const { data: branchConfig, error: branchError } = await query
+        .eq('branch_id', branchId)
+        .maybeSingle();
+
+      if (!branchError && branchConfig) {
+        return branchConfig as InvoiceConfig;
+      }
+    }
+
+    // Fall back to tenant-wide config (branch_id is null)
     const { data, error } = await this.supabase
-      .rpc('get_invoice_config', {
-        p_tenant_id: tenantId,
-        p_branch_id: branchId || null,
-      })
-      .single();
+      .from('restaurant_invoice_config')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .is('branch_id', null)
+      .is('deleted_at', null)
+      .maybeSingle();
 
     if (error || !data) {
       return null;
     }
 
-    return data as unknown as InvoiceConfig;
+    return data as InvoiceConfig;
   }
 
   /**
@@ -517,17 +537,30 @@ export class InvoiceService {
       end_date?: string;
     }
   ): Promise<InvoiceStatistics> {
-    const { data, error } = await this.supabase.rpc('get_invoice_statistics', {
-      p_tenant_id: tenantId,
-      p_branch_id: options?.branch_id || null,
-      p_start_date: options?.start_date || null,
-      p_end_date: options?.end_date || null,
-    });
+    // Build query for invoice stats
+    let query = this.supabase
+      .from('restaurant_invoices')
+      .select('id, total, status, receptor_rfc, receptor_nombre', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null);
 
-    if (error) throw new Error(`Error fetching statistics: ${error.message}`);
+    if (options?.branch_id) {
+      query = query.eq('branch_id', options.branch_id);
+    }
 
-    // Handle empty result
-    if (!data || (Array.isArray(data) && data.length === 0)) {
+    if (options?.start_date) {
+      query = query.gte('fecha_emision', options.start_date);
+    }
+
+    if (options?.end_date) {
+      query = query.lte('fecha_emision', options.end_date);
+    }
+
+    const { data: invoices, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching invoice statistics:', error);
+      // Return empty stats on error instead of throwing
       return {
         total_invoices: 0,
         total_amount: 0,
@@ -540,8 +573,47 @@ export class InvoiceService {
       };
     }
 
-    const result = Array.isArray(data) ? data[0] : data;
-    return result as InvoiceStatistics;
+    // Calculate statistics from the invoices
+    const total_invoices = count || 0;
+    const total_amount = invoices?.reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+    const invoices_timbradas = invoices?.filter(inv => inv.status === 'timbrada').length || 0;
+    const invoices_canceladas = invoices?.filter(inv => inv.status === 'cancelada').length || 0;
+    const invoices_pendientes = invoices?.filter(inv => ['draft', 'pending'].includes(inv.status)).length || 0;
+    const avg_invoice_amount = total_invoices > 0 ? total_amount / total_invoices : 0;
+
+    // Calculate top customers
+    const customerMap = new Map<string, { rfc: string; nombre: string; count: number; amount: number }>();
+    invoices?.forEach(inv => {
+      if (inv.receptor_rfc) {
+        const existing = customerMap.get(inv.receptor_rfc);
+        if (existing) {
+          existing.count++;
+          existing.amount += inv.total || 0;
+        } else {
+          customerMap.set(inv.receptor_rfc, {
+            rfc: inv.receptor_rfc,
+            nombre: inv.receptor_nombre || '',
+            count: 1,
+            amount: inv.total || 0,
+          });
+        }
+      }
+    });
+
+    const top_customers = Array.from(customerMap.values())
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10);
+
+    return {
+      total_invoices,
+      total_amount,
+      invoices_timbradas,
+      invoices_canceladas,
+      invoices_pendientes,
+      avg_invoice_amount,
+      invoices_by_day: [],
+      top_customers,
+    };
   }
 }
 

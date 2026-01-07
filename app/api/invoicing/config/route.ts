@@ -83,11 +83,21 @@ export async function GET(request: NextRequest) {
     const invoiceService = getInvoiceService();
     const config = await invoiceService.getConfig(userRole.tenant_id, branchId);
 
+    // Return empty config structure if none exists (UI will show empty form)
     if (!config) {
-      return NextResponse.json(
-        { error: 'No invoice configuration found. Please set up invoicing first.' },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        tenant_id: userRole.tenant_id,
+        rfc: '',
+        razon_social: '',
+        regimen_fiscal: '601',
+        codigo_postal: '',
+        domicilio_fiscal: '',
+        serie: 'FAC',
+        folio_actual: 0,
+        tasa_iva: 0.16,
+        auto_send_email: true,
+        is_active: true,
+      });
     }
 
     return NextResponse.json(config);
