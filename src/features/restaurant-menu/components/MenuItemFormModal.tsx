@@ -478,6 +478,13 @@ export function MenuItemFormModal({
       // Only save if we're editing an existing item (has ID)
       const recipeSaved = await recipeEditorRef.current.saveRecipe();
       console.log('[MenuItemFormModal.handleSubmit] Recipe save result:', recipeSaved);
+
+      // If recipe save failed, don't continue with form submit
+      // This prevents data loss - user can retry
+      if (!recipeSaved) {
+        console.error('[MenuItemFormModal.handleSubmit] Recipe save failed, aborting form submit');
+        return;
+      }
     } else {
       console.log('[MenuItemFormModal.handleSubmit] No recipe to save (no ref or no item.id)');
     }
@@ -726,7 +733,10 @@ export function MenuItemFormModal({
               </div>
             )}
 
-            {activeTab === 'recipe' && (
+            {/* Recipe Tab - ALWAYS MOUNTED but hidden when not active
+                This ensures the RecipeEditor state is preserved when switching tabs
+                and the ref is always available for saving */}
+            <div className={activeTab === 'recipe' ? 'block' : 'hidden'}>
               <div className="space-y-5">
                 {/* Recipe Cost vs Price Info */}
                 {item && recipeCost > 0 && (
@@ -759,7 +769,7 @@ export function MenuItemFormModal({
                   onCostCalculated={handleRecipeCostCalculated}
                 />
               </div>
-            )}
+            </div>
           </form>
 
           {/* Footer */}

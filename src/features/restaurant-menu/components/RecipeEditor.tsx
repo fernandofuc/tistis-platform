@@ -473,6 +473,10 @@ export const RecipeEditor = forwardRef<RecipeEditorRef, RecipeEditorProps>(
 
   // Load recipe when menuItemId changes
   useEffect(() => {
+    // Always reset hasChanges when menuItemId changes
+    // This prevents stale state from previous item
+    setHasChanges(false);
+
     if (!menuItemId) {
       setRecipe(null);
       setIngredients([]);
