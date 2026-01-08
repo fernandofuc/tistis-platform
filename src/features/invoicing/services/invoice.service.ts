@@ -44,6 +44,8 @@ export class InvoiceService {
    * Note: restaurant_invoice_config does NOT have deleted_at column
    */
   async getConfig(tenantId: string, branchId?: string): Promise<InvoiceConfig | null> {
+    console.log('🔎 [InvoiceService.getConfig] tenantId:', tenantId, 'branchId:', branchId);
+
     // Try to get branch-specific config first, then fall back to tenant-wide config
     if (branchId) {
       // Try branch-specific config first
@@ -53,6 +55,8 @@ export class InvoiceService {
         .eq('tenant_id', tenantId)
         .eq('branch_id', branchId)
         .maybeSingle();
+
+      console.log('🔎 [InvoiceService.getConfig] Branch query result:', branchConfig ? 'FOUND' : 'NOT FOUND', branchError?.message);
 
       if (!branchError && branchConfig) {
         return branchConfig as InvoiceConfig;
@@ -66,6 +70,11 @@ export class InvoiceService {
       .eq('tenant_id', tenantId)
       .is('branch_id', null)
       .maybeSingle();
+
+    console.log('🔎 [InvoiceService.getConfig] Tenant-wide query result:', data ? 'FOUND' : 'NOT FOUND', error?.message);
+    if (data) {
+      console.log('🔎 [InvoiceService.getConfig] Config id:', data.id, 'rfc:', data.rfc);
+    }
 
     if (error) {
       console.error('Error fetching invoice config:', error);
@@ -83,26 +92,30 @@ export class InvoiceService {
   async upsertConfig(config: Partial<InvoiceConfig> & { tenant_id: string }): Promise<InvoiceConfig> {
     const branchId = config.branch_id || null;
 
+    console.log('💾 [InvoiceService.upsertConfig] tenant_id:', config.tenant_id, 'branch_id:', branchId);
+
     // First, check if a config already exists for this tenant/branch
     let existingConfig: InvoiceConfig | null = null;
 
     if (branchId) {
-      const { data } = await this.supabase
+      const { data, error } = await this.supabase
         .from('restaurant_invoice_config')
         .select('id')
         .eq('tenant_id', config.tenant_id)
         .eq('branch_id', branchId)
         .maybeSingle();
       existingConfig = data as InvoiceConfig | null;
+      console.log('💾 [InvoiceService.upsertConfig] Branch check:', data ? 'EXISTS' : 'NOT EXISTS', error?.message);
     } else {
       // For NULL branch_id, use .is() instead of .eq()
-      const { data } = await this.supabase
+      const { data, error } = await this.supabase
         .from('restaurant_invoice_config')
         .select('id')
         .eq('tenant_id', config.tenant_id)
         .is('branch_id', null)
         .maybeSingle();
       existingConfig = data as InvoiceConfig | null;
+      console.log('💾 [InvoiceService.upsertConfig] Tenant-wide check:', data ? 'EXISTS' : 'NOT EXISTS', error?.message);
     }
 
     const configData = {
@@ -113,6 +126,7 @@ export class InvoiceService {
 
     if (existingConfig?.id) {
       // Update existing config
+      console.log('💾 [InvoiceService.upsertConfig] UPDATING existing config id:', existingConfig.id);
       const { data, error } = await this.supabase
         .from('restaurant_invoice_config')
         .update(configData)
@@ -120,17 +134,26 @@ export class InvoiceService {
         .select()
         .single();
 
-      if (error) throw new Error(`Error updating invoice config: ${error.message}`);
+      if (error) {
+        console.error('💾 [InvoiceService.upsertConfig] UPDATE ERROR:', error.message);
+        throw new Error(`Error updating invoice config: ${error.message}`);
+      }
+      console.log('💾 [InvoiceService.upsertConfig] UPDATE SUCCESS, id:', data.id);
       return data as InvoiceConfig;
     } else {
       // Insert new config
+      console.log('💾 [InvoiceService.upsertConfig] INSERTING new config');
       const { data, error } = await this.supabase
         .from('restaurant_invoice_config')
         .insert(configData)
         .select()
         .single();
 
-      if (error) throw new Error(`Error creating invoice config: ${error.message}`);
+      if (error) {
+        console.error('💾 [InvoiceService.upsertConfig] INSERT ERROR:', error.message);
+        throw new Error(`Error creating invoice config: ${error.message}`);
+      }
+      console.log('💾 [InvoiceService.upsertConfig] INSERT SUCCESS, id:', data.id);
       return data as InvoiceConfig;
     }
   }

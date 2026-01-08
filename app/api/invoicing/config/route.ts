@@ -79,12 +79,17 @@ export async function GET(request: NextRequest) {
     // Get branch_id from query params
     const branchId = request.nextUrl.searchParams.get('branch_id') || undefined;
 
+    console.log('🔍 [GET /api/invoicing/config] tenant_id:', userRole.tenant_id, 'branch_id:', branchId);
+
     // Get config
     const invoiceService = getInvoiceService();
     const config = await invoiceService.getConfig(userRole.tenant_id, branchId);
 
+    console.log('📦 [GET /api/invoicing/config] config found:', config ? 'YES' : 'NO', config?.id);
+
     // Return empty config structure if none exists (UI will show empty form)
     if (!config) {
+      console.log('⚠️ [GET /api/invoicing/config] No config found, returning defaults');
       return NextResponse.json({
         tenant_id: userRole.tenant_id,
         rfc: '',
@@ -99,6 +104,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    console.log('✅ [GET /api/invoicing/config] Returning config:', config.rfc);
     return NextResponse.json(config);
   } catch (error) {
     console.error('Error getting config:', error);
@@ -172,6 +178,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Save config
+    console.log('💾 [POST /api/invoicing/config] Saving config for tenant:', userRole.tenant_id, 'branch_id:', body.branch_id || null);
+
     const invoiceService = getInvoiceService();
     const config = await invoiceService.upsertConfig({
       tenant_id: userRole.tenant_id,
@@ -198,8 +206,10 @@ export async function POST(request: NextRequest) {
       auto_send_email: body.auto_send_email ?? true,
       require_rfc_validation: body.require_rfc_validation ?? true,
       allow_generic_rfc: body.allow_generic_rfc ?? true,
-      is_active: true,
+      is_active: body.is_active ?? true,
     });
+
+    console.log('✅ [POST /api/invoicing/config] Config saved with id:', config.id);
 
     return NextResponse.json(config, { status: 201 });
   } catch (error) {
