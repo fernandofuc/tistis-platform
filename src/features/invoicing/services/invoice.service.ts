@@ -45,6 +45,7 @@ export class InvoiceService {
   /**
    * Get invoice configuration for a tenant/branch
    * Note: restaurant_invoice_config does NOT have deleted_at column
+   * Using .limit(1) instead of .maybeSingle() to handle cases where duplicates exist
    */
   async getConfig(tenantId: string, branchId?: string): Promise<InvoiceConfig | null> {
     console.log('🔎 [InvoiceService.getConfig] tenantId:', tenantId, 'branchId:', branchId);
@@ -52,31 +53,36 @@ export class InvoiceService {
     // Try to get branch-specific config first, then fall back to tenant-wide config
     if (branchId) {
       // Try branch-specific config first
-      const { data: branchConfig, error: branchError } = await this.supabase
+      const { data: branchConfigs, error: branchError } = await this.supabase
         .from('restaurant_invoice_config')
         .select('*')
         .eq('tenant_id', tenantId)
         .eq('branch_id', branchId)
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-      console.log('🔎 [InvoiceService.getConfig] Branch query result:', branchConfig ? 'FOUND' : 'NOT FOUND', branchError?.message);
+      console.log('🔎 [InvoiceService.getConfig] Branch query result:', branchConfigs?.length ? 'FOUND' : 'NOT FOUND', branchError?.message);
 
-      if (!branchError && branchConfig) {
-        return branchConfig as InvoiceConfig;
+      if (!branchError && branchConfigs && branchConfigs.length > 0) {
+        return branchConfigs[0] as InvoiceConfig;
       }
     }
 
     // Fall back to tenant-wide config (branch_id is null)
-    const { data, error } = await this.supabase
+    // Use .limit(1) to get the most recently updated config if duplicates exist
+    const { data: configs, error } = await this.supabase
       .from('restaurant_invoice_config')
       .select('*')
       .eq('tenant_id', tenantId)
       .is('branch_id', null)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
-    console.log('🔎 [InvoiceService.getConfig] Tenant-wide query result:', data ? 'FOUND' : 'NOT FOUND', error?.message);
-    if (data) {
-      console.log('🔎 [InvoiceService.getConfig] Config id:', data.id, 'rfc:', data.rfc);
+    console.log('🔎 [InvoiceService.getConfig] Tenant-wide query result:', configs?.length ? 'FOUND' : 'NOT FOUND', error?.message);
+
+    if (configs && configs.length > 0) {
+      console.log('🔎 [InvoiceService.getConfig] Config id:', configs[0].id, 'rfc:', configs[0].rfc);
+      return configs[0] as InvoiceConfig;
     }
 
     if (error) {
@@ -84,13 +90,14 @@ export class InvoiceService {
       return null;
     }
 
-    return data as InvoiceConfig | null;
+    return null;
   }
 
   /**
    * Create or update invoice configuration
    * Note: Can't use upsert with onConflict when branch_id is NULL because NULL != NULL in PostgreSQL
    * So we manually check if config exists first, then insert or update accordingly
+   * Using .limit(1) instead of .maybeSingle() to handle cases where duplicates exist
    */
   async upsertConfig(config: Partial<InvoiceConfig> & { tenant_id: string }): Promise<InvoiceConfig> {
     const branchId = config.branch_id || null;
@@ -98,7 +105,8 @@ export class InvoiceService {
     console.log('💾 [InvoiceService.upsertConfig] tenant_id:', config.tenant_id, 'branch_id:', branchId);
 
     // First, check if a config already exists for this tenant/branch
-    let existingConfig: InvoiceConfig | null = null;
+    // Use .limit(1) to get the most recent config if duplicates exist
+    let existingConfigs: InvoiceConfig[] = [];
 
     if (branchId) {
       const { data, error } = await this.supabase
@@ -106,9 +114,10 @@ export class InvoiceService {
         .select('id')
         .eq('tenant_id', config.tenant_id)
         .eq('branch_id', branchId)
-        .maybeSingle();
-      existingConfig = data as InvoiceConfig | null;
-      console.log('💾 [InvoiceService.upsertConfig] Branch check:', data ? 'EXISTS' : 'NOT EXISTS', error?.message);
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      existingConfigs = (data || []) as InvoiceConfig[];
+      console.log('💾 [InvoiceService.upsertConfig] Branch check:', existingConfigs.length ? 'EXISTS' : 'NOT EXISTS', error?.message);
     } else {
       // For NULL branch_id, use .is() instead of .eq()
       const { data, error } = await this.supabase
@@ -116,9 +125,10 @@ export class InvoiceService {
         .select('id')
         .eq('tenant_id', config.tenant_id)
         .is('branch_id', null)
-        .maybeSingle();
-      existingConfig = data as InvoiceConfig | null;
-      console.log('💾 [InvoiceService.upsertConfig] Tenant-wide check:', data ? 'EXISTS' : 'NOT EXISTS', error?.message);
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      existingConfigs = (data || []) as InvoiceConfig[];
+      console.log('💾 [InvoiceService.upsertConfig] Tenant-wide check:', existingConfigs.length ? 'EXISTS' : 'NOT EXISTS', error?.message);
     }
 
     const configData = {
@@ -127,13 +137,14 @@ export class InvoiceService {
       updated_at: new Date().toISOString(),
     };
 
-    if (existingConfig?.id) {
-      // Update existing config
-      console.log('💾 [InvoiceService.upsertConfig] UPDATING existing config id:', existingConfig.id);
+    if (existingConfigs.length > 0 && existingConfigs[0].id) {
+      // Update existing config (the most recently updated one)
+      const existingId = existingConfigs[0].id;
+      console.log('💾 [InvoiceService.upsertConfig] UPDATING existing config id:', existingId);
       const { data, error } = await this.supabase
         .from('restaurant_invoice_config')
         .update(configData)
-        .eq('id', existingConfig.id)
+        .eq('id', existingId)
         .select()
         .single();
 
