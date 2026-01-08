@@ -358,11 +358,22 @@ function IngredientRow({
               <div className="relative">
                 <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                 <input
-                  type="number"
-                  value={ingredient.quantity}
-                  onChange={(e) => onUpdate(index, 'quantity', parseFloat(e.target.value) || 0)}
-                  step="0.001"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
+                  value={ingredient.quantity === 0 ? '' : ingredient.quantity}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Allow empty string, numbers, and decimals
+                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      onUpdate(index, 'quantity', val === '' ? 0 : parseFloat(val) || 0);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // On blur, ensure we have a valid number
+                    const val = parseFloat(e.target.value) || 0;
+                    onUpdate(index, 'quantity', val);
+                  }}
+                  placeholder="0"
                   className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg
                     focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
                 />
