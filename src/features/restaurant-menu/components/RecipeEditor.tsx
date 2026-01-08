@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus,
   Trash2,
@@ -152,10 +153,18 @@ function IngredientSearchModal({
 
   if (!isOpen) return null;
 
-  return (
+  // Use Portal to render modal OUTSIDE the parent form's DOM tree
+  // This prevents form events from bubbling up and closing the modal
+  if (typeof document === 'undefined') return null;
+
+  const modalContent = (
     <div
       className="fixed inset-0 z-[70] overflow-y-auto"
       onMouseDown={(e) => e.stopPropagation()}
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       {/* Backdrop - clicking here closes the modal */}
       <div
@@ -205,6 +214,13 @@ function IngredientSearchModal({
                   focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
                 autoFocus
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  // Prevent Enter from submitting any parent form
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }}
               />
             </div>
           </div>
@@ -267,6 +283,9 @@ function IngredientSearchModal({
       </div>
     </div>
   );
+
+  // Render modal using Portal to escape the form's DOM tree
+  return createPortal(modalContent, document.body);
 }
 
 // ======================
@@ -402,6 +421,7 @@ function IngredientRow({
 
         {/* Remove Button */}
         <button
+          type="button"
           onClick={() => onRemove(index)}
           className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg
             opacity-0 group-hover:opacity-100 transition-all"
@@ -655,6 +675,7 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
             Ingredientes ({ingredients.length})
           </label>
           <button
+            type="button"
             onClick={() => setShowSearch(true)}
             className="text-sm text-tis-coral hover:text-tis-coral/80 flex items-center gap-1.5 font-medium"
           >
@@ -670,6 +691,7 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
               Sin ingredientes agregados
             </p>
             <button
+              type="button"
               onClick={() => setShowSearch(true)}
               className="px-4 py-2 text-sm font-medium text-tis-coral bg-tis-coral/10
                 hover:bg-tis-coral/20 rounded-lg transition-colors"
@@ -746,6 +768,7 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
             </span>
           )}
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
             className="px-5 py-2 text-sm font-medium text-white bg-tis-coral
