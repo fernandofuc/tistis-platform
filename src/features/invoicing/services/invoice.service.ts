@@ -29,10 +29,13 @@ export class InvoiceService {
   private supabase: SupabaseClient<any>;
 
   constructor(supabaseUrl?: string, supabaseKey?: string) {
-    this.supabase = createClient(
-      supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      supabaseKey || process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const url = supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const key = supabaseKey || process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+    console.log('🔧 [InvoiceService] Initializing with URL:', url?.substring(0, 30) + '...');
+    console.log('🔧 [InvoiceService] Service role key present:', !!key, 'length:', key?.length);
+
+    this.supabase = createClient(url, key);
   }
 
   // ======================
