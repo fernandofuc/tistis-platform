@@ -378,5 +378,3 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
     refresh: fetchData,
   };
 }
-
-export default useInventory;

@@ -33,6 +33,12 @@ export {
 } from './services/email.service';
 
 // ======================
+// HOOKS
+// ======================
+export { useInvoices } from './hooks/useInvoices';
+export { useTicketExtraction } from './hooks/useTicketExtraction';
+
+// ======================
 // UTILS
 // ======================
 export {
