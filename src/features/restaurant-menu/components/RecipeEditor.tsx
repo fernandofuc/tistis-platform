@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus,
@@ -30,6 +30,12 @@ interface RecipeEditorProps {
   menuItemId: string | null;
   branchId: string;
   onCostCalculated?: (cost: number) => void;
+}
+
+// Expose these methods to parent component via ref
+export interface RecipeEditorRef {
+  saveRecipe: () => Promise<boolean>;
+  hasUnsavedChanges: () => boolean;
 }
 
 interface LocalIngredient {
@@ -437,7 +443,8 @@ function IngredientRow({
 // MAIN COMPONENT
 // ======================
 
-export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeEditorProps) {
+export const RecipeEditor = forwardRef<RecipeEditorRef, RecipeEditorProps>(
+  function RecipeEditor({ menuItemId, branchId, onCostCalculated }, ref) {
   const [recipe, setRecipe] = useState<MenuItemRecipe | null>(null);
   const [ingredients, setIngredients] = useState<LocalIngredient[]>([]);
   const [yieldQuantity, setYieldQuantity] = useState(1);
@@ -550,15 +557,28 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
     setHasChanges(true);
   }, []);
 
-  // Handle save
-  const handleSave = async () => {
-    if (!menuItemId) return;
+  // Handle save - returns true if successful, false otherwise
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    console.log('[RecipeEditor.handleSave] menuItemId:', menuItemId, 'hasChanges:', hasChanges, 'ingredients:', ingredients.length);
 
+    if (!menuItemId) {
+      console.log('[RecipeEditor.handleSave] No menuItemId, skipping save');
+      return true; // No menu item, nothing to save
+    }
+
+    // Only skip if there are no changes AND no ingredients to save
+    // If there are ingredients (even without changes flag), we should save them
+    if (!hasChanges && ingredients.length === 0) {
+      console.log('[RecipeEditor.handleSave] No changes and no ingredients, skipping save');
+      return true;
+    }
+
+    console.log('[RecipeEditor.handleSave] Saving recipe with', ingredients.length, 'ingredients');
     setSaving(true);
     setSaveStatus('idle');
 
     try {
-      await menuService.saveRecipe({
+      const payload = {
         menu_item_id: menuItemId,
         yield_quantity: yieldQuantity,
         yield_unit: yieldUnit,
@@ -572,18 +592,30 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
           is_optional: ing.is_optional,
           display_order: index,
         })),
-      });
+      };
+      console.log('[RecipeEditor.handleSave] Payload:', JSON.stringify(payload, null, 2));
 
+      await menuService.saveRecipe(payload);
+
+      console.log('[RecipeEditor.handleSave] Save successful');
       setHasChanges(false);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
+      return true;
     } catch (error) {
-      console.error('Error saving recipe:', error);
+      console.error('[RecipeEditor.handleSave] Error saving recipe:', error);
       setSaveStatus('error');
+      return false;
     } finally {
       setSaving(false);
     }
-  };
+  }, [menuItemId, hasChanges, ingredients, yieldQuantity, yieldUnit, preparationNotes, storageNotes]);
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    saveRecipe: handleSave,
+    hasUnsavedChanges: () => hasChanges,
+  }), [handleSave, hasChanges]);
 
   if (!menuItemId) {
     return (
@@ -800,6 +832,6 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
       />
     </div>
   );
-}
+});
 
 export default RecipeEditor;

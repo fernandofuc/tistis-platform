@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, UtensilsCrossed, Plus, Trash2, DollarSign, Clock, Flame, AlertTriangle, ChefHat } from 'lucide-react';
 import type { MenuItem, MenuCategory, MenuItemFormData, Allergen, MenuItemVariant, MenuItemSize, MenuItemAddOn } from '../types';
 import { ALLERGEN_CONFIG, SPICE_LEVELS } from '../types';
-import { RecipeEditor } from './RecipeEditor';
+import { RecipeEditor, type RecipeEditorRef } from './RecipeEditor';
 
 // ======================
 // TYPES
@@ -368,6 +368,9 @@ export function MenuItemFormModal({
   const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'variants' | 'recipe'>('basic');
   const [recipeCost, setRecipeCost] = useState<number>(0);
 
+  // Ref to RecipeEditor to call saveRecipe before closing
+  const recipeEditorRef = useRef<RecipeEditorRef>(null);
+
   // Callback for recipe cost updates
   const handleRecipeCostCalculated = useCallback((cost: number) => {
     setRecipeCost(cost);
@@ -459,11 +462,30 @@ export function MenuItemFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[MenuItemFormModal.handleSubmit] Starting submit, item?.id:', item?.id);
+
     if (!validateForm()) {
+      console.log('[MenuItemFormModal.handleSubmit] Form validation failed');
       setActiveTab('basic');
       return;
     }
+
+    // IMPORTANT: Save recipe BEFORE submitting the form
+    // Because onSubmit will close the modal and unmount RecipeEditor
+    // We need to save any pending recipe changes first
+    if (recipeEditorRef.current && item?.id) {
+      console.log('[MenuItemFormModal.handleSubmit] Saving recipe first...');
+      // Only save if we're editing an existing item (has ID)
+      const recipeSaved = await recipeEditorRef.current.saveRecipe();
+      console.log('[MenuItemFormModal.handleSubmit] Recipe save result:', recipeSaved);
+    } else {
+      console.log('[MenuItemFormModal.handleSubmit] No recipe to save (no ref or no item.id)');
+    }
+
+    // Now save the menu item (this may close the modal)
+    console.log('[MenuItemFormModal.handleSubmit] Saving menu item...');
     await onSubmit(formData);
+    console.log('[MenuItemFormModal.handleSubmit] Menu item saved');
   };
 
   if (!isOpen) return null;
@@ -731,6 +753,7 @@ export function MenuItemFormModal({
                 )}
 
                 <RecipeEditor
+                  ref={recipeEditorRef}
                   menuItemId={item?.id || null}
                   branchId={branchId}
                   onCostCalculated={handleRecipeCostCalculated}
