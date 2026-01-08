@@ -38,20 +38,49 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('branch_id');
 
-    // Simple query - fetch all categories for tenant
-    let query = supabase
+    // Use separate queries for branch-specific and global categories
+    // PostgREST's .or() doesn't combine well with other AND conditions
+    if (branchId && isValidUUID(branchId)) {
+      const [branchResult, globalResult] = await Promise.all([
+        supabase
+          .from('inventory_categories')
+          .select('*')
+          .eq('tenant_id', userRole.tenant_id)
+          .eq('branch_id', branchId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('name', { ascending: true }),
+        supabase
+          .from('inventory_categories')
+          .select('*')
+          .eq('tenant_id', userRole.tenant_id)
+          .is('branch_id', null)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('name', { ascending: true }),
+      ]);
+
+      const error = branchResult.error || globalResult.error;
+      if (error) {
+        console.error('[Categories API] Error fetching:', JSON.stringify(error, null, 2));
+        if (error.code === '42P01') {
+          return errorResponse('Sistema de inventario no configurado - ejecute las migraciones', 500);
+        }
+        return errorResponse(`Error al obtener categorías: ${error.message || error.code || 'Unknown'}`, 500);
+      }
+
+      const categories = [...(branchResult.data || []), ...(globalResult.data || [])];
+      return successResponse(categories);
+    }
+
+    // No branchId - fetch all tenant categories
+    const { data: categories, error } = await supabase
       .from('inventory_categories')
       .select('*')
       .eq('tenant_id', userRole.tenant_id)
       .eq('is_active', true)
       .is('deleted_at', null)
       .order('name', { ascending: true });
-
-    if (branchId && isValidUUID(branchId)) {
-      query = query.or(`branch_id.eq.${branchId},branch_id.is.null`);
-    }
-
-    const { data: categories, error } = await query;
 
     if (error) {
       console.error('[Categories API] Error fetching:', JSON.stringify(error, null, 2));

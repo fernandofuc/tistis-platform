@@ -47,22 +47,54 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all items for this tenant/branch
-    const { data: items } = await supabase
-      .from('inventory_items')
-      .select(`
-        id,
-        name,
-        current_stock,
-        minimum_stock,
-        unit,
-        unit_cost,
-        category_id,
-        category:inventory_categories(id, name)
-      `)
-      .eq('tenant_id', userRole.tenant_id)
-      .or(`branch_id.eq.${branchId},branch_id.is.null`)
-      .eq('is_active', true)
-      .is('deleted_at', null);
+    // Note: Using separate queries to handle branch_id IS NULL correctly
+    // PostgREST's .or() doesn't combine well with other AND conditions
+    // Using Promise.all for parallel execution
+    const [branchItemsResult, globalItemsResult] = await Promise.all([
+      supabase
+        .from('inventory_items')
+        .select(`
+          id,
+          name,
+          current_stock,
+          minimum_stock,
+          unit,
+          unit_cost,
+          category_id,
+          category:inventory_categories(id, name)
+        `)
+        .eq('tenant_id', userRole.tenant_id)
+        .eq('branch_id', branchId)
+        .eq('is_active', true)
+        .is('deleted_at', null),
+      supabase
+        .from('inventory_items')
+        .select(`
+          id,
+          name,
+          current_stock,
+          minimum_stock,
+          unit,
+          unit_cost,
+          category_id,
+          category:inventory_categories(id, name)
+        `)
+        .eq('tenant_id', userRole.tenant_id)
+        .is('branch_id', null)
+        .eq('is_active', true)
+        .is('deleted_at', null),
+    ]);
+
+    // Log any errors for debugging
+    if (branchItemsResult.error) {
+      console.error('Error fetching branch items:', branchItemsResult.error);
+    }
+    if (globalItemsResult.error) {
+      console.error('Error fetching global items:', globalItemsResult.error);
+    }
+
+    // Combine both results
+    const items = [...(branchItemsResult.data || []), ...(globalItemsResult.data || [])];
 
     // Get categories count
     const { count: categoriesCount } = await supabase
@@ -118,26 +150,29 @@ export async function GET(request: NextRequest) {
     const valueByCategory: Record<string, { value: number; items_count: number; category_name: string }> = {};
 
     items?.forEach(item => {
-      const value = item.current_stock * item.unit_cost;
+      const stock = item.current_stock ?? 0;
+      const cost = item.unit_cost ?? 0;
+      const minStock = item.minimum_stock ?? 0;
+      const value = stock * cost;
       totalValue += value;
 
-      if (item.current_stock <= 0) {
+      if (stock <= 0) {
         outOfStockCount++;
         lowStockCount++;
         lowStockItems.push({
           id: item.id,
           name: item.name,
-          current_stock: item.current_stock,
-          minimum_stock: item.minimum_stock,
+          current_stock: stock,
+          minimum_stock: minStock,
           unit: item.unit,
         });
-      } else if (item.current_stock <= item.minimum_stock) {
+      } else if (stock <= minStock) {
         lowStockCount++;
         lowStockItems.push({
           id: item.id,
           name: item.name,
-          current_stock: item.current_stock,
-          minimum_stock: item.minimum_stock,
+          current_stock: stock,
+          minimum_stock: minStock,
           unit: item.unit,
         });
       }

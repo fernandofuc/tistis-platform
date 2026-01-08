@@ -231,7 +231,7 @@ function ItemsListTab({ items, categories, loading, onAddItem, onEditItem, onDel
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>

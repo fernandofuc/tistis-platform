@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Plus,
   Trash2,
@@ -78,6 +78,15 @@ function IngredientSearchModal({
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const isOpenRef = useRef(isOpen);
+
+  // Memoize excludeIds Set for stable reference and efficient lookups
+  const excludeIdsSet = useMemo(() => new Set(excludeIds), [excludeIds]);
+
+  // Keep track of isOpen to prevent stale closures
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -86,7 +95,12 @@ function IngredientSearchModal({
       return;
     }
 
+    // Only load when modal is actually open
+    let isMounted = true;
+
     const loadItems = async () => {
+      if (!isOpenRef.current) return;
+
       setLoading(true);
       try {
         const result = await inventoryService.getItems({
@@ -94,27 +108,66 @@ function IngredientSearchModal({
           search: search || undefined,
           limit: 50,
         });
-        setItems(result.filter(item => !excludeIds.includes(item.id)));
+
+        // Check if still mounted and modal still open before updating state
+        if (isMounted && isOpenRef.current) {
+          setItems(result.filter(item => !excludeIdsSet.has(item.id)));
+        }
       } catch (error) {
         console.error('Error loading inventory items:', error);
       } finally {
-        setLoading(false);
+        if (isMounted && isOpenRef.current) {
+          setLoading(false);
+        }
       }
     };
 
     const debounce = setTimeout(loadItems, 300);
-    return () => clearTimeout(debounce);
-  }, [isOpen, search, branchId, excludeIds]);
+    return () => {
+      isMounted = false;
+      clearTimeout(debounce);
+    };
+  }, [isOpen, search, branchId, excludeIdsSet]);
+
+  // Handle backdrop click
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onClose();
+  }, [onClose]);
+
+  // Handle modal content click - prevent any propagation
+  const handleModalClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
+
+  // Handle ingredient selection
+  const handleSelect = useCallback((item: InventoryItem) => {
+    onSelect(item);
+    // Delay close slightly to ensure selection is processed
+    setTimeout(() => {
+      onClose();
+    }, 10);
+  }, [onSelect, onClose]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-[70] overflow-y-auto"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {/* Backdrop - clicking here closes the modal */}
+      <div
+        className="fixed inset-0 bg-black/40"
+        onClick={handleBackdropClick}
+        aria-hidden="true"
+      />
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className="relative w-full max-w-md bg-white rounded-2xl shadow-xl"
-          onClick={e => e.stopPropagation()}
+          onClick={handleModalClick}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -127,7 +180,12 @@ function IngredientSearchModal({
               </h3>
             </div>
             <button
-              onClick={onClose}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
               className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
             >
               <XIcon className="w-5 h-5" />
@@ -146,6 +204,7 @@ function IngredientSearchModal({
                 className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl
                   focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
                 autoFocus
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
@@ -168,9 +227,11 @@ function IngredientSearchModal({
                 {items.map(item => (
                   <button
                     key={item.id}
-                    onClick={() => {
-                      onSelect(item);
-                      onClose();
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSelect(item);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-left transition-colors"
                   >
@@ -368,6 +429,12 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
   const [showSearch, setShowSearch] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+
+  // Memoize excludeIds to prevent unnecessary re-renders of the search modal
+  const excludeIds = useMemo(
+    () => ingredients.map(i => i.inventory_item_id),
+    [ingredients]
+  );
 
   // Calculate total cost
   const totalCost = ingredients.reduce((sum, ing) => {
@@ -706,7 +773,7 @@ export function RecipeEditor({ menuItemId, branchId, onCostCalculated }: RecipeE
         onClose={() => setShowSearch(false)}
         onSelect={handleAddIngredient}
         branchId={branchId}
-        excludeIds={ingredients.map(i => i.inventory_item_id)}
+        excludeIds={excludeIds}
       />
     </div>
   );

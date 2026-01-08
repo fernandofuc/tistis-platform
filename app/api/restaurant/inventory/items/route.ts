@@ -38,26 +38,45 @@ export async function GET(request: NextRequest) {
       return errorResponse('branch_id requerido', 400);
     }
 
-    // Simple query without complex joins that might fail
-    let query = supabase
+    // Use separate queries for branch-specific and global items
+    // PostgREST's .or() doesn't combine well with other AND conditions
+    let branchQuery = supabase
       .from('inventory_items')
       .select('*')
       .eq('tenant_id', userRole.tenant_id)
-      .or(`branch_id.eq.${branchId},branch_id.is.null`)
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('name', { ascending: true })
+      .limit(limit);
+
+    let globalQuery = supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('tenant_id', userRole.tenant_id)
+      .is('branch_id', null)
       .eq('is_active', true)
       .is('deleted_at', null)
       .order('name', { ascending: true })
       .limit(limit);
 
     if (categoryId && isValidUUID(categoryId)) {
-      query = query.eq('category_id', categoryId);
+      branchQuery = branchQuery.eq('category_id', categoryId);
+      globalQuery = globalQuery.eq('category_id', categoryId);
     }
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%`);
+      // Sanitize search to prevent issues with special characters
+      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
+      branchQuery = branchQuery.or(`name.ilike.%${sanitizedSearch}%,sku.ilike.%${sanitizedSearch}%`);
+      globalQuery = globalQuery.or(`name.ilike.%${sanitizedSearch}%,sku.ilike.%${sanitizedSearch}%`);
     }
 
-    const { data: items, error } = await query;
+    const [branchResult, globalResult] = await Promise.all([branchQuery, globalQuery]);
+
+    const error = branchResult.error || globalResult.error;
+    // Combine results, branch items take priority over global
+    const items = [...(branchResult.data || []), ...(globalResult.data || [])];
 
     if (error) {
       console.error('[Items API] Error fetching:', JSON.stringify(error, null, 2));
@@ -71,7 +90,11 @@ export async function GET(request: NextRequest) {
     // Filter low stock items manually
     let filteredItems = items || [];
     if (lowStockOnly) {
-      filteredItems = filteredItems.filter(item => item.current_stock <= item.minimum_stock);
+      filteredItems = filteredItems.filter(item => {
+        const stock = item.current_stock ?? 0;
+        const minStock = item.minimum_stock ?? 0;
+        return stock <= minStock;
+      });
     }
 
     return successResponse(filteredItems);
