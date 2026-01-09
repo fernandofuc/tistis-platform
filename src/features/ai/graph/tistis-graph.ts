@@ -395,15 +395,35 @@ export function buildTISTISGraph() {
 }
 
 // ======================
-// COMPILED GRAPH
+// COMPILED GRAPH (SINGLETON)
 // ======================
 
+// U6 FIX: Cache the compiled graph to prevent memory leak
+// Compiling on every request creates new objects that accumulate
+let _compiledGraph: ReturnType<ReturnType<typeof buildTISTISGraph>['compile']> | null = null;
+let _graphVersion = 0;
+
 /**
- * Compila el grafo para ejecución
+ * Compila el grafo para ejecución (singleton)
+ * FIXED: Uses singleton pattern to prevent memory leak from repeated compilation
  */
 export function compileTISTISGraph() {
-  const workflow = buildTISTISGraph();
-  return workflow.compile();
+  if (!_compiledGraph) {
+    console.log('[Graph] Compiling graph (first time)...');
+    const workflow = buildTISTISGraph();
+    _compiledGraph = workflow.compile();
+    _graphVersion++;
+    console.log(`[Graph] Graph compiled, version ${_graphVersion}`);
+  }
+  return _compiledGraph;
+}
+
+/**
+ * Forces recompilation of the graph (use after code changes in dev)
+ */
+export function invalidateGraphCache(): void {
+  _compiledGraph = null;
+  console.log('[Graph] Graph cache invalidated, will recompile on next execution');
 }
 
 // ======================
@@ -512,4 +532,5 @@ export const TISTISGraph = {
   build: buildTISTISGraph,
   compile: compileTISTISGraph,
   execute: executeGraph,
+  invalidateCache: invalidateGraphCache,
 };

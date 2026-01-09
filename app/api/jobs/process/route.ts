@@ -178,11 +178,20 @@ export async function POST(request: NextRequest) {
 
         switch (jobType) {
           case 'ai_response':
-            result = await processAIResponseJob(job.payload as AIResponseJobPayload);
+            // U1 FIX: Pass job_id and cached_result for retry optimization
+            result = await processAIResponseJob({
+              ...(job.payload as AIResponseJobPayload),
+              job_id: job.id,
+              cached_result: (job as { cached_result?: { ai_response: string; metadata: Record<string, unknown> } }).cached_result,
+            });
             break;
 
           case 'send_whatsapp':
-            result = await processSendWhatsAppJob(job.payload as SendMessageJobPayload);
+            // U4/U7 FIX: Pass job_id for connection validation and rate limiting
+            result = await processSendWhatsAppJob({
+              ...(job.payload as SendMessageJobPayload),
+              job_id: job.id,
+            } as SendMessageJobPayload & { job_id: string });
             break;
 
           case 'send_instagram':
@@ -240,39 +249,87 @@ export async function POST(request: NextRequest) {
 
 /**
  * Procesa un trabajo de respuesta AI
+ * FIXED: Caches AI response before DB operations to prevent token waste on retry (U1)
  */
 async function processAIResponseJob(
-  payload: AIResponseJobPayload
+  payload: AIResponseJobPayload & { job_id?: string; cached_result?: { ai_response: string; metadata: Record<string, unknown> } }
 ): Promise<Record<string, unknown>> {
   const { tenant_id, conversation_id, message_id, lead_id, channel, channel_connection_id } = payload;
 
   console.log(`[Jobs API] Processing AI response for conversation ${conversation_id}`);
 
-  // 1. Obtener el mensaje actual
   const supabase = createServerClient();
-  const { data: message } = await supabase
-    .from('messages')
-    .select('content')
-    .eq('id', message_id)
-    .single();
 
-  if (!message) {
-    throw new Error(`Message ${message_id} not found`);
+  // U1 FIX: Check if we have a cached AI response from a previous failed attempt
+  let aiResult: Awaited<ReturnType<typeof generateAIResponseSmart>>;
+  let usedCachedResponse = false;
+
+  if (payload.cached_result?.ai_response) {
+    // Retry case: Use cached response to avoid regenerating (saves tokens)
+    console.log('[Jobs API] Using cached AI response from previous attempt');
+    const cachedIntent = (payload.cached_result.metadata?.intent as string) || 'UNKNOWN';
+    aiResult = {
+      response: payload.cached_result.ai_response,
+      // Cast to same type that generateAIResponseSmart returns
+      intent: cachedIntent as Awaited<ReturnType<typeof generateAIResponseSmart>>['intent'],
+      signals: (payload.cached_result.metadata?.signals as Array<{ signal: string; points: number }>) || [],
+      score_change: (payload.cached_result.metadata?.score_change as number) || 0,
+      escalate: (payload.cached_result.metadata?.escalate as boolean) || false,
+      escalate_reason: payload.cached_result.metadata?.escalate_reason as string | undefined,
+      tokens_used: (payload.cached_result.metadata?.tokens_used as number) || 0,
+      model_used: (payload.cached_result.metadata?.model_used as string) || 'cached',
+      processing_time_ms: 0,
+    };
+    usedCachedResponse = true;
+  } else {
+    // 1. Obtener el mensaje actual
+    const { data: message } = await supabase
+      .from('messages')
+      .select('content')
+      .eq('id', message_id)
+      .single();
+
+    if (!message) {
+      throw new Error(`Message ${message_id} not found`);
+    }
+
+    // 2. Generar respuesta AI (usa LangGraph o legacy según configuración del tenant)
+    aiResult = await generateAIResponseSmart(tenant_id, conversation_id, message.content, lead_id);
+
+    console.log(
+      `[Jobs API] AI response generated: intent=${aiResult.intent}, ` +
+      `escalate=${aiResult.escalate}, tokens=${aiResult.tokens_used}`
+    );
+
+    // U1 FIX: Cache the AI response BEFORE attempting DB operations
+    // If DB insert fails and job retries, we'll use this cached response
+    if (payload.job_id) {
+      try {
+        await supabase.rpc('cache_job_ai_response', {
+          p_job_id: payload.job_id,
+          p_ai_response: aiResult.response,
+          p_metadata: {
+            intent: aiResult.intent,
+            signals: aiResult.signals,
+            score_change: aiResult.score_change,
+            escalate: aiResult.escalate,
+            escalate_reason: aiResult.escalate_reason,
+            tokens_used: aiResult.tokens_used,
+            model_used: aiResult.model_used,
+          },
+        });
+      } catch (cacheError) {
+        // Non-critical: continue even if caching fails
+        console.warn('[Jobs API] Failed to cache AI response:', cacheError);
+      }
+    }
   }
-
-  // 2. Generar respuesta AI (usa LangGraph o legacy según configuración del tenant)
-  const aiResult = await generateAIResponseSmart(tenant_id, conversation_id, message.content, lead_id);
-
-  console.log(
-    `[Jobs API] AI response generated: intent=${aiResult.intent}, ` +
-    `escalate=${aiResult.escalate}, tokens=${aiResult.tokens_used}`
-  );
 
   // 3. Guardar respuesta
   const responseMessageId = await saveAIResponse(conversation_id, aiResult.response, {
     intent: aiResult.intent,
     signals: aiResult.signals,
-    model: aiResult.model_used,
+    model: usedCachedResponse ? 'cached-' + aiResult.model_used : aiResult.model_used,
     tokens: aiResult.tokens_used,
     processing_time_ms: aiResult.processing_time_ms,
   });
@@ -282,8 +339,10 @@ async function processAIResponseJob(
     await updateLeadScore(lead_id, aiResult.signals, conversation_id);
   }
 
-  // 5. Registrar uso de AI
-  await logAIUsage(tenant_id, conversation_id, aiResult);
+  // 5. Registrar uso de AI (skip if using cached response to avoid double counting)
+  if (!usedCachedResponse) {
+    await logAIUsage(tenant_id, conversation_id, aiResult);
+  }
 
   // 6. Escalar si es necesario
   if (aiResult.escalate && aiResult.escalate_reason) {
@@ -309,6 +368,7 @@ async function processAIResponseJob(
     escalated: aiResult.escalate,
     score_change: aiResult.score_change,
     tokens_used: aiResult.tokens_used,
+    used_cached_response: usedCachedResponse,
   };
 }
 
@@ -450,26 +510,49 @@ async function enqueueMetaSendJob(payload: MetaSendMessageJobPayload): Promise<s
 
 /**
  * Procesa un trabajo de envío de mensaje WhatsApp
+ * FIXED: Validates connection status and checks rate limits (U4, U7)
  */
 async function processSendWhatsAppJob(
-  payload: SendMessageJobPayload
+  payload: SendMessageJobPayload & { job_id?: string }
 ): Promise<Record<string, unknown>> {
-  const { message_id, channel_connection_id, recipient_phone, content } = payload;
+  const { message_id, channel_connection_id, recipient_phone, content, job_id } = payload;
 
   // Log without exposing phone number
   console.log(`[Jobs API] Sending WhatsApp message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
 
+  // U4 FIX: Validate connection is still active before sending
+  const { data: validation } = await supabase.rpc('validate_channel_connection_for_job', {
+    p_job_id: job_id || null,
+    p_channel_connection_id: channel_connection_id,
+  });
+
+  if (validation && validation.length > 0 && !validation[0].is_valid) {
+    throw new Error(`Channel connection invalid: ${validation[0].error_reason}`);
+  }
+
+  // U7 FIX: Check rate limit before sending
+  const { data: rateLimit } = await supabase.rpc('check_rate_limit', {
+    p_channel_connection_id: channel_connection_id,
+    p_channel: 'whatsapp',
+  });
+
+  if (rateLimit && rateLimit.length > 0 && !rateLimit[0].allowed) {
+    const retryAfter = rateLimit[0].retry_after_seconds || 60;
+    throw new Error(`Rate limited. Retry after ${retryAfter} seconds. Current: ${rateLimit[0].current_count}/${rateLimit[0].limit_count}`);
+  }
+
   // 1. Obtener channel connection
   const { data: connection, error } = await supabase
     .from('channel_connections')
     .select('*')
     .eq('id', channel_connection_id)
+    .eq('status', 'connected') // U4: Only use connected channels
     .single();
 
   if (error || !connection) {
-    throw new Error(`Channel connection ${channel_connection_id} not found`);
+    throw new Error(`Channel connection ${channel_connection_id} not found or disconnected`);
   }
 
   // 2. Enviar mensaje por WhatsApp
