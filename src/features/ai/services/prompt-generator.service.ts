@@ -1241,81 +1241,127 @@ export async function saveCachedPrompt(
 /**
  * Genera y cachea un prompt para un canal específico
  * Esta es la función principal que se llama cuando el usuario guarda cambios en Business IA
+ *
+ * P22 FIX: Prevents concurrent generation for same tenant/channel
  */
 export async function generateAndCachePrompt(
   tenantId: string,
   channel: CacheChannel
 ): Promise<PromptGenerationResult> {
+  const supabase = createServerClient();
   console.log(`[PromptCache] Generating and caching prompt for tenant ${tenantId}, channel ${channel}`);
 
-  // 1. Determinar el tipo de prompt basado en el canal
-  const promptType: PromptType = channel === 'voice' ? 'voice' : 'messaging';
+  // P22 FIX: Try to acquire generation lock to prevent concurrent generations
+  const { data: lockResult } = await supabase.rpc('acquire_prompt_generation_lock', {
+    p_tenant_id: tenantId,
+    p_channel: channel,
+    p_locked_by: `server-${process.env.HOSTNAME || 'unknown'}`,
+  });
 
-  // 2. Recopilar contexto del negocio
-  const context = await collectBusinessContext(tenantId, promptType);
+  const lockAcquired = lockResult?.[0]?.acquired ?? true; // Default to true if RPC not available
+  const waitSeconds = lockResult?.[0]?.wait_seconds ?? 0;
 
-  if (!context) {
-    return {
-      success: false,
-      prompt: '',
-      error: 'No se pudo obtener el contexto del negocio',
-      generatedAt: new Date().toISOString(),
-      model: 'none',
-      processingTimeMs: 0,
-    };
+  if (!lockAcquired && waitSeconds > 0) {
+    console.log(`[PromptCache] Generation already in progress, waiting ${waitSeconds}s`);
+    // Wait for the other generation to complete, then return cached
+    await new Promise(resolve => setTimeout(resolve, Math.min(waitSeconds * 1000, 30000)));
+
+    // Try to get the freshly generated prompt
+    const freshPrompt = await getCachedPrompt(tenantId, channel);
+    if (freshPrompt.found && freshPrompt.generated_prompt) {
+      return {
+        success: true,
+        prompt: freshPrompt.generated_prompt,
+        generatedAt: freshPrompt.last_updated || new Date().toISOString(),
+        model: 'concurrent-cached',
+        processingTimeMs: waitSeconds * 1000,
+      };
+    }
+    // If still no prompt, continue with generation
   }
 
-  // 3. Calcular hash de los datos actuales
-  const sourceDataHash = calculateBusinessContextHash(context);
+  try {
+    // 1. Determinar el tipo de prompt basado en el canal
+    const promptType: PromptType = channel === 'voice' ? 'voice' : 'messaging';
 
-  // 4. Verificar si ya existe un prompt con el mismo hash (sin cambios)
-  const existingPrompt = await getCachedPrompt(tenantId, channel);
-  if (existingPrompt.found && existingPrompt.source_data_hash === sourceDataHash) {
-    console.log(`[PromptCache] Prompt already up-to-date for channel ${channel}`);
-    return {
-      success: true,
-      prompt: existingPrompt.generated_prompt || '',
-      generatedAt: existingPrompt.last_updated || new Date().toISOString(),
-      model: 'cached',
-      processingTimeMs: 0,
-    };
-  }
+    // 2. Recopilar contexto del negocio
+    const context = await collectBusinessContext(tenantId, promptType);
 
-  // 5. Generar nuevo prompt con Gemini
-  const result = await generatePromptWithAI(context, promptType);
+    if (!context) {
+      return {
+        success: false,
+        prompt: '',
+        error: 'No se pudo obtener el contexto del negocio',
+        generatedAt: new Date().toISOString(),
+        model: 'none',
+        processingTimeMs: 0,
+      };
+    }
 
-  if (!result.success) {
+    // 3. Calcular hash de los datos actuales
+    const sourceDataHash = calculateBusinessContextHash(context);
+
+    // 4. Verificar si ya existe un prompt con el mismo hash (sin cambios)
+    const existingPrompt = await getCachedPrompt(tenantId, channel);
+    if (existingPrompt.found && existingPrompt.source_data_hash === sourceDataHash) {
+      console.log(`[PromptCache] Prompt already up-to-date for channel ${channel}`);
+      return {
+        success: true,
+        prompt: existingPrompt.generated_prompt || '',
+        generatedAt: existingPrompt.last_updated || new Date().toISOString(),
+        model: 'cached',
+        processingTimeMs: 0,
+      };
+    }
+
+    // 5. Generar nuevo prompt con Gemini
+    const result = await generatePromptWithAI(context, promptType);
+
+    if (!result.success) {
+      return result;
+    }
+
+    // P5 FIX: Pass validation result to saveCachedPrompt
+    // This will REJECT prompts that fail critical validation
+    const saveResult = await saveCachedPrompt(
+      tenantId,
+      channel,
+      result.prompt,
+      result.prompt, // El system_prompt es el mismo que el generated_prompt por ahora
+      sourceDataHash,
+      result.model,
+      Math.ceil(result.prompt.length / 4), // Estimación aproximada de tokens
+      result.validation // Pass validation result for P5 fix
+    );
+
+    if (saveResult.rejected) {
+      console.error(`[PromptCache] Prompt REJECTED by validation for ${channel}`);
+      return {
+        ...result,
+        success: false,
+        error: `Prompt rechazado por validación: ${saveResult.error}`,
+      };
+    }
+
+    if (!saveResult.promptId) {
+      console.warn('[PromptCache] Could not save to cache, but prompt was generated');
+    }
+
+    console.log(`[PromptCache] Successfully generated and cached prompt for channel ${channel}`);
     return result;
+  } finally {
+    // P22 FIX: Release the generation lock
+    if (lockAcquired) {
+      try {
+        await supabase.rpc('release_prompt_generation_lock', {
+          p_tenant_id: tenantId,
+          p_channel: channel,
+        });
+      } catch (releaseErr) {
+        console.warn('[PromptCache] Failed to release generation lock:', releaseErr);
+      }
+    }
   }
-
-  // P5 FIX: Pass validation result to saveCachedPrompt
-  // This will REJECT prompts that fail critical validation
-  const saveResult = await saveCachedPrompt(
-    tenantId,
-    channel,
-    result.prompt,
-    result.prompt, // El system_prompt es el mismo que el generated_prompt por ahora
-    sourceDataHash,
-    result.model,
-    Math.ceil(result.prompt.length / 4), // Estimación aproximada de tokens
-    result.validation // Pass validation result for P5 fix
-  );
-
-  if (saveResult.rejected) {
-    console.error(`[PromptCache] Prompt REJECTED by validation for ${channel}`);
-    return {
-      ...result,
-      success: false,
-      error: `Prompt rechazado por validación: ${saveResult.error}`,
-    };
-  }
-
-  if (!saveResult.promptId) {
-    console.warn('[PromptCache] Could not save to cache, but prompt was generated');
-  }
-
-  console.log(`[PromptCache] Successfully generated and cached prompt for channel ${channel}`);
-  return result;
 }
 
 /**

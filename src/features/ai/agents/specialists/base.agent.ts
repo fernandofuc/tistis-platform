@@ -83,36 +83,86 @@ export abstract class BaseAgent {
   /**
    * Construye el system prompt con el contexto COMPLETO del negocio
    *
-   * MEJORADO: Ahora incluye toda la información personalizada del cliente
-   * incluyendo Knowledge Base, políticas, instrucciones personalizadas, etc.
+   * P13 FIX: PRIORIZA el prompt cacheado de Gemini si está disponible.
+   * El prompt cacheado ya incluye toda la información del negocio optimizada.
+   * Solo usa el template del agente como FALLBACK o para información específica.
+   *
+   * FLUJO:
+   * 1. Si hay prompt cacheado en tenant.ai_config.system_prompt → usarlo como BASE
+   * 2. Agregar instrucciones específicas del agente (rol, tarea específica)
+   * 3. Agregar contexto dinámico (lead info, conversation context)
    */
   protected buildSystemPrompt(state: TISTISAgentStateType): string {
-    let prompt = this.config.systemPromptTemplate;
-
-    // Reemplazar placeholders con datos del estado
     const tenant = state.tenant;
     const business = state.business_context;
 
-    if (tenant) {
-      prompt = prompt.replace('{{TENANT_NAME}}', tenant.tenant_name || '');
-      prompt = prompt.replace('{{VERTICAL}}', tenant.vertical || 'general');
-      prompt = prompt.replace('{{RESPONSE_STYLE}}', tenant.ai_config?.response_style || 'professional');
-      prompt = prompt.replace('{{MAX_LENGTH}}', String(tenant.ai_config?.max_response_length || 300));
+    // P13 FIX: Check if we have a cached prompt from Gemini
+    const cachedPrompt = tenant?.ai_config?.system_prompt;
+    const hasCachedPrompt = cachedPrompt && cachedPrompt.length > 500;
+
+    let prompt: string;
+
+    if (hasCachedPrompt) {
+      // =====================================================
+      // P13 FIX: USE CACHED GEMINI PROMPT AS BASE
+      // This prompt already contains:
+      // - Business info (services, branches, staff)
+      // - FAQs, Knowledge Base, policies
+      // - Custom instructions
+      // - Personality and style settings
+      // =====================================================
+      prompt = cachedPrompt;
+
+      // Add agent-specific role instructions (short, doesn't repeat business info)
+      const agentRole = this.getAgentRoleInstructions(state);
+      if (agentRole) {
+        prompt += `\n\n# TU ROL ESPECÍFICO EN ESTA CONVERSACIÓN\n${agentRole}`;
+      }
+
+      console.log(`[${this.config.name}] Using cached Gemini prompt (${cachedPrompt.length} chars) + agent role`);
+    } else {
+      // =====================================================
+      // FALLBACK: Use hardcoded template if no cached prompt
+      // This happens when:
+      // - Prompt generation failed
+      // - New tenant without generated prompt
+      // - Cache invalidated
+      // =====================================================
+      console.warn(`[${this.config.name}] No cached prompt available, using template fallback`);
+
+      prompt = this.config.systemPromptTemplate;
+
+      // Reemplazar placeholders con datos del estado
+      if (tenant) {
+        prompt = prompt.replace('{{TENANT_NAME}}', tenant.tenant_name || '');
+        prompt = prompt.replace('{{VERTICAL}}', tenant.vertical || 'general');
+        prompt = prompt.replace('{{RESPONSE_STYLE}}', tenant.ai_config?.response_style || 'professional');
+        prompt = prompt.replace('{{MAX_LENGTH}}', String(tenant.ai_config?.max_response_length || 300));
+      }
+
+      // Agregar instrucciones de estilo
+      const styleDescriptions: Record<string, string> = {
+        professional: 'profesional y directo',
+        professional_friendly: 'profesional pero cálido y amigable',
+        casual: 'informal y cercano',
+        formal: 'muy formal y respetuoso',
+      };
+      const style = tenant?.ai_config?.response_style || 'professional';
+      prompt = prompt.replace('{{STYLE_DESCRIPTION}}', styleDescriptions[style] || 'profesional');
+
+      // Add full business context since we don't have cached prompt
+      const fullContext = buildFullBusinessContext(state);
+      if (fullContext) {
+        prompt += `\n${fullContext}`;
+      }
     }
 
-    // Agregar instrucciones de estilo
-    const styleDescriptions: Record<string, string> = {
-      professional: 'profesional y directo',
-      professional_friendly: 'profesional pero cálido y amigable',
-      casual: 'informal y cercano',
-      formal: 'muy formal y respetuoso',
-    };
-    const style = tenant?.ai_config?.response_style || 'professional';
-    prompt = prompt.replace('{{STYLE_DESCRIPTION}}', styleDescriptions[style] || 'profesional');
-
-    // Agregar contexto del lead
+    // =====================================================
+    // ALWAYS ADD: Dynamic context (lead info, conversation state)
+    // This info changes per conversation, not in cached prompt
+    // =====================================================
     if (state.lead) {
-      prompt += `\n\n# INFORMACIÓN DEL CLIENTE\n`;
+      prompt += `\n\n# INFORMACIÓN DEL CLIENTE ACTUAL\n`;
       prompt += `- Nombre: ${state.lead.name || 'No proporcionado'}\n`;
       prompt += `- Score: ${state.lead.score || 50} (${state.lead.classification || 'warm'})\n`;
       if (state.lead.preferred_branch_id) {
@@ -121,25 +171,42 @@ export abstract class BaseAgent {
           prompt += `- Sucursal preferida: ${branch.name}\n`;
         }
       }
+      if (state.lead.notes) {
+        prompt += `- Notas: ${state.lead.notes}\n`;
+      }
     }
 
-    // =====================================================
-    // AGREGAR CONTEXTO COMPLETO DEL NEGOCIO
-    // Esto incluye toda la información personalizada del cliente:
-    // - Instrucciones personalizadas
-    // - Políticas del negocio
-    // - Servicios y precios
-    // - FAQs
-    // - Knowledge Base
-    // - Manejo de competencia
-    // - Plantillas de respuesta
-    // =====================================================
-    const fullContext = buildFullBusinessContext(state);
-    if (fullContext) {
-      prompt += `\n${fullContext}`;
+    // Add conversation context if available
+    if (state.conversation) {
+      prompt += `\n# CONTEXTO DE CONVERSACIÓN\n`;
+      prompt += `- Canal: ${state.conversation.channel}\n`;
+      prompt += `- Mensajes previos: ${state.conversation.message_count}\n`;
     }
 
     return prompt;
+  }
+
+  /**
+   * P13 FIX: Returns agent-specific role instructions
+   * These are SHORT instructions about what this specific agent does,
+   * NOT business info (which is already in the cached prompt)
+   */
+  protected getAgentRoleInstructions(state: TISTISAgentStateType): string {
+    // Can be overridden by specific agents
+    // Default: use the first paragraph of the template as role description
+    const templateLines = this.config.systemPromptTemplate.split('\n');
+    const roleLines: string[] = [];
+
+    for (const line of templateLines) {
+      // Stop at first heading or after 5 lines
+      if (line.startsWith('#') && roleLines.length > 0) break;
+      if (roleLines.length >= 5) break;
+      if (line.trim()) {
+        roleLines.push(line);
+      }
+    }
+
+    return roleLines.join('\n').replace(/\{\{[^}]+\}\}/g, '').trim();
   }
 
   /**
