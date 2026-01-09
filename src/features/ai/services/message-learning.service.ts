@@ -910,6 +910,65 @@ const alertThrottleCacheInternal = new Map<string, AlertThrottleStateInternal>()
 const tenantAlertCountInternal = new Map<string, { count: number; lastReset: number }>();
 
 /**
+ * FIX: Cleanup function for alert throttle caches to prevent memory leak
+ * Removes entries older than 2x the TTL
+ * FIX: Collect keys first to avoid modifying Map during iteration
+ */
+function cleanupAlertThrottleCaches(): void {
+  const now = Date.now();
+  const ttl2x = ALERT_THROTTLE_CONFIG_INTERNAL.cache_ttl_ms * 2;
+
+  // FIX: Collect keys first, then delete (avoid ConcurrentModificationException)
+  const alertKeysToDelete: string[] = [];
+  const tenantKeysToDelete: string[] = [];
+  const patternKeysToDelete: string[] = [];
+
+  // Collect keys for alertThrottleCacheInternal
+  for (const [key, state] of alertThrottleCacheInternal.entries()) {
+    if (now - state.lastReset > ttl2x) {
+      alertKeysToDelete.push(key);
+    }
+  }
+
+  // Collect keys for tenantAlertCountInternal
+  for (const [key, state] of tenantAlertCountInternal.entries()) {
+    if (now - state.lastReset > ttl2x) {
+      tenantKeysToDelete.push(key);
+    }
+  }
+
+  // Collect keys for patternRateLimitCacheInternal
+  for (const [key, state] of patternRateLimitCacheInternal.entries()) {
+    if (now - state.lastReset > PATTERN_RATE_LIMITS_INTERNAL.cache_ttl_ms * 2) {
+      patternKeysToDelete.push(key);
+    }
+  }
+
+  // Now delete collected keys
+  alertKeysToDelete.forEach(key => alertThrottleCacheInternal.delete(key));
+  tenantKeysToDelete.forEach(key => tenantAlertCountInternal.delete(key));
+  patternKeysToDelete.forEach(key => patternRateLimitCacheInternal.delete(key));
+}
+
+// FIX: Store interval IDs to allow cleanup in tests
+let alertThrottleCleanupIntervalId: ReturnType<typeof setInterval> | null = null;
+
+// Run cleanup every 30 minutes (only in server context)
+if (typeof setInterval !== 'undefined' && !alertThrottleCleanupIntervalId) {
+  alertThrottleCleanupIntervalId = setInterval(cleanupAlertThrottleCaches, 1800000);
+}
+
+/**
+ * Stop cleanup intervals (useful for tests)
+ */
+export function stopAlertThrottleCleanup(): void {
+  if (alertThrottleCleanupIntervalId) {
+    clearInterval(alertThrottleCleanupIntervalId);
+    alertThrottleCleanupIntervalId = null;
+  }
+}
+
+/**
  * REVISIÓN 5.3 G-B17: Versión interna de throttling
  */
 function shouldSendAlertInternal(
@@ -1272,10 +1331,63 @@ export function hasHighPriorityPatterns(
 // MAIN SERVICE
 // ======================
 
+// ======================
+// FIX: Cache for isLearningEnabled to avoid N+1 queries
+// TTL: 5 minutes (300000ms)
+// ======================
+const learningEnabledCache = new Map<string, { enabled: boolean; timestamp: number }>();
+const LEARNING_CACHE_TTL_MS = 300000; // 5 minutes
+
+/**
+ * Clears expired entries from the learning cache
+ * Called periodically to prevent memory growth
+ */
+function cleanupLearningCache(): void {
+  const now = Date.now();
+  const keysToDelete: string[] = [];
+
+  for (const [key, value] of learningEnabledCache.entries()) {
+    if (now - value.timestamp > LEARNING_CACHE_TTL_MS * 2) {
+      keysToDelete.push(key);
+    }
+  }
+
+  for (const key of keysToDelete) {
+    learningEnabledCache.delete(key);
+  }
+}
+
+// FIX: Store interval ID to allow cleanup in tests
+let learningCacheCleanupIntervalId: ReturnType<typeof setInterval> | null = null;
+
+// Run cleanup every 10 minutes (only in server context)
+if (typeof setInterval !== 'undefined' && !learningCacheCleanupIntervalId) {
+  learningCacheCleanupIntervalId = setInterval(cleanupLearningCache, 600000);
+}
+
+/**
+ * Stop learning cache cleanup interval (useful for tests)
+ */
+export function stopLearningCacheCleanup(): void {
+  if (learningCacheCleanupIntervalId) {
+    clearInterval(learningCacheCleanupIntervalId);
+    learningCacheCleanupIntervalId = null;
+  }
+}
+
 /**
  * Verifica si el aprendizaje está habilitado para un tenant
+ * FIX: Now uses in-memory cache to avoid repeated DB queries
  */
 export async function isLearningEnabled(tenantId: string): Promise<boolean> {
+  const now = Date.now();
+  const cached = learningEnabledCache.get(tenantId);
+
+  // Return cached value if not expired
+  if (cached && now - cached.timestamp < LEARNING_CACHE_TTL_MS) {
+    return cached.enabled;
+  }
+
   const supabase = createServerClient();
 
   const { data } = await supabase
@@ -1284,7 +1396,20 @@ export async function isLearningEnabled(tenantId: string): Promise<boolean> {
     .eq('tenant_id', tenantId)
     .single();
 
-  return data?.learning_enabled ?? false;
+  const enabled = data?.learning_enabled ?? false;
+
+  // Cache the result
+  learningEnabledCache.set(tenantId, { enabled, timestamp: now });
+
+  return enabled;
+}
+
+/**
+ * Invalidates the learning cache for a tenant
+ * Called when learning config is changed
+ */
+export function invalidateLearningCache(tenantId: string): void {
+  learningEnabledCache.delete(tenantId);
 }
 
 /**
@@ -1356,29 +1481,66 @@ export async function processLearningMessage(
   const supabase = createServerClient();
 
   try {
-    // 1. Obtener el item de la cola
-    const { data: queueItem, error: fetchError } = await supabase
+    // FIX: Race Condition - Atomic claim with status check
+    // Only claim the item if it's still 'pending', preventing duplicate processing
+    const { data: claimedItems, error: claimError } = await supabase
       .from('ai_learning_queue')
-      .select('*')
+      .update({
+        status: 'processing',
+        processing_started_at: new Date().toISOString()
+      })
       .eq('id', queueItemId)
-      .single();
+      .eq('status', 'pending')  // Only claim if still pending
+      .select('*');
 
-    if (fetchError || !queueItem) {
-      return { success: false, patterns_extracted: 0, vocabulary_extracted: 0, error: 'Queue item not found' };
+    if (claimError) {
+      console.error('[Learning Service] Error claiming queue item:', claimError);
+      return { success: false, patterns_extracted: 0, vocabulary_extracted: 0, error: 'Failed to claim item' };
     }
 
-    // 2. Marcar como procesando
-    await supabase
-      .from('ai_learning_queue')
-      .update({ status: 'processing', processing_started_at: new Date().toISOString() })
-      .eq('id', queueItemId);
+    // If no rows updated, item was already claimed by another process
+    if (!claimedItems || claimedItems.length === 0) {
+      console.log(`[Learning Service] Item ${queueItemId} already claimed by another process`);
+      return { success: false, patterns_extracted: 0, vocabulary_extracted: 0, error: 'Item already processing' };
+    }
 
-    // 3. Obtener configuración del tenant
-    const { data: tenant } = await supabase
+    const queueItem = claimedItems[0];
+
+    // FIX: Tenant Suspension Bypass - Validate tenant is active before processing
+    const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('vertical')
+      .select('vertical, status')
       .eq('id', queueItem.tenant_id)
       .single();
+
+    if (tenantError || !tenant) {
+      console.warn(`[Learning Service] Tenant not found for queue item ${queueItemId}`);
+      // Mark as failed since tenant doesn't exist
+      await supabase
+        .from('ai_learning_queue')
+        .update({ status: 'failed', error_message: 'Tenant not found' })
+        .eq('id', queueItemId);
+      return { success: false, patterns_extracted: 0, vocabulary_extracted: 0, error: 'Tenant not found' };
+    }
+
+    // FIX: Skip processing for suspended/inactive tenants
+    if (tenant.status !== 'active') {
+      console.log(`[Learning Service] Skipping item ${queueItemId} - tenant status: ${tenant.status}`);
+      // Mark as failed with specific reason
+      await supabase
+        .from('ai_learning_queue')
+        .update({
+          status: 'failed',
+          error_message: `Tenant is ${tenant.status}`
+        })
+        .eq('id', queueItemId);
+      return {
+        success: false,
+        patterns_extracted: 0,
+        vocabulary_extracted: 0,
+        error: `Tenant is ${tenant.status}`
+      };
+    }
 
     const vertical = tenant?.vertical || 'general';
 
@@ -1392,19 +1554,27 @@ export async function processLearningMessage(
     const vocabulary = extractVocabulary(queueItem.message_content, vertical);
 
     // 6. Guardar patrones en la base de datos
-    for (const pattern of patterns) {
-      await supabase.rpc('upsert_message_pattern', {
+    // FIX: Use Promise.allSettled to handle individual failures without stopping
+    const patternPromises = patterns.map(pattern =>
+      supabase.rpc('upsert_message_pattern', {
         p_tenant_id: queueItem.tenant_id,
         p_pattern_type: pattern.type,
         p_pattern_value: pattern.value,
         p_context_example: pattern.context,
         p_sentiment: pattern.sentiment,
         p_metadata: pattern.metadata || {},
-      });
+      })
+    );
+
+    const patternResults = await Promise.allSettled(patternPromises);
+    const failedPatterns = patternResults.filter(r => r.status === 'rejected');
+    if (failedPatterns.length > 0) {
+      console.warn(`[Learning Service] ${failedPatterns.length}/${patterns.length} patterns failed to save`);
     }
 
     // 7. Guardar vocabulario con upsert que incrementa contador
-    for (const vocab of vocabulary) {
+    // FIX: Use Promise.allSettled for vocabulary too
+    const vocabularyPromises = vocabulary.map(async (vocab) => {
       const normalizedTerm = vocab.term.toLowerCase().trim();
 
       // Primero verificar si ya existe
@@ -1417,7 +1587,7 @@ export async function processLearningMessage(
 
       if (existing) {
         // Actualizar contador y timestamp
-        await supabase
+        return supabase
           .from('ai_learned_vocabulary')
           .update({
             usage_count: (existing.usage_count || 1) + 1,
@@ -1426,7 +1596,7 @@ export async function processLearningMessage(
           .eq('id', existing.id);
       } else {
         // Insertar nuevo
-        await supabase
+        return supabase
           .from('ai_learned_vocabulary')
           .insert({
             tenant_id: queueItem.tenant_id,
@@ -1439,16 +1609,23 @@ export async function processLearningMessage(
             last_used: new Date().toISOString(),
           });
       }
+    });
+
+    const vocabularyResults = await Promise.allSettled(vocabularyPromises);
+    const failedVocabulary = vocabularyResults.filter(r => r.status === 'rejected');
+    if (failedVocabulary.length > 0) {
+      console.warn(`[Learning Service] ${failedVocabulary.length}/${vocabulary.length} vocabulary items failed to save`);
     }
 
     // 8. Marcar como completado
+    // FIX: patterns_extracted and vocabulary_extracted are JSONB in BD, storing the actual data
     await supabase
       .from('ai_learning_queue')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        patterns_extracted: patterns,
-        vocabulary_extracted: vocabulary,
+        patterns_extracted: patterns, // JSONB column - stores actual pattern data
+        vocabulary_extracted: vocabulary, // JSONB column - stores actual vocabulary data
       })
       .eq('id', queueItemId);
 
@@ -1488,12 +1665,15 @@ export async function processLearningMessage(
  *
  * REVISIÓN 5.3 G-B15: Implementa fairness por tenant usando round-robin
  * Evita que tenants de alto volumen acaparen el procesamiento
+ *
+ * REVISIÓN 5.4: Filtra tenants inactivos antes de procesar
  */
 export async function processLearningQueue(limit: number = 100): Promise<{
   processed: number;
   successful: number;
   failed: number;
   tenants_processed?: number;
+  skipped_inactive?: number;
 }> {
   const supabase = createServerClient();
 
@@ -1514,7 +1694,32 @@ export async function processLearningQueue(limit: number = 100): Promise<{
   }
 
   // Obtener lista única de tenants
-  const uniqueTenantIds = [...new Set(tenantsWithPending.map(t => t.tenant_id))];
+  const allTenantIds = [...new Set(tenantsWithPending.map(t => t.tenant_id))];
+
+  // FIX: Tenant Suspension Bypass - Filter out inactive tenants upfront
+  // This is more efficient than checking each item individually
+  const { data: activeTenants, error: activeError } = await supabase
+    .from('tenants')
+    .select('id')
+    .in('id', allTenantIds)
+    .eq('status', 'active');
+
+  if (activeError) {
+    console.error('[Learning Queue] Error fetching active tenants:', activeError);
+    return { processed: 0, successful: 0, failed: 0 };
+  }
+
+  const activeTenantIds = new Set((activeTenants || []).map(t => t.id));
+  const uniqueTenantIds = allTenantIds.filter(id => activeTenantIds.has(id));
+  const skippedInactive = allTenantIds.length - uniqueTenantIds.length;
+
+  if (skippedInactive > 0) {
+    console.log(`[Learning Queue] Skipped ${skippedInactive} inactive tenants`);
+  }
+
+  if (uniqueTenantIds.length === 0) {
+    return { processed: 0, successful: 0, failed: 0, skipped_inactive: skippedInactive };
+  }
   const numTenants = uniqueTenantIds.length;
 
   // Calcular cuántos items procesar por tenant (round-robin)
@@ -1566,13 +1771,15 @@ export async function processLearningQueue(limit: number = 100): Promise<{
     }
   }
 
-  console.log(`[Learning Queue] G-B15: Processed ${totalProcessed} items from ${tenantsProcessed} tenants`);
+  console.log(`[Learning Queue] G-B15: Processed ${totalProcessed} items from ${tenantsProcessed} tenants` +
+    (skippedInactive > 0 ? `, skipped ${skippedInactive} inactive` : ''));
 
   return {
     processed: totalProcessed,
     successful,
     failed,
     tenants_processed: tenantsProcessed,
+    skipped_inactive: skippedInactive,
   };
 }
 
@@ -1669,6 +1876,7 @@ export const MessageLearningService = {
   getLearningConfig,
   enableLearning,
   disableLearning,
+  invalidateLearningCache, // FIX: Export cache invalidation
 
   // Processing
   queueMessageForLearning,
@@ -1685,6 +1893,10 @@ export const MessageLearningService = {
 
   // Context
   getLearningContext,
+
+  // FIX: Cleanup functions for tests
+  stopAlertThrottleCleanup,
+  stopLearningCacheCleanup,
 };
 
 // Re-export types for convenience

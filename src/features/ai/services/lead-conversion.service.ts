@@ -76,7 +76,9 @@ export async function checkConversionReadiness(leadId: string): Promise<Conversi
     .from('leads')
     .select(`
       id,
-      name,
+      first_name,
+      last_name,
+      full_name,
       email,
       phone,
       phone_normalized,
@@ -99,10 +101,12 @@ export async function checkConversionReadiness(leadId: string): Promise<Conversi
   const missing: string[] = [];
 
   // Verificar nombre (no genérico)
-  const hasValidName = lead.name &&
-    lead.name !== 'Desconocido' &&
-    lead.name !== 'Cliente' &&
-    lead.name.trim().length > 2;
+  // Check full_name or first_name/last_name combination
+  const leadName = lead.full_name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim();
+  const hasValidName = leadName &&
+    leadName !== 'Desconocido' &&
+    leadName !== 'Cliente' &&
+    leadName.trim().length > 2;
 
   if (!hasValidName) {
     missing.push('name');
@@ -141,23 +145,39 @@ export async function checkConversionReadiness(leadId: string): Promise<Conversi
 
 /**
  * Convierte un lead a paciente
+ * @param leadId - ID del lead a convertir
+ * @param tenantId - ID del tenant (REQUIRED for security)
+ * @param additionalData - Datos adicionales para el paciente
  */
 export async function convertLeadToPatient(
   leadId: string,
+  tenantId?: string,  // Optional for backwards compatibility, but should be provided
   additionalData?: Partial<PatientData>
 ): Promise<ConversionResult> {
   const supabase = createServerClient();
 
   try {
     // 1. Obtener datos del lead
-    const { data: lead, error: leadError } = await supabase
+    // SECURITY: If tenantId provided, validate lead belongs to tenant
+    let query = supabase
       .from('leads')
       .select('*')
-      .eq('id', leadId)
-      .single();
+      .eq('id', leadId);
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: lead, error: leadError } = await query.single();
 
     if (leadError || !lead) {
-      return { success: false, error: 'Lead no encontrado' };
+      return { success: false, error: 'Lead no encontrado o no accesible' };
+    }
+
+    // SECURITY: If tenantId was provided and doesn't match, reject
+    if (tenantId && lead.tenant_id !== tenantId) {
+      console.warn(`[Lead Conversion] Tenant mismatch for lead ${leadId}. Expected ${tenantId}, got ${lead.tenant_id}`);
+      return { success: false, error: 'Lead no accesible' };
     }
 
     // 2. Verificar si ya existe como paciente (por teléfono o email)
@@ -202,9 +222,21 @@ export async function convertLeadToPatient(
     }
 
     // 3. Parsear nombre
-    const nameParts = (lead.name || 'Cliente').split(' ');
-    const firstName = nameParts[0] || 'Cliente';
-    const lastName = nameParts.slice(1).join(' ') || '';
+    // Use first_name/last_name directly if available, otherwise parse full_name
+    let firstName = lead.first_name || '';
+    let lastName = lead.last_name || '';
+
+    // Fallback: parse full_name if first_name is empty
+    if (!firstName && lead.full_name) {
+      const nameParts = lead.full_name.split(' ');
+      firstName = nameParts[0] || 'Cliente';
+      lastName = nameParts.slice(1).join(' ') || '';
+    }
+
+    // Final fallback
+    if (!firstName) {
+      firstName = 'Cliente';
+    }
 
     // 4. Extraer datos adicionales de metadata del lead
     const metadata = lead.metadata || {};
@@ -225,23 +257,44 @@ export async function convertLeadToPatient(
       lead_id: leadId,
     };
 
-    // 6. Crear paciente
-    const { data: newPatient, error: createError } = await supabase
-      .from('patients')
-      .insert(patientData)
-      .select('id')
-      .single();
+    // 6. Crear paciente usando función RPC segura (previene race conditions)
+    const { data: createResult, error: rpcError } = await supabase.rpc('create_patient_safe', {
+      p_tenant_id: lead.tenant_id,
+      p_first_name: patientData.first_name,
+      p_last_name: patientData.last_name,
+      p_phone: patientData.phone,
+      p_email: patientData.email,
+      p_lead_id: leadId,
+      p_branch_id: patientData.branch_id,
+      p_additional_data: JSON.stringify({
+        source: patientData.source,
+        date_of_birth: patientData.date_of_birth,
+        gender: patientData.gender,
+        address: patientData.address,
+        city: patientData.city,
+      })
+    });
 
-    if (createError) {
-      console.error('[Lead Conversion] Error creating patient:', createError);
-      return { success: false, error: createError.message };
+    // Handle RPC result
+    const rpcResult = Array.isArray(createResult) ? createResult[0] : createResult;
+
+    if (rpcError || !rpcResult?.success) {
+      console.error('[Lead Conversion] Error creating patient:', rpcError || rpcResult?.error_message);
+      return { success: false, error: rpcResult?.error_message || rpcError?.message || 'Error creando paciente' };
+    }
+
+    const newPatientId = rpcResult.patient_id;
+    const alreadyExists = rpcResult.already_exists;
+
+    if (alreadyExists) {
+      console.log(`[Lead Conversion] Patient already exists for lead ${leadId}: ${newPatientId}`);
     }
 
     // 7. Actualizar lead con referencia al paciente
     await supabase
       .from('leads')
       .update({
-        patient_id: newPatient.id,
+        patient_id: newPatientId,
         status: 'converted',
         converted_at: new Date().toISOString(),
       })
@@ -250,15 +303,15 @@ export async function convertLeadToPatient(
     // 8. Vincular citas del lead con el nuevo paciente
     await supabase
       .from('appointments')
-      .update({ patient_id: newPatient.id })
+      .update({ patient_id: newPatientId })
       .eq('lead_id', leadId);
 
-    console.log(`[Lead Conversion] Lead ${leadId} converted to patient ${newPatient.id}`);
+    console.log(`[Lead Conversion] Lead ${leadId} converted to patient ${newPatientId}`);
 
     return {
       success: true,
-      patient_id: newPatient.id,
-      already_exists: false,
+      patient_id: newPatientId,
+      already_exists: alreadyExists,
     };
 
   } catch (error) {
@@ -275,22 +328,77 @@ export async function convertLeadToPatient(
  * Verifica y convierte automáticamente leads calificados
  * Se ejecuta después de eventos importantes (cita completada, etc.)
  */
-export async function autoConvertQualifiedLead(leadId: string): Promise<ConversionResult | null> {
+export async function autoConvertQualifiedLead(
+  leadId: string,
+  options?: {
+    triggeredBy?: string;
+    triggeredAppointmentId?: string;
+  }
+): Promise<ConversionResult | null> {
+  const supabase = createServerClient();
   const readiness = await checkConversionReadiness(leadId);
+
+  // Get lead tenant_id for logging
+  const { data: leadData } = await supabase
+    .from('leads')
+    .select('tenant_id')
+    .eq('id', leadId)
+    .single();
+
+  const tenantId = leadData?.tenant_id;
+
+  // Log the conversion attempt
+  const logEntry = {
+    lead_id: leadId,
+    tenant_id: tenantId,
+    conversion_type: 'auto_appointment_completed',
+    had_name: readiness.has_name,
+    had_phone_or_email: readiness.has_phone_or_email,
+    had_appointment: readiness.has_appointment,
+    missing_fields: readiness.missing_fields,
+    triggered_by: options?.triggeredBy || 'appointment_completed',
+    triggered_appointment_id: options?.triggeredAppointmentId || null,
+    success: false,
+    error_message: null as string | null,
+    patient_id: null as string | null,
+  };
 
   // Solo convertir si está listo
   if (!readiness.ready_to_convert) {
     console.log(`[Lead Conversion] Lead ${leadId} not ready. Missing: ${readiness.missing_fields.join(', ')}`);
+    logEntry.error_message = `Not ready: missing ${readiness.missing_fields.join(', ')}`;
+
+    // Log to database (ignore errors)
+    if (tenantId) {
+      await supabase.from('lead_conversion_log').insert(logEntry).select().maybeSingle();
+    }
+
     return null;
   }
 
   // Si tiene cita, convertir automáticamente
   if (readiness.has_appointment) {
-    return await convertLeadToPatient(leadId);
+    const result = await convertLeadToPatient(leadId);
+
+    // Update log with result
+    logEntry.success = result.success;
+    logEntry.patient_id = result.patient_id || null;
+    logEntry.error_message = result.error || null;
+
+    if (tenantId) {
+      await supabase.from('lead_conversion_log').insert(logEntry).select().maybeSingle();
+    }
+
+    return result;
   }
 
   // Si no tiene cita pero está calificado, solo marcar como listo
   // (la conversión final se hace cuando complete una cita)
+  logEntry.error_message = 'No appointment found, skipping conversion';
+  if (tenantId) {
+    await supabase.from('lead_conversion_log').insert(logEntry).select().maybeSingle();
+  }
+
   return null;
 }
 

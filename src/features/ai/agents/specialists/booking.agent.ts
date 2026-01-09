@@ -139,6 +139,8 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
         service_id: serviceId,
         requested_date: preferredDate,
         requested_time: preferredTime,
+        // AI traceability
+        ai_booking_channel: state.channel === 'voice' ? 'ai_voice' : state.channel === 'whatsapp' ? 'ai_whatsapp' : 'ai_webchat',
       };
 
       const bookingResult = await createBooking(bookingRequest);
@@ -523,6 +525,8 @@ class BookingRestaurantAgentClass extends BookingAgentClass {
         occasion_type: occasion,
         special_requests: specialRequests,
         vertical: 'restaurant',
+        // AI traceability
+        ai_booking_channel: state.channel === 'voice' ? 'ai_voice' : state.channel === 'whatsapp' ? 'ai_whatsapp' : 'ai_webchat',
       };
 
       const bookingResult = await createBooking(bookingRequest);

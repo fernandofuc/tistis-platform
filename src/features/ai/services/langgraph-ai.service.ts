@@ -167,9 +167,12 @@ async function loadLeadContext(leadId: string): Promise<LeadInfo | null> {
     return null;
   }
 
+  // Build name from available fields
+  const leadName = lead.full_name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'Cliente';
+
   return {
     lead_id: lead.id,
-    name: lead.name || 'Cliente',
+    name: leadName,
     phone: lead.phone || '',
     email: lead.email,
     score: lead.score || 50,

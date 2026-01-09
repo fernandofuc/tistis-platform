@@ -112,6 +112,34 @@ export async function GET(request: NextRequest, context: RouteParams) {
 }
 
 // ======================
+// RATE LIMITING
+// Simple in-memory rate limiting per tenant (resets on redeploy)
+// For production, use Redis or Supabase RPC
+// ======================
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute per tenant
+
+function checkRateLimit(tenantSlug: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const key = `instagram:${tenantSlug}`;
+  const current = rateLimitMap.get(key);
+
+  if (!current || now > current.resetTime) {
+    // Reset window
+    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - 1 };
+  }
+
+  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  current.count++;
+  return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - current.count };
+}
+
+// ======================
 // POST - Receive Webhook Events
 // Meta envía POST con mensajes directos de Instagram
 // ======================
@@ -119,11 +147,19 @@ export async function POST(request: NextRequest, context: RouteParams) {
   const startTime = Date.now();
   const { tenantSlug } = await context.params;
 
+  // SECURITY: Rate limit check before processing
+  const rateLimit = checkRateLimit(tenantSlug);
+  if (!rateLimit.allowed) {
+    console.warn(`[Instagram Webhook] Rate limit exceeded for tenant: ${tenantSlug}`);
+    // Still return 200 to prevent Meta from retrying, but don't process
+    return NextResponse.json({ received: true, rate_limited: true });
+  }
+
   try {
     // 1. Leer body como texto para verificación de firma
     const rawBody = await request.text();
 
-    console.log(`[Instagram Webhook] Received event for tenant: ${tenantSlug}`);
+    console.log(`[Instagram Webhook] Received event for tenant: ${tenantSlug} (remaining: ${rateLimit.remaining})`);
 
     // 2. Parsear payload
     let payload: MetaWebhookPayload;
@@ -174,10 +210,26 @@ export async function POST(request: NextRequest, context: RouteParams) {
       .single();
 
     // 5. Verificar firma X-Hub-Signature-256
+    // SECURITY: Each tenant MUST have their own webhook_secret to prevent cross-tenant attacks
+    // NEVER use global META_APP_SECRET fallback in production - it allows signature reuse
     const signature = request.headers.get('x-hub-signature-256');
+
+    // CRITICAL: Require per-tenant webhook_secret
+    if (!connection?.webhook_secret) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[Instagram Webhook] SECURITY: Tenant ${tenantSlug} has no webhook_secret configured - rejecting`);
+        return NextResponse.json(
+          { error: 'Webhook security not configured for this tenant' },
+          { status: 500 }
+        );
+      }
+      // Development only: allow fallback with warning
+      console.warn(`[Instagram Webhook] WARNING: Tenant ${tenantSlug} has no webhook_secret - using global fallback (ONLY OK in development)`);
+    }
+
     const appSecret = connection?.webhook_secret || process.env.META_APP_SECRET;
 
-    if (appSecret) {
+    if (appSecret && signature) {
       const isValid = verifyMetaSignature(rawBody, signature, appSecret);
       if (!isValid) {
         console.error(`[Instagram Webhook] Invalid signature for tenant: ${tenantSlug}`);
@@ -186,16 +238,12 @@ export async function POST(request: NextRequest, context: RouteParams) {
           { status: 403 }
         );
       }
-    } else {
-      // In production, require signature verification
-      if (process.env.NODE_ENV === 'production') {
-        console.error('[Instagram Webhook] No app secret configured in production - rejecting');
-        return NextResponse.json(
-          { error: 'Webhook signature verification not configured' },
-          { status: 500 }
-        );
-      }
-      console.warn('[Instagram Webhook] No app secret configured - skipping signature verification in development');
+    } else if (!appSecret) {
+      console.error('[Instagram Webhook] No secret available for verification');
+      return NextResponse.json(
+        { error: 'Webhook signature verification not configured' },
+        { status: 500 }
+      );
     }
 
     // 6. Procesar webhook en background

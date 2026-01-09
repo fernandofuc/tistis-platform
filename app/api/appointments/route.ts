@@ -137,36 +137,116 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify lead exists and belongs to user's tenant
+    // ==========================================================
+    // CRITICAL: Validate ALL foreign keys belong to same tenant
+    // This prevents cross-tenant data access attacks
+    // ==========================================================
+
+    // 1. Verify lead exists and belongs to user's tenant
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .select('id, full_name')
       .eq('tenant_id', tenantId)
       .eq('id', body.lead_id)
+      .is('deleted_at', null)  // Exclude soft-deleted leads
       .single();
 
     if (leadError || !lead) {
       return NextResponse.json(
-        { error: 'Lead not found' },
+        { error: 'Lead not found or not accessible' },
         { status: 404 }
       );
     }
 
-    // Get service duration if service_id provided
+    // 2. Verify branch exists, belongs to tenant, and is active
+    const { data: branch, error: branchError } = await supabase
+      .from('branches')
+      .select('id, name, is_active')
+      .eq('tenant_id', tenantId)
+      .eq('id', body.branch_id)
+      .single();
+
+    if (branchError || !branch) {
+      return NextResponse.json(
+        { error: 'Branch not found or not accessible' },
+        { status: 404 }
+      );
+    }
+
+    if (!branch.is_active) {
+      return NextResponse.json(
+        { error: 'Branch is not active' },
+        { status: 400 }
+      );
+    }
+
+    // 3. Verify service belongs to tenant (if provided)
     let durationMinutes = body.duration_minutes || 60;
     if (body.service_id) {
-      const { data: service } = await supabase
+      const { data: service, error: serviceError } = await supabase
         .from('services')
-        .select('duration_minutes')
+        .select('id, duration_minutes, is_active')
+        .eq('tenant_id', tenantId)
         .eq('id', body.service_id)
         .single();
 
-      if (service) {
-        durationMinutes = service.duration_minutes;
+      if (serviceError || !service) {
+        return NextResponse.json(
+          { error: 'Service not found or not accessible' },
+          { status: 404 }
+        );
+      }
+
+      if (!service.is_active) {
+        return NextResponse.json(
+          { error: 'Service is not active' },
+          { status: 400 }
+        );
+      }
+
+      durationMinutes = service.duration_minutes || durationMinutes;
+    }
+
+    // 4. Verify staff belongs to tenant and works in branch (if provided)
+    if (body.staff_id) {
+      const { data: staff, error: staffError } = await supabase
+        .from('staff')
+        .select(`
+          id,
+          is_active,
+          staff_branches!inner(branch_id)
+        `)
+        .eq('tenant_id', tenantId)
+        .eq('id', body.staff_id)
+        .single();
+
+      if (staffError || !staff) {
+        return NextResponse.json(
+          { error: 'Staff member not found or not accessible' },
+          { status: 404 }
+        );
+      }
+
+      if (!staff.is_active) {
+        return NextResponse.json(
+          { error: 'Staff member is not active' },
+          { status: 400 }
+        );
+      }
+
+      // Verify staff works in the specified branch
+      const staffBranches = staff.staff_branches as Array<{ branch_id: string }>;
+      const worksInBranch = staffBranches?.some(sb => sb.branch_id === body.branch_id);
+
+      if (!worksInBranch) {
+        return NextResponse.json(
+          { error: 'Staff member does not work in the specified branch' },
+          { status: 400 }
+        );
       }
     }
 
-    // Create appointment with authenticated user's tenant
+    // Create appointment with validated data
     const appointmentData = {
       tenant_id: tenantId,
       lead_id: body.lead_id,

@@ -195,15 +195,27 @@ export async function POST(request: NextRequest) {
             break;
 
           case 'send_instagram':
-            result = await processSendInstagramJob(job.payload as unknown as MetaSendMessageJobPayload);
+            // SECURITY: Pass job_id for connection validation
+            result = await processSendInstagramJob({
+              ...(job.payload as unknown as MetaSendMessageJobPayload),
+              job_id: job.id,
+            });
             break;
 
           case 'send_facebook':
-            result = await processSendFacebookJob(job.payload as unknown as MetaSendMessageJobPayload);
+            // SECURITY: Pass job_id for connection validation
+            result = await processSendFacebookJob({
+              ...(job.payload as unknown as MetaSendMessageJobPayload),
+              job_id: job.id,
+            });
             break;
 
           case 'send_tiktok':
-            result = await processSendTikTokJob(job.payload as unknown as TikTokSendMessageJobPayload);
+            // SECURITY: Pass job_id for connection validation
+            result = await processSendTikTokJob({
+              ...(job.payload as unknown as TikTokSendMessageJobPayload),
+              job_id: job.id,
+            });
             break;
 
           default:
@@ -250,6 +262,7 @@ export async function POST(request: NextRequest) {
 /**
  * Procesa un trabajo de respuesta AI
  * FIXED: Caches AI response before DB operations to prevent token waste on retry (U1)
+ * SECURITY: Validates tenant is still active before processing
  */
 async function processAIResponseJob(
   payload: AIResponseJobPayload & { job_id?: string; cached_result?: { ai_response: string; metadata: Record<string, unknown> } }
@@ -259,6 +272,26 @@ async function processAIResponseJob(
   console.log(`[Jobs API] Processing AI response for conversation ${conversation_id}`);
 
   const supabase = createServerClient();
+
+  // SECURITY: Re-validate tenant is still active before processing
+  // This handles the case where tenant was suspended/deactivated between job creation and processing
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
+    .select('id, status')
+    .eq('id', tenant_id)
+    .single();
+
+  if (tenantError || !tenant) {
+    throw new Error(`Tenant ${tenant_id} not found - aborting job`);
+  }
+
+  if (tenant.status !== 'active') {
+    console.warn(`[Jobs API] Tenant ${tenant_id} is ${tenant.status} - skipping AI processing`);
+    return {
+      skipped: true,
+      reason: `Tenant status is ${tenant.status}`,
+    };
+  }
 
   // U1 FIX: Check if we have a cached AI response from a previous failed attempt
   let aiResult: Awaited<ReturnType<typeof generateAIResponseSmart>>;
@@ -325,18 +358,18 @@ async function processAIResponseJob(
     }
   }
 
-  // 3. Guardar respuesta
+  // 3. Guardar respuesta (SECURITY: Pass tenant_id to validate ownership)
   const responseMessageId = await saveAIResponse(conversation_id, aiResult.response, {
     intent: aiResult.intent,
     signals: aiResult.signals,
     model: usedCachedResponse ? 'cached-' + aiResult.model_used : aiResult.model_used,
     tokens: aiResult.tokens_used,
     processing_time_ms: aiResult.processing_time_ms,
-  });
+  }, tenant_id);
 
-  // 4. Actualizar score del lead
+  // 4. Actualizar score del lead (SECURITY: Pass tenant_id to validate ownership)
   if (aiResult.signals.length > 0) {
-    await updateLeadScore(lead_id, aiResult.signals, conversation_id);
+    await updateLeadScore(lead_id, aiResult.signals, conversation_id, tenant_id);
   }
 
   // 5. Registrar uso de AI (skip if using cached response to avoid double counting)
@@ -344,9 +377,9 @@ async function processAIResponseJob(
     await logAIUsage(tenant_id, conversation_id, aiResult);
   }
 
-  // 6. Escalar si es necesario
+  // 6. Escalar si es necesario (SECURITY: Pass tenant_id to validate ownership)
   if (aiResult.escalate && aiResult.escalate_reason) {
-    await escalateConversation(conversation_id, aiResult.escalate_reason);
+    await escalateConversation(conversation_id, aiResult.escalate_reason, tenant_id);
   } else if (channel_connection_id) {
     // 7. Encolar envío del mensaje según canal
     await enqueueOutboundMessage({
@@ -582,15 +615,26 @@ async function processSendWhatsAppJob(
 
 /**
  * Procesa un trabajo de envío de mensaje Instagram
+ * SECURITY: Validates connection is still active before sending
  */
 async function processSendInstagramJob(
-  payload: MetaSendMessageJobPayload
+  payload: MetaSendMessageJobPayload & { job_id?: string }
 ): Promise<Record<string, unknown>> {
-  const { message_id, channel_connection_id, recipient_psid, content } = payload;
+  const { message_id, channel_connection_id, recipient_psid, content, job_id } = payload;
 
   console.log(`[Jobs API] Sending Instagram message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
+
+  // SECURITY: Validate connection is still active before sending
+  const { data: validation } = await supabase.rpc('validate_channel_connection_for_job', {
+    p_job_id: job_id || null,
+    p_channel_connection_id: channel_connection_id,
+  });
+
+  if (validation && validation.length > 0 && !validation[0].is_valid) {
+    throw new Error(`Instagram connection invalid: ${validation[0].error_reason}`);
+  }
 
   // 1. Obtener channel connection
   const { data: connection, error } = await supabase
@@ -598,10 +642,11 @@ async function processSendInstagramJob(
     .select('instagram_page_id, instagram_access_token')
     .eq('id', channel_connection_id)
     .eq('channel', 'instagram')
+    .eq('status', 'connected') // SECURITY: Only use connected channels
     .single();
 
   if (error || !connection) {
-    throw new Error(`Instagram connection ${channel_connection_id} not found`);
+    throw new Error(`Instagram connection ${channel_connection_id} not found or disconnected`);
   }
 
   if (!connection.instagram_access_token) {
@@ -638,15 +683,26 @@ async function processSendInstagramJob(
 
 /**
  * Procesa un trabajo de envío de mensaje Facebook
+ * SECURITY: Validates connection is still active before sending
  */
 async function processSendFacebookJob(
-  payload: MetaSendMessageJobPayload
+  payload: MetaSendMessageJobPayload & { job_id?: string }
 ): Promise<Record<string, unknown>> {
-  const { message_id, channel_connection_id, recipient_psid, content } = payload;
+  const { message_id, channel_connection_id, recipient_psid, content, job_id } = payload;
 
   console.log(`[Jobs API] Sending Facebook message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
+
+  // SECURITY: Validate connection is still active before sending
+  const { data: validation } = await supabase.rpc('validate_channel_connection_for_job', {
+    p_job_id: job_id || null,
+    p_channel_connection_id: channel_connection_id,
+  });
+
+  if (validation && validation.length > 0 && !validation[0].is_valid) {
+    throw new Error(`Facebook connection invalid: ${validation[0].error_reason}`);
+  }
 
   // 1. Obtener channel connection
   const { data: connection, error } = await supabase
@@ -654,10 +710,11 @@ async function processSendFacebookJob(
     .select('facebook_page_id, facebook_access_token')
     .eq('id', channel_connection_id)
     .eq('channel', 'facebook')
+    .eq('status', 'connected') // SECURITY: Only use connected channels
     .single();
 
   if (error || !connection) {
-    throw new Error(`Facebook connection ${channel_connection_id} not found`);
+    throw new Error(`Facebook connection ${channel_connection_id} not found or disconnected`);
   }
 
   if (!connection.facebook_access_token) {
@@ -694,15 +751,26 @@ async function processSendFacebookJob(
 
 /**
  * Procesa un trabajo de envío de mensaje TikTok
+ * SECURITY: Validates connection is still active before sending
  */
 async function processSendTikTokJob(
-  payload: TikTokSendMessageJobPayload
+  payload: TikTokSendMessageJobPayload & { job_id?: string }
 ): Promise<Record<string, unknown>> {
-  const { message_id, channel_connection_id, recipient_open_id, content } = payload;
+  const { message_id, channel_connection_id, recipient_open_id, content, job_id } = payload;
 
   console.log(`[Jobs API] Sending TikTok message, message_id: ${message_id}`);
 
   const supabase = createServerClient();
+
+  // SECURITY: Validate connection is still active before sending
+  const { data: validation } = await supabase.rpc('validate_channel_connection_for_job', {
+    p_job_id: job_id || null,
+    p_channel_connection_id: channel_connection_id,
+  });
+
+  if (validation && validation.length > 0 && !validation[0].is_valid) {
+    throw new Error(`TikTok connection invalid: ${validation[0].error_reason}`);
+  }
 
   // 1. Obtener channel connection
   const { data: connection, error } = await supabase
@@ -710,10 +778,11 @@ async function processSendTikTokJob(
     .select('tiktok_access_token')
     .eq('id', channel_connection_id)
     .eq('channel', 'tiktok')
+    .eq('status', 'connected') // SECURITY: Only use connected channels
     .single();
 
   if (error || !connection) {
-    throw new Error(`TikTok connection ${channel_connection_id} not found`);
+    throw new Error(`TikTok connection ${channel_connection_id} not found or disconnected`);
   }
 
   if (!connection.tiktok_access_token) {

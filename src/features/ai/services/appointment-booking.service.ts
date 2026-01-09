@@ -259,8 +259,59 @@ export async function checkSlotAvailability(
     return { available: false, conflictReason: 'Formato de hora inválido (esperado HH:MM)' };
   }
 
-  // Construir datetime con validación
-  const scheduledAt = new Date(`${date}T${time}:00`);
+  // 1. Obtener información de la sucursal incluyendo timezone
+  const { data: branch } = await supabase
+    .from('branches')
+    .select('operating_hours, timezone')
+    .eq('id', branchId)
+    .single();
+
+  // Default timezone for Mexico
+  const branchTimezone = branch?.timezone || 'America/Mexico_City';
+
+  // Construir datetime con timezone de la sucursal
+  // IMPORTANT: We interpret the date/time as being in the branch's timezone
+  // Then convert to UTC for storage
+  let scheduledAt: Date;
+
+  try {
+    // Format: "2025-01-15T14:00:00" in branch timezone
+    // We need to convert this to UTC for DB storage
+    const dateTimeStr = `${date}T${time}:00`;
+
+    // Create date object - JavaScript will interpret this as local time
+    // But we need to interpret it as branch timezone
+    // Using a simple offset calculation for now
+    // TODO: Consider using date-fns-tz for more robust timezone handling
+
+    // For Mexico timezones, calculate offset
+    const tzOffsets: Record<string, number> = {
+      'America/Mexico_City': -6,      // CST
+      'America/Cancun': -5,           // EST (Quintana Roo)
+      'America/Tijuana': -8,          // PST
+      'America/Chihuahua': -7,        // MST
+      'America/Hermosillo': -7,       // MST (no DST)
+      'America/Mazatlan': -7,         // MST
+      'UTC': 0,
+    };
+
+    const offsetHours = tzOffsets[branchTimezone] ?? -6; // Default to Mexico City
+
+    // Parse as local and apply offset
+    const localDate = new Date(dateTimeStr);
+
+    // Get the local timezone offset and adjust
+    const localOffset = localDate.getTimezoneOffset() / 60; // in hours, positive for west
+    const targetOffset = -offsetHours; // convert to same format
+
+    // Adjust by the difference
+    const offsetDiff = (targetOffset - localOffset) * 60 * 60 * 1000;
+    scheduledAt = new Date(localDate.getTime() + offsetDiff);
+
+  } catch {
+    // Fallback to simple parsing
+    scheduledAt = new Date(`${date}T${time}:00`);
+  }
 
   // Verificar que la fecha sea válida
   if (isNaN(scheduledAt.getTime())) {
@@ -275,22 +326,21 @@ export async function checkSlotAvailability(
 
   const endAt = new Date(scheduledAt.getTime() + durationMinutes * 60000);
 
-  // 1. Verificar horario de operación de la sucursal
-  const { data: branch } = await supabase
-    .from('branches')
-    .select('operating_hours')
-    .eq('id', branchId)
-    .single();
-
+  // 2. Verificar horario de operación de la sucursal
   if (branch?.operating_hours) {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayName = dayNames[scheduledAt.getDay()];
+
+    // IMPORTANT: Use the original date/time in branch timezone to check day/hours
+    // The operating_hours are defined in the branch's local time
+    const localDayIndex = new Date(`${date}T12:00:00`).getDay(); // Use noon to avoid DST issues
+    const dayName = dayNames[localDayIndex];
     const dayHours = branch.operating_hours[dayName];
 
     if (!dayHours || !dayHours.open || !dayHours.close) {
       return { available: false, conflictReason: 'La sucursal está cerrada ese día' };
     }
 
+    // Compare time strings directly (they're both in local time)
     const requestedTime = time;
     if (requestedTime < dayHours.open || requestedTime >= dayHours.close) {
       return {

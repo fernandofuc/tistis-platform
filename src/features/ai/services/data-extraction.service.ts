@@ -314,7 +314,7 @@ export async function updateLeadWithExtractedData(
   // Solo actualizar campos que tienen valor y que el lead actual no tiene
   const { data: currentLead, error: fetchError } = await supabase
     .from('leads')
-    .select('name, email, phone, metadata')
+    .select('first_name, last_name, full_name, email, phone, metadata')
     .eq('id', leadId)
     .single();
 
@@ -326,9 +326,16 @@ export async function updateLeadWithExtractedData(
   const metadataUpdates: Record<string, unknown> = {};
 
   // Nombre - solo si actual es genérico
-  if (extractedData.name &&
-      (!currentLead.name || currentLead.name === 'Desconocido' || currentLead.name === 'Cliente')) {
-    updates.name = extractedData.name;
+  // Build current name from available fields
+  const currentName = currentLead.full_name || `${currentLead.first_name || ''} ${currentLead.last_name || ''}`.trim();
+  const isGenericName = !currentName || currentName === 'Desconocido' || currentName === 'Cliente';
+
+  if (extractedData.name && isGenericName) {
+    // Parse extracted name into first_name and last_name
+    const nameParts = extractedData.name.trim().split(' ');
+    updates.first_name = nameParts[0];
+    updates.last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+    updates.full_name = extractedData.name.trim();
     fieldsUpdated.push('name');
   }
 

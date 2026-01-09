@@ -81,10 +81,11 @@ export async function PATCH(
     const body = await request.json();
 
     // Fields allowed for update
+    // NOTE: DB column is 'cancellation_reason' (not 'cancelled_reason')
     const allowedFields = [
       'branch_id', 'staff_id', 'service_id', 'scheduled_at',
       'duration_minutes', 'status', 'notes', 'reminder_sent',
-      'confirmation_sent', 'cancelled_reason', 'outcome'
+      'confirmation_sent', 'cancellation_reason', 'outcome'
     ];
 
     // Filter only allowed fields
@@ -96,7 +97,7 @@ export async function PATCH(
     }
 
     // Handle status transitions
-    if (updateData.status === 'cancelled' && body.cancelled_reason) {
+    if (updateData.status === 'cancelled' && body.cancellation_reason) {
       updateData.cancelled_at = new Date().toISOString();
     }
     if (updateData.status === 'completed') {
@@ -141,8 +142,14 @@ export async function PATCH(
     // Update lead status and auto-convert to patient when appointment completes
     if (updateData.status === 'completed' && data.lead_id) {
       try {
-        // Auto-convert lead to patient
-        const conversionResult = await LeadConversionService.autoConvertQualifiedLead(data.lead_id);
+        // Auto-convert lead to patient with traceability
+        const conversionResult = await LeadConversionService.autoConvertQualifiedLead(
+          data.lead_id,
+          {
+            triggeredBy: 'appointment_completed',
+            triggeredAppointmentId: id,
+          }
+        );
 
         if (conversionResult?.success) {
           console.log(`[Appointment] Lead ${data.lead_id} auto-converted to patient ${conversionResult.patient_id}`);
@@ -198,7 +205,7 @@ export async function DELETE(
       .update({
         status: 'cancelled',
         cancelled_at: new Date().toISOString(),
-        cancelled_reason: reason,
+        cancellation_reason: reason,
       })
       .eq('tenant_id', tenantId)
       .eq('id', id)

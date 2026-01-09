@@ -140,10 +140,12 @@ export async function GET(request: NextRequest) {
     const processingTime = Date.now() - startTime;
 
     // REVISIÓN 5.3 G-B15: Incluir info de tenants procesados
+    // REVISIÓN 5.4: Include skipped inactive tenants
     console.log(
       `[CRON: Process Learning] Completed in ${processingTime}ms. ` +
       `Processed: ${result.processed}, Success: ${result.successful}, Failed: ${result.failed}` +
-      (result.tenants_processed ? `, Tenants: ${result.tenants_processed}` : '')
+      (result.tenants_processed ? `, Tenants: ${result.tenants_processed}` : '') +
+      (result.skipped_inactive ? `, Skipped inactive: ${result.skipped_inactive}` : '')
     );
 
     return NextResponse.json({
@@ -153,6 +155,8 @@ export async function GET(request: NextRequest) {
       failed: result.failed,
       // G-B15: Include tenants processed for fairness visibility
       tenants_processed: result.tenants_processed,
+      // FIX 5.4: Include skipped inactive tenants count
+      skipped_inactive: result.skipped_inactive || 0,
       // G-B9: Include cleanup stats
       cleanup: {
         deleted: cleanupResult.deleted_count,

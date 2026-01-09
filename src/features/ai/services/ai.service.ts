@@ -26,8 +26,14 @@ import {
 // CONFIGURATION
 // ======================
 
+// LLM Timeout: 30 seconds to prevent hanging requests
+// If OpenAI doesn't respond within this time, we return a fallback message
+const LLM_TIMEOUT_MS = 30000;
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
+  timeout: LLM_TIMEOUT_MS, // Global timeout for all requests
+  maxRetries: 2, // Retry up to 2 times on transient errors
 });
 
 // GPT-5 Mini: Optimizado para mensajeria automatizada (WhatsApp, Instagram, etc.)
@@ -216,27 +222,38 @@ export async function getTenantAIContext(tenantId: string): Promise<TenantAICont
 
 /**
  * Obtiene el contexto de la conversación actual
+ * @param tenantId - Optional tenant ID for security validation
  */
 export async function getConversationContext(
   conversationId: string,
-  currentMessage: string
+  currentMessage: string,
+  tenantId?: string
 ): Promise<ConversationContext | null> {
   const supabase = createServerClient();
 
   // Obtener conversación con lead
-  const { data: conversation, error: convError } = await supabase
+  // SECURITY: If tenantId provided, validate conversation belongs to tenant
+  let query = supabase
     .from('conversations')
     .select(`
       id,
       lead_id,
+      tenant_id,
       leads (
-        name,
+        first_name,
+        last_name,
+        full_name,
         score,
         classification
       )
     `)
-    .eq('id', conversationId)
-    .single();
+    .eq('id', conversationId);
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  const { data: conversation, error: convError } = await query.single();
 
   if (convError || !conversation) {
     console.error('[AI Service] Error getting conversation:', convError);
@@ -260,11 +277,13 @@ export async function getConversationContext(
     }));
 
   const lead = conversation.leads as any;
+  // Build lead name from available fields
+  const leadName = lead?.full_name || `${lead?.first_name || ''} ${lead?.last_name || ''}`.trim() || 'Cliente';
 
   return {
     conversation_id: conversationId,
     lead_id: conversation.lead_id,
-    lead_name: lead?.name || 'Cliente',
+    lead_name: leadName,
     lead_score: lead?.score || 50,
     lead_classification: lead?.classification || 'warm',
     message_count: lastMessages.length,
@@ -806,6 +825,7 @@ function shouldEscalate(
 /**
  * Genera una respuesta AI para un mensaje de cliente
  * MEJORADO: Ahora soporta acciones transaccionales (crear citas, actualizar datos)
+ * SECURITY: Validates conversation belongs to tenant to prevent IDOR attacks
  */
 export async function generateAIResponse(
   tenantId: string,
@@ -814,32 +834,61 @@ export async function generateAIResponse(
 ): Promise<AIProcessingResult> {
   const startTime = Date.now();
 
-  // 1. Obtener contextos
+  // SECURITY: First validate conversation belongs to tenant (prevents IDOR)
+  const supabase = createServerClient();
+  const { data: conversationCheck, error: checkError } = await supabase
+    .from('conversations')
+    .select('id, tenant_id')
+    .eq('id', conversationId)
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (checkError || !conversationCheck) {
+    console.error(`[AI Service] SECURITY: Conversation ${conversationId} does not belong to tenant ${tenantId} or does not exist`);
+    throw new Error('Conversation not accessible');
+  }
+
+  // 1. Obtener contextos (tenantId already validated above)
   const [tenantContext, conversationContext] = await Promise.all([
     getTenantAIContext(tenantId),
-    getConversationContext(conversationId, currentMessage),
+    getConversationContext(conversationId, currentMessage, tenantId),
   ]);
 
   if (!tenantContext || !conversationContext) {
+    console.error(`[AI Service] Context load failed - tenant: ${!!tenantContext}, conversation: ${!!conversationContext}`);
     throw new Error('Could not load AI context');
   }
 
-  // 2. Detectar señales e intención
-  const { signals, totalPoints } = detectSignals(currentMessage, tenantContext.scoring_rules);
+  // SAFETY: Handle edge case where tenant has no services/branches configured
+  if (!tenantContext.services || tenantContext.services.length === 0) {
+    console.warn(`[AI Service] Tenant ${tenantId} has no services configured - AI may provide limited responses`);
+  }
+  if (!tenantContext.branches || tenantContext.branches.length === 0) {
+    console.warn(`[AI Service] Tenant ${tenantId} has no branches configured - cannot schedule appointments`);
+  }
+  if (!tenantContext.ai_config?.system_prompt) {
+    console.warn(`[AI Service] Tenant ${tenantId} has no system prompt configured - using minimal response`);
+  }
+
+  // 2. Detectar señales e intención (handle missing scoring_rules)
+  const scoringRules = tenantContext.scoring_rules || [];
+  const { signals, totalPoints } = detectSignals(currentMessage, scoringRules);
   const intent = detectIntent(currentMessage, signals);
 
-  // 3. Verificar escalación
+  // 3. Verificar escalación (handle missing auto_escalate_keywords)
+  const autoEscalateKeywords = tenantContext.ai_config?.auto_escalate_keywords || [];
   const escalationCheck = shouldEscalate(
     intent,
     signals,
-    tenantContext.ai_config.auto_escalate_keywords,
+    autoEscalateKeywords,
     currentMessage
   );
 
-  // 4. NUEVO: Extraer datos estructurados del mensaje
+  // 4. NUEVO: Extraer datos estructurados del mensaje (handle missing services)
+  const services = tenantContext.services || [];
   const extractionResult = performFullExtraction(
     currentMessage,
-    tenantContext.services.map(s => ({ id: s.id, name: s.name, category: s.category }))
+    services.map(s => ({ id: s.id, name: s.name, category: s.category }))
   );
 
   // Variables para acciones transaccionales
@@ -996,8 +1045,21 @@ export async function generateAIResponse(
     response = completion.choices[0]?.message?.content || 'Lo siento, no pude procesar tu mensaje. Un asesor te contactará pronto.';
     tokensUsed = (completion.usage?.prompt_tokens || 0) + (completion.usage?.completion_tokens || 0);
   } catch (error) {
-    console.error('[AI Service] OpenAI API error:', error);
-    response = 'Disculpa, estoy experimentando dificultades técnicas. Un asesor humano te atenderá en breve.';
+    // Handle different types of OpenAI errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT');
+    const isRateLimit = errorMessage.includes('rate_limit') || errorMessage.includes('429');
+
+    if (isTimeout) {
+      console.error(`[AI Service] OpenAI timeout after ${LLM_TIMEOUT_MS}ms:`, errorMessage);
+      response = 'Disculpa, la respuesta está tardando más de lo esperado. Un asesor te contactará en breve.';
+    } else if (isRateLimit) {
+      console.error('[AI Service] OpenAI rate limit hit:', errorMessage);
+      response = 'Estamos experimentando alta demanda. Un asesor te atenderá pronto.';
+    } else {
+      console.error('[AI Service] OpenAI API error:', error);
+      response = 'Disculpa, estoy experimentando dificultades técnicas. Un asesor humano te atenderá en breve.';
+    }
     tokensUsed = 0;
   }
 
@@ -1026,13 +1088,30 @@ export async function generateAIResponse(
 
 /**
  * Guarda la respuesta AI como mensaje
+ * SECURITY: tenantId required to prevent cross-tenant writes
  */
 export async function saveAIResponse(
   conversationId: string,
   response: string,
-  metadata: Record<string, unknown>
+  metadata: Record<string, unknown>,
+  tenantId?: string
 ): Promise<string> {
   const supabase = createServerClient();
+
+  // SECURITY: If tenantId provided, validate conversation belongs to tenant before writing
+  if (tenantId) {
+    const { data: convCheck, error: checkError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (checkError || !convCheck) {
+      console.error(`[AI Service] SECURITY: Attempt to write message to conversation ${conversationId} not belonging to tenant ${tenantId}`);
+      throw new Error('Cannot write to conversation: access denied');
+    }
+  }
 
   const { data: message, error } = await supabase
     .from('messages')
@@ -1053,7 +1132,7 @@ export async function saveAIResponse(
     throw new Error(`Failed to save AI response: ${error.message}`);
   }
 
-  // Actualizar conversación
+  // Actualizar conversación (already validated above if tenantId was provided)
   await supabase
     .from('conversations')
     .update({ last_message_at: new Date().toISOString() })
@@ -1090,13 +1169,30 @@ export async function logAIUsage(
 
 /**
  * Actualiza el score del lead basado en las señales
+ * SECURITY: tenantId required to validate lead ownership
  */
 export async function updateLeadScore(
   leadId: string,
   signals: AISignal[],
-  conversationId: string
+  conversationId: string,
+  tenantId?: string
 ): Promise<void> {
   const supabase = createServerClient();
+
+  // SECURITY: If tenantId provided, validate lead belongs to tenant
+  if (tenantId) {
+    const { data: leadCheck, error: checkError } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('id', leadId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (checkError || !leadCheck) {
+      console.error(`[AI Service] SECURITY: Attempt to update score for lead ${leadId} not belonging to tenant ${tenantId}`);
+      throw new Error('Cannot update lead: access denied');
+    }
+  }
 
   for (const signal of signals) {
     await supabase.rpc('update_lead_score', {
@@ -1111,14 +1207,17 @@ export async function updateLeadScore(
 
 /**
  * Escala una conversación a un humano
+ * SECURITY: tenantId required to validate conversation ownership
  */
 export async function escalateConversation(
   conversationId: string,
-  reason: string
+  reason: string,
+  tenantId?: string
 ): Promise<void> {
   const supabase = createServerClient();
 
-  await supabase
+  // SECURITY: If tenantId provided, only update if conversation belongs to tenant
+  let query = supabase
     .from('conversations')
     .update({
       status: 'escalated',
@@ -1127,6 +1226,17 @@ export async function escalateConversation(
       escalated_at: new Date().toISOString(),
     })
     .eq('id', conversationId);
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  const { error } = await query;
+
+  if (error) {
+    console.error(`[AI Service] Error escalating conversation ${conversationId}:`, error);
+    throw new Error('Failed to escalate conversation');
+  }
 
   console.log(`[AI Service] Conversation ${conversationId} escalated: ${reason}`);
 }
