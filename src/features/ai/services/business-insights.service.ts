@@ -541,9 +541,28 @@ export async function canGenerateInsights(tenantId: string): Promise<{
   };
 }
 
+// REVISIÓN 5.2 G-B3: Umbrales mínimos de data_points por tipo de insight
+const MIN_DATA_POINTS_BY_TYPE: Partial<Record<InsightType, number>> = {
+  popular_service: 20,      // Necesita suficientes solicitudes
+  peak_hours: 50,           // Necesita suficientes mensajes para patrón
+  common_objection: 10,     // Al menos 10 objeciones similares
+  pricing_sensitivity: 15,  // Suficientes menciones de precio
+  lead_conversion: 30,      // Datos de conversión significativos
+  loyalty_insight: 20,      // Datos de lealtad
+  follow_up_opportunity: 15,
+  upsell_opportunity: 15,
+  response_improvement: 25,
+};
+
+const DEFAULT_MIN_DATA_POINTS = 10;
+
 /**
  * Genera insights de negocio para un tenant específico
  * Esta función es el punto de entrada principal
+ *
+ * REVISIÓN 5.2:
+ * - G-B3: Valida data_points mínimos por tipo de insight
+ * - G-B8: Guarda snapshot de vertical al momento de generación
  */
 export async function generateBusinessInsights(tenantId: string): Promise<InsightGenerationResult> {
   const supabase = createServerClient();
@@ -561,14 +580,16 @@ export async function generateBusinessInsights(tenantId: string): Promise<Insigh
       };
     }
 
-    // 2. Obtener plan del tenant para determinar límite de insights
+    // 2. Obtener plan y vertical del tenant
+    // REVISIÓN 5.2 G-B8: Incluir vertical para snapshot
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('plan')
+      .select('plan, vertical')
       .eq('id', tenantId)
       .single();
 
     const maxInsights = MAX_INSIGHTS_PER_PLAN[tenant?.plan || 'essentials'] || 5;
+    const tenantVertical = tenant?.vertical || 'general'; // G-B8: Capturar vertical
 
     // 3. Recopilar datos analíticos del tenant
     const analyticsData = await collectTenantAnalytics(tenantId);
@@ -610,28 +631,49 @@ export async function generateBusinessInsights(tenantId: string): Promise<Insigh
     }
 
     // 6. Guardar insights en la base de datos
+    // REVISIÓN 5.2 G-B3: Validar y marcar data_points mínimos
+    // REVISIÓN 5.2 G-B8: Incluir snapshot de vertical
     const now = new Date().toISOString();
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const insightsToInsert = insights.map(insight => ({
-      tenant_id: tenantId,
-      insight_type: insight.insight_type,
-      title: insight.title,
-      description: insight.description,
-      evidence: insight.evidence,
-      recommendation: insight.recommendation,
-      confidence_score: insight.confidence_score,
-      impact_score: insight.impact_score,
-      data_points: insight.data_points,
-      metadata: insight.metadata,
-      analysis_period_start: thirtyDaysAgo.toISOString(),
-      analysis_period_end: now,
-      is_active: true,
-      is_actionable: true,
-      was_acted_upon: false,
-      dismissed: false,
-    }));
+    const insightsToInsert = insights.map(insight => {
+      // G-B3: Verificar si cumple data_points mínimos para su tipo
+      const minRequired = MIN_DATA_POINTS_BY_TYPE[insight.insight_type] || DEFAULT_MIN_DATA_POINTS;
+      const meetsMinDataPoints = insight.data_points >= minRequired;
+
+      // G-B3: Ajustar confidence si no cumple mínimos
+      const adjustedConfidence = meetsMinDataPoints
+        ? insight.confidence_score
+        : Math.min(insight.confidence_score, 0.5); // Limitar confianza si datos insuficientes
+
+      return {
+        tenant_id: tenantId,
+        insight_type: insight.insight_type,
+        title: insight.title,
+        description: insight.description,
+        evidence: insight.evidence,
+        recommendation: insight.recommendation,
+        confidence_score: adjustedConfidence,
+        impact_score: insight.impact_score,
+        data_points: insight.data_points,
+        metadata: {
+          ...insight.metadata,
+          min_data_points_required: minRequired,
+          meets_min_data_points: meetsMinDataPoints,
+        },
+        analysis_period_start: thirtyDaysAgo.toISOString(),
+        analysis_period_end: now,
+        is_active: true,
+        is_actionable: true,
+        was_acted_upon: false,
+        dismissed: false,
+        // G-B3: Marcar si cumple data_points mínimos
+        min_data_points_met: meetsMinDataPoints,
+        // G-B8: Snapshot de vertical al momento de generación
+        vertical_at_generation: tenantVertical,
+      };
+    });
 
     const { error: insertError } = await supabase
       .from('ai_business_insights')

@@ -683,16 +683,86 @@ $$;
 
 ---
 
-## 9. GAPS PENDIENTES (Backlog)
+## 9. IMPLEMENTACIONES ADICIONALES (Fase 2)
+
+### 9.1 G-B1: Lock Distribuido para CRON ✅
+
+**Archivos:**
+- `src/features/ai/services/distributed-lock.service.ts` (NUEVO)
+- `app/api/cron/generate-insights/route.ts` (MODIFICADO)
+- `supabase/migrations/119_BUSINESS_IA_IMPROVEMENTS.sql` (NUEVO)
+
+**Cambios realizados:**
+- Servicio completo de locks distribuidos usando PostgreSQL
+- Tabla `system_locks` con TTL automático
+- Integración en CRON de insights para evitar ejecuciones concurrentes
+- Métodos: `acquireLock()`, `releaseLock()`, `extendLock()`, `withLock()`
+- Limpieza automática de locks expirados
+
+### 9.2 G-B10: Validación de Longitud Pre-Regex ✅
+
+**Archivo:** `src/features/ai/services/message-learning.service.ts`
+
+**Cambios realizados:**
+- Ya implementado: `MAX_MESSAGE_LENGTH = 5000` antes de cualquier regex
+- Constraint en DB: `check_message_length` (máx 10000 caracteres)
+- Constraint en DB: `check_pattern_value_length` (máx 500 caracteres)
+
+### 9.3 G-B8: Snapshot de Vertical ✅
+
+**Archivo:** `src/features/ai/services/business-insights.service.ts`
+
+**Cambios realizados:**
+- Columna `vertical_at_generation` añadida a `ai_business_insights`
+- Se guarda la vertical del tenant al momento de generar cada insight
+- Permite auditar si la vertical cambió después de generar insights
+
+### 9.4 G-B3: Validación de Data Points Mínimos ✅
+
+**Archivo:** `src/features/ai/services/business-insights.service.ts`
+
+**Cambios realizados:**
+- Constante `MIN_DATA_POINTS_BY_TYPE` con umbrales por tipo de insight
+- Columna `min_data_points_met` añadida a `ai_business_insights`
+- Si no cumple mínimos:
+  - Se marca `min_data_points_met = false`
+  - Se limita `confidence_score` a máximo 0.5
+  - Se incluye info en metadata
+
+### 9.5 G-B9: Limpieza Automática de Cola ✅
+
+**Archivos:**
+- `app/api/cron/process-learning/route.ts` (MODIFICADO)
+- `supabase/migrations/119_BUSINESS_IA_IMPROVEMENTS.sql`
+
+**Cambios realizados:**
+- Función PostgreSQL `cleanup_learning_queue(p_max_age_days, p_max_items)`
+- Se ejecuta automáticamente antes de procesar la cola
+- Elimina items completados/fallidos > 7 días
+- Mantiene máximo 10,000 items en cola (elimina los más antiguos)
+
+---
+
+## 10. GAPS PENDIENTES (Backlog - Prioridad Baja)
 
 | ID | Gap | Severidad | Estado |
 |----|-----|-----------|--------|
-| G-B1 | Lock de concurrencia en CRON | ALTA | Pendiente |
-| G-B3 | Validación de data_points mínimos | MEDIA | Pendiente |
 | G-B5 | Normalización de sinónimos | BAJA | Pendiente |
-| G-B8 | Validación de cambio de vertical | ALTA | Pendiente |
-| G-B9 | Límite de antigüedad en cola | MEDIA | Pendiente |
-| G-B10 | Validación de longitud pre-regex | ALTA | Pendiente |
+
+---
+
+## 11. RESUMEN DE ARCHIVOS MODIFICADOS
+
+### Nuevos Archivos
+- `src/features/ai/services/distributed-lock.service.ts`
+- `supabase/migrations/119_BUSINESS_IA_IMPROVEMENTS.sql`
+
+### Archivos Modificados
+- `src/features/ai/services/business-insights.service.ts`
+- `src/features/ai/services/message-learning.service.ts`
+- `app/api/cron/generate-insights/route.ts`
+- `app/api/cron/process-learning/route.ts`
+- `docs/REVISION_5.2_BUSINESS_IA_AUDIT.md`
 
 ---
 

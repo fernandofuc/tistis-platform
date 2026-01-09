@@ -6,10 +6,12 @@
 // para procesar los mensajes pendientes en la cola de aprendizaje.
 //
 // Frecuencia recomendada: Cada 5-10 minutos
+// REVISIÓN 5.2 G-B9: Incluye limpieza automática de cola antigua
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 import { MessageLearningService } from '@/src/features/ai/services/message-learning.service';
 
 // Evitar que Next.js cachee esta ruta
@@ -21,6 +23,8 @@ export const maxDuration = 60;
 // Constantes de configuración
 const MAX_LIMIT = 500; // Límite máximo de mensajes por ejecución
 const DEFAULT_LIMIT = 100;
+const CLEANUP_MAX_AGE_DAYS = 7; // G-B9: Limpiar items más antiguos de 7 días
+const CLEANUP_MAX_QUEUE_SIZE = 10000; // G-B9: Máximo de items en cola
 
 /**
  * Verifica el token de autorización para CRON jobs (timing-safe)
@@ -95,6 +99,40 @@ export async function GET(request: NextRequest) {
 
     console.log(`[CRON: Process Learning] Starting processing with limit: ${limit}`);
 
+    // REVISIÓN 5.2 G-B9: Limpiar cola antigua antes de procesar
+    let cleanupResult = { deleted_count: 0, remaining_count: 0 };
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (supabaseUrl && serviceRoleKey) {
+        const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+        const { data: cleanup, error: cleanupError } = await supabase.rpc(
+          'cleanup_learning_queue',
+          {
+            p_max_age_days: CLEANUP_MAX_AGE_DAYS,
+            p_max_items: CLEANUP_MAX_QUEUE_SIZE,
+          }
+        );
+
+        if (cleanupError) {
+          console.warn('[CRON: Process Learning] Cleanup RPC error:', cleanupError.message);
+        } else if (cleanup && cleanup.length > 0) {
+          cleanupResult = cleanup[0];
+          if (cleanupResult.deleted_count > 0) {
+            console.log(
+              `[CRON: Process Learning] G-B9 Cleanup: Deleted ${cleanupResult.deleted_count} old items, ` +
+              `${cleanupResult.remaining_count} remaining`
+            );
+          }
+        }
+      }
+    } catch (cleanupErr) {
+      console.warn('[CRON: Process Learning] Cleanup failed (non-fatal):', cleanupErr);
+      // Continue processing even if cleanup fails
+    }
+
     // Procesar la cola
     const result = await MessageLearningService.processLearningQueue(limit);
 
@@ -110,6 +148,11 @@ export async function GET(request: NextRequest) {
       processed: result.processed,
       successful: result.successful,
       failed: result.failed,
+      // G-B9: Include cleanup stats
+      cleanup: {
+        deleted: cleanupResult.deleted_count,
+        remaining: cleanupResult.remaining_count,
+      },
       processing_time_ms: processingTime,
       timestamp: new Date().toISOString(),
     });

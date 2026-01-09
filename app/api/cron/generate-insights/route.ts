@@ -6,12 +6,17 @@
 // (Vercel CRON, AWS EventBridge, etc.) cada 3 días.
 //
 // SEGURIDAD: Requiere CRON_SECRET para autenticación
+// REVISIÓN 5.2 G-B1: Incluye lock distribuido anti-concurrencia
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateBusinessInsights } from '@/src/features/ai/services/business-insights.service';
 import { timingSafeEqual } from 'crypto';
+import {
+  getDistributedLockService,
+  LOCK_NAMES,
+} from '@/src/features/ai/services/distributed-lock.service';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -64,9 +69,12 @@ function verifyCronAuth(request: NextRequest): boolean {
 
 /**
  * GET handler - Genera insights para todos los tenants elegibles
+ *
+ * REVISIÓN 5.2 G-B1: Usa lock distribuido para evitar ejecuciones concurrentes
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
+  const instanceId = `cron-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
   // 1. Verificar autenticación
   if (!verifyCronAuth(request)) {
@@ -90,6 +98,36 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  // REVISIÓN 5.2 G-B1: Adquirir lock distribuido antes de procesar
+  let lockService;
+  let lockAcquired = false;
+
+  try {
+    lockService = getDistributedLockService();
+    const lockResult = await lockService.acquireLock(
+      LOCK_NAMES.CRON_GENERATE_INSIGHTS,
+      instanceId,
+      { ttlMinutes: 10 } // Lock expira en 10 minutos
+    );
+
+    if (!lockResult.acquired) {
+      console.log(`[CRON Insights] Lock not acquired - another instance is running (${lockResult.alreadyLockedBy})`);
+      return NextResponse.json({
+        success: true,
+        message: 'Another instance is already running',
+        locked_by: lockResult.alreadyLockedBy,
+        lock_expires: lockResult.expiresAt?.toISOString(),
+        duration_ms: Date.now() - startTime,
+      });
+    }
+
+    lockAcquired = true;
+    console.log(`[CRON Insights] Lock acquired by ${instanceId}`);
+  } catch (lockError) {
+    console.warn('[CRON Insights] Could not check/acquire lock, proceeding without lock:', lockError);
+    // Continuar sin lock si hay error (graceful degradation)
+  }
 
   try {
     // 3. Obtener tenants elegibles (Essentials+ con learning habilitado)
@@ -234,6 +272,11 @@ export async function GET(request: NextRequest) {
 
     console.log(`[CRON Insights] Completed in ${duration}ms - Success: ${successCount}, Skipped: ${skippedCount}, Errors: ${errorCount}`);
 
+    // REVISIÓN 5.2 G-B1: Liberar lock antes de retornar
+    if (lockAcquired && lockService) {
+      await lockService.releaseLock(LOCK_NAMES.CRON_GENERATE_INSIGHTS, instanceId);
+    }
+
     return NextResponse.json({
       success: true,
       summary: {
@@ -248,6 +291,14 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[CRON Insights] Fatal error:', errorMessage);
+
+    // REVISIÓN 5.2 G-B1: Liberar lock incluso en caso de error
+    if (lockAcquired && lockService) {
+      await lockService.releaseLock(LOCK_NAMES.CRON_GENERATE_INSIGHTS, instanceId).catch(
+        (err) => console.error('[CRON Insights] Error releasing lock:', err)
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
