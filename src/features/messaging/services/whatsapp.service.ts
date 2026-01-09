@@ -381,13 +381,94 @@ export async function findOrCreateConversation(
 
 /**
  * Guarda un mensaje entrante en la base de datos
+ * FIXED: Uses atomic RPC function with:
+ * - Duplicate webhook detection (same whatsapp_message_id)
+ * - Auto-reopening of resolved/closed conversations
+ * - Atomic message count increment
+ * - Lead engagement update trigger
  */
 export async function saveIncomingMessage(
   conversationId: string,
   leadId: string,
-  parsedMessage: ParsedWhatsAppMessage
-): Promise<string> {
+  parsedMessage: ParsedWhatsAppMessage,
+  channel: string = 'whatsapp'
+): Promise<{ id: string; isDuplicate: boolean; conversationReopened: boolean }> {
   const supabase = createServerClient();
+
+  // Build metadata object
+  const metadata = {
+    phone_number_id: parsedMessage.metadata.phoneNumberId,
+    is_reply: parsedMessage.metadata.isReply,
+    reply_to_message_id: parsedMessage.metadata.replyToMessageId,
+    media_type: parsedMessage.mediaType,
+  };
+
+  // Use atomic RPC function for duplicate detection and auto-reopen
+  const { data: result, error } = await supabase.rpc('save_incoming_message', {
+    p_conversation_id: conversationId,
+    p_lead_id: leadId,
+    p_content: parsedMessage.content,
+    p_message_type: parsedMessage.type,
+    p_channel: channel,
+    p_media_url: parsedMessage.mediaId || null,
+    p_whatsapp_message_id: parsedMessage.messageId,
+    p_metadata: metadata,
+  });
+
+  if (error) {
+    // If RPC doesn't exist, fallback to direct insert
+    if (error.code === 'PGRST202' || error.message.includes('function') || error.message.includes('does not exist')) {
+      console.warn('[WhatsApp] save_incoming_message RPC not available, using fallback');
+      return saveIncomingMessageFallback(conversationId, leadId, parsedMessage, channel);
+    }
+
+    console.error('[WhatsApp] Error saving message:', error);
+    throw new Error(`Failed to save message: ${error.message}`);
+  }
+
+  // RPC returns array, get first row
+  const saveResult = Array.isArray(result) ? result[0] : result;
+
+  if (!saveResult?.message_id) {
+    throw new Error('save_incoming_message returned no result');
+  }
+
+  if (saveResult.is_duplicate) {
+    console.log(`[WhatsApp] Duplicate message detected: ${parsedMessage.messageId}`);
+  }
+
+  if (saveResult.conversation_reopened) {
+    console.log(`[WhatsApp] Conversation ${conversationId} was auto-reopened`);
+  }
+
+  return {
+    id: saveResult.message_id,
+    isDuplicate: saveResult.is_duplicate || false,
+    conversationReopened: saveResult.conversation_reopened || false,
+  };
+}
+
+/**
+ * Fallback function for saving messages when RPC is not available
+ */
+async function saveIncomingMessageFallback(
+  conversationId: string,
+  leadId: string,
+  parsedMessage: ParsedWhatsAppMessage,
+  channel: string
+): Promise<{ id: string; isDuplicate: boolean; conversationReopened: boolean }> {
+  const supabase = createServerClient();
+
+  // Check for duplicate first
+  const { data: existingMessage } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('metadata->>whatsapp_message_id', parsedMessage.messageId)
+    .single();
+
+  if (existingMessage) {
+    return { id: existingMessage.id, isDuplicate: true, conversationReopened: false };
+  }
 
   const { data: message, error } = await supabase
     .from('messages')
@@ -397,8 +478,8 @@ export async function saveIncomingMessage(
       sender_id: leadId,
       content: parsedMessage.content,
       message_type: parsedMessage.type,
-      channel: 'whatsapp',
-      media_url: parsedMessage.mediaId, // WhatsApp media ID, se descargará después
+      channel: channel,
+      media_url: parsedMessage.mediaId,
       status: 'received',
       metadata: {
         whatsapp_message_id: parsedMessage.messageId,
@@ -412,33 +493,31 @@ export async function saveIncomingMessage(
     .single();
 
   if (error) {
-    console.error('[WhatsApp] Error saving message:', error);
+    // Handle unique constraint violation (duplicate)
+    if (error.code === '23505') {
+      const { data: duplicateMsg } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('metadata->>whatsapp_message_id', parsedMessage.messageId)
+        .single();
+      return { id: duplicateMsg?.id || '', isDuplicate: true, conversationReopened: false };
+    }
     throw new Error(`Failed to save message: ${error.message}`);
   }
 
-  // Actualizar last_message_at y message_count de la conversación
-  // Usamos SQL raw para incrementar el contador correctamente
+  // Update conversation
   try {
-    const { error: updateError } = await supabase.rpc('increment_conversation_message_count', {
+    await supabase.rpc('increment_conversation_message_count', {
       p_conversation_id: conversationId
     });
-
-    // Fallback si la función no existe: solo actualizar last_message_at
-    if (updateError) {
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', conversationId);
-    }
   } catch {
-    // Fallback en caso de error
     await supabase
       .from('conversations')
       .update({ last_message_at: new Date().toISOString() })
       .eq('id', conversationId);
   }
 
-  return message.id;
+  return { id: message.id, isDuplicate: false, conversationReopened: false };
 }
 
 // ======================
@@ -747,12 +826,26 @@ async function processIncomingMessage(
     context.ai_enabled
   );
 
-  // 4. Guardar mensaje
-  const messageId = await saveIncomingMessage(
+  // 4. Guardar mensaje (with duplicate detection and auto-reopen)
+  const messageResult = await saveIncomingMessage(
     conversation.id,
     lead.id,
-    parsedMessage
+    parsedMessage,
+    'whatsapp'
   );
+
+  // If duplicate message, skip further processing
+  if (messageResult.isDuplicate) {
+    console.log(`[WhatsApp] Skipping duplicate message: ${parsedMessage.messageId}`);
+    return;
+  }
+
+  const messageId = messageResult.id;
+
+  // Log if conversation was auto-reopened
+  if (messageResult.conversationReopened) {
+    console.log(`[WhatsApp] Conversation ${conversation.id} was auto-reopened by new message`);
+  }
 
   // 5. AI Learning: Solo para verticales soportadas (dental y restaurant)
   // Variables para pasar contexto al AI job
