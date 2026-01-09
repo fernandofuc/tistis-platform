@@ -13,6 +13,77 @@
 import { createServerClient } from '@/src/shared/lib/supabase';
 
 // ======================
+// REVISIÓN 5.2 G-B2: PII SANITIZATION
+// ======================
+
+/**
+ * Patrones de información personal identificable (PII)
+ * Estos patrones se eliminan del texto antes de almacenar
+ * para cumplir con GDPR/LFPDPPP
+ */
+const PII_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
+  // RFC mexicano (persona física y moral)
+  { pattern: /[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}/gi, replacement: '[RFC]' },
+  // Email
+  { pattern: /[\w.-]+@[\w.-]+\.\w+/gi, replacement: '[EMAIL]' },
+  // Teléfono mexicano (varios formatos)
+  { pattern: /(\+?52)?[\s.-]?\d{2,3}[\s.-]?\d{3,4}[\s.-]?\d{4}/g, replacement: '[TELEFONO]' },
+  // CURP
+  { pattern: /[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{5}[A-Z0-9]\d/gi, replacement: '[CURP]' },
+  // Tarjeta de crédito (4 grupos de 4 dígitos)
+  { pattern: /\d{4}[\s.-]?\d{4}[\s.-]?\d{4}[\s.-]?\d{4}/g, replacement: '[TARJETA]' },
+  // NSS (IMSS - 11 dígitos)
+  { pattern: /\b\d{11}\b/g, replacement: '[NSS]' },
+  // Nombres propios después de "soy", "me llamo", "mi nombre es"
+  { pattern: /(?:soy|me llamo|mi nombre es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,3})/gi, replacement: '[NOMBRE]' },
+  // Direcciones con número (calle + número)
+  { pattern: /(?:calle|av(?:enida)?|blvd|boulevard|col(?:onia)?)\s+[\w\s]+\s*#?\s*\d+/gi, replacement: '[DIRECCION]' },
+  // Código postal mexicano
+  { pattern: /\b(?:c\.?p\.?\s*)?\d{5}\b/gi, replacement: '[CP]' },
+];
+
+/**
+ * REVISIÓN 5.2 G-B2: Sanitiza información personal del texto
+ * Reemplaza PII con placeholders seguros antes de almacenar
+ *
+ * @param text - Texto a sanitizar
+ * @returns Texto sin información personal identificable
+ */
+function sanitizePII(text: string): string {
+  if (!text || typeof text !== 'string') {
+    return text;
+  }
+
+  let sanitized = text;
+  for (const { pattern, replacement } of PII_PATTERNS) {
+    // Crear nueva instancia para evitar problemas con lastIndex
+    const regex = new RegExp(pattern.source, pattern.flags);
+    sanitized = sanitized.replace(regex, replacement);
+  }
+
+  return sanitized;
+}
+
+/**
+ * Verifica si un texto contiene PII
+ * Útil para logging y métricas
+ */
+export function containsPII(text: string): boolean {
+  if (!text || typeof text !== 'string') {
+    return false;
+  }
+
+  for (const { pattern } of PII_PATTERNS) {
+    const regex = new RegExp(pattern.source, pattern.flags);
+    if (regex.test(text)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ======================
 // TYPES
 // ======================
 
@@ -126,6 +197,8 @@ const PATTERN_DETECTORS: Record<string, RegExp[]> = {
 /**
  * Extrae patrones de un mensaje
  *
+ * REVISIÓN 5.2 G-B2: Ahora sanitiza PII antes de procesar
+ *
  * NOTA: El parámetro `vertical` está reservado para uso futuro
  * cuando se añadan patrones específicos por vertical.
  * Actualmente se usan los patrones generales para todos.
@@ -139,14 +212,19 @@ export function extractPatterns(
     return [];
   }
 
-  // Limitar longitud del mensaje para evitar problemas de rendimiento
+  // REVISIÓN 5.2 G-B10: Limitar longitud ANTES de cualquier procesamiento
   const MAX_MESSAGE_LENGTH = 5000;
   const truncatedMessage = message.length > MAX_MESSAGE_LENGTH
     ? message.substring(0, MAX_MESSAGE_LENGTH)
     : message;
 
+  // REVISIÓN 5.2 G-B2: Sanitizar PII antes de extraer patrones
+  // El contexto guardado NO debe contener información personal
+  const sanitizedMessage = sanitizePII(truncatedMessage);
+
   const patterns: ExtractedPattern[] = [];
-  const messageLower = truncatedMessage.toLowerCase();
+  const messageLower = truncatedMessage.toLowerCase(); // Para matching usamos original
+  const sanitizedLower = sanitizedMessage.toLowerCase(); // Para contexto usamos sanitizado
   const MAX_PATTERNS_PER_TYPE = 10; // Límite de patrones por tipo
 
   // Set para evitar duplicados (clave: type + value normalizado)
@@ -176,7 +254,9 @@ export function extractPatterns(
         lastIndex = match.index;
 
         // El valor capturado es el primer grupo o el match completo
-        const value = (match[1] || match[0]).trim();
+        // REVISIÓN 5.2 G-B2: Sanitizar el valor extraído también
+        const rawValue = (match[1] || match[0]).trim();
+        const value = sanitizePII(rawValue);
 
         // Clave de deduplicación: tipo + valor normalizado
         const dedupeKey = `${patternType}:${value.toLowerCase()}`;
@@ -184,13 +264,16 @@ export function extractPatterns(
         // Evitar valores muy cortos, muy largos, o duplicados
         if (value.length >= 3 && value.length <= 100 && !seenPatterns.has(dedupeKey)) {
           seenPatterns.add(dedupeKey);
+
+          // REVISIÓN 5.2 G-B2: Contexto siempre sanitizado
+          const contextStart = Math.max(0, match.index - 20);
+          const contextEnd = Math.min(sanitizedMessage.length, match.index + match[0].length + 20);
+          const sanitizedContext = sanitizedMessage.substring(contextStart, contextEnd);
+
           patterns.push({
             type: patternType,
             value: value,
-            context: truncatedMessage.substring(
-              Math.max(0, match.index - 20),
-              Math.min(truncatedMessage.length, match.index + match[0].length + 20)
-            ),
+            context: sanitizedContext,
           });
           patternsOfType++;
           if (patternsOfType >= MAX_PATTERNS_PER_TYPE) break;
@@ -641,8 +724,18 @@ async function createHighPriorityAlert(
 
     const userIds = staffUsers.map(u => u.user_id);
 
-    // Usar broadcast_notification RPC para enviar a todos los usuarios relevantes
-    await supabase.rpc('broadcast_notification', {
+    // REVISIÓN 5.2 G-B6: Intentar RPC primero, fallback a insert directo
+    const notificationData = {
+      lead_id: leadId,
+      conversation_id: conversationId,
+      patterns: patterns.map(p => ({ type: p.type, value: p.value })),
+      channel: channel,
+      detected_at: new Date().toISOString(),
+      source: 'ai_learning_realtime',
+    };
+
+    // Intentar usar broadcast_notification RPC
+    const { error: rpcError } = await supabase.rpc('broadcast_notification', {
       p_tenant_id: tenantId,
       p_user_ids: userIds,
       p_type: config.type,
@@ -655,15 +748,42 @@ async function createHighPriorityAlert(
         ? `/dashboard/conversations/${conversationId}`
         : `/dashboard/leads/${leadId}`,
       p_action_label: config.actionLabel,
-      p_metadata: {
-        lead_id: leadId,
-        conversation_id: conversationId,
-        patterns: patterns.map(p => ({ type: p.type, value: p.value })),
-        channel: channel,
-        detected_at: new Date().toISOString(),
-        source: 'ai_learning_realtime',
-      },
+      p_metadata: notificationData,
     });
+
+    // REVISIÓN 5.2 G-B6: Si RPC falla, usar insert directo como fallback
+    if (rpcError) {
+      console.warn('[Learning Service] broadcast_notification RPC failed, using direct insert fallback:', rpcError.message);
+
+      // Fallback: Insertar notificaciones directamente
+      const notifications = userIds.map(userId => ({
+        tenant_id: tenantId,
+        user_id: userId,
+        type: config.type,
+        title: config.title,
+        message: `Patrones detectados: ${patternsSummary}`,
+        priority: config.priority,
+        related_entity_type: 'lead',
+        related_entity_id: leadId,
+        action_url: conversationId
+          ? `/dashboard/conversations/${conversationId}`
+          : `/dashboard/leads/${leadId}`,
+        action_label: config.actionLabel,
+        metadata: notificationData,
+        read: false,
+        created_at: new Date().toISOString(),
+      }));
+
+      const { error: insertError } = await supabase
+        .from('notifications')
+        .insert(notifications);
+
+      if (insertError) {
+        console.error('[Learning Service] Direct notification insert also failed:', insertError.message);
+      } else {
+        console.log(`[Learning Service] Fallback: Created ${notifications.length} notifications via direct insert`);
+      }
+    }
   } catch (error) {
     // No fallar silenciosamente - loguear el error pero no bloquear el flujo
     console.warn('[Learning Service] Error creating high priority alert:', error);

@@ -15,6 +15,10 @@ import {
   DEFAULT_GEMINI_MODELS,
   isGeminiConfigured,
 } from '@/src/shared/lib/gemini';
+import { SafetyResilienceService } from './safety-resilience.service';
+
+// REVISIÓN 5.2 G-B4: Circuit breaker name for Gemini insights
+const GEMINI_INSIGHTS_CIRCUIT = 'gemini-business-insights';
 
 // ======================
 // TYPES
@@ -300,11 +304,19 @@ export async function collectTenantAnalytics(tenantId: string): Promise<TenantAn
 /**
  * Genera insights de negocio usando Gemini 3.0
  * El análisis es específico para el tenant y su vertical
+ *
+ * REVISIÓN 5.2 G-B4: Incluye circuit breaker para proteger contra fallos repetidos
  */
 async function generateInsightsWithGemini(
   data: TenantAnalyticsData,
   maxInsights: number
 ): Promise<BusinessInsight[]> {
+  // REVISIÓN 5.2 G-B4: Verificar circuit breaker antes de llamar a Gemini
+  if (SafetyResilienceService.isCircuitOpen(GEMINI_INSIGHTS_CIRCUIT)) {
+    console.warn('[Business Insights] Circuit breaker OPEN - skipping Gemini call');
+    return [];
+  }
+
   // Verificar que Gemini está configurado
   if (!isGeminiConfigured()) {
     console.error('[Business Insights] Gemini not configured');
@@ -375,14 +387,28 @@ RESPONDE EN FORMATO JSON (array de objetos):
 Genera SOLO el JSON, sin texto adicional.`;
 
   // Usar el cliente centralizado de Gemini 3.0
-  const result = await generateWithGemini(prompt, {
-    model: DEFAULT_GEMINI_MODELS.BUSINESS_INSIGHTS,
-    temperature: 0.7,
-    maxOutputTokens: 4096,
-  });
+  // REVISIÓN 5.2 G-B4: Envolver en try-catch para circuit breaker
+  let result;
+  try {
+    result = await generateWithGemini(prompt, {
+      model: DEFAULT_GEMINI_MODELS.BUSINESS_INSIGHTS,
+      temperature: 0.7,
+      maxOutputTokens: 4096,
+    });
 
-  if (!result.success) {
-    console.error('[Business Insights] Gemini generation failed:', result.error);
+    if (!result.success) {
+      // REVISIÓN 5.2 G-B4: Registrar fallo en circuit breaker
+      SafetyResilienceService.recordCircuitFailure(GEMINI_INSIGHTS_CIRCUIT);
+      console.error('[Business Insights] Gemini generation failed:', result.error);
+      return [];
+    }
+
+    // REVISIÓN 5.2 G-B4: Registrar éxito en circuit breaker
+    SafetyResilienceService.recordCircuitSuccess(GEMINI_INSIGHTS_CIRCUIT);
+  } catch (error) {
+    // REVISIÓN 5.2 G-B4: Registrar excepción como fallo
+    SafetyResilienceService.recordCircuitFailure(GEMINI_INSIGHTS_CIRCUIT);
+    console.error('[Business Insights] Gemini call threw exception:', error);
     return [];
   }
 
@@ -656,9 +682,16 @@ export async function generateBusinessInsights(tenantId: string): Promise<Insigh
 
 /**
  * Obtiene los insights activos de un tenant
+ *
+ * REVISIÓN 5.2 G-B7: Filtra insights expirados en tiempo de lectura
+ * Esto previene mostrar insights stale aunque is_active sea true
  */
 export async function getActiveInsights(tenantId: string): Promise<BusinessInsight[]> {
   const supabase = createServerClient();
+
+  // REVISIÓN 5.2 G-B7: Calcular fecha de expiración para filtro
+  const expiryDate = new Date();
+  expiryDate.setDate(expiryDate.getDate() - INSIGHTS_EXPIRY_DAYS);
 
   const { data: insights, error } = await supabase
     .from('ai_business_insights')
@@ -666,6 +699,7 @@ export async function getActiveInsights(tenantId: string): Promise<BusinessInsig
     .eq('tenant_id', tenantId)
     .eq('is_active', true)
     .eq('dismissed', false)
+    .gte('created_at', expiryDate.toISOString()) // G-B7: Solo insights no expirados
     .order('impact_score', { ascending: false })
     .order('confidence_score', { ascending: false });
 
@@ -739,18 +773,25 @@ export async function markInsightActedUpon(insightId: string, tenantId: string):
 /**
  * Obtiene el conteo de insights no vistos (para notificación)
  * Nota: Usa approach alternativo ya que filtrar JSONB con .is() puede ser problemático
+ *
+ * REVISIÓN 5.2 G-B7: También filtra insights expirados
  */
 export async function getUnseenInsightsCount(tenantId: string): Promise<number> {
   const supabase = createServerClient();
+
+  // REVISIÓN 5.2 G-B7: Calcular fecha de expiración
+  const expiryDate = new Date();
+  expiryDate.setDate(expiryDate.getDate() - INSIGHTS_EXPIRY_DAYS);
 
   // Obtener todos los insights activos y filtrar en código
   // ya que el filtro JSONB .is('metadata->seen_at', null) no es confiable
   const { data: insights } = await supabase
     .from('ai_business_insights')
-    .select('metadata')
+    .select('metadata, created_at')
     .eq('tenant_id', tenantId)
     .eq('is_active', true)
-    .eq('dismissed', false);
+    .eq('dismissed', false)
+    .gte('created_at', expiryDate.toISOString()); // G-B7: Solo no expirados
 
   if (!insights) return 0;
 
