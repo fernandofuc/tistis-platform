@@ -447,10 +447,11 @@ function validateEmojis(
   );
 
   if (forbiddenEmojisFound.length > 0) {
+    // P4 FIX: Emojis prohibidos son ahora CRITICAL para rechazar el prompt
     errors.push({
       code: 'FORBIDDEN_EMOJIS',
       message: `Emojis no permitidos encontrados: ${Array.from(new Set(forbiddenEmojisFound)).join(', ')}`,
-      severity: 'high',
+      severity: 'critical', // P4 FIX: Changed from 'high' to 'critical'
       category: 'general',
     });
 

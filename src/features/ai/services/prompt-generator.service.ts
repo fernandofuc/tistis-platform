@@ -1164,7 +1164,9 @@ export async function checkNeedsRegeneration(
 }
 
 /**
- * Guarda un prompt generado en el caché
+ * Guarda un prompt generado en el caché CON VALIDACIÓN
+ *
+ * P5 FIX: Rechaza prompts que fallen validación crítica
  */
 export async function saveCachedPrompt(
   tenantId: string,
@@ -1173,11 +1175,45 @@ export async function saveCachedPrompt(
   systemPrompt: string,
   sourceDataHash: string,
   generatorModel: string = 'gemini-2.0-flash-exp',
-  tokensEstimated?: number
-): Promise<string | null> {
+  tokensEstimated?: number,
+  validationResult?: ValidationResult
+): Promise<{ promptId: string | null; rejected: boolean; error?: string }> {
   const supabase = createServerClient();
 
   try {
+    // P5 FIX: Use the new validated save function if validation is provided
+    if (validationResult) {
+      const { data, error } = await supabase.rpc('save_validated_prompt', {
+        p_tenant_id: tenantId,
+        p_channel: channel,
+        p_generated_prompt: generatedPrompt,
+        p_source_data_hash: sourceDataHash,
+        p_generator_model: generatorModel,
+        p_validation_score: validationResult.score,
+        p_validation_errors: JSON.stringify(validationResult.errors),
+        p_min_valid_score: 70, // Minimum acceptable score
+      });
+
+      if (error) {
+        console.error('[PromptCache] Error saving validated prompt:', error);
+        return { promptId: null, rejected: false, error: error.message };
+      }
+
+      const result = data?.[0];
+      if (result?.was_rejected) {
+        console.warn(`[PromptCache] Prompt REJECTED for ${channel}: ${result.error_message}`);
+        return {
+          promptId: result.prompt_id,
+          rejected: true,
+          error: result.error_message,
+        };
+      }
+
+      console.log(`[PromptCache] Validated prompt saved for tenant ${tenantId}, channel ${channel}`);
+      return { promptId: result?.prompt_id, rejected: false };
+    }
+
+    // Fallback to original method if no validation provided
     const { data, error } = await supabase.rpc('upsert_generated_prompt', {
       p_tenant_id: tenantId,
       p_channel: channel,
@@ -1191,14 +1227,14 @@ export async function saveCachedPrompt(
 
     if (error) {
       console.error('[PromptCache] Error saving cached prompt:', error);
-      return null;
+      return { promptId: null, rejected: false, error: error.message };
     }
 
     console.log(`[PromptCache] Saved prompt for tenant ${tenantId}, channel ${channel}`);
-    return data;
+    return { promptId: data, rejected: false };
   } catch (error) {
     console.error('[PromptCache] Exception saving cached prompt:', error);
-    return null;
+    return { promptId: null, rejected: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -1252,18 +1288,29 @@ export async function generateAndCachePrompt(
     return result;
   }
 
-  // 6. Guardar en caché
-  const promptId = await saveCachedPrompt(
+  // P5 FIX: Pass validation result to saveCachedPrompt
+  // This will REJECT prompts that fail critical validation
+  const saveResult = await saveCachedPrompt(
     tenantId,
     channel,
     result.prompt,
     result.prompt, // El system_prompt es el mismo que el generated_prompt por ahora
     sourceDataHash,
     result.model,
-    Math.ceil(result.prompt.length / 4) // Estimación aproximada de tokens
+    Math.ceil(result.prompt.length / 4), // Estimación aproximada de tokens
+    result.validation // Pass validation result for P5 fix
   );
 
-  if (!promptId) {
+  if (saveResult.rejected) {
+    console.error(`[PromptCache] Prompt REJECTED by validation for ${channel}`);
+    return {
+      ...result,
+      success: false,
+      error: `Prompt rechazado por validación: ${saveResult.error}`,
+    };
+  }
+
+  if (!saveResult.promptId) {
     console.warn('[PromptCache] Could not save to cache, but prompt was generated');
   }
 

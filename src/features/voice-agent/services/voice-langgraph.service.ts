@@ -183,7 +183,8 @@ export async function processVoiceMessage(
     }
 
     // 3. Determinar el system prompt a usar
-    // Prioridad: 1) Prompt cacheado, 2) Prompt del tenant + instrucciones de voz
+    // Prioridad: 1) Prompt cacheado, 2) Fallback específico de voz, 3) Prompt del tenant + instrucciones
+    // P6 FIX: Voice fallback MUST NOT use messaging prompt from tenantContext
     let finalSystemPrompt: string;
 
     if (cachedVoicePrompt) {
@@ -192,10 +193,27 @@ export async function processVoiceMessage(
       finalSystemPrompt = cachedVoicePrompt;
       console.log(`[Voice LangGraph] Using optimized cached prompt (${cachedVoicePrompt.length} chars)`);
     } else {
-      // Fallback: generar instrucciones de voz y concatenar
-      const voiceInstructions = generateVoiceInstructions(context.voice_config);
-      finalSystemPrompt = `${tenantContext.ai_config.system_prompt}\n\n${voiceInstructions}`;
-      console.log(`[Voice LangGraph] Using fallback prompt with voice instructions`);
+      // P6 FIX: Try to get voice-specific fallback from DB first
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      const { data: voiceFallback } = await supabase.rpc('get_voice_fallback_prompt', {
+        p_tenant_id: context.tenant_id,
+      });
+
+      if (voiceFallback && typeof voiceFallback === 'string' && voiceFallback.length > 100) {
+        // Use voice-specific fallback from DB
+        finalSystemPrompt = voiceFallback;
+        console.log(`[Voice LangGraph] Using voice-specific DB fallback (${voiceFallback.length} chars)`);
+      } else {
+        // Last resort: Generate voice instructions from config
+        // WARNING: tenantContext.ai_config.system_prompt may be MESSAGING prompt!
+        const voiceInstructions = generateVoiceInstructions(context.voice_config);
+        // P6 FIX: Only use voice instructions, NOT the messaging system prompt
+        finalSystemPrompt = voiceInstructions;
+        console.warn(`[Voice LangGraph] Using voice instructions ONLY (no cached prompt available)`);
+      }
     }
 
     // 4. Crear contexto mejorado para voz
