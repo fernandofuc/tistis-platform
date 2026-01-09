@@ -278,21 +278,24 @@ export async function collectTenantAnalytics(tenantId: string): Promise<TenantAn
     let avgPointsPerMember = 0;
     let redemptionRate = 0;
 
+    // Use loyalty_memberships (correct table name) with active status
     const { count: loyaltyCount } = await supabase
-      .from('loyalty_members')
+      .from('loyalty_memberships')
       .select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId);
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active');
 
     if (loyaltyCount && loyaltyCount > 0) {
       loyaltyMembers = loyaltyCount;
 
+      // Get balance data from loyalty_balances table
       const { data: loyaltyStats } = await supabase
-        .from('loyalty_members')
-        .select('points_balance')
+        .from('loyalty_balances')
+        .select('current_balance')
         .eq('tenant_id', tenantId);
 
       if (loyaltyStats && loyaltyStats.length > 0) {
-        const totalPoints = loyaltyStats.reduce((sum, m) => sum + (m.points_balance || 0), 0);
+        const totalPoints = loyaltyStats.reduce((sum, m) => sum + (m.current_balance || 0), 0);
         avgPointsPerMember = Math.round(totalPoints / loyaltyStats.length);
       }
 

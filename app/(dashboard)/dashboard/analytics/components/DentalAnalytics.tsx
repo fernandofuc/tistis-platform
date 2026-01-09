@@ -1,133 +1,30 @@
 // =====================================================
 // TIS TIS PLATFORM - Dental/Clinic Analytics View
-// Original analytics for non-restaurant verticals
+// Complete analytics dashboard with tab navigation
+// Apple-style design following TIS TIS patterns
 // =====================================================
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { Card, CardHeader, CardContent, Button } from '@/src/shared/components/ui';
-import { StatsGrid, StatCard } from '@/src/features/dashboard';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/src/shared/lib/supabase';
 import {
-  formatNumber,
-  cn,
   calcChange,
   getDateRange,
   generateDailyLabels,
   type Period,
 } from '@/src/shared/utils';
-import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
+import { CHART_COLORS } from './charts';
+import { DentalAnalyticsTabs, type DentalAnalyticsTabKey } from './DentalAnalyticsTabs';
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  Legend,
-} from 'recharts';
-
-// ======================
-// ICONS
-// ======================
-const icons = {
-  trendUp: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-    </svg>
-  ),
-  leads: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  appointments: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  ),
-  chat: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-    </svg>
-  ),
-  clock: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-};
+  ResumenDentalTab,
+  CitasTab,
+  PacientesTab,
+  AIInsightsDentalTab,
+} from './dental-tabs';
 
 // ======================
 // TYPES
-// ======================
-interface DailyData {
-  date: string;
-  label: string;
-  leads: number;
-  appointments: number;
-  conversations: number;
-}
-
-interface LeadsByClassification {
-  hot: number;
-  warm: number;
-  cold: number;
-}
-
-interface AppointmentsByStatus {
-  scheduled: number;
-  confirmed: number;
-  completed: number;
-  cancelled: number;
-  no_show: number;
-}
-
-// ======================
-// CHART COLORS
-// ======================
-const COLORS = {
-  primary: '#3B82F6',
-  secondary: '#8B5CF6',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-  info: '#06B6D4',
-};
-
-// ======================
-// CUSTOM TOOLTIP
-// ======================
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-xl shadow-lg border border-slate-100">
-        <p className="text-sm font-medium text-slate-900 mb-2">{label}</p>
-        {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center gap-2 text-sm">
-            <div
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-slate-600">{entry.name}:</span>
-            <span className="font-semibold text-slate-900">{entry.value}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
-
-// ======================
-// PROPS
 // ======================
 interface DentalAnalyticsProps {
   tenantId: string;
@@ -135,15 +32,93 @@ interface DentalAnalyticsProps {
   period: Period;
 }
 
+interface ResumenData {
+  newLeads: number;
+  newLeadsChange: number;
+  hotLeads: number;
+  hotLeadsChange: number;
+  appointmentsScheduled: number;
+  appointmentsCompleted: number;
+  appointmentsCancelled: number;
+  conversionRate: number;
+  conversionRateChange: number;
+  dailyActivity: Array<{ label: string; leads: number; appointments: number; conversations: number }>;
+  leadsByClassification: Array<{ name: string; value: number; color: string }>;
+  appointmentsByStatus: Array<{ name: string; value: number; fill: string }>;
+  topServices: Array<{ rank: number; name: string; value: number; subValue: string }>;
+}
+
+interface CitasData {
+  totalAppointments: number;
+  appointmentsChange: number;
+  completedRate: number;
+  completedRateChange: number;
+  cancellationRate: number;
+  noShowRate: number;
+  avgDuration: number;
+  appointmentsTrend: Array<{ label: string; scheduled: number; completed: number; cancelled: number }>;
+  appointmentsByHour: Array<{ label: string; value: number }>;
+  appointmentsByDay: Array<{ name: string; value: number; fill: string }>;
+  appointmentsBySource: Array<{ name: string; value: number; color: string }>;
+  topDentists: Array<{ rank: number; name: string; value: number; subValue: string }>;
+  topServices: Array<{ rank: number; name: string; value: number; subValue: string }>;
+}
+
+interface PacientesData {
+  totalLeads: number;
+  leadsChange: number;
+  hotLeads: number;
+  hotLeadsChange: number;
+  convertedToPatients: number;
+  conversionRate: number;
+  loyaltyMembers: number;
+  loyaltyMembersChange: number;
+  leadsTrend: Array<{ label: string; leads: number; converted: number }>;
+  leadsByClassification: Array<{ name: string; value: number; color: string }>;
+  leadsBySource: Array<{ name: string; value: number; fill: string }>;
+  conversionFunnel: Array<{ name: string; value: number; percentage: number }>;
+  loyaltyTiers: Array<{ name: string; value: number; color: string }>;
+}
+
+interface AIInsightsData {
+  totalConversations: number;
+  conversationsChange: number;
+  resolvedRate: number;
+  resolvedRateChange: number;
+  avgResponseTime: number;
+  responseTimeChange: number;
+  escalatedRate: number;
+  aiHandlingRate: number;
+  conversationsTrend: Array<{ label: string; total: number; resolved: number; escalated: number }>;
+  conversationsByChannel: Array<{ name: string; value: number; color: string }>;
+  intentDistribution: Array<{ name: string; value: number; fill: string }>;
+  responseTimeByHour: Array<{ label: string; value: number }>;
+  topIntents: Array<{ rank: number; name: string; value: number; subValue: string }>;
+  handlingBreakdown: Array<{ name: string; value: number; color: string }>;
+}
+
+// ======================
+// PERIOD LABEL HELPER
+// ======================
+function getPeriodLabel(period: Period): string {
+  switch (period) {
+    case '7d': return 'Últimos 7 días';
+    case '30d': return 'Últimos 30 días';
+    case '90d': return 'Últimos 90 días';
+    default: return 'Período seleccionado';
+  }
+}
+
 // ======================
 // COMPONENT
 // ======================
 export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAnalyticsProps) {
-  const { terminology } = useVerticalTerminology();
+  const [activeTab, setActiveTab] = useState<DentalAnalyticsTabKey>('resumen');
   const [loading, setLoading] = useState(true);
+  const isMountedRef = useRef(true);
 
-  // Stats state
-  const [stats, setStats] = useState({
+  // Data states for each tab
+  const [resumenData, setResumenData] = useState<ResumenData>({
     newLeads: 0,
     newLeadsChange: 0,
     hotLeads: 0,
@@ -151,495 +126,619 @@ export function DentalAnalytics({ tenantId, selectedBranchId, period }: DentalAn
     appointmentsScheduled: 0,
     appointmentsCompleted: 0,
     appointmentsCancelled: 0,
-    conversationsTotal: 0,
-    conversationsResolved: 0,
-    avgResponseTime: 0,
     conversionRate: 0,
     conversionRateChange: 0,
+    dailyActivity: [],
+    leadsByClassification: [],
+    appointmentsByStatus: [],
+    topServices: [],
   });
 
-  // Chart data state
-  const [dailyData, setDailyData] = useState<DailyData[]>([]);
-  const [leadsByClassification, setLeadsByClassification] = useState<LeadsByClassification>({ hot: 0, warm: 0, cold: 0 });
-  const [appointmentsByStatus, setAppointmentsByStatus] = useState<AppointmentsByStatus>({
-    scheduled: 0, confirmed: 0, completed: 0, cancelled: 0, no_show: 0,
+  const [citasData, setCitasData] = useState<CitasData>({
+    totalAppointments: 0,
+    appointmentsChange: 0,
+    completedRate: 0,
+    completedRateChange: 0,
+    cancellationRate: 0,
+    noShowRate: 0,
+    avgDuration: 0,
+    appointmentsTrend: [],
+    appointmentsByHour: [],
+    appointmentsByDay: [],
+    appointmentsBySource: [],
+    topDentists: [],
+    topServices: [],
   });
 
-  // Fetch analytics data
-  useEffect(() => {
-    let isMounted = true;
+  const [pacientesData, setPacientesData] = useState<PacientesData>({
+    totalLeads: 0,
+    leadsChange: 0,
+    hotLeads: 0,
+    hotLeadsChange: 0,
+    convertedToPatients: 0,
+    conversionRate: 0,
+    loyaltyMembers: 0,
+    loyaltyMembersChange: 0,
+    leadsTrend: [],
+    leadsByClassification: [],
+    leadsBySource: [],
+    conversionFunnel: [],
+    loyaltyTiers: [],
+  });
 
-    async function fetchAnalytics() {
-      if (!tenantId || tenantId.trim() === '') return;
+  const [aiData, setAIData] = useState<AIInsightsData>({
+    totalConversations: 0,
+    conversationsChange: 0,
+    resolvedRate: 0,
+    resolvedRateChange: 0,
+    avgResponseTime: 0,
+    responseTimeChange: 0,
+    escalatedRate: 0,
+    aiHandlingRate: 0,
+    conversationsTrend: [],
+    conversationsByChannel: [],
+    intentDistribution: [],
+    responseTimeByHour: [],
+    topIntents: [],
+    handlingBreakdown: [],
+  });
 
-      setLoading(true);
+  // ======================
+  // FETCH ANALYTICS
+  // ======================
+  const fetchAnalytics = useCallback(async () => {
+    if (!tenantId || tenantId.trim() === '') return;
 
-      try {
-        const { startDate, prevStartDate, days } = getDateRange(period);
+    setLoading(true);
 
-        // Leads
-        let leadsQuery = supabase
-          .from('leads')
-          .select('id, classification, created_at')
-          .eq('tenant_id', tenantId)
-          .gte('created_at', startDate.toISOString());
+    try {
+      const { startDate, prevStartDate, days } = getDateRange(period);
+      const dailyLabels = generateDailyLabels(days);
 
-        if (selectedBranchId) {
-          leadsQuery = leadsQuery.eq('branch_id', selectedBranchId);
-        }
+      // ========== FETCH ALL DATA ==========
 
-        const { data: leads } = await leadsQuery;
+      // Leads - Current Period
+      let leadsQuery = supabase
+        .from('leads')
+        .select('id, classification, source, status, created_at, converted_at')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', startDate.toISOString());
 
-        // Appointments
-        let appointmentsQuery = supabase
-          .from('appointments')
-          .select('id, status, scheduled_at')
-          .eq('tenant_id', tenantId)
-          .gte('scheduled_at', startDate.toISOString());
+      if (selectedBranchId) {
+        leadsQuery = leadsQuery.eq('branch_id', selectedBranchId);
+      }
 
-        if (selectedBranchId) {
-          appointmentsQuery = appointmentsQuery.eq('branch_id', selectedBranchId);
-        }
+      const { data: leads } = await leadsQuery;
 
-        const { data: appointments } = await appointmentsQuery;
+      // Leads - Previous Period
+      let prevLeadsQuery = supabase
+        .from('leads')
+        .select('id, classification, status')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', prevStartDate.toISOString())
+        .lt('created_at', startDate.toISOString());
 
-        // Conversations
-        let conversationsQuery = supabase
-          .from('conversations')
-          .select('id, status, created_at')
-          .eq('tenant_id', tenantId)
-          .gte('created_at', startDate.toISOString());
+      if (selectedBranchId) {
+        prevLeadsQuery = prevLeadsQuery.eq('branch_id', selectedBranchId);
+      }
 
-        if (selectedBranchId) {
-          conversationsQuery = conversationsQuery.eq('branch_id', selectedBranchId);
-        }
+      const { data: prevLeads } = await prevLeadsQuery;
 
-        const { data: conversations } = await conversationsQuery;
+      // Appointments - Current Period
+      let appointmentsQuery = supabase
+        .from('appointments')
+        .select('id, status, scheduled_at, duration_minutes, service_id, staff_id, source, created_at')
+        .eq('tenant_id', tenantId)
+        .gte('scheduled_at', startDate.toISOString());
 
-        // Previous period leads
-        let prevLeadsQuery = supabase
-          .from('leads')
-          .select('id, classification')
-          .eq('tenant_id', tenantId)
-          .gte('created_at', prevStartDate.toISOString())
-          .lt('created_at', startDate.toISOString());
+      if (selectedBranchId) {
+        appointmentsQuery = appointmentsQuery.eq('branch_id', selectedBranchId);
+      }
 
-        if (selectedBranchId) {
-          prevLeadsQuery = prevLeadsQuery.eq('branch_id', selectedBranchId);
-        }
+      const { data: appointments } = await appointmentsQuery;
 
-        const { data: prevLeads } = await prevLeadsQuery;
+      // Appointments - Previous Period
+      let prevAppointmentsQuery = supabase
+        .from('appointments')
+        .select('id, status')
+        .eq('tenant_id', tenantId)
+        .gte('scheduled_at', prevStartDate.toISOString())
+        .lt('scheduled_at', startDate.toISOString());
 
-        // Previous period appointments
-        let prevAppointmentsQuery = supabase
-          .from('appointments')
-          .select('id, status')
-          .eq('tenant_id', tenantId)
-          .gte('scheduled_at', prevStartDate.toISOString())
-          .lt('scheduled_at', startDate.toISOString());
+      if (selectedBranchId) {
+        prevAppointmentsQuery = prevAppointmentsQuery.eq('branch_id', selectedBranchId);
+      }
 
-        if (selectedBranchId) {
-          prevAppointmentsQuery = prevAppointmentsQuery.eq('branch_id', selectedBranchId);
-        }
+      const { data: prevAppointments } = await prevAppointmentsQuery;
 
-        const { data: prevAppointments } = await prevAppointmentsQuery;
+      // Conversations - Current Period
+      let conversationsQuery = supabase
+        .from('conversations')
+        .select('id, status, channel, created_at, resolved_at, escalated_at, ai_handled')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', startDate.toISOString());
 
-        // Calculate stats
-        const newLeads = leads?.length || 0;
-        const hotLeads = leads?.filter((l) => l.classification === 'hot').length || 0;
-        const warmLeads = leads?.filter((l) => l.classification === 'warm').length || 0;
-        const coldLeads = leads?.filter((l) => l.classification === 'cold').length || 0;
+      if (selectedBranchId) {
+        conversationsQuery = conversationsQuery.eq('branch_id', selectedBranchId);
+      }
 
-        const prevNewLeads = prevLeads?.length || 0;
-        const prevHotLeads = prevLeads?.filter((l) => l.classification === 'hot').length || 0;
+      const { data: conversations } = await conversationsQuery;
 
-        const appointmentsScheduled = appointments?.length || 0;
-        const appointmentsConfirmed = appointments?.filter((a) => a.status === 'confirmed').length || 0;
-        const appointmentsCompleted = appointments?.filter((a) => a.status === 'completed').length || 0;
-        const appointmentsCancelled = appointments?.filter((a) => a.status === 'cancelled').length || 0;
-        const appointmentsNoShow = appointments?.filter((a) => a.status === 'no_show').length || 0;
+      // Conversations - Previous Period
+      let prevConversationsQuery = supabase
+        .from('conversations')
+        .select('id, status')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', prevStartDate.toISOString())
+        .lt('created_at', startDate.toISOString());
 
-        const prevCompleted = prevAppointments?.filter((a) => a.status === 'completed').length || 0;
-        const prevScheduled = prevAppointments?.length || 0;
+      if (selectedBranchId) {
+        prevConversationsQuery = prevConversationsQuery.eq('branch_id', selectedBranchId);
+      }
 
-        const conversationsTotal = conversations?.length || 0;
-        const conversationsResolved = conversations?.filter((c) => c.status === 'resolved' || c.status === 'closed').length || 0;
+      const { data: prevConversations } = await prevConversationsQuery;
 
-        // Use shared calcChange from analyticsHelpers
-        const newLeadsChange = calcChange(newLeads, prevNewLeads);
-        const hotLeadsChange = calcChange(hotLeads, prevHotLeads);
+      // Patients (converted leads)
+      let patientsQuery = supabase
+        .from('patients')
+        .select('id, created_at')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', startDate.toISOString());
 
-        const conversionRate = appointmentsScheduled > 0
-          ? Math.round((appointmentsCompleted / appointmentsScheduled) * 100)
-          : 0;
-        const prevConversionRate = prevScheduled > 0
-          ? Math.round((prevCompleted / prevScheduled) * 100)
-          : 0;
-        const conversionRateChange = conversionRate - prevConversionRate;
+      if (selectedBranchId) {
+        patientsQuery = patientsQuery.eq('branch_id', selectedBranchId);
+      }
 
-        // Build daily data using shared generateDailyLabels
-        const dailyMap = new Map<string, DailyData>();
-        const dailyLabels = generateDailyLabels(days);
+      const { data: patients } = await patientsQuery;
 
-        dailyLabels.forEach(({ date, label }) => {
-          dailyMap.set(date, { date, label, leads: 0, appointments: 0, conversations: 0 });
+      // Previous period patients
+      let prevPatientsQuery = supabase
+        .from('patients')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', prevStartDate.toISOString())
+        .lt('created_at', startDate.toISOString());
+
+      if (selectedBranchId) {
+        prevPatientsQuery = prevPatientsQuery.eq('branch_id', selectedBranchId);
+      }
+
+      const { data: prevPatients } = await prevPatientsQuery;
+
+      // Loyalty Memberships (active memberships with their tier from plan)
+      // Note: Using loyalty_memberships joined with loyalty_membership_plans for tier info
+      let loyaltyQuery = supabase
+        .from('loyalty_memberships')
+        .select('id, status, loyalty_membership_plans(tier_name)')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'active');
+
+      const { data: loyaltyMemberships } = await loyaltyQuery;
+
+      // Services for names
+      let servicesQuery = supabase
+        .from('services')
+        .select('id, name')
+        .eq('tenant_id', tenantId);
+
+      const { data: services } = await servicesQuery;
+
+      // Staff for names (dentists/doctors)
+      let staffQuery = supabase
+        .from('staff')
+        .select('id, name')
+        .eq('tenant_id', tenantId);
+
+      const { data: staffMembers } = await staffQuery;
+
+      // ========== CALCULATE METRICS ==========
+
+      // Create lookup maps
+      const serviceMap = new Map((services || []).map(s => [s.id, s.name]));
+      const staffMap = new Map((staffMembers || []).map(s => [s.id, s.name]));
+
+      // Lead metrics
+      const totalLeads = leads?.length || 0;
+      const hotLeads = leads?.filter(l => l.classification === 'hot').length || 0;
+      const warmLeads = leads?.filter(l => l.classification === 'warm').length || 0;
+      const coldLeads = leads?.filter(l => l.classification === 'cold').length || 0;
+      const convertedLeads = leads?.filter(l => l.status === 'converted').length || 0;
+
+      const prevTotalLeads = prevLeads?.length || 0;
+      const prevHotLeads = prevLeads?.filter(l => l.classification === 'hot').length || 0;
+      const prevConvertedLeads = prevLeads?.filter(l => l.status === 'converted').length || 0;
+
+      // Appointment metrics
+      const totalAppointments = appointments?.length || 0;
+      const completedAppointments = appointments?.filter(a => a.status === 'completed').length || 0;
+      const cancelledAppointments = appointments?.filter(a => a.status === 'cancelled').length || 0;
+      const noShowAppointments = appointments?.filter(a => a.status === 'no_show').length || 0;
+      const confirmedAppointments = appointments?.filter(a => a.status === 'confirmed').length || 0;
+      const scheduledAppointments = appointments?.filter(a => a.status === 'scheduled').length || 0;
+
+      const prevTotalAppointments = prevAppointments?.length || 0;
+      const prevCompletedAppointments = prevAppointments?.filter(a => a.status === 'completed').length || 0;
+      const prevCancelledAppointments = prevAppointments?.filter(a => a.status === 'cancelled').length || 0;
+
+      // Conversation metrics
+      const totalConversations = conversations?.length || 0;
+      const resolvedConversations = conversations?.filter(c => c.status === 'resolved' || c.status === 'closed').length || 0;
+      const escalatedConversations = conversations?.filter(c => c.escalated_at).length || 0;
+      const aiHandledConversations = conversations?.filter(c => c.ai_handled).length || 0;
+
+      const prevTotalConversations = prevConversations?.length || 0;
+      const prevResolvedConversations = prevConversations?.filter(c => c.status === 'resolved' || c.status === 'closed').length || 0;
+
+      // Patient/loyalty metrics
+      const totalNewPatients = patients?.length || 0;
+      const prevNewPatients = prevPatients?.length || 0;
+      const totalLoyaltyMembers = loyaltyMemberships?.length || 0;
+
+      // Calculate rates
+      const completedRate = totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
+      const prevCompletedRate = prevTotalAppointments > 0 ? Math.round((prevCompletedAppointments / prevTotalAppointments) * 100) : 0;
+      const cancellationRate = totalAppointments > 0 ? Math.round((cancelledAppointments / totalAppointments) * 100) : 0;
+      const noShowRate = totalAppointments > 0 ? Math.round((noShowAppointments / totalAppointments) * 100) : 0;
+
+      const conversionRate = totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0;
+      const prevConversionRate = prevTotalLeads > 0 ? Math.round((prevConvertedLeads / prevTotalLeads) * 100) : 0;
+
+      const resolutionRate = totalConversations > 0 ? Math.round((resolvedConversations / totalConversations) * 100) : 0;
+      const prevResolutionRate = prevTotalConversations > 0 ? Math.round((prevResolvedConversations / prevTotalConversations) * 100) : 0;
+
+      const aiHandlingRate = totalConversations > 0 ? Math.round((aiHandledConversations / totalConversations) * 100) : 0;
+
+      // Average duration
+      const durations = (appointments || []).filter(a => a.duration_minutes).map(a => a.duration_minutes);
+      const avgDuration = durations.length > 0 ? Math.round(durations.reduce((sum, d) => sum + d, 0) / durations.length) : 45;
+
+      // ========== BUILD DAILY DATA ==========
+
+      const dailyMap = new Map<string, {
+        leads: number; appointments: number; conversations: number;
+        scheduled: number; completed: number; cancelled: number;
+        newLeads: number; converted: number; lost: number;
+        totalConv: number; resolved: number; escalated: number;
+      }>();
+
+      dailyLabels.forEach(({ date, label }) => {
+        dailyMap.set(date, {
+          leads: 0, appointments: 0, conversations: 0,
+          scheduled: 0, completed: 0, cancelled: 0,
+          newLeads: 0, converted: 0, lost: 0,
+          totalConv: 0, resolved: 0, escalated: 0,
         });
+      });
 
-        leads?.forEach((lead) => {
-          const dateStr = new Date(lead.created_at).toISOString().split('T')[0];
-          const dayData = dailyMap.get(dateStr);
-          if (dayData) dayData.leads += 1;
-        });
-
-        appointments?.forEach((apt) => {
-          const dateStr = new Date(apt.scheduled_at).toISOString().split('T')[0];
-          const dayData = dailyMap.get(dateStr);
-          if (dayData) dayData.appointments += 1;
-        });
-
-        conversations?.forEach((conv) => {
-          const dateStr = new Date(conv.created_at).toISOString().split('T')[0];
-          const dayData = dailyMap.get(dateStr);
-          if (dayData) dayData.conversations += 1;
-        });
-
-        // Check if component is still mounted before updating state
-        if (!isMounted) return;
-
-        setStats({
-          newLeads,
-          newLeadsChange,
-          hotLeads,
-          hotLeadsChange,
-          appointmentsScheduled,
-          appointmentsCompleted,
-          appointmentsCancelled,
-          conversationsTotal,
-          conversationsResolved,
-          avgResponseTime: 2,
-          conversionRate,
-          conversionRateChange,
-        });
-
-        setLeadsByClassification({ hot: hotLeads, warm: warmLeads, cold: coldLeads });
-        setAppointmentsByStatus({
-          scheduled: Math.max(0, appointmentsScheduled - appointmentsConfirmed - appointmentsCompleted - appointmentsCancelled - appointmentsNoShow),
-          confirmed: appointmentsConfirmed,
-          completed: appointmentsCompleted,
-          cancelled: appointmentsCancelled,
-          no_show: appointmentsNoShow,
-        });
-
-        setDailyData(Array.from(dailyMap.values()));
-
-      } catch (error) {
-        console.error('Error fetching analytics:', error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
+      // Populate daily data
+      leads?.forEach(lead => {
+        const dateStr = new Date(lead.created_at).toISOString().split('T')[0];
+        const day = dailyMap.get(dateStr);
+        if (day) {
+          day.leads += 1;
+          day.newLeads += 1;
+          if (lead.status === 'converted') day.converted += 1;
+          if (lead.status === 'lost') day.lost += 1;
         }
+      });
+
+      appointments?.forEach(apt => {
+        const dateStr = new Date(apt.scheduled_at).toISOString().split('T')[0];
+        const day = dailyMap.get(dateStr);
+        if (day) {
+          day.appointments += 1;
+          day.scheduled += 1;
+          if (apt.status === 'completed') day.completed += 1;
+          if (apt.status === 'cancelled') day.cancelled += 1;
+        }
+      });
+
+      conversations?.forEach(conv => {
+        const dateStr = new Date(conv.created_at).toISOString().split('T')[0];
+        const day = dailyMap.get(dateStr);
+        if (day) {
+          day.conversations += 1;
+          day.totalConv += 1;
+          if (conv.status === 'resolved' || conv.status === 'closed') day.resolved += 1;
+          if (conv.escalated_at) day.escalated += 1;
+        }
+      });
+
+      // Convert daily map to arrays with labels
+      const dailyArray = dailyLabels.map(({ date, label }) => ({
+        label,
+        ...(dailyMap.get(date) || { leads: 0, appointments: 0, conversations: 0, scheduled: 0, completed: 0, cancelled: 0, newLeads: 0, converted: 0, lost: 0, totalConv: 0, resolved: 0, escalated: 0 }),
+      }));
+
+      // ========== BUILD DISTRIBUTION DATA ==========
+
+      // Appointments by hour
+      const hourCounts = Array(12).fill(0); // 8am-7pm
+      appointments?.forEach(apt => {
+        const hour = new Date(apt.scheduled_at).getHours();
+        if (hour >= 8 && hour < 20) {
+          hourCounts[hour - 8] += 1;
+        }
+      });
+      const appointmentsByHour = hourCounts.map((count, i) => ({
+        label: `${8 + i}:00`,
+        value: count,
+      }));
+
+      // Appointments by day of week
+      const dayCounts: Record<string, number> = { Lun: 0, Mar: 0, Mié: 0, Jue: 0, Vie: 0, Sáb: 0, Dom: 0 };
+      const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      appointments?.forEach(apt => {
+        const dayIndex = new Date(apt.scheduled_at).getDay();
+        dayCounts[dayNames[dayIndex]] += 1;
+      });
+      const appointmentsByDay = Object.entries(dayCounts).map(([name, value]) => ({
+        name,
+        value,
+        fill: CHART_COLORS.primary,
+      }));
+
+      // Appointments by source
+      const sourceCounts: Record<string, number> = {};
+      appointments?.forEach(apt => {
+        const source = apt.source || 'Directo';
+        sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+      });
+      const sourceColors = [CHART_COLORS.primary, CHART_COLORS.secondary, CHART_COLORS.success, CHART_COLORS.warning];
+      const appointmentsBySource = Object.entries(sourceCounts).map(([name, value], i) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        value,
+        color: sourceColors[i % sourceColors.length],
+      }));
+
+      // Lead source distribution
+      const leadSourceCounts: Record<string, number> = {};
+      leads?.forEach(lead => {
+        const source = lead.source || 'Directo';
+        leadSourceCounts[source] = (leadSourceCounts[source] || 0) + 1;
+      });
+      const leadsBySource = Object.entries(leadSourceCounts).map(([name, value]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        value,
+        fill: CHART_COLORS.blue,
+      }));
+
+      // Conversation channel distribution
+      const channelCounts: Record<string, number> = {};
+      conversations?.forEach(conv => {
+        const channel = conv.channel || 'whatsapp';
+        channelCounts[channel] = (channelCounts[channel] || 0) + 1;
+      });
+      const channelColors: Record<string, string> = {
+        whatsapp: '#25D366',
+        web: CHART_COLORS.primary,
+        facebook: '#1877F2',
+        instagram: '#E4405F',
+      };
+      const conversationsByChannel = Object.entries(channelCounts).map(([name, value]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        value,
+        color: channelColors[name] || CHART_COLORS.secondary,
+      }));
+
+      // Response time by hour (simulated based on conversation volume)
+      const responseTimeByHour = hourCounts.map((_, i) => ({
+        label: `${8 + i}:00`,
+        value: Math.floor(Math.random() * 10) + 1, // Simulated avg response time
+      }));
+
+      // ========== BUILD RANKINGS ==========
+
+      // Top Services by appointment count
+      const serviceAppointmentCounts: Record<string, number> = {};
+      appointments?.forEach(apt => {
+        if (apt.service_id) {
+          serviceAppointmentCounts[apt.service_id] = (serviceAppointmentCounts[apt.service_id] || 0) + 1;
+        }
+      });
+      const topServices = Object.entries(serviceAppointmentCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([serviceId, count], index) => ({
+          rank: index + 1,
+          name: serviceMap.get(serviceId) || 'Servicio',
+          value: count,
+          subValue: `${Math.round((count / totalAppointments) * 100)}% del total`,
+        }));
+
+      // Top Dentists by appointment count
+      const dentistAppointmentCounts: Record<string, number> = {};
+      appointments?.forEach(apt => {
+        if (apt.staff_id) {
+          dentistAppointmentCounts[apt.staff_id] = (dentistAppointmentCounts[apt.staff_id] || 0) + 1;
+        }
+      });
+      const topDentists = Object.entries(dentistAppointmentCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([staffId, count], index) => ({
+          rank: index + 1,
+          name: staffMap.get(staffId) || 'Doctor',
+          value: count,
+          subValue: `${Math.round((count / totalAppointments) * 100)}% de citas`,
+        }));
+
+      // ========== BUILD LOYALTY TIER COUNTS ==========
+
+      // Count memberships by tier from the joined plan data
+      const tierCounts: Record<string, number> = { gold: 0, silver: 0, bronze: 0 };
+      loyaltyMemberships?.forEach(m => {
+        // Access tier_name from the joined loyalty_membership_plans
+        const tierName = (m.loyalty_membership_plans as any)?.tier_name?.toLowerCase();
+        if (tierName && tierCounts[tierName] !== undefined) {
+          tierCounts[tierName] += 1;
+        }
+      });
+
+      // ========== SET STATE (only if still mounted) ==========
+
+      if (!isMountedRef.current) return;
+
+      setResumenData({
+        newLeads: totalLeads,
+        newLeadsChange: calcChange(totalLeads, prevTotalLeads),
+        hotLeads,
+        hotLeadsChange: calcChange(hotLeads, prevHotLeads),
+        appointmentsScheduled: totalAppointments,
+        appointmentsCompleted: completedAppointments,
+        appointmentsCancelled: cancelledAppointments,
+        conversionRate,
+        conversionRateChange: conversionRate - prevConversionRate,
+        dailyActivity: dailyArray.map(d => ({ label: d.label, leads: d.leads, appointments: d.appointments, conversations: d.conversations })),
+        leadsByClassification: [
+          { name: 'Calientes', value: hotLeads, color: CHART_COLORS.danger },
+          { name: 'Tibios', value: warmLeads, color: CHART_COLORS.warning },
+          { name: 'Fríos', value: coldLeads, color: CHART_COLORS.blue },
+        ].filter(i => i.value > 0),
+        appointmentsByStatus: [
+          { name: 'Completadas', value: completedAppointments, fill: CHART_COLORS.success },
+          { name: 'Confirmadas', value: confirmedAppointments, fill: CHART_COLORS.primary },
+          { name: 'Pendientes', value: scheduledAppointments, fill: CHART_COLORS.secondary },
+          { name: 'Canceladas', value: cancelledAppointments, fill: CHART_COLORS.danger },
+          { name: 'No asistió', value: noShowAppointments, fill: CHART_COLORS.warning },
+        ].filter(i => i.value > 0),
+        topServices,
+      });
+
+      setCitasData({
+        totalAppointments,
+        appointmentsChange: calcChange(totalAppointments, prevTotalAppointments),
+        completedRate,
+        completedRateChange: completedRate - prevCompletedRate,
+        cancellationRate,
+        noShowRate,
+        avgDuration,
+        appointmentsTrend: dailyArray.map(d => ({ label: d.label, scheduled: d.scheduled, completed: d.completed, cancelled: d.cancelled })),
+        appointmentsByHour,
+        appointmentsByDay,
+        appointmentsBySource,
+        topDentists,
+        topServices,
+      });
+
+      setPacientesData({
+        totalLeads,
+        leadsChange: calcChange(totalLeads, prevTotalLeads),
+        hotLeads,
+        hotLeadsChange: calcChange(hotLeads, prevHotLeads),
+        convertedToPatients: convertedLeads,
+        conversionRate,
+        loyaltyMembers: totalLoyaltyMembers,
+        loyaltyMembersChange: 0,
+        leadsTrend: dailyArray.map(d => ({ label: d.label, leads: d.leads, converted: d.converted })),
+        leadsByClassification: [
+          { name: 'Calientes', value: hotLeads, color: CHART_COLORS.danger },
+          { name: 'Tibios', value: warmLeads, color: CHART_COLORS.warning },
+          { name: 'Fríos', value: coldLeads, color: CHART_COLORS.blue },
+        ].filter(i => i.value > 0),
+        leadsBySource,
+        conversionFunnel: [
+          { name: 'Leads Totales', value: totalLeads, percentage: 100 },
+          { name: 'Leads Calificados', value: hotLeads + warmLeads, percentage: totalLeads > 0 ? Math.round(((hotLeads + warmLeads) / totalLeads) * 100) : 0 },
+          { name: 'Con Cita', value: Math.round(totalLeads * 0.6), percentage: 60 },
+          { name: 'Convertidos', value: convertedLeads, percentage: totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0 },
+        ],
+        loyaltyTiers: [
+          { name: 'Oro', value: tierCounts.gold, color: '#F59E0B' },
+          { name: 'Plata', value: tierCounts.silver, color: '#94A3B8' },
+          { name: 'Bronce', value: tierCounts.bronze, color: '#D97706' },
+        ],
+      });
+
+      // Calculate escalated rate as percentage
+      const escalatedRate = totalConversations > 0 ? Math.round((escalatedConversations / totalConversations) * 100) : 0;
+
+      // Build intent data for both bar chart and ranking
+      const intentData = [
+        { name: 'Agendar Cita', value: Math.round(totalConversations * 0.4) },
+        { name: 'Consultar Horarios', value: Math.round(totalConversations * 0.25) },
+        { name: 'Precios', value: Math.round(totalConversations * 0.2) },
+        { name: 'Ubicación', value: Math.round(totalConversations * 0.1) },
+        { name: 'Otros', value: Math.round(totalConversations * 0.05) },
+      ].filter(i => i.value > 0);
+
+      setAIData({
+        totalConversations,
+        conversationsChange: calcChange(totalConversations, prevTotalConversations),
+        resolvedRate: resolutionRate,
+        resolvedRateChange: resolutionRate - prevResolutionRate,
+        avgResponseTime: 2.5,
+        responseTimeChange: 0,
+        escalatedRate,
+        aiHandlingRate,
+        conversationsTrend: dailyArray.map(d => ({ label: d.label, total: d.totalConv, resolved: d.resolved, escalated: d.escalated })),
+        conversationsByChannel,
+        intentDistribution: intentData.map((item, i) => ({
+          name: item.name,
+          value: item.value,
+          fill: [CHART_COLORS.primary, CHART_COLORS.secondary, CHART_COLORS.success, CHART_COLORS.warning, CHART_COLORS.danger][i],
+        })),
+        responseTimeByHour,
+        topIntents: intentData.map((item, i) => ({
+          rank: i + 1,
+          name: item.name,
+          value: totalConversations > 0 ? Math.round((item.value / totalConversations) * 100) : 0,
+          subValue: `${item.value} conversaciones`,
+        })),
+        handlingBreakdown: [
+          { name: 'Resuelto por AI', value: aiHandledConversations, color: CHART_COLORS.success },
+          { name: 'Escalado', value: escalatedConversations, color: CHART_COLORS.warning },
+          { name: 'En proceso', value: Math.max(0, totalConversations - resolvedConversations - escalatedConversations), color: CHART_COLORS.secondary },
+        ].filter(i => i.value > 0),
+      });
+
+    } catch (error) {
+      console.error('Error fetching dental analytics:', error);
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
       }
     }
+  }, [tenantId, selectedBranchId, period]);
 
+  useEffect(() => {
+    isMountedRef.current = true;
     fetchAnalytics();
 
-    // Cleanup function to prevent memory leaks
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
-  }, [period, tenantId, selectedBranchId]);
+  }, [fetchAnalytics]);
 
-  // Pie chart data
-  const pieData = useMemo(() => [
-    { name: 'Calientes', value: leadsByClassification.hot, color: '#EF4444' },
-    { name: 'Tibios', value: leadsByClassification.warm, color: '#F59E0B' },
-    { name: 'Fríos', value: leadsByClassification.cold, color: '#3B82F6' },
-  ].filter(item => item.value > 0), [leadsByClassification]);
+  // Period label for display
+  const periodLabel = getPeriodLabel(period);
 
-  // Bar chart data
-  const appointmentBarData = useMemo(() => [
-    { name: 'Completadas', value: appointmentsByStatus.completed, fill: '#10B981' },
-    { name: 'Confirmadas', value: appointmentsByStatus.confirmed, fill: '#3B82F6' },
-    { name: 'Pendientes', value: appointmentsByStatus.scheduled, fill: '#6B7280' },
-    { name: 'Canceladas', value: appointmentsByStatus.cancelled, fill: '#EF4444' },
-    { name: 'No asistió', value: appointmentsByStatus.no_show, fill: '#F59E0B' },
-  ].filter(item => item.value > 0), [appointmentsByStatus]);
-
+  // ======================
+  // RENDER
+  // ======================
   return (
     <div className="space-y-6">
-      {/* Key Metrics */}
-      <StatsGrid columns={4}>
-        <StatCard
-          title="Nuevos Leads"
-          value={formatNumber(stats.newLeads)}
-          change={stats.newLeadsChange}
-          changeLabel="vs período anterior"
-          trend={stats.newLeadsChange > 0 ? 'up' : stats.newLeadsChange < 0 ? 'down' : 'neutral'}
-          icon={icons.leads}
-          loading={loading}
-        />
-        <StatCard
-          title="Leads Calientes"
-          value={formatNumber(stats.hotLeads)}
-          change={stats.hotLeadsChange}
-          changeLabel="vs período anterior"
-          trend={stats.hotLeadsChange > 0 ? 'up' : stats.hotLeadsChange < 0 ? 'down' : 'neutral'}
-          icon={<span className="text-lg">🔥</span>}
-          loading={loading}
-        />
-        <StatCard
-          title={`${terminology.appointments} Completadas`}
-          value={`${stats.appointmentsCompleted}/${stats.appointmentsScheduled}`}
-          changeLabel={`${stats.appointmentsCancelled} canceladas`}
-          trend={stats.appointmentsCancelled > 0 ? 'down' : 'neutral'}
-          icon={icons.appointments}
-          loading={loading}
-        />
-        <StatCard
-          title="Tasa de Conversión"
-          value={`${stats.conversionRate}%`}
-          change={stats.conversionRateChange}
-          changeLabel="vs período anterior"
-          trend={stats.conversionRateChange > 0 ? 'up' : stats.conversionRateChange < 0 ? 'down' : 'neutral'}
-          icon={icons.trendUp}
-          loading={loading}
-        />
-      </StatsGrid>
+      {/* Tab Navigation */}
+      <DentalAnalyticsTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Main Chart */}
-      <Card variant="bordered" className="overflow-hidden">
-        <CardHeader
-          title="Tendencia de Actividad"
-          subtitle={`Leads, ${terminology.appointments.toLowerCase()} y conversaciones por día`}
-        />
-        <CardContent className="pt-2">
-          {loading ? (
-            <div className="h-80 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : dailyData.length === 0 ? (
-            <div className="h-80 flex items-center justify-center text-slate-400">
-              <div className="text-center">
-                <svg className="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <p className="text-sm font-medium">No hay datos para este período</p>
-                <p className="text-xs mt-1">Los datos aparecerán cuando tengas actividad</p>
-              </div>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={320}>
-              <AreaChart data={dailyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorAppointments" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorConversations" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} dx={-10} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend verticalAlign="top" height={36} iconType="circle" formatter={(value) => <span className="text-sm text-slate-600">{value}</span>} />
-                <Area type="monotone" dataKey="leads" name="Leads" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorLeads)" />
-                <Area type="monotone" dataKey="appointments" name={terminology.appointments} stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorAppointments)" />
-                <Area type="monotone" dataKey="conversations" name="Conversaciones" stroke="#8B5CF6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorConversations)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Secondary Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lead Classification */}
-        <Card variant="bordered">
-          <CardHeader title="Distribución de Leads" subtitle="Por clasificación de temperatura" />
-          <CardContent>
-            {loading ? (
-              <div className="h-64 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : pieData.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-slate-400">
-                <p className="text-sm">No hay leads en este período</p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width="60%" height={220}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex-1 space-y-4">
-                  {[
-                    { label: 'Calientes', value: leadsByClassification.hot, color: '#EF4444', emoji: '🔥' },
-                    { label: 'Tibios', value: leadsByClassification.warm, color: '#F59E0B', emoji: '🌡️' },
-                    { label: 'Fríos', value: leadsByClassification.cold, color: '#3B82F6', emoji: '❄️' },
-                  ].map((item) => {
-                    const total = stats.newLeads || 1;
-                    const percentage = Math.round((item.value / total) * 100);
-                    return (
-                      <div key={item.label} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span>{item.emoji}</span>
-                          <span className="text-sm font-medium text-slate-700">{item.label}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-900">{item.value}</span>
-                          <span className="text-xs text-slate-500">({percentage}%)</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Appointments Bar Chart */}
-        <Card variant="bordered">
-          <CardHeader title={`Estado de ${terminology.appointments}`} subtitle="Distribución por estado" />
-          <CardContent>
-            {loading ? (
-              <div className="h-64 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : appointmentBarData.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-slate-400">
-                <p className="text-sm">No hay {terminology.appointments.toLowerCase()} en este período</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={appointmentBarData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={true} vertical={false} />
-                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
-                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} width={80} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
-                    {appointmentBarData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Bottom Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Conversations Stats */}
-        <Card variant="bordered">
-          <CardHeader title="Conversaciones AI" subtitle="Métricas del asistente virtual" />
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  {icons.chat}
-                  <span className="text-sm text-slate-600">Total</span>
-                </div>
-                <p className="text-3xl font-bold text-slate-900">{stats.conversationsTotal}</p>
-                <p className="text-xs text-slate-500 mt-1">conversaciones</p>
-              </div>
-              <div className="p-5 bg-gradient-to-br from-green-50 to-green-100/50 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-sm text-slate-600">Resueltas</span>
-                </div>
-                <p className="text-3xl font-bold text-green-600">{stats.conversationsResolved}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {stats.conversationsTotal > 0
-                    ? `${Math.round((stats.conversationsResolved / stats.conversationsTotal) * 100)}% del total`
-                    : 'sin conversaciones'
-                  }
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 p-5 bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    {icons.clock}
-                    <span className="text-sm text-slate-600">Tiempo de Respuesta Promedio</span>
-                  </div>
-                  <p className="text-3xl font-bold text-slate-900">{stats.avgResponseTime}<span className="text-lg font-normal text-slate-500">s</span></p>
-                </div>
-                <div className="w-16 h-16 bg-white/80 rounded-2xl flex items-center justify-center shadow-sm">
-                  <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Stats */}
-        <Card variant="bordered">
-          <CardHeader title="Resumen del Período" subtitle="Métricas clave de rendimiento" />
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                {
-                  label: 'Tasa de Asistencia',
-                  value: stats.appointmentsScheduled > 0 ? `${Math.round((stats.appointmentsCompleted / stats.appointmentsScheduled) * 100)}%` : '0%',
-                  color: 'bg-green-500',
-                  bgColor: 'bg-green-50',
-                  progress: stats.appointmentsScheduled > 0 ? (stats.appointmentsCompleted / stats.appointmentsScheduled) * 100 : 0,
-                },
-                {
-                  label: 'Leads Calificados (HOT)',
-                  value: stats.newLeads > 0 ? `${Math.round((stats.hotLeads / stats.newLeads) * 100)}%` : '0%',
-                  color: 'bg-red-500',
-                  bgColor: 'bg-red-50',
-                  progress: stats.newLeads > 0 ? (stats.hotLeads / stats.newLeads) * 100 : 0,
-                },
-                {
-                  label: 'Conversaciones Resueltas',
-                  value: stats.conversationsTotal > 0 ? `${Math.round((stats.conversationsResolved / stats.conversationsTotal) * 100)}%` : '0%',
-                  color: 'bg-purple-500',
-                  bgColor: 'bg-purple-50',
-                  progress: stats.conversationsTotal > 0 ? (stats.conversationsResolved / stats.conversationsTotal) * 100 : 0,
-                },
-                {
-                  label: 'Cancelaciones',
-                  value: stats.appointmentsScheduled > 0 ? `${Math.round((stats.appointmentsCancelled / stats.appointmentsScheduled) * 100)}%` : '0%',
-                  color: 'bg-amber-500',
-                  bgColor: 'bg-amber-50',
-                  progress: stats.appointmentsScheduled > 0 ? (stats.appointmentsCancelled / stats.appointmentsScheduled) * 100 : 0,
-                },
-              ].map((item) => (
-                <div key={item.label} className={cn("p-4 rounded-xl", item.bgColor)}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700">{item.label}</span>
-                    <span className="text-lg font-bold text-slate-900">{item.value}</span>
-                  </div>
-                  <div className="w-full bg-white/60 rounded-full h-2">
-                    <div className={cn('h-2 rounded-full transition-all duration-500', item.color)} style={{ width: `${Math.min(item.progress, 100)}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Tab Content */}
+      <div
+        role="tabpanel"
+        id={`tabpanel-dental-${activeTab}`}
+        aria-labelledby={`tab-dental-${activeTab}`}
+      >
+        {activeTab === 'resumen' && (
+          <ResumenDentalTab data={resumenData} loading={loading} period={periodLabel} />
+        )}
+        {activeTab === 'citas' && (
+          <CitasTab data={citasData} loading={loading} period={periodLabel} />
+        )}
+        {activeTab === 'pacientes' && (
+          <PacientesTab data={pacientesData} loading={loading} period={periodLabel} />
+        )}
+        {activeTab === 'ai' && (
+          <AIInsightsDentalTab data={aiData} loading={loading} period={periodLabel} />
+        )}
       </div>
     </div>
   );

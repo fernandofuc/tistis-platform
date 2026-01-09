@@ -147,6 +147,31 @@ interface SyncOption {
 }
 
 // ======================
+// DEFAULT SYNC CONFIG
+// ======================
+
+const DEFAULT_SR_SYNC_CONFIG: SRSyncConfig = {
+  sync_menu: true,
+  sync_recipes: true,
+  sync_inventory: true,
+  sync_tables: true,
+  sync_reservations: false,
+  sync_sales: true,
+  menu_direction: 'sr_to_tistis',
+  inventory_direction: 'bidirectional',
+  reservations_direction: 'bidirectional',
+  sync_frequency_minutes: 30,
+  include_inactive_products: false,
+  sales_history_days: 30,
+  default_branch_id: undefined,
+  category_mapping: {},
+  auto_create_categories: true,
+  auto_update_prices: true,
+  alert_on_low_stock: true,
+  alert_on_price_change: false,
+};
+
+// ======================
 // SYNC OPTIONS CONFIG
 // ======================
 
@@ -260,30 +285,7 @@ export function SoftRestaurantConfigModal({
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  // Default sync config - defined once for reuse
-  const defaultSyncConfig: SRSyncConfig = {
-    sync_menu: true,
-    sync_recipes: true,
-    sync_inventory: true,
-    sync_tables: true,
-    sync_reservations: false,
-    sync_sales: true,
-    menu_direction: 'sr_to_tistis',
-    inventory_direction: 'bidirectional',
-    reservations_direction: 'bidirectional',
-    sync_frequency_minutes: 30,
-    include_inactive_products: false,
-    sales_history_days: 30,
-    default_branch_id: undefined,
-    category_mapping: {},
-    auto_create_categories: true,
-    auto_update_prices: true,
-    alert_on_low_stock: true,
-    alert_on_price_change: false,
-  };
-
-  const [syncConfig, setSyncConfig] = useState<SRSyncConfig>(defaultSyncConfig);
+  const [syncConfig, setSyncConfig] = useState<SRSyncConfig>(DEFAULT_SR_SYNC_CONFIG);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -304,19 +306,19 @@ export function SoftRestaurantConfigModal({
           const savedConfig = connection.metadata as { sync_config?: Partial<SRSyncConfig> };
           if (savedConfig.sync_config) {
             setSyncConfig({
-              ...defaultSyncConfig,
+              ...DEFAULT_SR_SYNC_CONFIG,
               ...savedConfig.sync_config,
             });
           } else {
-            setSyncConfig(defaultSyncConfig);
+            setSyncConfig(DEFAULT_SR_SYNC_CONFIG);
           }
         } else {
-          setSyncConfig(defaultSyncConfig);
+          setSyncConfig(DEFAULT_SR_SYNC_CONFIG);
         }
       } else {
         // New connection - start at step 1 (credentials) with defaults
         setCurrentStep(1);
-        setSyncConfig(defaultSyncConfig);
+        setSyncConfig(DEFAULT_SR_SYNC_CONFIG);
       }
     }
   }, [isOpen, connection]);

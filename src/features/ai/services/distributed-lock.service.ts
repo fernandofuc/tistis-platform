@@ -173,8 +173,9 @@ export class DistributedLockService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + ttlMinutes * 60 * 1000);
 
-    // Usar una transacción atómica: DELETE + INSERT
-    // Si otro proceso ya reclamó el lock, el DELETE no afectará filas
+    // Operación optimista: DELETE + INSERT
+    // Si otro proceso reclamó el lock entre DELETE e INSERT,
+    // el INSERT fallará por constraint único (23505) y retornaremos acquired: false
     const { data: deleted, error: deleteError } = await this.supabase
       .from('system_locks')
       .delete()

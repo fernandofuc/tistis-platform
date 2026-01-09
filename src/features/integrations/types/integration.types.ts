@@ -19,7 +19,8 @@ export type IntegrationType =
   | 'open_dental'
   | 'eaglesoft'
   | 'curve_dental'
-  // POS Systems
+  | 'dentalink'             // Popular in Latin America
+  // POS Systems (Restaurant)
   | 'square'
   | 'toast'
   | 'clover'

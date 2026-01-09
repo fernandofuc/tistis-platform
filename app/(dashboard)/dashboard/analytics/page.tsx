@@ -215,11 +215,12 @@ export default function AnalyticsPage() {
         tables = tablesData || [];
       }
 
-      // Loyalty members
-      const { data: loyaltyMembers } = await supabase
-        .from('loyalty_members')
-        .select('id, tier, points_balance')
-        .eq('tenant_id', tenant.id);
+      // Loyalty memberships (active memberships)
+      const { data: loyaltyMemberships } = await supabase
+        .from('loyalty_memberships')
+        .select('id, status, loyalty_membership_plans(tier_name)')
+        .eq('tenant_id', tenant.id)
+        .eq('status', 'active');
 
       // ============================================
       // CALCULATE METRICS
@@ -302,10 +303,10 @@ export default function AnalyticsPage() {
       const stockValue = inventory.reduce((sum, i) => sum + (i.current_stock * (i.unit_cost || 0)), 0);
 
       // Loyalty metrics
-      const totalLoyaltyMembers = loyaltyMembers?.length || 0;
-      const loyaltyTiers = loyaltyMembers?.reduce((acc: Record<string, number>, member) => {
-        const tier = member.tier || 'bronze';
-        acc[tier] = (acc[tier] || 0) + 1;
+      const totalLoyaltyMembers = loyaltyMemberships?.length || 0;
+      const loyaltyTiers = loyaltyMemberships?.reduce((acc: Record<string, number>, member) => {
+        const tierName = (member.loyalty_membership_plans as any)?.tier_name?.toLowerCase() || 'bronze';
+        acc[tierName] = (acc[tierName] || 0) + 1;
         return acc;
       }, {}) || {};
 

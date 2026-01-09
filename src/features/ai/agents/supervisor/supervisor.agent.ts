@@ -9,15 +9,12 @@
 // - P23: Validación de configuración incompleta
 // =====================================================
 
-import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import {
   type TISTISAgentStateType,
   type AgentTrace,
   addAgentTrace,
 } from '../../state';
 import type { AIIntent, AISignal } from '@/src/shared/types/whatsapp';
-import { DEFAULT_MODELS } from '@/src/shared/config/ai-models';
 import {
   SafetyResilienceService,
   logSafetyIncident,
@@ -29,14 +26,6 @@ import {
   type SafetyIncidentType,
   type SafetyActionTaken,
 } from '../../services/safety-resilience.service';
-
-// ======================
-// CONFIGURATION
-// ======================
-
-const SUPERVISOR_MODEL = DEFAULT_MODELS.MESSAGING; // gpt-5-mini
-const MAX_TOKENS = 300;
-const TEMPERATURE = 0.3; // Bajo para decisiones consistentes
 
 // ======================
 // TYPES

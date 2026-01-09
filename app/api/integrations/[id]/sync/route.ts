@@ -80,18 +80,29 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Update status to syncing
-    const { error: updateError } = await supabase
+    // ATOMIC UPDATE: Only update if status is still 'connected'
+    // This prevents race conditions where two requests try to start sync simultaneously
+    const { data: updatedRows, error: updateError } = await supabase
       .from('integration_connections')
       .update({ status: 'syncing' })
       .eq('id', id)
-      .eq('tenant_id', tenantId);
+      .eq('tenant_id', tenantId)
+      .eq('status', 'connected') // Only update if still connected (atomic check)
+      .select('id');
 
     if (updateError) {
       console.error('[Integration Sync] Error updating status:', updateError);
       return NextResponse.json(
         { error: 'Failed to start sync' },
         { status: 500 }
+      );
+    }
+
+    // If no rows were updated, another request already started the sync
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json(
+        { error: 'Sync already in progress or integration status changed' },
+        { status: 409 }
       );
     }
 
@@ -140,7 +151,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const durationMs = Date.now() - new Date(startedAt).getTime();
 
         // Update integration status back to connected
-        await serviceClient
+        const { error: connUpdateErr } = await serviceClient
           .from('integration_connections')
           .update({
             status: 'connected',
@@ -153,8 +164,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           .eq('id', id)
           .eq('tenant_id', tenantId);
 
+        if (connUpdateErr) {
+          console.error('[Integration Sync] Failed to update connection status:', connUpdateErr);
+          // Continue to update sync_log anyway for audit trail
+        }
+
         // Update sync log
-        await serviceClient
+        const { error: logUpdateErr } = await serviceClient
           .from('integration_sync_logs')
           .update({
             status: 'completed',
@@ -167,22 +183,51 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           .eq('id', syncLogId)
           .eq('tenant_id', tenantId);
 
+        if (logUpdateErr) {
+          console.error('[Integration Sync] Failed to update sync log:', logUpdateErr);
+        }
+
         console.log('[Integration Sync] Sync completed:', id);
       } catch (err) {
         console.error('[Integration Sync] Error completing sync:', err);
+        const errorAt = new Date().toISOString();
+        const errorMessage = err instanceof Error ? err.message : 'Sync failed unexpectedly';
 
-        // Update to error state using service client
-        await serviceClient
-          .from('integration_connections')
-          .update({
-            status: 'error',
-            last_error_at: new Date().toISOString(),
-            last_error_message: 'Sync failed unexpectedly',
-            error_count: errorCount + 1,
-            consecutive_errors: consecutiveErrors + 1,
-          })
-          .eq('id', id)
-          .eq('tenant_id', tenantId);
+        // CRITICAL: Wrap error handling in try-catch to prevent silent failures
+        // If this fails (e.g., Supabase down), at least log it
+        try {
+          // Update integration to error state
+          await serviceClient
+            .from('integration_connections')
+            .update({
+              status: 'error',
+              last_error_at: errorAt,
+              last_error_message: errorMessage,
+              error_count: errorCount + 1,
+              consecutive_errors: consecutiveErrors + 1,
+            })
+            .eq('id', id)
+            .eq('tenant_id', tenantId);
+
+          // CRITICAL: Also update the sync_log to 'failed' state
+          // Without this, sync_logs stay in 'started' state forever
+          await serviceClient
+            .from('integration_sync_logs')
+            .update({
+              status: 'failed',
+              completed_at: errorAt,
+              duration_ms: Date.now() - new Date(startedAt).getTime(),
+              error_message: errorMessage,
+            })
+            .eq('id', syncLogId)
+            .eq('tenant_id', tenantId);
+        } catch (dbErr) {
+          // If we can't even update the error state, log it critically
+          // This indicates a serious infrastructure issue
+          console.error('[Integration Sync] CRITICAL: Failed to update error state:', dbErr);
+          console.error('[Integration Sync] Original error was:', errorMessage);
+          console.error('[Integration Sync] Affected integration:', id, 'sync_log:', syncLogId);
+        }
       }
     }, 3000);
 

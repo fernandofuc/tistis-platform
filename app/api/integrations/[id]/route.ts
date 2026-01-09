@@ -212,7 +212,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        updateData[field] = body[field];
+        // Ensure sync_frequency_minutes is stored as number
+        if (field === 'sync_frequency_minutes') {
+          updateData[field] = Number(body[field]);
+        } else {
+          updateData[field] = body[field];
+        }
       }
     }
 

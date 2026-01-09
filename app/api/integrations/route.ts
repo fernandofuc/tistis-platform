@@ -126,10 +126,14 @@ export async function POST(request: NextRequest) {
       sync_appointments = true,
       sync_products = false,
       sync_inventory = false,
+      sync_orders = false,
+      sync_frequency_minutes = 60,
       // Auth credentials (optional, depends on auth_type)
       api_key,
       api_secret,
       external_api_base_url,
+      // Metadata (for sync_config and other custom settings)
+      metadata = {},
     } = body;
 
     if (!integration_type) {
@@ -149,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate boolean fields
-    const booleanFields = { sync_contacts, sync_appointments, sync_products, sync_inventory };
+    const booleanFields = { sync_contacts, sync_appointments, sync_products, sync_inventory, sync_orders };
     for (const [field, value] of Object.entries(booleanFields)) {
       if (value !== undefined && typeof value !== 'boolean') {
         return NextResponse.json(
@@ -159,11 +163,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Validate sync_frequency_minutes
+    if (sync_frequency_minutes !== undefined) {
+      const freq = Number(sync_frequency_minutes);
+      if (isNaN(freq) || freq < 5 || freq > 1440) {
+        return NextResponse.json(
+          { error: 'sync_frequency_minutes must be between 5 and 1440' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate metadata is an object (if provided)
+    if (metadata !== undefined && metadata !== null) {
+      if (typeof metadata !== 'object' || Array.isArray(metadata)) {
+        return NextResponse.json(
+          { error: 'metadata must be an object' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Validate integration type
+    // NOTE: 'softrestaurant' is the main type used by IntegrationHub
+    // 'softrestaurant_import' is kept for legacy compatibility
+    // 'dentalink' added for dental vertical in Latin America
     const VALID_TYPES = [
       'hubspot', 'salesforce', 'zoho_crm', 'pipedrive', 'freshsales',
-      'dentrix', 'open_dental', 'eaglesoft', 'curve_dental',
-      'square', 'toast', 'clover', 'lightspeed', 'softrestaurant_import',
+      'dentrix', 'open_dental', 'eaglesoft', 'curve_dental', 'dentalink',
+      'square', 'toast', 'clover', 'lightspeed', 'softrestaurant', 'softrestaurant_import',
       'google_calendar', 'calendly', 'acuity',
       'epic', 'cerner', 'athenahealth',
       'webhook_incoming', 'csv_import', 'api_custom',
@@ -216,10 +244,15 @@ export async function POST(request: NextRequest) {
       clover: 'oauth2',
       google_calendar: 'oauth2',
       calendly: 'oauth2',
+      acuity: 'oauth2',
       dentrix: 'api_key',
       open_dental: 'api_key',
       eaglesoft: 'api_key',
       curve_dental: 'api_key',
+      dentalink: 'api_key',
+      softrestaurant: 'api_key',
+      softrestaurant_import: 'api_key',
+      lightspeed: 'api_key',
       webhook_incoming: 'webhook_secret',
       csv_import: 'api_key',
       api_custom: 'api_key',
@@ -274,18 +307,19 @@ export async function POST(request: NextRequest) {
         // Sync configuration
         sync_enabled: !!api_key, // Enable sync if credentials provided
         sync_direction,
-        sync_frequency_minutes: 60,
+        sync_frequency_minutes: Math.max(5, Math.min(1440, Number(sync_frequency_minutes))), // Clamp between 5 and 1440
         sync_contacts,
         sync_appointments,
         sync_products,
         sync_inventory,
-        sync_orders: false,
+        sync_orders,
         field_mapping: {},
         records_synced_total: 0,
         records_synced_today: 0,
         error_count: 0,
         consecutive_errors: 0,
-        metadata: {},
+        // Store metadata (e.g., sync_config for SoftRestaurant)
+        metadata: typeof metadata === 'object' && metadata !== null ? metadata : {},
       })
       .select(SAFE_INTEGRATION_FIELDS)
       .single();
