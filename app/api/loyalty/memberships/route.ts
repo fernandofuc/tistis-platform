@@ -228,16 +228,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 });
     }
 
-    // Verify lead belongs to this tenant
+    // Verify lead belongs to this tenant and is not deleted
     const { data: lead } = await supabase
       .from('leads')
-      .select('id')
+      .select('id, deleted_at')
       .eq('id', lead_id)
       .eq('tenant_id', context.userRole.tenant_id)
       .single();
 
     if (!lead) {
       return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+    }
+
+    if (lead.deleted_at) {
+      return NextResponse.json({ error: 'No se puede crear membresía para un lead eliminado' }, { status: 400 });
     }
 
     // Verify plan exists

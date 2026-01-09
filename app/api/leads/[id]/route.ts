@@ -146,7 +146,7 @@ export async function PATCH(
 }
 
 // ======================
-// DELETE - Delete lead
+// DELETE - Soft delete lead (preserves data for recovery)
 // ======================
 export async function DELETE(
   request: NextRequest,
@@ -159,24 +159,142 @@ export async function DELETE(
       return createAuthErrorResponse(authContext);
     }
 
-    const { client: supabase, tenantId } = authContext;
+    const { client: supabase, tenantId, user } = authContext;
     const { id } = await params;
 
-    const { error } = await supabase
+    // First verify the lead belongs to this tenant
+    const { data: existingLead, error: checkError } = await supabase
       .from('leads')
-      .delete()
+      .select('id, tenant_id, deleted_at')
       .eq('tenant_id', tenantId)
-      .eq('id', id);
+      .eq('id', id)
+      .single();
+
+    if (checkError || !existingLead) {
+      return NextResponse.json(
+        { error: 'Lead not found' },
+        { status: 404 }
+      );
+    }
+
+    if (existingLead.deleted_at) {
+      return NextResponse.json(
+        { error: 'Lead already deleted' },
+        { status: 400 }
+      );
+    }
+
+    // Use soft delete function
+    const { data, error } = await supabase.rpc('soft_delete_lead', {
+      p_lead_id: id,
+      p_deleted_by: user.id
+    });
 
     if (error) {
-      console.error('Error deleting lead:', error);
+      console.error('Error soft deleting lead:', error);
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    // Check RPC result
+    const result = data?.[0];
+    if (!result?.success) {
+      return NextResponse.json(
+        { error: result?.message || 'Failed to delete lead' },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Lead moved to trash. Can be restored within 30 days.',
+      lead_id: result.lead_id
+    }, { status: 200 });
+  } catch (error) {
+    console.error('Lead API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// ======================
+// POST - Restore deleted lead
+// ======================
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authContext = await getAuthenticatedContext(request);
+
+    if (isAuthError(authContext)) {
+      return createAuthErrorResponse(authContext);
+    }
+
+    const { client: supabase, tenantId } = authContext;
+    const { id } = await params;
+    const body = await request.json();
+
+    // Check if this is a restore action
+    if (body.action !== 'restore') {
+      return NextResponse.json(
+        { error: 'Invalid action. Use action: "restore"' },
+        { status: 400 }
+      );
+    }
+
+    // First verify the lead belongs to this tenant
+    const { data: existingLead, error: checkError } = await supabase
+      .from('leads')
+      .select('id, tenant_id, deleted_at')
+      .eq('tenant_id', tenantId)
+      .eq('id', id)
+      .single();
+
+    if (checkError || !existingLead) {
+      return NextResponse.json(
+        { error: 'Lead not found' },
+        { status: 404 }
+      );
+    }
+
+    if (!existingLead.deleted_at) {
+      return NextResponse.json(
+        { error: 'Lead is not deleted' },
+        { status: 400 }
+      );
+    }
+
+    // Use restore function
+    const { data, error } = await supabase.rpc('restore_lead', {
+      p_lead_id: id
+    });
+
+    if (error) {
+      console.error('Error restoring lead:', error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    const result = data?.[0];
+    if (!result?.success) {
+      return NextResponse.json(
+        { error: result?.message || 'Failed to restore lead' },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Lead restored successfully',
+      lead_id: result.lead_id
+    }, { status: 200 });
   } catch (error) {
     console.error('Lead API error:', error);
     return NextResponse.json(

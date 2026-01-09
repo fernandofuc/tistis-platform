@@ -101,11 +101,12 @@ export async function GET(request: NextRequest) {
     const searchPattern = `*${sanitizedQuery}*`;
     const results: SearchResult[] = [];
 
-    // Search in Leads
+    // Search in Leads (excluding soft-deleted)
     const { data: leads, error: leadsError } = await supabase
       .from('leads')
       .select('id, full_name, first_name, last_name, phone, email, classification, status')
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null) // Exclude soft-deleted leads
       .or(`full_name.ilike.${searchPattern},first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},phone.ilike.${searchPattern},email.ilike.${searchPattern}`)
       .limit(limit);
 

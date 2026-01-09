@@ -195,16 +195,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 });
     }
 
-    // Verify lead belongs to this tenant
+    // Verify lead belongs to this tenant and is not deleted
     const { data: leadData } = await supabase
       .from('leads')
-      .select('id, full_name, first_name, last_name')
+      .select('id, full_name, first_name, last_name, deleted_at')
       .eq('id', lead_id)
       .eq('tenant_id', context.userRole.tenant_id)
       .single();
 
     if (!leadData) {
       return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+    }
+
+    if (leadData.deleted_at) {
+      return NextResponse.json({ error: 'No se pueden canjear recompensas para un lead eliminado' }, { status: 400 });
     }
 
     // Compute lead name for response

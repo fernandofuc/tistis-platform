@@ -73,9 +73,11 @@ export async function GET(request: NextRequest) {
     const classification = searchParams.get('classification');
     const status = searchParams.get('status');
     const search = searchParams.get('search');
+    const includeDeleted = searchParams.get('include_deleted') === 'true';
+    const onlyDeleted = searchParams.get('only_deleted') === 'true'; // For trash view
 
     // Allowlist of valid sort columns (prevent SQL injection)
-    const ALLOWED_SORT_COLUMNS = ['score', 'created_at', 'status', 'classification', 'first_name', 'last_name', 'full_name', 'updated_at'];
+    const ALLOWED_SORT_COLUMNS = ['score', 'created_at', 'status', 'classification', 'first_name', 'last_name', 'full_name', 'updated_at', 'deleted_at'];
     const requestedSortBy = searchParams.get('sortBy') || 'score';
     const sortBy = ALLOWED_SORT_COLUMNS.includes(requestedSortBy) ? requestedSortBy : 'score';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
@@ -85,6 +87,16 @@ export async function GET(request: NextRequest) {
       .from('leads')
       .select('*, branches(name, city)', { count: 'exact' })
       .eq('tenant_id', tenantId);
+
+    // Handle deleted leads filtering
+    if (onlyDeleted) {
+      // Show only deleted leads (trash view)
+      query = query.not('deleted_at', 'is', null);
+    } else if (!includeDeleted) {
+      // Default: exclude deleted leads
+      query = query.is('deleted_at', null);
+    }
+    // If include_deleted=true, we show all (no filter on deleted_at)
 
     // Apply filters
     if (classification) {
@@ -172,15 +184,26 @@ export async function POST(request: NextRequest) {
       normalizedPhone = `+${normalizedPhone}`;
     }
 
-    // Check if lead exists in this tenant
+    // Check if lead exists in this tenant (including soft-deleted)
     const { data: existingLead } = await supabase
       .from('leads')
-      .select('id')
+      .select('id, deleted_at')
       .eq('tenant_id', tenantId)
       .eq('phone_normalized', normalizedPhone)
       .single();
 
     if (existingLead) {
+      if (existingLead.deleted_at) {
+        // Lead was soft-deleted, suggest restoration
+        return NextResponse.json(
+          {
+            error: 'A deleted lead with this phone exists. You can restore it instead.',
+            leadId: existingLead.id,
+            canRestore: true
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { error: 'Lead already exists', leadId: existingLead.id },
         { status: 409 }

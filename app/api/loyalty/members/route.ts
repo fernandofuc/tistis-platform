@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
 
     // =====================================================
     // QUERY 1: Get leads with their loyalty balances and memberships
+    // (excluding soft-deleted leads)
     // =====================================================
     let leadsQuery = supabase
       .from('leads')
@@ -141,7 +142,8 @@ export async function GET(request: NextRequest) {
           )
         )
       `, { count: 'exact' })
-      .eq('tenant_id', context.userRole.tenant_id);
+      .eq('tenant_id', context.userRole.tenant_id)
+      .is('deleted_at', null); // Exclude soft-deleted leads
 
     // =====================================================
     // QUERY 2: Get patients (may or may not have linked lead)
@@ -410,16 +412,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 });
     }
 
-    // Verify lead belongs to this tenant
+    // Verify lead belongs to this tenant and is not deleted
     const { data: lead } = await supabase
       .from('leads')
-      .select('id')
+      .select('id, deleted_at')
       .eq('id', lead_id)
       .eq('tenant_id', context.userRole.tenant_id)
       .single();
 
     if (!lead) {
       return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+    }
+
+    if (lead.deleted_at) {
+      return NextResponse.json({ error: 'No se pueden otorgar tokens a un lead eliminado' }, { status: 400 });
     }
 
     // Use the award_loyalty_tokens function
