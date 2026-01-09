@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Avatar, SearchInput } from '@/src/shared/components/ui';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
@@ -14,6 +14,7 @@ import { useBranch } from '@/src/shared/stores';
 import { formatRelativeTime, cn } from '@/src/shared/utils';
 import { ChannelIcon, ChannelBadge } from '@/src/shared/components/ChannelBadge';
 import type { Conversation, Message, Lead } from '@/src/shared/types';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 // ======================
 // ICONS - Refined SVG icons
@@ -216,6 +217,123 @@ export default function InboxPage() {
 
     fetchMessages();
   }, [selectedConversationId]);
+
+  // ======================
+  // REVISIÓN 5.4 G-I9: REALTIME SUBSCRIPTIONS
+  // ======================
+  // Escucha cambios en tiempo real para actualizar el inbox sin refresh manual
+
+  // Callback para refetch de conversaciones (estable para evitar re-renders)
+  const refetchConversations = useCallback(async () => {
+    if (!tenant?.id) return;
+
+    try {
+      let query = supabase
+        .from('conversations')
+        .select('*, leads(id, full_name, first_name, last_name, phone, classification, score)')
+        .eq('tenant_id', tenant.id)
+        .in('status', ['active', 'waiting_response', 'escalated']);
+
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query.order('last_message_at', { ascending: false });
+
+      if (error) throw error;
+      setConversations(data as ConversationWithLead[]);
+    } catch (error) {
+      console.error('[Inbox Realtime] Error refetching conversations:', error);
+    }
+  }, [tenant?.id, selectedBranchId]);
+
+  // Realtime: Nuevos mensajes en la conversación seleccionada
+  useEffect(() => {
+    if (!selectedConversationId) return;
+
+    let messagesChannel: RealtimeChannel | null = null;
+
+    const setupMessagesSubscription = () => {
+      messagesChannel = supabase
+        .channel(`inbox-messages-${selectedConversationId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversation_id=eq.${selectedConversationId}`,
+          },
+          (payload: RealtimePostgresChangesPayload<Message>) => {
+            const newMessage = payload.new as Message;
+
+            // Evitar duplicados (puede pasar con optimistic updates)
+            setMessages((prev) => {
+              const exists = prev.some((m) => m.id === newMessage.id);
+              if (exists) return prev;
+
+              console.log('[Inbox Realtime] New message received:', newMessage.id);
+              return [...prev, newMessage];
+            });
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('[Inbox Realtime] Messages channel subscribed for conversation:', selectedConversationId);
+          }
+        });
+    };
+
+    setupMessagesSubscription();
+
+    return () => {
+      if (messagesChannel) {
+        console.log('[Inbox Realtime] Unsubscribing from messages channel');
+        supabase.removeChannel(messagesChannel);
+      }
+    };
+  }, [selectedConversationId]);
+
+  // Realtime: Cambios en conversaciones del tenant
+  useEffect(() => {
+    if (!tenant?.id) return;
+
+    let conversationsChannel: RealtimeChannel | null = null;
+
+    const setupConversationsSubscription = () => {
+      conversationsChannel = supabase
+        .channel(`inbox-conversations-${tenant.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'conversations',
+            filter: `tenant_id=eq.${tenant.id}`,
+          },
+          (payload: RealtimePostgresChangesPayload<Conversation>) => {
+            console.log('[Inbox Realtime] Conversation change:', payload.eventType, payload.new);
+
+            // Refetch completo para asegurar datos consistentes con joins
+            refetchConversations();
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('[Inbox Realtime] Conversations channel subscribed for tenant:', tenant.id);
+          }
+        });
+    };
+
+    setupConversationsSubscription();
+
+    return () => {
+      if (conversationsChannel) {
+        console.log('[Inbox Realtime] Unsubscribing from conversations channel');
+        supabase.removeChannel(conversationsChannel);
+      }
+    };
+  }, [tenant?.id, refetchConversations]);
 
   // Filter conversations
   const filteredConversations = useMemo(() => {

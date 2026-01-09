@@ -27,6 +27,7 @@ import {
   getOptimizedPrompt,
   type CacheChannel,
 } from './prompt-generator.service';
+import { PromptSanitizer } from './prompt-sanitizer.service';
 
 // ======================
 // LEARNING INTEGRATION
@@ -556,6 +557,18 @@ export async function generateAIResponseWithGraph(
   console.log(`[LangGraph AI] Processing message for tenant ${tenantId}`);
 
   try {
+    // REVISIÓN 5.4 G-I4: Sanitizar mensaje antes de procesar
+    // Detecta y neutraliza intentos de prompt injection
+    const sanitizationResult = PromptSanitizer.sanitizeUserPrompt(currentMessage);
+    const sanitizedMessage = sanitizationResult.sanitized;
+
+    if (sanitizationResult.wasModified) {
+      console.warn(
+        `[LangGraph AI] G-I4: Message sanitized. Risk: ${sanitizationResult.riskLevel}, ` +
+        `Patterns: ${sanitizationResult.detectedPatterns.map(p => p.type).join(', ')}`
+      );
+    }
+
     // 0. Primero cargar el contexto de conversación para determinar el canal
     const conversationContext = await loadConversationContext(conversationId);
     const effectiveChannel = (channel || conversationContext?.channel || 'whatsapp') as CacheChannel;
@@ -572,12 +585,12 @@ export async function generateAIResponseWithGraph(
       throw new Error('Could not load tenant context');
     }
 
-    // 2. Preparar input para el grafo
+    // 2. Preparar input para el grafo (usando mensaje sanitizado)
     const graphInput: GraphExecutionInput = {
       tenant_id: tenantId,
       conversation_id: conversationId,
       lead_id: leadId || '',
-      current_message: currentMessage,
+      current_message: sanitizedMessage, // G-I4: Usar mensaje sanitizado
       channel: effectiveChannel,
       tenant_context: tenantContext,
       lead_context: leadContext,

@@ -206,6 +206,196 @@ export async function getQueueStats(tenantId?: string): Promise<{
   return stats;
 }
 
+// ======================
+// REVISIÓN 5.4 G-I2: RECOVERY OF UNSENT AI MESSAGES
+// ======================
+
+/**
+ * REVISIÓN 5.4 G-I2: Recupera mensajes AI generados pero no enviados
+ *
+ * Este escenario ocurre cuando:
+ * 1. AI genera respuesta exitosamente (guardada en cached_result)
+ * 2. Job se completa
+ * 3. Pero el mensaje de envío falla (token expirado, rate limit, etc.)
+ *
+ * Esta función detecta estos casos y reencola el envío del mensaje.
+ *
+ * @param maxAgeMinutes - Máxima antigüedad de jobs a revisar (default: 60 min)
+ * @returns Número de mensajes recuperados
+ */
+export async function recoverUnsentAIMessages(maxAgeMinutes: number = 60): Promise<{
+  checked: number;
+  recovered: number;
+  errors: string[];
+}> {
+  const supabase = createServerClient();
+  const result = { checked: 0, recovered: 0, errors: [] as string[] };
+
+  try {
+    const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+
+    // 1. Buscar jobs de AI completados con cached_result en las últimas N minutos
+    const { data: completedJobs, error: queryError } = await supabase
+      .from('job_queue')
+      .select(`
+        id,
+        tenant_id,
+        payload,
+        result,
+        completed_at
+      `)
+      .eq('job_type', 'ai_response')
+      .eq('status', 'completed')
+      .gte('completed_at', cutoffTime)
+      .order('completed_at', { ascending: false })
+      .limit(100); // Limitar para evitar procesamiento excesivo
+
+    if (queryError) {
+      console.error('[G-I2 Recovery] Error querying completed jobs:', queryError);
+      result.errors.push(`Query error: ${queryError.message}`);
+      return result;
+    }
+
+    if (!completedJobs || completedJobs.length === 0) {
+      console.log('[G-I2 Recovery] No completed AI jobs to check');
+      return result;
+    }
+
+    result.checked = completedJobs.length;
+
+    // 2. Para cada job, verificar si el mensaje AI fue realmente enviado
+    for (const job of completedJobs) {
+      try {
+        const payload = job.payload as {
+          conversation_id?: string;
+          channel?: string;
+          lead_id?: string;
+          channel_connection_id?: string;
+        };
+        const jobResult = job.result as {
+          response_message_id?: string;
+        } | null;
+
+        if (!payload?.conversation_id || !jobResult?.response_message_id) {
+          continue; // Job sin datos suficientes
+        }
+
+        // 3. Verificar si el mensaje de respuesta AI fue enviado exitosamente
+        const { data: aiMessage, error: msgError } = await supabase
+          .from('messages')
+          .select('id, status, content, external_id')
+          .eq('id', jobResult.response_message_id)
+          .single();
+
+        if (msgError || !aiMessage) {
+          continue; // Mensaje no encontrado
+        }
+
+        // 4. Si el mensaje existe pero NO fue enviado (status != 'sent')
+        if (aiMessage.status !== 'sent' && aiMessage.status !== 'delivered' && aiMessage.status !== 'read') {
+          console.log(
+            `[G-I2 Recovery] Found unsent AI message: ${aiMessage.id}, status: ${aiMessage.status}`
+          );
+
+          // 5. Verificar que no haya ya un job de envío pendiente
+          const { data: existingSendJob } = await supabase
+            .from('job_queue')
+            .select('id')
+            .eq('job_type', `send_${payload.channel || 'whatsapp'}`)
+            .in('status', ['pending', 'processing'])
+            .limit(1);
+
+          // Filtrar por message_id en payload
+          const hasPendingSend = existingSendJob?.some(
+            j => (j as { payload?: { message_id?: string } }).payload?.message_id === aiMessage.id
+          );
+
+          if (hasPendingSend) {
+            console.log(`[G-I2 Recovery] Send job already pending for message ${aiMessage.id}`);
+            continue;
+          }
+
+          // 6. Obtener info del lead para el envío
+          const { data: lead } = await supabase
+            .from('leads')
+            .select('phone_normalized, instagram_psid, facebook_psid, tiktok_open_id')
+            .eq('id', payload.lead_id)
+            .single();
+
+          if (!lead) {
+            result.errors.push(`Lead not found for message ${aiMessage.id}`);
+            continue;
+          }
+
+          // 7. Reencolar el mensaje para envío
+          const channel = payload.channel || 'whatsapp';
+          let enqueueSuccess = false;
+
+          if (channel === 'whatsapp' && lead.phone_normalized) {
+            const { error: enqueueError } = await supabase
+              .from('job_queue')
+              .insert({
+                tenant_id: job.tenant_id,
+                job_type: 'send_whatsapp',
+                payload: {
+                  conversation_id: payload.conversation_id,
+                  message_id: aiMessage.id,
+                  tenant_id: job.tenant_id,
+                  channel: 'whatsapp',
+                  recipient_phone: lead.phone_normalized,
+                  content: aiMessage.content,
+                  channel_connection_id: payload.channel_connection_id,
+                  recovered_by: 'G-I2',
+                },
+                status: 'pending',
+                priority: 2, // Prioridad alta para recuperación
+                max_attempts: 3,
+                scheduled_for: new Date().toISOString(),
+              });
+
+            enqueueSuccess = !enqueueError;
+            if (enqueueError) {
+              result.errors.push(`Enqueue error for ${aiMessage.id}: ${enqueueError.message}`);
+            }
+          }
+          // TODO: Agregar soporte para Instagram, Facebook, TikTok
+
+          if (enqueueSuccess) {
+            result.recovered++;
+            console.log(`[G-I2 Recovery] Recovered message ${aiMessage.id} for resend`);
+
+            // Actualizar el mensaje para indicar que fue recuperado
+            await supabase
+              .from('messages')
+              .update({
+                metadata: {
+                  recovered_at: new Date().toISOString(),
+                  recovered_by: 'G-I2',
+                  original_job_id: job.id,
+                },
+              })
+              .eq('id', aiMessage.id);
+          }
+        }
+      } catch (jobError) {
+        const errorMsg = jobError instanceof Error ? jobError.message : 'Unknown error';
+        result.errors.push(`Job ${job.id}: ${errorMsg}`);
+      }
+    }
+
+    if (result.recovered > 0) {
+      console.log(`[G-I2 Recovery] Summary: checked=${result.checked}, recovered=${result.recovered}`);
+    }
+
+    return result;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[G-I2 Recovery] Fatal error:', error);
+    result.errors.push(`Fatal: ${errorMsg}`);
+    return result;
+  }
+}
+
 /**
  * Limpia trabajos completados/fallidos antiguos
  */
@@ -241,4 +431,6 @@ export const JobProcessor = {
   failJob,
   getQueueStats,
   cleanupOldJobs,
+  // REVISIÓN 5.4 G-I2
+  recoverUnsentAIMessages,
 };
