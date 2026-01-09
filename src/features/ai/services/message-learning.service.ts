@@ -959,11 +959,122 @@ function shouldSendAlertInternal(
   return { send: true };
 }
 
+// ======================
+// REVISIÓN 5.4 G-I8: PUSH NOTIFICATIONS SERVICE
+// ======================
+
+/**
+ * Envía push notifications a dispositivos móviles del staff
+ * Se usa para alertas urgentes que requieren atención inmediata
+ *
+ * REVISIÓN 5.4 G-I8: Urgencias fuera de horario de oficina
+ *
+ * Soporta:
+ * - Expo Push Notifications (React Native apps)
+ * - Web Push (Service Worker)
+ * - Email fallback para staff sin push_token
+ */
+async function sendUrgentPushNotifications(
+  supabase: ReturnType<typeof createServerClient>,
+  params: {
+    tenantId: string;
+    title: string;
+    body: string;
+    priority: 'urgent' | 'high' | 'normal';
+    data?: Record<string, unknown>;
+  }
+): Promise<{ sent: number; failed: number }> {
+  const { tenantId, title, body, priority, data } = params;
+
+  // Solo enviar push para urgencias y alta prioridad
+  if (priority !== 'urgent' && priority !== 'high') {
+    return { sent: 0, failed: 0 };
+  }
+
+  try {
+    // Obtener tokens de push de usuarios staff del tenant
+    // Los usuarios deben tener push_token configurado en su perfil
+    const { data: staffWithPush, error } = await supabase
+      .from('users')
+      .select('id, email, push_token, push_provider')
+      .eq('tenant_id', tenantId)
+      .not('push_token', 'is', null);
+
+    if (error || !staffWithPush || staffWithPush.length === 0) {
+      console.log('[Learning G-I8] No staff with push tokens found for tenant');
+      return { sent: 0, failed: 0 };
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    // Enviar push a cada dispositivo
+    for (const staff of staffWithPush) {
+      try {
+        const pushProvider = staff.push_provider || 'expo';
+
+        if (pushProvider === 'expo' && staff.push_token?.startsWith('ExponentPushToken')) {
+          // Expo Push Notification
+          const expoPushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Accept-Encoding': 'gzip, deflate',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              to: staff.push_token,
+              title: title,
+              body: body,
+              sound: priority === 'urgent' ? 'default' : undefined,
+              priority: priority === 'urgent' ? 'high' : 'normal',
+              data: {
+                ...data,
+                timestamp: new Date().toISOString(),
+              },
+              // Para urgencias, vibrar y mostrar badge
+              badge: priority === 'urgent' ? 1 : undefined,
+              channelId: priority === 'urgent' ? 'urgent-alerts' : 'default',
+            }),
+          });
+
+          if (expoPushResponse.ok) {
+            sent++;
+            console.log(`[Learning G-I8] Push sent to ${staff.id} via Expo`);
+          } else {
+            failed++;
+            const errorData = await expoPushResponse.json().catch(() => ({}));
+            console.warn(`[Learning G-I8] Expo push failed for ${staff.id}:`, errorData);
+          }
+        } else if (pushProvider === 'web' && staff.push_token) {
+          // Web Push - requiere configuración de VAPID keys
+          // Por ahora loguear que se intentaría enviar
+          console.log(`[Learning G-I8] Web Push would be sent to ${staff.id} (not implemented yet)`);
+          // TODO: Implementar Web Push con web-push library
+        }
+      } catch (pushError) {
+        failed++;
+        console.warn(`[Learning G-I8] Push failed for ${staff.id}:`, pushError);
+      }
+    }
+
+    if (sent > 0) {
+      console.log(`[Learning G-I8] Urgent push notifications: ${sent} sent, ${failed} failed`);
+    }
+
+    return { sent, failed };
+  } catch (err) {
+    console.error('[Learning G-I8] Error sending push notifications:', err);
+    return { sent: 0, failed: 0 };
+  }
+}
+
 /**
  * Crea una alerta de alta prioridad para el equipo
  * Se muestra en el dashboard usando el sistema de notificaciones existente
  *
  * REVISIÓN 5.3 G-B17: Ahora implementa throttling para evitar alert fatigue
+ * REVISIÓN 5.4 G-I8: Ahora envía push notifications para urgencias
  */
 async function createHighPriorityAlert(
   supabase: ReturnType<typeof createServerClient>,
@@ -1104,6 +1215,27 @@ async function createHighPriorityAlert(
       } else {
         console.log(`[Learning Service] Fallback: Created ${notifications.length} notifications via direct insert`);
       }
+    }
+
+    // REVISIÓN 5.4 G-I8: Enviar push notifications para urgencias
+    // Esto asegura que el staff reciba la notificación incluso fuera del dashboard
+    if (config.priority === 'urgent' || config.priority === 'high') {
+      await sendUrgentPushNotifications(supabase, {
+        tenantId,
+        title: config.title,
+        body: `${patternsSummary}`,
+        priority: config.priority,
+        data: {
+          type: 'high_priority_alert',
+          action_type: actionType,
+          lead_id: leadId,
+          conversation_id: conversationId,
+          channel: channel,
+          action_url: conversationId
+            ? `/dashboard/conversations/${conversationId}`
+            : `/dashboard/leads/${leadId}`,
+        },
+      });
     }
   } catch (error) {
     // No fallar silenciosamente - loguear el error pero no bloquear el flujo

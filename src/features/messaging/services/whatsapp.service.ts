@@ -664,6 +664,10 @@ export async function enqueueSendMessageJob(
 const WHATSAPP_MAX_MESSAGE_LENGTH = 4096;
 const WHATSAPP_API_TIMEOUT_MS = 30000; // 30 seconds
 
+// REVISIÓN 5.4 G-I1: Message debouncing constants
+const AI_DEBOUNCE_WINDOW_MS = 5000; // 5 seconds window for grouping rapid messages
+const MAX_INCOMING_MESSAGE_LENGTH = 4000; // G-I10: Limit incoming message length
+
 /**
  * Trunca un mensaje para que quepa en el límite de WhatsApp
  */
@@ -764,6 +768,99 @@ export async function sendWhatsAppMessage(
 }
 
 // ======================
+// REVISIÓN 5.4 G-I1: MESSAGE DEBOUNCING
+// ======================
+
+/**
+ * Verifica si debe hacer debounce del job de AI response
+ * Evita generar múltiples respuestas cuando un cliente envía mensajes rápidos
+ *
+ * REVISIÓN 5.4 G-I1: Previene desperdicio de tokens y confusión del cliente
+ *
+ * @returns true si debe saltar la creación del job (hay uno pendiente reciente)
+ */
+async function shouldDebounceAIJob(
+  conversationId: string,
+  newMessageId: string
+): Promise<{ shouldSkip: boolean; existingJobId?: string; messagesAggregated?: number }> {
+  const supabase = createServerClient();
+
+  try {
+    // Buscar job pendiente reciente para esta conversación
+    const { data: existingJob, error } = await supabase
+      .from('job_queue')
+      .select('id, created_at, payload')
+      .eq('job_type', 'ai_response')
+      .in('status', ['pending', 'processing'])
+      .gte('created_at', new Date(Date.now() - AI_DEBOUNCE_WINDOW_MS).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(10); // Get recent jobs to filter by conversation
+
+    if (error) {
+      console.warn('[WhatsApp] Debounce check failed:', error);
+      return { shouldSkip: false };
+    }
+
+    // Filtrar por conversation_id (payload es JSONB)
+    const jobForConversation = existingJob?.find(
+      job => (job.payload as { conversation_id?: string })?.conversation_id === conversationId
+    );
+
+    if (!jobForConversation) {
+      return { shouldSkip: false };
+    }
+
+    const jobAge = Date.now() - new Date(jobForConversation.created_at).getTime();
+
+    if (jobAge < AI_DEBOUNCE_WINDOW_MS) {
+      // Hay un job reciente, intentar agregar este mensaje al payload
+      const currentPayload = jobForConversation.payload as {
+        message_ids?: string[];
+        message_id?: string;
+        aggregated_count?: number;
+      };
+
+      // Agregar el nuevo message_id a la lista
+      const existingMessageIds = currentPayload.message_ids || [currentPayload.message_id].filter(Boolean);
+      const updatedMessageIds = [...existingMessageIds, newMessageId];
+
+      const { error: updateError } = await supabase
+        .from('job_queue')
+        .update({
+          payload: {
+            ...currentPayload,
+            message_ids: updatedMessageIds,
+            aggregated_count: updatedMessageIds.length,
+          },
+        })
+        .eq('id', jobForConversation.id)
+        .eq('status', 'pending'); // Solo si aún está pendiente
+
+      if (updateError) {
+        // Si falla la actualización, igual debemos saltar para no duplicar
+        console.warn('[WhatsApp] Failed to aggregate message to job:', updateError);
+      }
+
+      console.log(
+        `[WhatsApp] G-I1 Debounce: Aggregated message ${newMessageId} to job ${jobForConversation.id} ` +
+        `(${updatedMessageIds.length} messages total)`
+      );
+
+      return {
+        shouldSkip: true,
+        existingJobId: jobForConversation.id,
+        messagesAggregated: updatedMessageIds.length,
+      };
+    }
+
+    return { shouldSkip: false };
+  } catch (err) {
+    console.error('[WhatsApp] Debounce check error:', err);
+    return { shouldSkip: false }; // En caso de error, proceder normalmente
+  }
+}
+
+// ======================
 // MAIN PROCESSOR
 // ======================
 
@@ -840,6 +937,10 @@ export async function processWhatsAppWebhook(
 /**
  * Procesa un mensaje entrante individual
  * Aplica delay de respuesta y configuración de personalidad por canal
+ *
+ * REVISIÓN 5.4:
+ * - G-I1: Debouncing de mensajes rápidos
+ * - G-I10: Límite de longitud de mensaje entrante
  */
 async function processIncomingMessage(
   context: TenantContext,
@@ -849,6 +950,16 @@ async function processIncomingMessage(
 ): Promise<void> {
   // 1. Parsear mensaje
   const parsedMessage = parseWhatsAppMessage(message, contacts, metadata);
+
+  // REVISIÓN 5.4 G-I10: Truncar mensajes muy largos para evitar exceso de tokens
+  if (parsedMessage.content.length > MAX_INCOMING_MESSAGE_LENGTH) {
+    console.warn(
+      `[WhatsApp] G-I10: Message truncated from ${parsedMessage.content.length} to ${MAX_INCOMING_MESSAGE_LENGTH} chars`
+    );
+    parsedMessage.content =
+      parsedMessage.content.substring(0, MAX_INCOMING_MESSAGE_LENGTH) +
+      '... [mensaje truncado por longitud]';
+  }
 
   console.log(
     `[WhatsApp] Processing message from ${parsedMessage.phoneNormalized}: "${parsedMessage.content.substring(0, 50)}..."`
@@ -945,37 +1056,53 @@ async function processIncomingMessage(
   }
 
   // 6. Encolar trabajo de AI si está habilitado
+  let aiJobQueued = false;
+  let aiJobDebounced = false;
+
   if (context.ai_enabled) {
     const conn = context.channel_connection;
 
-    // Determine if this is the first message in conversation
-    const isFirstMessage = conversation.isNew;
+    // REVISIÓN 5.4 G-I1: Verificar debouncing antes de encolar
+    const debounceResult = await shouldDebounceAIJob(conversation.id, messageId);
 
-    // Get appropriate delay based on message position
-    const delaySeconds = isFirstMessage
-      ? (conn.first_message_delay_seconds || 0)
-      : (conn.subsequent_message_delay_seconds || 0);
+    if (debounceResult.shouldSkip) {
+      aiJobDebounced = true;
+      console.log(
+        `[WhatsApp] G-I1: AI job debounced for message ${messageId}, ` +
+        `aggregated to job ${debounceResult.existingJobId} ` +
+        `(${debounceResult.messagesAggregated} messages total)`
+      );
+    } else {
+      // Determine if this is the first message in conversation
+      const isFirstMessage = conversation.isNew;
 
-    await enqueueAIResponseJob(
-      {
-        conversation_id: conversation.id,
-        message_id: messageId,
-        lead_id: lead.id,
-        tenant_id: context.tenant_id,
-        channel: 'whatsapp',
-        channel_connection_id: conn.id,
-        // Pass per-channel AI configuration
-        ai_personality_override: conn.ai_personality_override || null,
-        custom_instructions_override: conn.custom_instructions_override || null,
-        is_first_message: isFirstMessage,
-      },
-      delaySeconds
-    );
+      // Get appropriate delay based on message position
+      const delaySeconds = isFirstMessage
+        ? (conn.first_message_delay_seconds || 0)
+        : (conn.subsequent_message_delay_seconds || 0);
+
+      await enqueueAIResponseJob(
+        {
+          conversation_id: conversation.id,
+          message_id: messageId,
+          lead_id: lead.id,
+          tenant_id: context.tenant_id,
+          channel: 'whatsapp',
+          channel_connection_id: conn.id,
+          // Pass per-channel AI configuration
+          ai_personality_override: conn.ai_personality_override || null,
+          custom_instructions_override: conn.custom_instructions_override || null,
+          is_first_message: isFirstMessage,
+        },
+        delaySeconds
+      );
+      aiJobQueued = true;
+    }
   }
 
   console.log(
     `[WhatsApp] Message processed: lead=${lead.id}, conv=${conversation.id}, msg=${messageId}, ` +
-    `vertical=${context.tenant_vertical}, ai_queued=${context.ai_enabled}` +
+    `vertical=${context.tenant_vertical}, ai_queued=${aiJobQueued}, ai_debounced=${aiJobDebounced}` +
     (detectedHighPriorityAction ? `, priority_action=${detectedHighPriorityAction}` : '')
   );
 }

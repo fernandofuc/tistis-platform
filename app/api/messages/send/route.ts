@@ -2,6 +2,7 @@
 // TIS TIS PLATFORM - Send Message API
 // POST /api/messages/send
 // =====================================================
+// REVISIÓN 5.4 G-I5: Cancela jobs AI pendientes cuando staff responde
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
 import { sendWhatsAppMessage } from '@/src/features/messaging/services/whatsapp.service';
 import type { ChannelConnection } from '@/src/shared/types/whatsapp';
+import { createServerClient } from '@/src/shared/lib/supabase';
 
 // ======================
 // TYPES
@@ -17,6 +19,69 @@ interface SendMessageRequest {
   conversation_id: string;
   content: string;
   message_type?: 'text' | 'image' | 'document';
+}
+
+// ======================
+// REVISIÓN 5.4 G-I5: CANCEL AI JOBS ON STAFF REPLY
+// ======================
+
+/**
+ * Cancela jobs de AI pendientes cuando el staff responde manualmente
+ * Evita respuestas duplicadas (staff + AI) al mismo mensaje
+ *
+ * REVISIÓN 5.4 G-I5
+ */
+async function cancelPendingAIJobs(conversationId: string): Promise<number> {
+  const supabase = createServerClient();
+
+  try {
+    // Cancelar jobs de AI pendientes para esta conversación
+    const { data, error } = await supabase
+      .from('job_queue')
+      .update({
+        status: 'cancelled',
+        error_message: 'Cancelled: Staff responded manually (G-I5)',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('job_type', 'ai_response')
+      .eq('status', 'pending')
+      .select('id, payload');
+
+    if (error) {
+      console.warn('[Send Message] G-I5: Failed to query AI jobs:', error);
+      return 0;
+    }
+
+    // Filtrar por conversation_id (payload es JSONB)
+    const jobsForConversation = data?.filter(
+      job => (job.payload as { conversation_id?: string })?.conversation_id === conversationId
+    );
+
+    // Si encontramos jobs para esta conversación, hacer update específico
+    if (jobsForConversation && jobsForConversation.length > 0) {
+      const jobIds = jobsForConversation.map(j => j.id);
+
+      await supabase
+        .from('job_queue')
+        .update({
+          status: 'cancelled',
+          error_message: 'Cancelled: Staff responded manually (G-I5)',
+          completed_at: new Date().toISOString(),
+        })
+        .in('id', jobIds);
+
+      console.log(
+        `[Send Message] G-I5: Cancelled ${jobsForConversation.length} pending AI job(s) for conversation ${conversationId}`
+      );
+
+      return jobsForConversation.length;
+    }
+
+    return 0;
+  } catch (err) {
+    console.error('[Send Message] G-I5: Error cancelling AI jobs:', err);
+    return 0;
+  }
 }
 
 // ======================
@@ -107,6 +172,13 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to save message' },
         { status: 500 }
       );
+    }
+
+    // REVISIÓN 5.4 G-I5: Cancelar jobs AI pendientes cuando staff responde
+    // Esto evita respuestas duplicadas (staff responde + AI también responde)
+    const cancelledJobs = await cancelPendingAIJobs(body.conversation_id);
+    if (cancelledJobs > 0) {
+      console.log(`[Send Message] G-I5: Staff reply cancelled ${cancelledJobs} pending AI jobs`);
     }
 
     // 5. Send via appropriate channel
