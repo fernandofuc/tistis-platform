@@ -7,6 +7,13 @@ import { createServerClient } from '@/src/shared/lib/supabase';
 import type { AIResponseJobPayload, SendMessageJobPayload } from '@/src/shared/types/whatsapp';
 
 // ======================
+// CONSTANTS
+// ======================
+
+// REVISIÓN 5.4.1: Cap exponential backoff at 1 hour to prevent infinite delays
+const MAX_BACKOFF_MS = 3600000; // 1 hour
+
+// ======================
 // TYPES
 // ======================
 
@@ -126,14 +133,19 @@ export async function failJob(jobId: string, errorMessage: string): Promise<bool
 
   const shouldRetry = job.attempts < job.max_attempts;
 
+  // REVISIÓN 5.4.1: Calculate backoff with cap to prevent infinite delays
+  // Formula: min(2^attempts * 1000ms, MAX_BACKOFF_MS)
+  // attempt 1: 2s, attempt 2: 4s, attempt 3: 8s, ..., capped at 1 hour
+  const backoffMs = Math.min(Math.pow(2, job.attempts) * 1000, MAX_BACKOFF_MS);
+
   const { error } = await supabase
     .from('job_queue')
     .update({
       status: shouldRetry ? 'pending' : 'failed',
       error_message: errorMessage,
-      // Si reintentamos, programar para más tarde (exponential backoff)
+      // Si reintentamos, programar para más tarde (exponential backoff with cap)
       scheduled_for: shouldRetry
-        ? new Date(Date.now() + Math.pow(2, job.attempts) * 1000).toISOString()
+        ? new Date(Date.now() + backoffMs).toISOString()
         : undefined,
       completed_at: shouldRetry ? undefined : new Date().toISOString(),
     })

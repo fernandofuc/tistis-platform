@@ -175,10 +175,23 @@ export async function POST(request: NextRequest, context: RouteParams) {
       .single();
 
     // 2. Verificar firma X-Hub-Signature-256
+    // REVISIÓN 5.4.1: Remove environment variable fallback for security
+    // Each tenant MUST have their own webhook_secret configured
     const signature = request.headers.get('x-hub-signature-256');
-    const appSecret = connection?.webhook_secret || process.env.WHATSAPP_APP_SECRET;
+    const appSecret = connection?.webhook_secret;
 
-    if (appSecret) {
+    if (!appSecret) {
+      // REVISIÓN 5.4.1: In production, always require tenant-specific webhook_secret
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[WhatsApp Webhook] No webhook_secret configured for tenant: ${tenantSlug} - rejecting`);
+        return NextResponse.json(
+          { error: 'Webhook signature verification not configured' },
+          { status: 500 }
+        );
+      }
+      // In development, allow without verification but warn
+      console.warn(`[WhatsApp Webhook] No webhook_secret for tenant ${tenantSlug} - skipping verification in development`);
+    } else {
       const isValid = verifyWhatsAppSignature(rawBody, signature, appSecret);
       if (!isValid) {
         console.error(`[WhatsApp Webhook] Invalid signature for tenant: ${tenantSlug}`);
@@ -187,16 +200,6 @@ export async function POST(request: NextRequest, context: RouteParams) {
           { status: 403 }
         );
       }
-    } else {
-      // In production, reject webhooks without signature verification
-      if (process.env.NODE_ENV === 'production') {
-        console.error('[WhatsApp Webhook] No app secret configured in production - rejecting');
-        return NextResponse.json(
-          { error: 'Webhook signature verification not configured' },
-          { status: 500 }
-        );
-      }
-      console.warn('[WhatsApp Webhook] No app secret configured - skipping signature verification in development');
     }
 
     // 3. Procesar webhook (async, no bloquea respuesta)

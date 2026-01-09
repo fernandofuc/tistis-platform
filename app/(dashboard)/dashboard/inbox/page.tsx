@@ -196,20 +196,27 @@ export default function InboxPage() {
 
   const selectedConversationId = selectedConversation?.id;
 
+  // REVISIÓN 5.4.1: Message pagination limit to prevent memory issues
+  const MESSAGE_FETCH_LIMIT = 100;
+
   // Fetch messages when conversation is selected
   useEffect(() => {
     async function fetchMessages() {
       if (!selectedConversationId) return;
 
       try {
+        // REVISIÓN 5.4.1: Fetch only last 100 messages to prevent unbounded memory growth
+        // For older messages, implement "load more" functionality if needed
         const { data, error } = await supabase
           .from('messages')
           .select('*')
           .eq('conversation_id', selectedConversationId)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false })
+          .limit(MESSAGE_FETCH_LIMIT);
 
         if (error) throw error;
-        setMessages(data as Message[]);
+        // Reverse to get chronological order (oldest first for display)
+        setMessages((data as Message[]).reverse());
       } catch (error) {
         console.error('[Inbox] Error fetching messages:', error);
       }
@@ -289,7 +296,10 @@ export default function InboxPage() {
     return () => {
       if (messagesChannel) {
         console.log('[Inbox Realtime] Unsubscribing from messages channel');
-        supabase.removeChannel(messagesChannel);
+        // REVISIÓN 5.4.1: Proper cleanup - unsubscribe before removeChannel to prevent memory leak
+        messagesChannel.unsubscribe().then(() => {
+          supabase.removeChannel(messagesChannel!);
+        });
       }
     };
   }, [selectedConversationId]);
@@ -330,7 +340,10 @@ export default function InboxPage() {
     return () => {
       if (conversationsChannel) {
         console.log('[Inbox Realtime] Unsubscribing from conversations channel');
-        supabase.removeChannel(conversationsChannel);
+        // REVISIÓN 5.4.1: Proper cleanup - unsubscribe before removeChannel to prevent memory leak
+        conversationsChannel.unsubscribe().then(() => {
+          supabase.removeChannel(conversationsChannel!);
+        });
       }
     };
   }, [tenant?.id, refetchConversations]);

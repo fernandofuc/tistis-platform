@@ -83,6 +83,32 @@ export async function GET(
 }
 
 // ======================
+// REVISIÓN 5.4.1: ROLE-BASED PERMISSIONS
+// ======================
+
+// Define which roles can perform which actions
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  // Roles that can escalate conversations
+  escalate: ['admin', 'manager', 'dentist', 'doctor', 'supervisor', 'staff'],
+  // Roles that can resolve/close conversations
+  resolve: ['admin', 'manager', 'dentist', 'doctor', 'supervisor', 'staff'],
+  // Roles that can toggle AI handling
+  toggle_ai: ['admin', 'manager', 'supervisor'],
+  // Roles that can reassign staff
+  reassign: ['admin', 'manager', 'supervisor'],
+  // Roles that can change branch assignment
+  change_branch: ['admin', 'manager'],
+};
+
+/**
+ * REVISIÓN 5.4.1: Check if user role has permission for an action
+ */
+function hasPermission(userRole: string, action: keyof typeof ROLE_PERMISSIONS): boolean {
+  const allowedRoles = ROLE_PERMISSIONS[action];
+  return allowedRoles?.includes(userRole.toLowerCase()) ?? false;
+}
+
+// ======================
 // PATCH - Update conversation
 // ======================
 export async function PATCH(
@@ -96,9 +122,47 @@ export async function PATCH(
       return createAuthErrorResponse(authContext);
     }
 
-    const { client: supabase, tenantId } = authContext;
+    const { client: supabase, tenantId, role: userRole } = authContext;
     const { id } = await params;
     const body = await request.json();
+
+    // REVISIÓN 5.4.1: Validate role-based permissions before processing
+    // Check specific permission requirements
+    if (body.status === 'escalated' && !hasPermission(userRole, 'escalate')) {
+      console.warn(`[Conversation PATCH] User with role '${userRole}' attempted to escalate without permission`);
+      return NextResponse.json(
+        { error: 'You do not have permission to escalate conversations' },
+        { status: 403 }
+      );
+    }
+    if (body.status === 'resolved' && !hasPermission(userRole, 'resolve')) {
+      console.warn(`[Conversation PATCH] User with role '${userRole}' attempted to resolve without permission`);
+      return NextResponse.json(
+        { error: 'You do not have permission to resolve conversations' },
+        { status: 403 }
+      );
+    }
+    if (body.ai_handling !== undefined && !hasPermission(userRole, 'toggle_ai')) {
+      console.warn(`[Conversation PATCH] User with role '${userRole}' attempted to toggle AI without permission`);
+      return NextResponse.json(
+        { error: 'You do not have permission to toggle AI handling' },
+        { status: 403 }
+      );
+    }
+    if (body.assigned_staff_id !== undefined && !hasPermission(userRole, 'reassign')) {
+      console.warn(`[Conversation PATCH] User with role '${userRole}' attempted to reassign without permission`);
+      return NextResponse.json(
+        { error: 'You do not have permission to reassign conversations' },
+        { status: 403 }
+      );
+    }
+    if (body.branch_id !== undefined && !hasPermission(userRole, 'change_branch')) {
+      console.warn(`[Conversation PATCH] User with role '${userRole}' attempted to change branch without permission`);
+      return NextResponse.json(
+        { error: 'You do not have permission to change branch assignment' },
+        { status: 403 }
+      );
+    }
 
     // Fields allowed for update
     const allowedFields = [
