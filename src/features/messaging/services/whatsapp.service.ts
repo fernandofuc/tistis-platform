@@ -277,61 +277,50 @@ export async function getTenantContext(
 
 /**
  * Busca o crea un lead basado en el número de teléfono
+ * FIXED: Uses atomic RPC function with advisory lock to prevent race conditions
+ * FIXED: Properly excludes soft-deleted leads
  */
 export async function findOrCreateLead(
   tenantId: string,
   branchId: string | null,
   phoneNormalized: string,
-  contactName?: string
+  contactName?: string,
+  source: string = 'whatsapp'
 ): Promise<{ id: string; name: string; isNew: boolean }> {
   const supabase = createServerClient();
 
-  // Buscar lead existente
-  const { data: existingLead } = await supabase
-    .from('leads')
-    .select('id, name')
-    .eq('tenant_id', tenantId)
-    .eq('phone_normalized', phoneNormalized)
-    .single();
-
-  if (existingLead) {
-    // Actualizar nombre si tenemos uno nuevo y el actual es genérico
-    if (contactName && existingLead.name === 'Desconocido') {
-      await supabase
-        .from('leads')
-        .update({ name: contactName })
-        .eq('id', existingLead.id);
-      existingLead.name = contactName;
-    }
-
-    return { ...existingLead, isNew: false };
-  }
-
-  // Crear nuevo lead
-  const { data: newLead, error } = await supabase
-    .from('leads')
-    .insert({
-      tenant_id: tenantId,
-      branch_id: branchId,
-      phone: phoneNormalized,
-      phone_normalized: phoneNormalized,
-      name: contactName || 'Desconocido',
-      source: 'whatsapp',
-      status: 'new',
-      classification: 'warm', // Nuevo lead es warm por defecto
-      score: 50, // Score inicial
-      first_contact_at: new Date().toISOString(),
-    })
-    .select('id, name')
-    .single();
+  // Use atomic RPC function to prevent race conditions
+  // This function uses advisory locks to ensure only one lead is created
+  // even if multiple webhooks arrive simultaneously
+  const { data: result, error } = await supabase.rpc('find_or_create_lead', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+    p_phone_normalized: phoneNormalized,
+    p_contact_name: contactName || null,
+    p_source: source,
+  });
 
   if (error) {
-    console.error('[WhatsApp] Error creating lead:', error);
-    throw new Error(`Failed to create lead: ${error.message}`);
+    console.error('[WhatsApp] Error in find_or_create_lead RPC:', error);
+    throw new Error(`Failed to find/create lead: ${error.message}`);
   }
 
-  console.log(`[WhatsApp] New lead created: ${newLead.id}`);
-  return { ...newLead, isNew: true };
+  // RPC returns array, get first row
+  const leadResult = Array.isArray(result) ? result[0] : result;
+
+  if (!leadResult?.lead_id) {
+    throw new Error('find_or_create_lead returned no result');
+  }
+
+  if (leadResult.is_new) {
+    console.log(`[WhatsApp] New lead created: ${leadResult.lead_id}`);
+  }
+
+  return {
+    id: leadResult.lead_id,
+    name: leadResult.lead_name,
+    isNew: leadResult.is_new,
+  };
 }
 
 // ======================
@@ -340,56 +329,50 @@ export async function findOrCreateLead(
 
 /**
  * Busca o crea una conversación activa para el lead
+ * FIXED: Uses atomic RPC function with advisory lock to prevent race conditions
  */
 export async function findOrCreateConversation(
   tenantId: string,
   branchId: string | null,
   leadId: string,
   channelConnectionId: string,
-  aiEnabled: boolean
+  aiEnabled: boolean,
+  channel: string = 'whatsapp'
 ): Promise<{ id: string; isNew: boolean }> {
   const supabase = createServerClient();
 
-  // Buscar conversación activa existente
-  const { data: existingConv } = await supabase
-    .from('conversations')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('lead_id', leadId)
-    .eq('channel', 'whatsapp')
-    .in('status', ['active', 'pending'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (existingConv) {
-    return { id: existingConv.id, isNew: false };
-  }
-
-  // Crear nueva conversación
-  const { data: newConv, error } = await supabase
-    .from('conversations')
-    .insert({
-      tenant_id: tenantId,
-      branch_id: branchId,
-      lead_id: leadId,
-      channel: 'whatsapp',
-      channel_connection_id: channelConnectionId,
-      status: 'active',
-      ai_handling: aiEnabled, // Respeta configuración del canal
-      started_at: new Date().toISOString(),
-      last_message_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
+  // Use atomic RPC function to prevent race conditions
+  // This function uses advisory locks to ensure only one conversation is created
+  // even if multiple webhooks arrive simultaneously
+  const { data: result, error } = await supabase.rpc('find_or_create_conversation', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+    p_lead_id: leadId,
+    p_channel_connection_id: channelConnectionId,
+    p_channel: channel,
+    p_ai_enabled: aiEnabled,
+  });
 
   if (error) {
-    console.error('[WhatsApp] Error creating conversation:', error);
-    throw new Error(`Failed to create conversation: ${error.message}`);
+    console.error('[WhatsApp] Error in find_or_create_conversation RPC:', error);
+    throw new Error(`Failed to find/create conversation: ${error.message}`);
   }
 
-  console.log(`[WhatsApp] New conversation created: ${newConv.id}`);
-  return { id: newConv.id, isNew: true };
+  // RPC returns array, get first row
+  const convResult = Array.isArray(result) ? result[0] : result;
+
+  if (!convResult?.conversation_id) {
+    throw new Error('find_or_create_conversation returned no result');
+  }
+
+  if (convResult.is_new) {
+    console.log(`[WhatsApp] New conversation created: ${convResult.conversation_id}`);
+  }
+
+  return {
+    id: convResult.conversation_id,
+    isNew: convResult.is_new,
+  };
 }
 
 // ======================
@@ -464,6 +447,7 @@ export async function saveIncomingMessage(
 
 /**
  * Procesa actualizaciones de estado de mensajes (sent, delivered, read)
+ * FIXED: Uses RPC function with proper tenant validation to prevent cross-tenant leakage
  */
 export async function processStatusUpdate(
   tenantId: string,
@@ -480,70 +464,45 @@ export async function processStatusUpdate(
   };
 
   const internalStatus = statusMapping[status.status] || 'unknown';
-
-  // Buscar mensaje por whatsapp_message_id
-  const { data: existingMessage } = await supabase
-    .from('messages')
-    .select('id, status')
-    .eq('metadata->>whatsapp_message_id', status.id)
-    .single();
-
-  if (!existingMessage) {
-    // Puede ser un mensaje que enviamos, buscar por external_id
-    const { error } = await supabase
-      .from('messages')
-      .update({
-        status: internalStatus,
-        metadata: {
-          status_timestamp: status.timestamp,
-          whatsapp_status: status.status,
-          updated_at: new Date().toISOString(),
-        },
-      })
-      .eq('external_id', status.id);
-
-    if (error) {
-      console.log(
-        `[WhatsApp] Status update for unknown message: ${status.id}`
-      );
-    }
+  if (internalStatus === 'unknown') {
+    console.log(`[WhatsApp] Unknown status type: ${status.status}`);
     return;
   }
 
-  // Solo actualizar si es un avance en el estado
-  const statusOrder = ['pending', 'sent', 'delivered', 'read', 'failed'];
-  const currentIndex = statusOrder.indexOf(existingMessage.status);
-  const newIndex = statusOrder.indexOf(internalStatus);
+  // Extract error message if present
+  const errorMessage = status.errors?.[0]?.message || status.errors?.[0]?.title || null;
 
-  if (newIndex > currentIndex || internalStatus === 'failed') {
-    await supabase
-      .from('messages')
-      .update({
-        status: internalStatus,
-        metadata: {
-          status_updated_at: new Date().toISOString(),
-          whatsapp_status: status.status,
-        },
-      })
-      .eq('id', existingMessage.id);
+  // Use atomic RPC function with tenant validation
+  // This prevents cross-tenant information leakage (M3 fix)
+  const { data: result, error } = await supabase.rpc('update_message_status', {
+    p_tenant_id: tenantId,
+    p_whatsapp_message_id: status.id,
+    p_new_status: internalStatus,
+    p_error_message: errorMessage,
+  });
 
-    console.log(
-      `[WhatsApp] Message ${existingMessage.id} status: ${internalStatus}`
-    );
+  if (error) {
+    console.error('[WhatsApp] Error updating message status:', error);
+    return;
   }
 
-  // Si falló, registrar el error
+  // RPC returns array, get first row
+  const updateResult = Array.isArray(result) ? result[0] : result;
+
+  if (!updateResult?.message_id) {
+    // Message not found or doesn't belong to tenant - this is normal for
+    // messages sent by other tenants or very old messages
+    console.log(`[WhatsApp] Status update for unknown/unauthorized message: ${status.id}`);
+    return;
+  }
+
+  if (updateResult.updated) {
+    console.log(`[WhatsApp] Message ${updateResult.message_id} status: ${internalStatus}`);
+  }
+
+  // Log errors for debugging
   if (status.errors && status.errors.length > 0) {
-    console.error('[WhatsApp] Message failed:', status.errors);
-    await supabase
-      .from('messages')
-      .update({
-        error_message: status.errors[0].message || status.errors[0].title,
-        metadata: {
-          whatsapp_errors: status.errors,
-        },
-      })
-      .eq('id', existingMessage.id);
+    console.error('[WhatsApp] Message delivery error:', status.errors);
   }
 }
 
