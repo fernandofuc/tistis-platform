@@ -214,25 +214,8 @@ export async function POST(request: NextRequest) {
     // Compute lead name for response
     const leadName = leadData.full_name || `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim() || 'Sin nombre';
 
-    // Verify reward exists and is active
-    const { data: reward } = await supabase
-      .from('loyalty_rewards')
-      .select('*')
-      .eq('id', reward_id)
-      .eq('program_id', context.program.id)
-      .eq('is_active', true)
-      .single();
-
-    if (!reward) {
-      return NextResponse.json({ error: 'Recompensa no encontrada o inactiva' }, { status: 404 });
-    }
-
-    // Check stock limit
-    if (reward.stock_limit !== null && reward.stock_used >= reward.stock_limit) {
-      return NextResponse.json({ error: 'Recompensa agotada' }, { status: 400 });
-    }
-
-    // Use the redeem_loyalty_reward function
+    // Use the atomic redeem_loyalty_reward function
+    // All validations (stock, limits, balance) are done atomically with FOR UPDATE locks
     const { data: result, error } = await supabase.rpc('redeem_loyalty_reward', {
       p_tenant_id: context.userRole.tenant_id,
       p_lead_id: lead_id,
@@ -241,29 +224,40 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[Redemptions API] POST error:', error);
-      // Check for specific error messages from the function
-      if (error.message.includes('No tiene suficientes')) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-      }
       return NextResponse.json({ error: 'Error al canjear recompensa' }, { status: 500 });
     }
 
+    // Check RPC result - function returns validation errors
+    const redemptionResult = result?.[0];
+    if (!redemptionResult?.success) {
+      return NextResponse.json({
+        error: redemptionResult?.error_message || 'Error al canjear recompensa'
+      }, { status: 400 });
+    }
+
     // Update notes if provided
-    if (notes && result?.redemption_id) {
+    if (notes && redemptionResult.redemption_id) {
       await supabase
         .from('loyalty_redemptions')
         .update({ notes })
-        .eq('id', result.redemption_id);
+        .eq('id', redemptionResult.redemption_id);
     }
+
+    // Get reward info for response
+    const { data: reward } = await supabase
+      .from('loyalty_rewards')
+      .select('reward_name, tokens_required')
+      .eq('id', reward_id)
+      .single();
 
     return NextResponse.json({
       success: true,
       data: {
-        redemption_id: result?.redemption_id,
-        redemption_code: result?.redemption_code,
-        reward_name: reward.reward_name,
+        redemption_id: redemptionResult.redemption_id,
+        redemption_code: redemptionResult.redemption_code,
+        reward_name: reward?.reward_name || 'Recompensa',
         patient_name: leadName,
-        tokens_used: reward.tokens_required,
+        tokens_used: reward?.tokens_required || 0,
       }
     });
   } catch (error) {
