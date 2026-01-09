@@ -477,6 +477,9 @@ export async function getAvailableSlots(
 
 /**
  * Crea una cita en el sistema
+ *
+ * V8/V9 FIX: Usa create_appointment_atomic RPC con advisory lock
+ * para prevenir race conditions entre Voice y Message channels
  */
 export async function createBooking(request: BookingRequest): Promise<BookingResult> {
   const supabase = createServerClient();
@@ -546,41 +549,9 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
       request.staff_id = slots[0].staff_id || undefined;
     }
 
-    // 4. Verificar disponibilidad del slot
+    // 4. Validar que tenemos branch_id
     if (!request.branch_id) {
       return { success: false, error: 'No se pudo determinar la sucursal' };
-    }
-
-    const availability = await checkSlotAvailability(
-      request.tenant_id,
-      request.branch_id,
-      scheduledAt.toISOString().split('T')[0],
-      scheduledAt.toTimeString().slice(0, 5),
-      request.staff_id,
-      durationMinutes
-    );
-
-    if (!availability.available) {
-      // Buscar alternativa
-      const alternatives = await getAvailableSlots(
-        request.tenant_id,
-        request.branch_id,
-        request.service_id,
-        request.staff_id,
-        request.requested_date,
-        3
-      );
-
-      if (alternatives.length > 0) {
-        const alt = alternatives[0];
-        return {
-          success: false,
-          error: availability.conflictReason || 'Horario no disponible',
-          suggestion: `Tenemos disponibilidad el ${formatDate(alt.date)} a las ${alt.time} en ${alt.branch_name}`
-        };
-      }
-
-      return { success: false, error: availability.conflictReason || 'Horario no disponible' };
     }
 
     // 5. Asignar staff si no se especificó
@@ -607,55 +578,61 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
       }
     }
 
-    // 6. Crear la cita
+    // 6. Determinar el canal para AI traceability
     const isRestaurant = request.vertical === 'restaurant';
-    const isDental = request.vertical === 'dental';
-    const appointmentData: Record<string, any> = {
-      tenant_id: request.tenant_id,
-      lead_id: request.lead_id,
-      branch_id: request.branch_id,
-      service_id: request.service_id || null,
-      staff_id: request.staff_id || null,
-      scheduled_at: scheduledAt.toISOString(),
-      duration_minutes: isRestaurant ? 120 : durationMinutes, // Default 2 hours for restaurant
-      status: 'scheduled',
-      source: 'ai_booking',
-      notes: request.notes || (isRestaurant ? 'Reservación agendada por asistente AI' : 'Cita agendada por asistente AI'),
-      reminder_sent: false,
-      confirmation_sent: false,
-      // AI Traceability fields (for all AI-booked appointments)
-      conversation_id: request.conversation_id || null,
-    };
+    const aiChannel = request.ai_booking_channel || 'ai_whatsapp';
 
-    // Add AI traceability fields if present
-    if (request.ai_booking_channel) {
-      appointmentData.ai_booking_channel = request.ai_booking_channel;
-      appointmentData.ai_booked_at = new Date().toISOString();
-    }
-    if (request.ai_urgency_level) {
-      appointmentData.ai_urgency_level = request.ai_urgency_level;
-      // Auto-set requires_human_review for high urgency cases
-      if (request.ai_urgency_level >= 4) {
-        appointmentData.requires_human_review = true;
-        appointmentData.human_review_reason = 'Caso de urgencia dental detectado por IA';
-      }
-    }
-    if (request.ai_detected_symptoms && request.ai_detected_symptoms.length > 0) {
-      appointmentData.ai_detected_symptoms = JSON.stringify(request.ai_detected_symptoms);
-    }
-    if (request.ai_confidence_score !== undefined) {
-      appointmentData.ai_confidence_score = request.ai_confidence_score;
-    }
+    // =================================================================
+    // V8/V9 FIX: Use atomic RPC to prevent race conditions
+    // This uses pg_advisory_xact_lock to ensure only one process
+    // can book the same slot at a time (Voice OR Message, not both)
+    // =================================================================
+    const { data: result, error } = await supabase.rpc('create_appointment_atomic', {
+      p_tenant_id: request.tenant_id,
+      p_lead_id: request.lead_id,
+      p_branch_id: request.branch_id,
+      p_scheduled_at: scheduledAt.toISOString(),
+      p_duration_minutes: isRestaurant ? 120 : durationMinutes,
+      p_service_id: request.service_id || null,
+      p_staff_id: request.staff_id || null,
+      p_notes: request.notes || (isRestaurant ? 'Reservación agendada por asistente AI' : 'Cita agendada por asistente AI'),
+      p_source: 'ai_booking',
+      p_conversation_id: request.conversation_id || null,
+      p_channel: aiChannel.replace('ai_', ''), // 'ai_whatsapp' -> 'whatsapp'
+      // Restaurant specific
+      p_party_size: request.party_size || null,
+      p_occasion_type: request.occasion_type || null,
+      p_special_requests: request.special_requests || null,
+      // AI traceability
+      p_ai_booking_channel: request.ai_booking_channel || null,
+      p_ai_urgency_level: request.ai_urgency_level || null,
+      p_ai_detected_symptoms: request.ai_detected_symptoms ? JSON.stringify(request.ai_detected_symptoms) : null,
+      p_ai_confidence_score: request.ai_confidence_score || null,
+    });
 
-    // Add restaurant-specific fields to appointments table
-    if (isRestaurant && request.party_size) {
-      appointmentData.party_size = request.party_size;
-      appointmentData.reservation_type = request.occasion_type || 'regular';
+    if (error) {
+      console.error('[Booking Service] Atomic booking error:', error);
+      return {
+        success: false,
+        error: isRestaurant ? 'Error al crear la reservación' : 'Error al crear la cita',
+      };
     }
 
-    const { data: appointment, error } = await supabase
+    // The RPC returns an array with one row
+    const bookingResult = result?.[0];
+
+    if (!bookingResult?.success) {
+      console.log('[Booking Service] Slot not available:', bookingResult?.error_message);
+      return {
+        success: false,
+        error: bookingResult?.error_message || 'Horario no disponible',
+        suggestion: bookingResult?.suggestion,
+      };
+    }
+
+    // 7. Get appointment details for response
+    const { data: appointment } = await supabase
       .from('appointments')
-      .insert(appointmentData)
       .select(`
         id,
         scheduled_at,
@@ -664,60 +641,30 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
         service:services(name),
         staff:staff(display_name, first_name, last_name)
       `)
+      .eq('id', bookingResult.appointment_id)
       .single();
 
-    if (error) {
-      console.error('[Booking Service] Error creating appointment:', error);
-      return { success: false, error: isRestaurant ? 'Error al crear la reservación' : 'Error al crear la cita' };
-    }
-
-    // 6b. Create restaurant details record if applicable
-    if (isRestaurant && appointment?.id) {
-      const restaurantDetails = {
-        appointment_id: appointment.id,
-        party_size: request.party_size || 2,
-        table_id: request.table_id || null,
-        occasion_type: request.occasion_type || 'regular',
-        special_requests: request.special_requests || null,
+    if (!appointment) {
+      // Appointment was created but we couldn't fetch details
+      // This shouldn't happen, but handle gracefully
+      return {
+        success: true,
+        appointment_id: bookingResult.appointment_id,
+        scheduled_at: scheduledAt.toISOString(),
+        branch_name: '',
+        service_name: serviceName,
+        staff_name: 'Por asignar',
+        duration_minutes: isRestaurant ? 120 : durationMinutes,
+        vertical: request.vertical,
       };
-
-      const { error: detailsError } = await supabase
-        .from('appointment_restaurant_details')
-        .insert(restaurantDetails);
-
-      if (detailsError) {
-        console.error('[Booking Service] Error creating restaurant details:', detailsError);
-        // Don't fail the whole operation, just log
-      }
     }
-
-    // 7. Actualizar lead status
-    await supabase
-      .from('leads')
-      .update({
-        status: 'contacted',
-        classification: 'hot' // Lead que agenda es hot
-      })
-      .eq('id', request.lead_id);
-
-    // 8. Registrar en historial de la conversación
-    await supabase
-      .from('conversation_events')
-      .insert({
-        conversation_id: request.conversation_id,
-        event_type: 'appointment_created',
-        event_data: {
-          appointment_id: appointment.id,
-          scheduled_at: scheduledAt.toISOString(),
-        },
-      });
 
     const staffData = appointment.staff as any;
     const staffName = staffData?.display_name ||
       `${staffData?.first_name || ''} ${staffData?.last_name || ''}`.trim() ||
       'Por asignar';
 
-    const result: BookingResult = {
+    const finalResult: BookingResult = {
       success: true,
       appointment_id: appointment.id,
       scheduled_at: scheduledAt.toISOString(),
@@ -730,12 +677,12 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
 
     // Add restaurant-specific fields to result
     if (isRestaurant) {
-      result.party_size = request.party_size;
-      result.occasion_type = request.occasion_type;
-      // Note: table_name would need to be fetched if table_id was provided
+      finalResult.party_size = request.party_size;
+      finalResult.occasion_type = request.occasion_type;
     }
 
-    return result;
+    console.log(`[Booking Service] Appointment created atomically: ${appointment.id}`);
+    return finalResult;
 
   } catch (error) {
     console.error('[Booking Service] Unexpected error:', error);

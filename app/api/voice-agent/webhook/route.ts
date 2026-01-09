@@ -412,7 +412,25 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
     return { status: 'ok' };
   }
 
-  console.log(`[Voice Webhook] User message: "${lastUserMessage.content.substring(0, 100)}..."`);
+  // V3 FIX: Validate transcription is not empty or corrupted
+  const transcription = lastUserMessage.content?.trim();
+  if (!transcription || transcription.length < 2) {
+    console.warn('[Voice Webhook] Empty or invalid transcription received');
+    return {
+      assistantResponse: '¿Podrías repetir eso? No te escuché bien.',
+    };
+  }
+
+  // V3 FIX: Detect potentially corrupted transcription (all special chars, etc)
+  const validTextRatio = (transcription.match(/[a-záéíóúüñA-ZÁÉÍÓÚÜÑ0-9\s]/g) || []).length / transcription.length;
+  if (validTextRatio < 0.5) {
+    console.warn('[Voice Webhook] Potentially corrupted transcription:', transcription.substring(0, 50));
+    return {
+      assistantResponse: 'Disculpa, hubo interferencia. ¿Podrías repetir?',
+    };
+  }
+
+  console.log(`[Voice Webhook] User message: "${transcription.substring(0, 100)}..."`);
 
   // Obtener la llamada
   const { data: call } = await supabase
@@ -453,7 +471,7 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
         caller_phone: call.caller_phone || '',
         conversation_history: previousMessages,
       },
-      lastUserMessage.content
+      transcription // V3 FIX: Use validated transcription
     );
 
     const processingTime = Date.now() - startTime;
@@ -466,7 +484,7 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
     await VoiceLangGraphService.saveVoiceMessage(
       call.id,
       'user',
-      lastUserMessage.content,
+      transcription, // V3 FIX: Use validated transcription
       {
         sequence_number: userMsgCount + 1,
         detected_intent: result.intent,
