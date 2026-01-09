@@ -38,49 +38,40 @@ export interface ProcessResult {
 // ======================
 
 /**
- * Obtiene el próximo trabajo pendiente de la cola
- * Usa SELECT FOR UPDATE SKIP LOCKED para evitar conflictos
+ * Obtiene y reclama el próximo trabajo pendiente de la cola
+ * Usa claim_next_job RPC que hace SELECT FOR UPDATE SKIP LOCKED atomicamente
+ * Esto previene race conditions donde múltiples workers toman el mismo job
  */
 export async function getNextPendingJob(): Promise<Job | null> {
   const supabase = createServerClient();
 
-  // Llamar a la función SQL que hace el locking apropiado
-  const { data, error } = await supabase.rpc('get_next_pending_job');
+  // Use atomic claim function that selects, locks, and updates in one transaction
+  const { data, error } = await supabase.rpc('claim_next_job');
 
   if (error) {
-    console.error('[JobProcessor] Error getting next job:', error);
+    console.error('[JobProcessor] Error claiming next job:', error);
     return null;
   }
 
+  // claim_next_job returns the job already marked as 'processing'
   return data as Job | null;
 }
 
 /**
- * Marca un trabajo como en procesamiento
+ * @deprecated Use getNextPendingJob() which atomically claims the job
+ * This function is kept for backwards compatibility but the atomic
+ * claim_next_job RPC should be used instead.
  */
 export async function markJobProcessing(jobId: string): Promise<boolean> {
   const supabase = createServerClient();
 
-  // Primero obtener el valor actual de attempts
-  const { data: currentJob, error: fetchError } = await supabase
-    .from('job_queue')
-    .select('attempts')
-    .eq('id', jobId)
-    .eq('status', 'pending')
-    .single();
-
-  if (fetchError || !currentJob) {
-    console.error('[JobProcessor] Error fetching job for processing:', fetchError);
-    return false;
-  }
-
-  // Actualizar con el nuevo valor de attempts
+  // Use atomic update to prevent race conditions
   const { error } = await supabase
     .from('job_queue')
     .update({
       status: 'processing',
       started_at: new Date().toISOString(),
-      attempts: (currentJob.attempts || 0) + 1,
+      attempts: supabase.rpc('coalesce_increment', { current_val: 0 }) as unknown as number,
     })
     .eq('id', jobId)
     .eq('status', 'pending');
