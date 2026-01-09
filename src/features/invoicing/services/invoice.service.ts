@@ -209,8 +209,10 @@ export class InvoiceService {
       .order('last_invoice_at', { ascending: false, nullsFirst: false });
 
     if (options?.search) {
+      // Sanitize search to prevent SQL injection via special characters
+      const sanitizedSearch = options.search.replace(/[%_\\'"]/g, '\\$&');
       query = query.or(
-        `rfc.ilike.%${options.search}%,nombre_razon_social.ilike.%${options.search}%,email.ilike.%${options.search}%`
+        `rfc.ilike.%${sanitizedSearch}%,nombre_razon_social.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`
       );
     }
 
@@ -398,12 +400,18 @@ export class InvoiceService {
 
   /**
    * Get invoice by ID
+   * SECURITY: tenantId is optional but recommended to prevent information disclosure
    */
-  async getInvoice(invoiceId: string, includeItems = true): Promise<Invoice | null> {
+  async getInvoice(invoiceId: string, includeItems = true, tenantId?: string): Promise<Invoice | null> {
     let query = this.supabase
       .from('restaurant_invoices')
       .select(includeItems ? '*, items:restaurant_invoice_items(*)' : '*')
       .eq('id', invoiceId);
+
+    // If tenantId provided, add security filter
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
 
     const { data, error } = await query.single();
 
@@ -449,8 +457,10 @@ export class InvoiceService {
     }
 
     if (options?.search) {
+      // Sanitize search to prevent SQL injection via special characters
+      const sanitizedSearch = options.search.replace(/[%_\\'"]/g, '\\$&');
       query = query.or(
-        `receptor_rfc.ilike.%${options.search}%,receptor_nombre.ilike.%${options.search}%,folio::text.ilike.%${options.search}%`
+        `receptor_rfc.ilike.%${sanitizedSearch}%,receptor_nombre.ilike.%${sanitizedSearch}%,folio::text.ilike.%${sanitizedSearch}%`
       );
     }
 
@@ -474,8 +484,27 @@ export class InvoiceService {
 
   /**
    * Update invoice status
+   * SECURITY: tenantId is required to prevent IDOR attacks
    */
-  async updateStatus(invoiceId: string, status: InvoiceStatus, errorMessage?: string): Promise<Invoice> {
+  async updateStatus(invoiceId: string, status: InvoiceStatus, errorMessage?: string, tenantId?: string): Promise<Invoice> {
+    // Security check: verify invoice belongs to tenant if tenantId provided
+    if (tenantId) {
+      const { data: existing, error: checkError } = await this.supabase
+        .from('restaurant_invoices')
+        .select('id, tenant_id')
+        .eq('id', invoiceId)
+        .single();
+
+      if (checkError || !existing) {
+        throw new Error('Factura no encontrada');
+      }
+
+      if (existing.tenant_id !== tenantId) {
+        console.error(`[SECURITY] IDOR attempt: user from tenant ${tenantId} tried to access invoice from tenant ${existing.tenant_id}`);
+        throw new Error('No tienes permiso para modificar esta factura');
+      }
+    }
+
     const updateData: Partial<Invoice> = {
       status,
       updated_at: new Date().toISOString(),
@@ -506,12 +535,37 @@ export class InvoiceService {
 
   /**
    * Cancel an invoice
+   * SECURITY: tenantId is required to prevent IDOR attacks
    */
   async cancelInvoice(
     invoiceId: string,
     motivo: '01' | '02' | '03' | '04',
-    folioSustitucion?: string
+    folioSustitucion?: string,
+    tenantId?: string
   ): Promise<Invoice> {
+    // Security check: verify invoice belongs to tenant if tenantId provided
+    if (tenantId) {
+      const { data: existing, error: checkError } = await this.supabase
+        .from('restaurant_invoices')
+        .select('id, tenant_id, status')
+        .eq('id', invoiceId)
+        .single();
+
+      if (checkError || !existing) {
+        throw new Error('Factura no encontrada');
+      }
+
+      if (existing.tenant_id !== tenantId) {
+        console.error(`[SECURITY] IDOR attempt: user from tenant ${tenantId} tried to cancel invoice from tenant ${existing.tenant_id}`);
+        throw new Error('No tienes permiso para cancelar esta factura');
+      }
+
+      // Prevent cancelling already cancelled invoices
+      if (existing.status === 'cancelada') {
+        throw new Error('Esta factura ya fue cancelada');
+      }
+    }
+
     const { data, error } = await this.supabase
       .from('restaurant_invoices')
       .update({

@@ -37,3 +37,31 @@ export {
   type SecurityConfig,
   type SecurityContext,
 } from './api-security';
+
+// API Client (for client-side authenticated requests)
+export {
+  fetchWithAuth,
+  apiGet,
+  apiPost,
+  apiPut,
+  apiPatch,
+  apiDelete,
+  buildUrl,
+  hasActiveSession,
+  getAccessToken,
+  type APIResponse,
+  type FetchWithAuthOptions,
+} from './api-client';
+
+// WhatsApp Client
+export {
+  whatsappClient,
+  sendAppointmentConfirmation,
+  sendAppointmentReminder,
+  sendServicesMenu,
+  ESVA_TEMPLATES,
+  type WhatsAppMessage,
+  type WhatsAppResponse,
+  type WhatsAppTemplateComponent,
+  type WhatsAppInteractiveAction,
+} from './whatsapp';

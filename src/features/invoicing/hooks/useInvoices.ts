@@ -6,6 +6,7 @@
 // =====================================================
 
 import { useState, useEffect, useCallback } from 'react';
+import { fetchWithAuth, type APIResponse } from '@/src/shared/lib/api-client';
 import type {
   Invoice,
   InvoiceConfig,
@@ -14,6 +15,14 @@ import type {
   InvoiceStatus,
   TicketExtraction,
 } from '../types';
+
+// Response types for API calls
+interface InvoicesAPIResponse extends APIResponse<Invoice[]> {}
+interface ConfigAPIResponse extends APIResponse<InvoiceConfig> {}
+interface StatsAPIResponse extends APIResponse<InvoiceStatistics> {}
+interface ExtractionsAPIResponse extends APIResponse<TicketExtraction[]> {}
+interface InvoiceAPIResponse extends APIResponse<Invoice> {}
+interface PDFAPIResponse extends APIResponse<{ pdf_url: string }> {}
 
 // ======================
 // TYPES
@@ -45,40 +54,6 @@ interface UseInvoicesReturn {
 }
 
 // ======================
-// API HELPERS
-// ======================
-
-async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error('No session found');
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-      ...options.headers,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Request failed');
-  }
-
-  return data;
-}
-
-// ======================
 // HOOK
 // ======================
 
@@ -107,7 +82,7 @@ export function useInvoices(options: UseInvoicesOptions = {}): UseInvoicesReturn
       if (end_date) params.set('end_date', end_date);
       params.set('limit', limit.toString());
 
-      const response = await fetchWithAuth(`/api/invoicing/invoices?${params}`);
+      const response = await fetchWithAuth<InvoicesAPIResponse>(`/api/invoicing/invoices?${params}`);
       setInvoices(response.data || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error loading invoices';
@@ -123,7 +98,7 @@ export function useInvoices(options: UseInvoicesOptions = {}): UseInvoicesReturn
     if (!branch_id) return;
 
     try {
-      const response = await fetchWithAuth(`/api/invoicing/config?branch_id=${branch_id}`);
+      const response = await fetchWithAuth<ConfigAPIResponse>(`/api/invoicing/config?branch_id=${branch_id}`);
       setConfig(response.data || null);
     } catch (err) {
       console.error('[useInvoices] Error fetching config:', err);
@@ -140,7 +115,7 @@ export function useInvoices(options: UseInvoicesOptions = {}): UseInvoicesReturn
       if (start_date) params.set('start_date', start_date);
       if (end_date) params.set('end_date', end_date);
 
-      const response = await fetchWithAuth(`/api/invoicing/stats?${params}`);
+      const response = await fetchWithAuth<StatsAPIResponse>(`/api/invoicing/stats?${params}`);
       setStats(response.data || null);
     } catch (err) {
       console.error('[useInvoices] Error fetching stats:', err);
@@ -150,7 +125,7 @@ export function useInvoices(options: UseInvoicesOptions = {}): UseInvoicesReturn
   // Fetch pending extractions
   const fetchPendingExtractions = useCallback(async () => {
     try {
-      const response = await fetchWithAuth('/api/invoicing/extractions?status=pending');
+      const response = await fetchWithAuth<ExtractionsAPIResponse>('/api/invoicing/extractions?status=pending');
       setPendingExtractions(response.data || []);
     } catch (err) {
       console.error('[useInvoices] Error fetching extractions:', err);
@@ -159,7 +134,7 @@ export function useInvoices(options: UseInvoicesOptions = {}): UseInvoicesReturn
 
   // Create invoice
   const createInvoice = useCallback(async (data: CreateInvoiceRequest): Promise<Invoice> => {
-    const response = await fetchWithAuth('/api/invoicing/invoices', {
+    const response = await fetchWithAuth<InvoiceAPIResponse>('/api/invoicing/invoices', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -167,7 +142,7 @@ export function useInvoices(options: UseInvoicesOptions = {}): UseInvoicesReturn
     await fetchInvoices();
     await fetchStats();
 
-    return response.data;
+    return response.data as Invoice;
   }, [fetchInvoices, fetchStats]);
 
   // Cancel invoice
@@ -190,12 +165,12 @@ export function useInvoices(options: UseInvoicesOptions = {}): UseInvoicesReturn
 
   // Generate PDF
   const generatePDF = useCallback(async (invoiceId: string): Promise<string> => {
-    const response = await fetchWithAuth('/api/invoicing/generate-pdf', {
+    const response = await fetchWithAuth<PDFAPIResponse>('/api/invoicing/generate-pdf', {
       method: 'POST',
       body: JSON.stringify({ invoice_id: invoiceId }),
     });
 
-    return response.pdf_url;
+    return response.data?.pdf_url || '';
   }, []);
 
   // Refresh all data

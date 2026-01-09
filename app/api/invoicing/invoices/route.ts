@@ -216,6 +216,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'invoice_id is required' }, { status: 400 });
     }
 
+    // Get tenant for security validation
+    const userRole = await getTenantFromUser(supabase, user.id);
+    if (!userRole) {
+      return NextResponse.json({ error: 'No tenant found for user' }, { status: 403 });
+    }
+
     const invoiceService = getInvoiceService();
 
     // Handle cancellation
@@ -223,12 +229,13 @@ export async function PATCH(request: NextRequest) {
       if (!cancel_motivo) {
         return NextResponse.json({ error: 'cancel_motivo is required for cancellation' }, { status: 400 });
       }
-      const invoice = await invoiceService.cancelInvoice(invoice_id, cancel_motivo, cancel_sustitucion);
+      // SECURITY: Pass tenantId to prevent IDOR attacks
+      const invoice = await invoiceService.cancelInvoice(invoice_id, cancel_motivo, cancel_sustitucion, userRole.tenant_id);
       return NextResponse.json(invoice);
     }
 
-    // Update status
-    const invoice = await invoiceService.updateStatus(invoice_id, status, error_message);
+    // Update status - SECURITY: Pass tenantId to prevent IDOR attacks
+    const invoice = await invoiceService.updateStatus(invoice_id, status, error_message, userRole.tenant_id);
     return NextResponse.json(invoice);
   } catch (error) {
     console.error('Error updating invoice:', error);

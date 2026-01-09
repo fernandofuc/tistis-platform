@@ -648,8 +648,8 @@ export interface RestockPreferencesFormData {
   auto_create_orders?: boolean;
   auto_send_to_supplier?: boolean;
   check_frequency_hours?: number;
-  quiet_hours_start?: string;
-  quiet_hours_end?: string;
+  quiet_hours_start?: string | null;
+  quiet_hours_end?: string | null;
 }
 
 // ======================

@@ -6,7 +6,11 @@
 // =====================================================
 
 import { useState, useCallback } from 'react';
+import { fetchWithAuth, type APIResponse } from '@/src/shared/lib/api-client';
 import type { TicketExtraction, TicketExtractedData } from '../types';
+
+// Response type for extraction API
+interface ExtractionAPIResponse extends APIResponse<TicketExtraction> {}
 
 // ======================
 // TYPES
@@ -30,39 +34,6 @@ interface UseTicketExtractionReturn {
   updateExtractedData: (data: Partial<TicketExtractedData>) => void;
   confirmExtraction: (extractionId: string) => Promise<void>;
   reset: () => void;
-}
-
-// ======================
-// API HELPERS
-// ======================
-
-async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error('No session found');
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...options.headers,
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Request failed');
-  }
-
-  return data;
 }
 
 // ======================
@@ -101,7 +72,7 @@ export function useTicketExtraction(): UseTicketExtractionReturn {
       setProgress({ status: 'extracting', progress: 40, message: 'Analizando ticket con IA...' });
 
       // Call extraction API
-      const response = await fetchWithAuth('/api/invoicing/extract-ticket', {
+      const response = await fetchWithAuth<ExtractionAPIResponse>('/api/invoicing/extract-ticket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

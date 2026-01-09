@@ -23,10 +23,20 @@ import {
   MovementForm,
   RestockOrdersTab,
   RestockOrderForm,
+  RestockPreferencesForm,
   ItemForm,
 } from '@/src/features/restaurant-inventory/components';
-import { createRestockOrder } from '@/src/features/restaurant-inventory/services/restock.service';
-import type { RestockOrderFormData, RestockOrder } from '@/src/features/restaurant-inventory/types';
+import {
+  createRestockOrder,
+  getRestockPreferences,
+  saveRestockPreferences,
+} from '@/src/features/restaurant-inventory/services/restock.service';
+import type {
+  RestockOrderFormData,
+  RestockOrder,
+  RestockNotificationPreferences,
+  RestockPreferencesFormData,
+} from '@/src/features/restaurant-inventory/types';
 import type {
   InventoryItem,
   InventoryCategory,
@@ -377,6 +387,8 @@ export default function InventarioPage() {
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [showMovementForm, setShowMovementForm] = useState(false);
   const [showRestockForm, setShowRestockForm] = useState(false);
+  const [showPreferencesForm, setShowPreferencesForm] = useState(false);
+  const [restockPreferences, setRestockPreferences] = useState<RestockNotificationPreferences | null>(null);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
@@ -569,6 +581,37 @@ export default function InventarioPage() {
     }
   }, []);
 
+  // Preferences handlers
+  const handleOpenPreferences = useCallback(async () => {
+    if (activeBranchId) {
+      try {
+        const prefs = await getRestockPreferences(activeBranchId);
+        setRestockPreferences(prefs);
+      } catch (error) {
+        console.error('Error loading preferences:', error);
+        setRestockPreferences(null);
+      }
+    }
+    setShowPreferencesForm(true);
+  }, [activeBranchId]);
+
+  const handlePreferencesSubmit = useCallback(async (data: RestockPreferencesFormData) => {
+    if (!activeBranchId) return;
+    setFormLoading(true);
+    try {
+      const updated = await saveRestockPreferences({
+        ...data,
+        branch_id: activeBranchId,
+      });
+      setRestockPreferences(updated);
+      setShowPreferencesForm(false);
+    } catch (error) {
+      console.error('Error saving preferences:', error);
+    } finally {
+      setFormLoading(false);
+    }
+  }, [activeBranchId]);
+
   // Loading state
   if (tenantLoading || flagsLoading) {
     return (
@@ -667,14 +710,30 @@ export default function InventarioPage() {
           </p>
         </div>
 
-        {activeBranch && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl">
-            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+        <div className="flex items-center gap-3">
+          {/* Preferences Button */}
+          <button
+            onClick={handleOpenPreferences}
+            className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+            title="Configurar preferencias de reabastecimiento"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span className="text-sm font-medium text-slate-700">{activeBranch.name}</span>
-          </div>
-        )}
+            <span className="text-sm font-medium hidden sm:inline">Configurar</span>
+          </button>
+
+          {/* Branch Selector */}
+          {activeBranch && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl">
+              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              </svg>
+              <span className="text-sm font-medium text-slate-700">{activeBranch.name}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -767,6 +826,16 @@ export default function InventarioPage() {
             setShowRestockForm(false);
             setPreSelectedAlertIds([]);
           }}
+          isLoading={formLoading}
+        />
+      )}
+
+      {/* Restock Preferences Form Modal */}
+      {showPreferencesForm && (
+        <RestockPreferencesForm
+          preferences={restockPreferences}
+          onSubmit={handlePreferencesSubmit}
+          onCancel={() => setShowPreferencesForm(false)}
           isLoading={formLoading}
         />
       )}
