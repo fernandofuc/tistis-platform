@@ -261,14 +261,15 @@ async function awardLoyaltyTokensForOrder(
     }
 
     // 3. Award tokens using the RPC function
+    // Using correct parameter names: p_source_id and p_source_type (not p_reference_*)
     const { error: awardError } = await supabase.rpc('award_loyalty_tokens', {
       p_program_id: program.id,
       p_lead_id: leadId,
       p_tokens: tokensToAward,
       p_transaction_type: 'earn_purchase',
       p_description: `Puntos por pedido IA - Total: $${orderTotal.toFixed(2)}`,
-      p_reference_id: null,
-      p_reference_type: 'restaurant_order',
+      p_source_id: null,
+      p_source_type: 'restaurant_order',
     });
 
     if (awardError) {

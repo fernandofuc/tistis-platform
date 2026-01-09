@@ -325,18 +325,23 @@ TOTAL: $${ticketData.total.toFixed(2)} MXN
 
 // ======================
 // CONVERSATION STATE MANAGEMENT
+// Using secure RPCs that validate tenant ownership
 // ======================
 
 async function getInvoicingState(conversationId: string): Promise<InvoicingState | null> {
   const supabase = createServerClient();
 
-  const { data } = await supabase
-    .from('conversation_metadata')
-    .select('invoicing_state')
-    .eq('conversation_id', conversationId)
-    .single();
+  // Use secure RPC that validates conversation exists
+  const { data, error } = await supabase.rpc('get_invoicing_state', {
+    p_conversation_id: conversationId,
+  });
 
-  return data?.invoicing_state || null;
+  if (error) {
+    console.warn('[Invoicing Agent] Error getting state:', error.message);
+    return null;
+  }
+
+  return data || null;
 }
 
 async function setInvoicingState(
@@ -345,27 +350,29 @@ async function setInvoicingState(
 ): Promise<void> {
   const supabase = createServerClient();
 
-  await supabase
-    .from('conversation_metadata')
-    .upsert({
-      conversation_id: conversationId,
-      invoicing_state: state,
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'conversation_id',
-    });
+  // Use secure RPC that validates conversation exists
+  const { error } = await supabase.rpc('set_invoicing_state', {
+    p_conversation_id: conversationId,
+    p_state: state,
+  });
+
+  if (error) {
+    console.error('[Invoicing Agent] Error setting state:', error.message);
+    throw new Error('Failed to save invoicing state');
+  }
 }
 
 async function clearInvoicingState(conversationId: string): Promise<void> {
   const supabase = createServerClient();
 
-  await supabase
-    .from('conversation_metadata')
-    .update({
-      invoicing_state: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('conversation_id', conversationId);
+  // Use secure RPC that validates conversation exists
+  const { error } = await supabase.rpc('clear_invoicing_state', {
+    p_conversation_id: conversationId,
+  });
+
+  if (error) {
+    console.error('[Invoicing Agent] Error clearing state:', error.message);
+  }
 }
 
 // ======================
