@@ -316,6 +316,66 @@ function detectSentiment(message: string): number {
 // VOCABULARY EXTRACTION
 // ======================
 
+// REVISIÓN 5.3 G-B13: Configuración de validación de vocabulario (internal)
+// La versión exportada está al final del archivo
+const VOCABULARY_VALIDATION_INTERNAL = {
+  max_term_length: 100,
+  min_term_length: 2,
+  forbidden_patterns: [
+    /<script/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /\{\{/,
+    /\$\{/,
+    /data:/i,
+    /vbscript:/i,
+    /expression\s*\(/i,
+    /<iframe/i,
+    /<object/i,
+    /<embed/i,
+    /<link/i,
+    /<meta/i,
+    /&#x?[0-9a-f]+;/i,
+    /%3c/i,
+    /%3e/i,
+  ],
+  allowed_chars: /^[\p{L}\p{N}\s.,;:!?¿¡'"()\-\/&@#%+*=]+$/u,
+};
+
+/**
+ * REVISIÓN 5.3 G-B13: Versión interna de sanitización de vocabulario
+ * Usada por extractVocabulary antes de que la versión exportada esté disponible
+ */
+function sanitizeVocabularyTermInternal(term: string): string | null {
+  if (!term || typeof term !== 'string') return null;
+
+  const trimmed = term.trim();
+
+  if (trimmed.length < VOCABULARY_VALIDATION_INTERNAL.min_term_length) return null;
+  if (trimmed.length > VOCABULARY_VALIDATION_INTERNAL.max_term_length) return null;
+
+  // Check forbidden patterns
+  for (const pattern of VOCABULARY_VALIDATION_INTERNAL.forbidden_patterns) {
+    if (pattern.test(trimmed)) {
+      console.warn(`[Learning] Vocabulary term rejected internally: ${pattern.source}`);
+      return null;
+    }
+  }
+
+  // Check allowed chars, try to sanitize if not
+  if (!VOCABULARY_VALIDATION_INTERNAL.allowed_chars.test(trimmed)) {
+    const sanitized = trimmed
+      .replace(/[^\p{L}\p{N}\s.,;:!?¿¡'"()\-\/&@#%+*=]/gu, '')
+      .trim();
+    if (sanitized.length >= VOCABULARY_VALIDATION_INTERNAL.min_term_length) {
+      return sanitized;
+    }
+    return null;
+  }
+
+  return trimmed;
+}
+
 /**
  * Categorías de vocabulario por vertical
  */
@@ -479,12 +539,15 @@ export function extractVocabulary(
         }
         lastIndex = match.index;
 
-        const term = (match[1] || match[0]).trim();
+        const rawTerm = (match[1] || match[0]).trim();
 
-        // Evitar duplicados y términos vacíos
-        if (term.length >= 2 && !vocabulary.some(v => v.term === term)) {
+        // REVISIÓN 5.3 G-B13: Validar y sanitizar término
+        const sanitizedTerm = sanitizeVocabularyTermInternal(rawTerm);
+
+        // Evitar duplicados y términos inválidos
+        if (sanitizedTerm && !vocabulary.some(v => v.term === sanitizedTerm)) {
           vocabulary.push({
-            term,
+            term: sanitizedTerm,
             category,
           });
           if (vocabulary.length >= MAX_VOCABULARY) break;
@@ -515,6 +578,82 @@ const HIGH_PRIORITY_PATTERN_TYPES = [
 ] as const;
 
 type HighPriorityPatternType = typeof HIGH_PRIORITY_PATTERN_TYPES[number];
+
+// ======================
+// REVISIÓN 5.3 G-B12: PATTERN RATE LIMITING (INTERNAL)
+// ======================
+
+const PATTERN_RATE_LIMITS_INTERNAL = {
+  max_patterns_per_lead_per_hour: 50,
+  max_same_pattern_per_lead_per_hour: 5,
+  cooldown_after_limit_ms: 60000,
+  cache_ttl_ms: 3600000,
+};
+
+interface PatternRateLimitStateInternal {
+  totalCount: number;
+  patternCounts: Map<string, number>;
+  lastReset: number;
+  inCooldown: boolean;
+  cooldownEnds?: number;
+}
+
+const patternRateLimitCacheInternal = new Map<string, PatternRateLimitStateInternal>();
+
+/**
+ * REVISIÓN 5.3 G-B12: Versión interna de rate limiting
+ */
+function checkPatternRateLimitInternal(
+  tenantId: string,
+  identifier: string,
+  patternType: string,
+  patternValue: string
+): { allowed: boolean; reason?: string } {
+  const now = Date.now();
+  const key = `${tenantId}:${identifier}`;
+  const patternKey = `${patternType}:${patternValue.toLowerCase().trim()}`;
+
+  let state = patternRateLimitCacheInternal.get(key);
+
+  // Reset si pasó 1 hora
+  if (!state || now - state.lastReset > PATTERN_RATE_LIMITS_INTERNAL.cache_ttl_ms) {
+    state = {
+      totalCount: 0,
+      patternCounts: new Map(),
+      lastReset: now,
+      inCooldown: false,
+    };
+  }
+
+  // Check cooldown activo
+  if (state.inCooldown && state.cooldownEnds && now < state.cooldownEnds) {
+    return { allowed: false, reason: 'In cooldown' };
+  } else if (state.inCooldown) {
+    state.inCooldown = false;
+    state.cooldownEnds = undefined;
+  }
+
+  // Check límite total
+  if (state.totalCount >= PATTERN_RATE_LIMITS_INTERNAL.max_patterns_per_lead_per_hour) {
+    state.inCooldown = true;
+    state.cooldownEnds = now + PATTERN_RATE_LIMITS_INTERNAL.cooldown_after_limit_ms;
+    patternRateLimitCacheInternal.set(key, state);
+    return { allowed: false, reason: 'Total pattern limit reached' };
+  }
+
+  // Check límite del mismo patrón
+  const patternCount = state.patternCounts.get(patternKey) || 0;
+  if (patternCount >= PATTERN_RATE_LIMITS_INTERNAL.max_same_pattern_per_lead_per_hour) {
+    return { allowed: false, reason: 'Same pattern limit' };
+  }
+
+  // Actualizar contadores
+  state.totalCount++;
+  state.patternCounts.set(patternKey, patternCount + 1);
+  patternRateLimitCacheInternal.set(key, state);
+
+  return { allowed: true };
+}
 
 export interface RealTimeProcessingResult {
   processed: boolean;
@@ -599,10 +738,37 @@ export async function processHighPriorityPatterns(
   // Esto permite que el equipo vea alertas en tiempo real
   const supabase = createServerClient();
 
+  // REVISIÓN 5.3 G-B12: Identificador para rate limiting
+  const rateLimitIdentifier = options?.leadId || options?.conversationId || 'anonymous';
+
   try {
+    // REVISIÓN 5.3 G-B12: Filtrar patrones que pasan el rate limit
+    const allowedPatterns = highPriorityPatterns.filter(pattern => {
+      const rateCheck = checkPatternRateLimitInternal(
+        tenantId,
+        rateLimitIdentifier,
+        pattern.type,
+        pattern.value
+      );
+      if (!rateCheck.allowed) {
+        console.log(`[Learning] Pattern rate limited: ${pattern.type}:${pattern.value} - ${rateCheck.reason}`);
+      }
+      return rateCheck.allowed;
+    });
+
+    // Si no hay patrones permitidos después del rate limiting, salir
+    if (allowedPatterns.length === 0) {
+      return {
+        processed: true,
+        high_priority_patterns: highPriorityPatterns, // Retornar los originales para que el caller sepa qué se detectó
+        requires_immediate_action: false, // Pero no generar acción
+        processing_time_ms: Date.now() - startTime,
+      };
+    }
+
     // Ejecutar todas las inserciones en paralelo para mejor rendimiento
     // En lugar de N queries secuenciales, hacemos N queries paralelas
-    const patternPromises = highPriorityPatterns.map(pattern =>
+    const patternPromises = allowedPatterns.map(pattern =>
       supabase.rpc('upsert_message_pattern', {
         p_tenant_id: tenantId,
         p_pattern_type: pattern.type,
@@ -649,9 +815,82 @@ export async function processHighPriorityPatterns(
   };
 }
 
+// ======================
+// REVISIÓN 5.3 G-B17: ALERT THROTTLING (INTERNAL)
+// ======================
+
+const ALERT_THROTTLE_CONFIG_INTERNAL = {
+  max_alerts_per_type_per_hour: 10,
+  max_alerts_per_tenant_per_hour: 50,
+  dedup_window_minutes: 15,
+  cache_ttl_ms: 3600000,
+};
+
+interface AlertThrottleStateInternal {
+  type: string;
+  count: number;
+  lastReset: number;
+  recentPatterns: string[];
+}
+
+const alertThrottleCacheInternal = new Map<string, AlertThrottleStateInternal>();
+const tenantAlertCountInternal = new Map<string, { count: number; lastReset: number }>();
+
+/**
+ * REVISIÓN 5.3 G-B17: Versión interna de throttling
+ */
+function shouldSendAlertInternal(
+  tenantId: string,
+  actionType: string,
+  patternValue: string
+): { send: boolean; reason?: string } {
+  const now = Date.now();
+  const typeKey = `${tenantId}:${actionType}`;
+  const totalKey = `${tenantId}:total`;
+
+  // Check límite total por tenant
+  let tenantTotal = tenantAlertCountInternal.get(totalKey);
+  if (!tenantTotal || now - tenantTotal.lastReset > ALERT_THROTTLE_CONFIG_INTERNAL.cache_ttl_ms) {
+    tenantTotal = { count: 0, lastReset: now };
+  }
+
+  if (tenantTotal.count >= ALERT_THROTTLE_CONFIG_INTERNAL.max_alerts_per_tenant_per_hour) {
+    return { send: false, reason: `Tenant alert limit (${ALERT_THROTTLE_CONFIG_INTERNAL.max_alerts_per_tenant_per_hour}/hr)` };
+  }
+
+  // Check límite por tipo
+  let typeState = alertThrottleCacheInternal.get(typeKey);
+  if (!typeState || now - typeState.lastReset > ALERT_THROTTLE_CONFIG_INTERNAL.cache_ttl_ms) {
+    typeState = { type: actionType, count: 0, lastReset: now, recentPatterns: [] };
+  }
+
+  if (typeState.count >= ALERT_THROTTLE_CONFIG_INTERNAL.max_alerts_per_type_per_hour) {
+    return { send: false, reason: `Type limit for ${actionType} (${ALERT_THROTTLE_CONFIG_INTERNAL.max_alerts_per_type_per_hour}/hr)` };
+  }
+
+  // Check deduplicación
+  const normalizedPattern = patternValue.toLowerCase().trim();
+  if (typeState.recentPatterns.includes(normalizedPattern)) {
+    return { send: false, reason: 'Duplicate pattern' };
+  }
+
+  // Actualizar contadores
+  typeState.count++;
+  typeState.recentPatterns.push(normalizedPattern);
+  if (typeState.recentPatterns.length > 20) typeState.recentPatterns.shift();
+  alertThrottleCacheInternal.set(typeKey, typeState);
+
+  tenantTotal.count++;
+  tenantAlertCountInternal.set(totalKey, tenantTotal);
+
+  return { send: true };
+}
+
 /**
  * Crea una alerta de alta prioridad para el equipo
  * Se muestra en el dashboard usando el sistema de notificaciones existente
+ *
+ * REVISIÓN 5.3 G-B17: Ahora implementa throttling para evitar alert fatigue
  */
 async function createHighPriorityAlert(
   supabase: ReturnType<typeof createServerClient>,
@@ -665,6 +904,15 @@ async function createHighPriorityAlert(
   }
 ): Promise<void> {
   const { tenantId, leadId, conversationId, actionType, patterns, channel } = params;
+
+  // REVISIÓN 5.3 G-B17: Check throttling antes de crear alerta
+  const primaryPattern = patterns[0]?.value || '';
+  const throttleCheck = shouldSendAlertInternal(tenantId, actionType, primaryPattern);
+
+  if (!throttleCheck.send) {
+    console.log(`[Learning] Alert throttled for ${tenantId}:${actionType} - ${throttleCheck.reason}`);
+    return; // No enviar alerta
+  }
 
   // Mapear tipo de acción a configuración de notificación
   // Usamos tipos compatibles con el sistema de notificaciones existente
@@ -1023,42 +1271,94 @@ export async function processLearningMessage(
 
 /**
  * Procesa todos los mensajes pendientes en la cola
+ *
+ * REVISIÓN 5.3 G-B15: Implementa fairness por tenant usando round-robin
+ * Evita que tenants de alto volumen acaparen el procesamiento
  */
 export async function processLearningQueue(limit: number = 100): Promise<{
   processed: number;
   successful: number;
   failed: number;
+  tenants_processed?: number;
 }> {
   const supabase = createServerClient();
 
-  // Obtener mensajes pendientes
-  const { data: pendingItems } = await supabase
+  // REVISIÓN 5.3 G-B15: Obtener tenants únicos con items pendientes
+  const { data: tenantsWithPending, error: tenantError } = await supabase
     .from('ai_learning_queue')
-    .select('id')
+    .select('tenant_id')
     .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(limit);
+    .limit(1000); // Limitar para no sobrecargar
 
-  if (!pendingItems || pendingItems.length === 0) {
+  if (tenantError) {
+    console.error('[Learning Queue] Error fetching tenants:', tenantError);
     return { processed: 0, successful: 0, failed: 0 };
   }
 
+  if (!tenantsWithPending || tenantsWithPending.length === 0) {
+    return { processed: 0, successful: 0, failed: 0 };
+  }
+
+  // Obtener lista única de tenants
+  const uniqueTenantIds = [...new Set(tenantsWithPending.map(t => t.tenant_id))];
+  const numTenants = uniqueTenantIds.length;
+
+  // Calcular cuántos items procesar por tenant (round-robin)
+  // Mínimo 1, máximo según el límite total dividido por número de tenants
+  const itemsPerTenant = Math.max(1, Math.floor(limit / numTenants));
+  const remainingItems = limit - (itemsPerTenant * numTenants);
+
+  console.log(`[Learning Queue] G-B15 Fairness: ${numTenants} tenants, ${itemsPerTenant} items/tenant`);
+
+  let totalProcessed = 0;
   let successful = 0;
   let failed = 0;
+  let tenantsProcessed = 0;
 
-  for (const item of pendingItems) {
-    const result = await processLearningMessage(item.id);
-    if (result.success) {
-      successful++;
-    } else {
-      failed++;
+  // REVISIÓN 5.3 G-B15: Procesar round-robin por tenant
+  for (let i = 0; i < uniqueTenantIds.length && totalProcessed < limit; i++) {
+    const tenantId = uniqueTenantIds[i];
+
+    // Dar items extra al primer tenant si hay remainder
+    const currentLimit = itemsPerTenant + (i < remainingItems ? 1 : 0);
+
+    if (currentLimit <= 0) continue;
+
+    // Obtener items de este tenant
+    const { data: tenantItems } = await supabase
+      .from('ai_learning_queue')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(currentLimit);
+
+    if (!tenantItems || tenantItems.length === 0) continue;
+
+    tenantsProcessed++;
+
+    // Procesar items de este tenant
+    for (const item of tenantItems) {
+      if (totalProcessed >= limit) break;
+
+      const result = await processLearningMessage(item.id);
+      totalProcessed++;
+
+      if (result.success) {
+        successful++;
+      } else {
+        failed++;
+      }
     }
   }
 
+  console.log(`[Learning Queue] G-B15: Processed ${totalProcessed} items from ${tenantsProcessed} tenants`);
+
   return {
-    processed: pendingItems.length,
+    processed: totalProcessed,
     successful,
     failed,
+    tenants_processed: tenantsProcessed,
   };
 }
 
@@ -1177,3 +1477,339 @@ export const MessageLearningService = {
 export type {
   HighPriorityPatternType,
 };
+
+// ======================
+// REVISIÓN 5.3 G-B13: VOCABULARY VALIDATION
+// ======================
+
+/**
+ * Configuración de validación de vocabulario
+ * Previene XSS y otros ataques de inyección
+ */
+const VOCABULARY_VALIDATION = {
+  max_term_length: 100,
+  min_term_length: 2,
+  forbidden_patterns: [
+    /<script/i,           // Script tags
+    /javascript:/i,        // JavaScript protocol
+    /on\w+\s*=/i,         // Event handlers (onclick, onerror, etc.)
+    /\{\{/,               // Template injection
+    /\$\{/,               // Template literals
+    /data:/i,             // Data URLs
+    /vbscript:/i,         // VBScript protocol
+    /expression\s*\(/i,   // CSS expression
+    /<iframe/i,           // Iframe injection
+    /<object/i,           // Object tag
+    /<embed/i,            // Embed tag
+    /<link/i,             // Link tag injection
+    /<meta/i,             // Meta tag injection
+    /&#x?[0-9a-f]+;/i,    // HTML entities (encoded attacks)
+    /%3c/i,               // URL encoded <
+    /%3e/i,               // URL encoded >
+  ],
+  // Caracteres permitidos: letras (incluyendo acentuadas), números, espacios, puntuación básica
+  allowed_chars: /^[\p{L}\p{N}\s.,;:!?¿¡'"()\-\/&@#%+*=]+$/u,
+};
+
+/**
+ * REVISIÓN 5.3 G-B13: Valida un término de vocabulario
+ * Previene XSS, inyección de scripts y caracteres maliciosos
+ *
+ * @param term - Término a validar
+ * @returns Objeto con validez y razón de rechazo si aplica
+ */
+export function validateVocabularyTerm(term: string): { valid: boolean; reason?: string; sanitized?: string } {
+  // Verificar que existe
+  if (!term || typeof term !== 'string') {
+    return { valid: false, reason: 'Term is empty or not a string' };
+  }
+
+  const trimmedTerm = term.trim();
+
+  // Verificar longitud mínima
+  if (trimmedTerm.length < VOCABULARY_VALIDATION.min_term_length) {
+    return { valid: false, reason: 'Term too short' };
+  }
+
+  // Verificar longitud máxima
+  if (trimmedTerm.length > VOCABULARY_VALIDATION.max_term_length) {
+    return { valid: false, reason: 'Term too long' };
+  }
+
+  // Verificar patrones prohibidos (XSS, inyección)
+  for (const pattern of VOCABULARY_VALIDATION.forbidden_patterns) {
+    if (pattern.test(trimmedTerm)) {
+      console.warn(`[Learning] Vocabulary term rejected - forbidden pattern: ${pattern.source}`);
+      return { valid: false, reason: 'Forbidden pattern detected' };
+    }
+  }
+
+  // Verificar caracteres permitidos
+  if (!VOCABULARY_VALIDATION.allowed_chars.test(trimmedTerm)) {
+    // Intentar sanitizar removiendo caracteres no permitidos
+    const sanitized = trimmedTerm
+      .replace(/[^\p{L}\p{N}\s.,;:!?¿¡'"()\-\/&@#%+*=]/gu, '')
+      .trim();
+
+    if (sanitized.length >= VOCABULARY_VALIDATION.min_term_length) {
+      return { valid: true, sanitized };
+    }
+    return { valid: false, reason: 'Invalid characters that cannot be sanitized' };
+  }
+
+  return { valid: true, sanitized: trimmedTerm };
+}
+
+/**
+ * Sanitiza un término de vocabulario, removiendo contenido potencialmente peligroso
+ * Si el término no puede ser sanitizado, retorna null
+ */
+export function sanitizeVocabularyTerm(term: string): string | null {
+  const validation = validateVocabularyTerm(term);
+
+  if (!validation.valid && !validation.sanitized) {
+    return null;
+  }
+
+  return validation.sanitized || term.trim();
+}
+
+// ======================
+// REVISIÓN 5.3 G-B17: ALERT THROTTLING
+// ======================
+
+/**
+ * Configuración de throttling de alertas
+ * Previene "alert fatigue" limitando la frecuencia de notificaciones
+ */
+const ALERT_THROTTLE_CONFIG = {
+  max_alerts_per_type_per_hour: 10,    // Máximo de alertas por tipo por hora
+  max_alerts_per_tenant_per_hour: 50,  // Máximo total de alertas por tenant por hora
+  dedup_window_minutes: 15,            // Ventana para considerar duplicados
+  cache_ttl_ms: 3600000,               // 1 hora en ms
+};
+
+/**
+ * Estado del throttle para una combinación tenant+tipo
+ */
+interface AlertThrottleState {
+  type: string;
+  count: number;
+  lastReset: number;
+  recentPatterns: string[];  // Para deduplicación
+}
+
+/**
+ * Cache en memoria para throttling de alertas
+ * Key: `${tenantId}:${actionType}`
+ */
+const alertThrottleCache = new Map<string, AlertThrottleState>();
+
+/**
+ * Cache para conteo total por tenant
+ * Key: `${tenantId}:total`
+ */
+const tenantAlertCount = new Map<string, { count: number; lastReset: number }>();
+
+/**
+ * REVISIÓN 5.3 G-B17: Verifica si se debe enviar una alerta
+ * Implementa throttling por tipo y deduplicación de patrones similares
+ *
+ * @param tenantId - ID del tenant
+ * @param actionType - Tipo de acción (urgent_booking, escalation, etc.)
+ * @param patternValue - Valor del patrón detectado (para deduplicación)
+ * @returns true si se debe enviar la alerta, false si está throttled
+ */
+export function shouldSendAlert(
+  tenantId: string,
+  actionType: string,
+  patternValue: string
+): { send: boolean; reason?: string } {
+  const now = Date.now();
+  const typeKey = `${tenantId}:${actionType}`;
+  const totalKey = `${tenantId}:total`;
+
+  // 1. Check límite total por tenant
+  let tenantTotal = tenantAlertCount.get(totalKey);
+  if (!tenantTotal || now - tenantTotal.lastReset > ALERT_THROTTLE_CONFIG.cache_ttl_ms) {
+    tenantTotal = { count: 0, lastReset: now };
+  }
+
+  if (tenantTotal.count >= ALERT_THROTTLE_CONFIG.max_alerts_per_tenant_per_hour) {
+    return {
+      send: false,
+      reason: `Tenant alert limit reached (${ALERT_THROTTLE_CONFIG.max_alerts_per_tenant_per_hour}/hr)`
+    };
+  }
+
+  // 2. Check límite por tipo
+  let typeState = alertThrottleCache.get(typeKey);
+
+  // Reset si pasó 1 hora
+  if (!typeState || now - typeState.lastReset > ALERT_THROTTLE_CONFIG.cache_ttl_ms) {
+    typeState = {
+      type: actionType,
+      count: 0,
+      lastReset: now,
+      recentPatterns: [],
+    };
+  }
+
+  // Check límite por tipo por hora
+  if (typeState.count >= ALERT_THROTTLE_CONFIG.max_alerts_per_type_per_hour) {
+    return {
+      send: false,
+      reason: `Type limit reached for ${actionType} (${ALERT_THROTTLE_CONFIG.max_alerts_per_type_per_hour}/hr)`
+    };
+  }
+
+  // 3. Check deduplicación de patrón
+  const normalizedPattern = patternValue.toLowerCase().trim();
+  if (typeState.recentPatterns.includes(normalizedPattern)) {
+    return {
+      send: false,
+      reason: `Duplicate pattern within ${ALERT_THROTTLE_CONFIG.dedup_window_minutes} min`
+    };
+  }
+
+  // 4. Todo OK - actualizar contadores
+  typeState.count++;
+  typeState.recentPatterns.push(normalizedPattern);
+
+  // Mantener solo los últimos 20 patrones para deduplicación
+  if (typeState.recentPatterns.length > 20) {
+    typeState.recentPatterns.shift();
+  }
+
+  alertThrottleCache.set(typeKey, typeState);
+
+  // Actualizar contador total del tenant
+  tenantTotal.count++;
+  tenantAlertCount.set(totalKey, tenantTotal);
+
+  return { send: true };
+}
+
+/**
+ * Limpia el cache de throttling (útil para tests)
+ */
+export function clearAlertThrottleCache(): void {
+  alertThrottleCache.clear();
+  tenantAlertCount.clear();
+}
+
+// ======================
+// REVISIÓN 5.3 G-B12: PATTERN RATE LIMITING
+// ======================
+
+/**
+ * Configuración de rate limiting para patrones
+ * Previene manipulación de sentimiento via repetición
+ */
+const PATTERN_RATE_LIMITS = {
+  max_patterns_per_lead_per_hour: 50,      // Máximo de patrones únicos por lead/hora
+  max_same_pattern_per_lead_per_hour: 5,   // Máximo del mismo patrón por lead/hora
+  max_patterns_per_conversation_per_hour: 100, // Máximo por conversación
+  cooldown_after_limit_ms: 60000,          // 1 minuto de cooldown
+  cache_ttl_ms: 3600000,                   // 1 hora
+};
+
+/**
+ * Estado del rate limit por lead
+ */
+interface PatternRateLimitState {
+  totalCount: number;
+  patternCounts: Map<string, number>;  // patternKey -> count
+  lastReset: number;
+  inCooldown: boolean;
+  cooldownEnds?: number;
+}
+
+/**
+ * Cache en memoria para rate limiting de patrones
+ * Key: `${tenantId}:${leadId || conversationId}`
+ */
+const patternRateLimitCache = new Map<string, PatternRateLimitState>();
+
+/**
+ * REVISIÓN 5.3 G-B12: Verifica rate limit para un patrón
+ * Previene manipulación de sentiment via repetición masiva
+ *
+ * @param tenantId - ID del tenant
+ * @param identifier - leadId o conversationId
+ * @param patternType - Tipo de patrón
+ * @param patternValue - Valor del patrón
+ * @returns true si el patrón puede ser procesado, false si está rate limited
+ */
+export function checkPatternRateLimit(
+  tenantId: string,
+  identifier: string,
+  patternType: string,
+  patternValue: string
+): { allowed: boolean; reason?: string } {
+  const now = Date.now();
+  const key = `${tenantId}:${identifier}`;
+  const patternKey = `${patternType}:${patternValue.toLowerCase().trim()}`;
+
+  let state = patternRateLimitCache.get(key);
+
+  // Reset si pasó 1 hora
+  if (!state || now - state.lastReset > PATTERN_RATE_LIMITS.cache_ttl_ms) {
+    state = {
+      totalCount: 0,
+      patternCounts: new Map(),
+      lastReset: now,
+      inCooldown: false,
+    };
+  }
+
+  // Check cooldown activo
+  if (state.inCooldown && state.cooldownEnds && now < state.cooldownEnds) {
+    return {
+      allowed: false,
+      reason: `In cooldown until ${new Date(state.cooldownEnds).toISOString()}`
+    };
+  } else if (state.inCooldown) {
+    // Salir de cooldown
+    state.inCooldown = false;
+    state.cooldownEnds = undefined;
+  }
+
+  // Check límite total
+  if (state.totalCount >= PATTERN_RATE_LIMITS.max_patterns_per_lead_per_hour) {
+    // Entrar en cooldown
+    state.inCooldown = true;
+    state.cooldownEnds = now + PATTERN_RATE_LIMITS.cooldown_after_limit_ms;
+    patternRateLimitCache.set(key, state);
+
+    console.warn(`[Learning] Rate limit: Total pattern limit reached for ${identifier}`);
+    return {
+      allowed: false,
+      reason: `Total pattern limit reached (${PATTERN_RATE_LIMITS.max_patterns_per_lead_per_hour}/hr)`
+    };
+  }
+
+  // Check límite del mismo patrón
+  const patternCount = state.patternCounts.get(patternKey) || 0;
+  if (patternCount >= PATTERN_RATE_LIMITS.max_same_pattern_per_lead_per_hour) {
+    console.warn(`[Learning] Rate limit: Same pattern limit for ${patternKey}`);
+    return {
+      allowed: false,
+      reason: `Same pattern limit (${PATTERN_RATE_LIMITS.max_same_pattern_per_lead_per_hour}/hr)`
+    };
+  }
+
+  // Actualizar contadores
+  state.totalCount++;
+  state.patternCounts.set(patternKey, patternCount + 1);
+  patternRateLimitCache.set(key, state);
+
+  return { allowed: true };
+}
+
+/**
+ * Limpia el cache de rate limiting (útil para tests)
+ */
+export function clearPatternRateLimitCache(): void {
+  patternRateLimitCache.clear();
+}

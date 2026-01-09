@@ -7,6 +7,7 @@
 //
 // Frecuencia recomendada: Cada 5-10 minutos
 // REVISIÓN 5.2 G-B9: Incluye limpieza automática de cola antigua
+// REVISIÓN 5.3 G-B15: Fairness por tenant (round-robin)
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -138,9 +139,11 @@ export async function GET(request: NextRequest) {
 
     const processingTime = Date.now() - startTime;
 
+    // REVISIÓN 5.3 G-B15: Incluir info de tenants procesados
     console.log(
       `[CRON: Process Learning] Completed in ${processingTime}ms. ` +
-      `Processed: ${result.processed}, Success: ${result.successful}, Failed: ${result.failed}`
+      `Processed: ${result.processed}, Success: ${result.successful}, Failed: ${result.failed}` +
+      (result.tenants_processed ? `, Tenants: ${result.tenants_processed}` : '')
     );
 
     return NextResponse.json({
@@ -148,6 +151,8 @@ export async function GET(request: NextRequest) {
       processed: result.processed,
       successful: result.successful,
       failed: result.failed,
+      // G-B15: Include tenants processed for fairness visibility
+      tenants_processed: result.tenants_processed,
       // G-B9: Include cleanup stats
       cleanup: {
         deleted: cleanupResult.deleted_count,
