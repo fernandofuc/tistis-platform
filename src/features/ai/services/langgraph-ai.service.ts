@@ -144,6 +144,7 @@ async function loadTenantContext(
 
 /**
  * Carga el contexto del lead para el grafo
+ * FIXED: Now filters out soft-deleted leads (H7 fix)
  */
 async function loadLeadContext(leadId: string): Promise<LeadInfo | null> {
   const supabase = createServerClient();
@@ -152,10 +153,16 @@ async function loadLeadContext(leadId: string): Promise<LeadInfo | null> {
     .from('leads')
     .select('*')
     .eq('id', leadId)
+    .is('deleted_at', null)  // H7 FIX: Only load active leads
     .single();
 
   if (error || !lead) {
-    console.error('[LangGraph AI] Error loading lead context:', error);
+    // Check if lead was soft-deleted
+    if (error?.code === 'PGRST116') {
+      console.warn(`[LangGraph AI] Lead ${leadId} not found or was deleted`);
+    } else {
+      console.error('[LangGraph AI] Error loading lead context:', error);
+    }
     return null;
   }
 

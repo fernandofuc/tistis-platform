@@ -660,8 +660,35 @@ export async function enqueueSendMessageJob(
 // OUTBOUND MESSAGING
 // ======================
 
+// WhatsApp message limits
+const WHATSAPP_MAX_MESSAGE_LENGTH = 4096;
+const WHATSAPP_API_TIMEOUT_MS = 30000; // 30 seconds
+
+/**
+ * Trunca un mensaje para que quepa en el límite de WhatsApp
+ */
+function truncateMessageForWhatsApp(message: string): string {
+  if (message.length <= WHATSAPP_MAX_MESSAGE_LENGTH) {
+    return message;
+  }
+
+  // Truncar dejando espacio para el aviso
+  const truncateAt = WHATSAPP_MAX_MESSAGE_LENGTH - 50;
+  let truncated = message.substring(0, truncateAt);
+
+  // Intentar cortar en el último punto para mejor UX
+  const lastPeriod = truncated.lastIndexOf('.');
+  if (lastPeriod > truncateAt - 200) {
+    truncated = truncated.substring(0, lastPeriod + 1);
+  }
+
+  return truncated + '\n\n[Mensaje truncado por límite de caracteres]';
+}
+
 /**
  * Envía un mensaje de texto por WhatsApp
+ * - Trunca mensajes que excedan 4096 caracteres
+ * - Incluye timeout de 30 segundos para evitar requests colgados
  */
 export async function sendWhatsAppMessage(
   connection: ChannelConnection,
@@ -675,6 +702,12 @@ export async function sendWhatsAppMessage(
     throw new Error('WhatsApp connection not properly configured');
   }
 
+  // Truncate message if too long (H5 fix)
+  const truncatedMessage = truncateMessageForWhatsApp(message);
+  if (truncatedMessage !== message) {
+    console.warn(`[WhatsApp] Message truncated from ${message.length} to ${truncatedMessage.length} chars`);
+  }
+
   const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
 
   const payload: WhatsAppOutboundMessage = {
@@ -684,9 +717,13 @@ export async function sendWhatsAppMessage(
     type: 'text',
     text: {
       preview_url: true,
-      body: message,
+      body: truncatedMessage,
     },
   };
+
+  // Create AbortController for timeout (H8 fix)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), WHATSAPP_API_TIMEOUT_MS);
 
   try {
     const response = await fetch(url, {
@@ -696,6 +733,7 @@ export async function sendWhatsAppMessage(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
     const data = await response.json();
@@ -713,8 +751,15 @@ export async function sendWhatsAppMessage(
       success: true,
     };
   } catch (error) {
+    // Handle timeout specifically
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[WhatsApp] Send timed out after 30 seconds');
+      throw new Error('WhatsApp API timeout - message may or may not have been sent');
+    }
     console.error('[WhatsApp] Send failed:', error);
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
