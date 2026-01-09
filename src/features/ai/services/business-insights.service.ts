@@ -101,6 +101,66 @@ const MAX_INSIGHTS_PER_PLAN: Record<string, number> = {
 };
 
 // ======================
+// REVISIÓN 5.3 G-B18: LÍMITES DE DATOS PARA PROMPT
+// ======================
+// Previene overflow del context window de Gemini
+// limitando la cantidad de datos enviados en el prompt
+
+const PROMPT_DATA_LIMITS = {
+  max_service_requests: 15,      // Top 15 servicios más solicitados
+  max_objections: 8,             // Top 8 objeciones más comunes
+  max_scheduling_prefs: 8,       // Top 8 preferencias de horario
+  max_peak_hours: 5,             // Top 5 horas pico
+  max_peak_days: 7,              // Todos los días de la semana
+  max_objection_examples: 2,     // Máx 2 ejemplos por objeción
+  max_prompt_chars: 15000,       // Límite total de caracteres del prompt
+};
+
+/**
+ * REVISIÓN 5.3 G-B18: Limita los datos analíticos para evitar overflow del prompt
+ * Aplica límites a cada tipo de dato para mantener el prompt dentro del context window
+ */
+function limitAnalyticsForPrompt(data: TenantAnalyticsData): TenantAnalyticsData {
+  return {
+    ...data,
+    // Limitar arrays a los top N más relevantes
+    topServiceRequests: data.topServiceRequests.slice(0, PROMPT_DATA_LIMITS.max_service_requests),
+    commonObjections: data.commonObjections
+      .slice(0, PROMPT_DATA_LIMITS.max_objections)
+      .map(obj => ({
+        ...obj,
+        // Limitar ejemplos por objeción
+        examples: obj.examples.slice(0, PROMPT_DATA_LIMITS.max_objection_examples),
+      })),
+    schedulingPreferences: data.schedulingPreferences.slice(0, PROMPT_DATA_LIMITS.max_scheduling_prefs),
+    peakHours: data.peakHours.slice(0, PROMPT_DATA_LIMITS.max_peak_hours),
+    peakDays: data.peakDays.slice(0, PROMPT_DATA_LIMITS.max_peak_days),
+  };
+}
+
+/**
+ * REVISIÓN 5.3 G-B18: Trunca el prompt si excede el límite de caracteres
+ * Esto es una última línea de defensa si limitAnalyticsForPrompt no es suficiente
+ */
+function truncatePromptIfNeeded(prompt: string): string {
+  if (prompt.length <= PROMPT_DATA_LIMITS.max_prompt_chars) {
+    return prompt;
+  }
+
+  console.warn(`[Business Insights] G-B18: Prompt truncated from ${prompt.length} to ${PROMPT_DATA_LIMITS.max_prompt_chars} chars`);
+
+  // Encontrar un punto de corte seguro (al final de una línea)
+  const truncated = prompt.substring(0, PROMPT_DATA_LIMITS.max_prompt_chars);
+  const lastNewline = truncated.lastIndexOf('\n');
+
+  if (lastNewline > PROMPT_DATA_LIMITS.max_prompt_chars * 0.8) {
+    return truncated.substring(0, lastNewline) + '\n\n[Datos truncados por límite de tamaño]';
+  }
+
+  return truncated + '\n\n[Datos truncados por límite de tamaño]';
+}
+
+// ======================
 // DATA COLLECTION
 // ======================
 
@@ -306,6 +366,7 @@ export async function collectTenantAnalytics(tenantId: string): Promise<TenantAn
  * El análisis es específico para el tenant y su vertical
  *
  * REVISIÓN 5.2 G-B4: Incluye circuit breaker para proteger contra fallos repetidos
+ * REVISIÓN 5.3 G-B18: Limita datos para evitar overflow del context window
  */
 async function generateInsightsWithGemini(
   data: TenantAnalyticsData,
@@ -323,35 +384,39 @@ async function generateInsightsWithGemini(
     return [];
   }
 
-  const prompt = `Eres un analista de negocios experto para empresas de servicios en México.
-Analiza los siguientes datos de un negocio tipo "${data.vertical}" llamado "${data.tenantName}" y genera EXACTAMENTE ${maxInsights} insights accionables.
+  // REVISIÓN 5.3 G-B18: Limitar datos para evitar overflow del context window
+  const limitedData = limitAnalyticsForPrompt(data);
+
+  // REVISIÓN 5.3 G-B18: Construir prompt con datos limitados
+  const rawPrompt = `Eres un analista de negocios experto para empresas de servicios en México.
+Analiza los siguientes datos de un negocio tipo "${limitedData.vertical}" llamado "${limitedData.tenantName}" y genera EXACTAMENTE ${maxInsights} insights accionables.
 
 DATOS DEL NEGOCIO:
-- Conversaciones totales: ${data.totalConversations}
-- Conversaciones últimos 30 días: ${data.conversationsLast30Days}
-- Leads totales: ${data.totalLeads}
-- Leads convertidos: ${data.leadsConverted}
-- Tasa de conversión: ${data.conversionRate.toFixed(1)}%
-- Miembros de lealtad: ${data.loyaltyMembers}
-- Puntos promedio por miembro: ${data.avgPointsPerMember}
-- Sentimiento promedio: ${data.avgSentiment.toFixed(2)} (-1 negativo a +1 positivo)
-- Menciones de satisfacción: ${data.satisfactionMentions}
-- Menciones de quejas: ${data.complaintMentions}
+- Conversaciones totales: ${limitedData.totalConversations}
+- Conversaciones últimos 30 días: ${limitedData.conversationsLast30Days}
+- Leads totales: ${limitedData.totalLeads}
+- Leads convertidos: ${limitedData.leadsConverted}
+- Tasa de conversión: ${limitedData.conversionRate.toFixed(1)}%
+- Miembros de lealtad: ${limitedData.loyaltyMembers}
+- Puntos promedio por miembro: ${limitedData.avgPointsPerMember}
+- Sentimiento promedio: ${limitedData.avgSentiment.toFixed(2)} (-1 negativo a +1 positivo)
+- Menciones de satisfacción: ${limitedData.satisfactionMentions}
+- Menciones de quejas: ${limitedData.complaintMentions}
 
 SERVICIOS MÁS SOLICITADOS:
-${data.topServiceRequests.map(s => `- ${s.service}: ${s.count} veces`).join('\n') || 'Sin datos suficientes'}
+${limitedData.topServiceRequests.map(s => `- ${s.service}: ${s.count} veces`).join('\n') || 'Sin datos suficientes'}
 
 OBJECIONES COMUNES:
-${data.commonObjections.map(o => `- "${o.objection}" (${o.count} veces)`).join('\n') || 'Sin datos suficientes'}
+${limitedData.commonObjections.map(o => `- "${o.objection}" (${o.count} veces)`).join('\n') || 'Sin datos suficientes'}
 
 PREFERENCIAS DE HORARIO:
-${data.schedulingPreferences.map(p => `- ${p.preference}: ${p.count} veces`).join('\n') || 'Sin datos suficientes'}
+${limitedData.schedulingPreferences.map(p => `- ${p.preference}: ${p.count} veces`).join('\n') || 'Sin datos suficientes'}
 
 HORAS PICO DE MENSAJES:
-${data.peakHours.map(h => `- ${h.hour}:00 hrs: ${h.count} mensajes`).join('\n') || 'Sin datos suficientes'}
+${limitedData.peakHours.map(h => `- ${h.hour}:00 hrs: ${h.count} mensajes`).join('\n') || 'Sin datos suficientes'}
 
 DÍAS MÁS ACTIVOS:
-${data.peakDays.map(d => `- ${d.day}: ${d.count} mensajes`).join('\n') || 'Sin datos suficientes'}
+${limitedData.peakDays.map(d => `- ${d.day}: ${d.count} mensajes`).join('\n') || 'Sin datos suficientes'}
 
 REGLAS PARA GENERAR INSIGHTS:
 1. Cada insight debe ser ESPECÍFICO y ACCIONABLE para este negocio
@@ -385,6 +450,9 @@ RESPONDE EN FORMATO JSON (array de objetos):
 ]
 
 Genera SOLO el JSON, sin texto adicional.`;
+
+  // REVISIÓN 5.3 G-B18: Aplicar truncación si es necesario
+  const prompt = truncatePromptIfNeeded(rawPrompt);
 
   // Usar el cliente centralizado de Gemini 3.0
   // REVISIÓN 5.2 G-B4: Envolver en try-catch para circuit breaker

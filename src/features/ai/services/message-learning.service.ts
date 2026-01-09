@@ -577,6 +577,75 @@ const HIGH_PRIORITY_PATTERN_TYPES = [
   'pain_point',         // Puntos de dolor (síntomas)
 ] as const;
 
+// ======================
+// REVISIÓN 5.3 G-B19: FILTRADO DE PATRONES POR VERTICAL
+// ======================
+
+/**
+ * Patrones específicos por vertical
+ * Estos patrones SOLO se detectan si el tenant pertenece a esa vertical
+ */
+const VERTICAL_SPECIFIC_PATTERNS: Record<string, string[]> = {
+  dental: [
+    'pain_point',         // Dolor físico solo aplica en dental/médico
+    'urgency_indicator',  // Urgencias médicas
+  ],
+  medical: [
+    'pain_point',
+    'urgency_indicator',
+  ],
+  restaurant: [
+    'complaint',          // Quejas de comida/servicio
+    'preference',         // Preferencias dietéticas
+  ],
+  beauty: [
+    'preference',         // Preferencias de estilo
+  ],
+};
+
+/**
+ * Patrones universales que aplican a TODAS las verticales
+ */
+const UNIVERSAL_PATTERNS = [
+  'service_request',
+  'scheduling_preference',
+  'objection',
+  'satisfaction',
+  'referral',
+  'competitor_mention',
+];
+
+/**
+ * REVISIÓN 5.3 G-B19: Filtra patrones basándose en la vertical del tenant
+ * Previene detección de patrones irrelevantes (ej: pain_point en restaurant)
+ *
+ * @param patterns - Patrones extraídos
+ * @param vertical - Vertical del tenant
+ * @returns Patrones filtrados apropiados para la vertical
+ */
+export function filterPatternsByVertical(
+  patterns: ExtractedPattern[],
+  vertical: string
+): ExtractedPattern[] {
+  // Obtener patrones permitidos para esta vertical
+  const verticalPatterns = VERTICAL_SPECIFIC_PATTERNS[vertical] || [];
+  const allowedTypes = new Set([...UNIVERSAL_PATTERNS, ...verticalPatterns]);
+
+  // Filtrar patrones no permitidos
+  const filtered = patterns.filter(p => allowedTypes.has(p.type));
+
+  // Log si se filtraron patrones (útil para debugging)
+  const removedCount = patterns.length - filtered.length;
+  if (removedCount > 0) {
+    const removedTypes = patterns
+      .filter(p => !allowedTypes.has(p.type))
+      .map(p => p.type);
+    console.log(`[Learning] G-B19: Filtered ${removedCount} patterns not applicable to vertical "${vertical}": ${[...new Set(removedTypes)].join(', ')}`);
+  }
+
+  return filtered;
+}
+
 type HighPriorityPatternType = typeof HIGH_PRIORITY_PATTERN_TYPES[number];
 
 // ======================
@@ -692,8 +761,12 @@ export async function processHighPriorityPatterns(
   // 1. Extraer TODOS los patrones (rápido, solo regex)
   const allPatterns = extractPatterns(messageContent, vertical);
 
+  // REVISIÓN 5.3 G-B19: Filtrar patrones por vertical ANTES de procesar
+  // Esto evita detectar pain_point en restaurant, por ejemplo
+  const verticalFilteredPatterns = filterPatternsByVertical(allPatterns, vertical);
+
   // 2. Filtrar solo los de alta prioridad
-  const highPriorityPatterns = allPatterns.filter(
+  const highPriorityPatterns = verticalFilteredPatterns.filter(
     p => (HIGH_PRIORITY_PATTERN_TYPES as readonly string[]).includes(p.type)
   );
 
@@ -1041,13 +1114,19 @@ async function createHighPriorityAlert(
 /**
  * Verifica rápidamente si un mensaje tiene patrones de alta prioridad
  * Sin guardar en BD - solo detección rápida
+ *
+ * REVISIÓN 5.3 G-B19: Ahora filtra por vertical antes de detectar alta prioridad
  */
 export function hasHighPriorityPatterns(
   messageContent: string,
   vertical: string = 'general'
 ): { hasHighPriority: boolean; types: string[] } {
   const patterns = extractPatterns(messageContent, vertical);
-  const highPriorityTypes = patterns
+
+  // REVISIÓN 5.3 G-B19: Filtrar por vertical primero
+  const filteredPatterns = filterPatternsByVertical(patterns, vertical);
+
+  const highPriorityTypes = filteredPatterns
     .filter(p => (HIGH_PRIORITY_PATTERN_TYPES as readonly string[]).includes(p.type))
     .map(p => p.type);
 
@@ -1172,7 +1251,10 @@ export async function processLearningMessage(
     const vertical = tenant?.vertical || 'general';
 
     // 4. Extraer patrones del mensaje
-    const patterns = extractPatterns(queueItem.message_content, vertical);
+    const rawPatterns = extractPatterns(queueItem.message_content, vertical);
+
+    // REVISIÓN 5.3 G-B19: Filtrar patrones por vertical
+    const patterns = filterPatternsByVertical(rawPatterns, vertical);
 
     // 5. Extraer vocabulario
     const vocabulary = extractVocabulary(queueItem.message_content, vertical);

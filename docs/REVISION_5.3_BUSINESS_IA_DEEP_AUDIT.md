@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-01-09
 **Autor:** Claude Opus 4.5
-**Estado:** IMPLEMENTADO - FASE 1 COMPLETA
+**Estado:** IMPLEMENTADO - FASE 1 Y FASE 2 COMPLETAS
 
 ---
 
@@ -366,8 +366,8 @@ Compliance issue: "Pedí que no guardaran mis datos"
 | **G-B15** | No hay fairness en cola por tenant | ALTA | B15 | Ambas | ✅ IMPLEMENTADO |
 | **G-B16** | No hay lock por tenant en generación | MEDIA | B16 | Ambas | PENDIENTE |
 | **G-B17** | No hay throttling de alertas | ALTA | B17 | Restaurant | ✅ IMPLEMENTADO |
-| **G-B18** | No hay límite de datos para prompt | MEDIA | B18 | Growth | PENDIENTE |
-| **G-B19** | Patrones no filtrados por vertical | MEDIA | B19 | Ambas | PENDIENTE |
+| **G-B18** | No hay límite de datos para prompt | MEDIA | B18 | Growth | ✅ IMPLEMENTADO |
+| **G-B19** | Patrones no filtrados por vertical | MEDIA | B19 | Ambas | ✅ IMPLEMENTADO |
 | **G-B20** | Config learning sin invalidación cache | MEDIA | B20 | Ambas | PENDIENTE |
 
 ---
@@ -674,9 +674,17 @@ function filterPatternsByVertical(
    - `processLearningQueue()` modificado con round-robin
    - Distribución equitativa de procesamiento entre tenants
 
-### Fase 2: Estabilidad (Siguiente sesión)
-5. G-B18: Límite de datos para prompt
-6. G-B19: Filtrado de patrones por vertical
+### Fase 2: Estabilidad ✅ COMPLETADO
+5. ✅ G-B18: Límite de datos para prompt - IMPLEMENTADO
+   - `PROMPT_DATA_LIMITS` configuración en business-insights.service.ts
+   - `limitAnalyticsForPrompt()` limita datos antes de enviar a Gemini
+   - `truncatePromptIfNeeded()` trunca si excede 15,000 caracteres
+   - Previene overflow del context window de Gemini
+6. ✅ G-B19: Filtrado de patrones por vertical - IMPLEMENTADO
+   - `VERTICAL_SPECIFIC_PATTERNS` define patrones por vertical
+   - `UNIVERSAL_PATTERNS` patrones que aplican a todos
+   - `filterPatternsByVertical()` filtra patrones no aplicables
+   - Integrado en `processHighPriorityPatterns`, `processLearningMessage`, `hasHighPriorityPatterns`
 
 ### Fase 3: Optimizaciones (Backlog)
 7. G-B11: Aislamiento de vocabulario
