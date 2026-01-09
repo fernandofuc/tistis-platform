@@ -6,6 +6,7 @@
 import { BaseAgent, type AgentResult, formatBranchesForPrompt } from './base.agent';
 import type { TISTISAgentStateType, OrderResult } from '../../state';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import { SafetyResilienceService } from '../../services/safety-resilience.service';
 
 // ======================
 // TYPES
@@ -573,6 +574,69 @@ Tú: "Tu pedido está confirmado. Total: $180. Número de orden: #023. Estará l
     const menuItems = business?.menu_items || [];
     const menuCategories = business?.menu_categories || [];
 
+    // =====================================================
+    // REVISIÓN 5.1 P1 FIX: VERIFICAR ALERGIAS ANTES DE PEDIDO
+    // =====================================================
+    const safetyAnalysis = state.safety_analysis;
+
+    // Check if allergy was detected in this conversation
+    if (safetyAnalysis?.safety_category === 'food_allergy') {
+      // Get items that contain detected allergens
+      const allergyWarnings: string[] = [];
+
+      // Extract allergen keywords from the disclaimer or detected items
+      const commonAllergens = ['mariscos', 'crustáceos', 'maní', 'cacahuate', 'nuez', 'nueces', 'gluten', 'trigo', 'leche', 'lácteos', 'huevo'];
+      const detectedAllergens: string[] = [];
+
+      for (const allergen of commonAllergens) {
+        if (safetyAnalysis.safety_disclaimer?.toLowerCase().includes(allergen)) {
+          detectedAllergens.push(allergen);
+        }
+      }
+
+      // Check menu items for allergen warnings
+      for (const item of menuItems) {
+        if (item.allergens && item.allergens.length > 0) {
+          for (const allergen of item.allergens) {
+            if (detectedAllergens.some(da => allergen.toLowerCase().includes(da))) {
+              allergyWarnings.push(`${item.name} contiene ${allergen}`);
+            }
+          }
+        }
+      }
+
+      // If severe allergy and items have allergens, require human confirmation
+      if (safetyAnalysis.safety_disclaimer?.includes('severa') ||
+          safetyAnalysis.safety_disclaimer?.includes('anafil')) {
+        console.warn(`[Ordering] SEVERE ALLERGY DETECTED - Escalating order for safety review`);
+
+        // Log the incident
+        await this.logAllergyIncident(
+          tenant?.tenant_id || '',
+          state.conversation?.conversation_id,
+          lead?.lead_id,
+          state.current_message,
+          state.channel,
+          detectedAllergens
+        );
+
+        return {
+          response: `Por tu seguridad, debido a tu alergia ${detectedAllergens.length > 0 ? `a ${detectedAllergens.join(', ')}` : 'severa'}, prefiero que un miembro de nuestro equipo tome tu pedido directamente. Ellos pueden verificar los ingredientes de cada platillo. Te conectaré con un asesor.`,
+          should_escalate: true,
+          escalation_reason: `Alergia severa detectada: ${detectedAllergens.join(', ')}. Requiere verificación humana para pedido.`,
+          tokens_used: 0,
+        };
+      }
+
+      // For moderate allergies, add warning context but allow order
+      if (allergyWarnings.length > 0) {
+        console.log(`[Ordering] Allergy warnings for menu items: ${allergyWarnings.join('; ')}`);
+      }
+    }
+    // =====================================================
+    // END P1 FIX
+    // =====================================================
+
     // Format menu for prompt
     const menuContext = formatMenuForPrompt(menuItems, menuCategories);
     const branchesContext = formatBranchesForPrompt(business);
@@ -640,6 +704,48 @@ Tú: "Tu pedido está confirmado. Total: $180. Número de orden: #023. Estará l
       response,
       tokens_used: tokens,
     };
+  }
+
+  /**
+   * REVISIÓN 5.1 P2 FIX: Log allergy incidents to database
+   */
+  private async logAllergyIncident(
+    tenantId: string,
+    conversationId: string | undefined,
+    leadId: string | undefined,
+    originalMessage: string,
+    channel: string,
+    detectedAllergens: string[]
+  ): Promise<void> {
+    if (!tenantId) return;
+
+    const supabase = createServerClient();
+
+    try {
+      await supabase.rpc('log_safety_incident', {
+        p_tenant_id: tenantId,
+        p_conversation_id: conversationId || null,
+        p_lead_id: leadId || null,
+        p_incident_type: 'food_allergy',
+        p_severity: 4, // High severity for ordering context
+        p_original_message: originalMessage.substring(0, 500),
+        p_channel: channel,
+        p_vertical: 'restaurant',
+        p_action_taken: 'escalated_immediate',
+        p_detected_keywords: detectedAllergens,
+        p_disclaimer_shown: 'Escalado a humano para verificación de ingredientes',
+        p_metadata: JSON.stringify({
+          context: 'ordering',
+          detected_allergens: detectedAllergens,
+          escalation_reason: 'severe_allergy_during_order',
+        }),
+      });
+
+      console.log(`[Ordering] Safety incident logged for tenant ${tenantId}`);
+    } catch (error) {
+      console.error('[Ordering] Error logging safety incident:', error);
+      // Don't throw - logging failure shouldn't block the escalation
+    }
   }
 }
 

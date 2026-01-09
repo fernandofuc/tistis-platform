@@ -84,3 +84,16 @@ export type {
   CallReconnectionContext,
   EscalationFallbackResult,
 } from './services/safety-resilience.service';
+
+// ======================
+// REVISIÓN 5.1: DATABASE LOGGING FUNCTIONS
+// ======================
+export {
+  logSafetyIncident,
+  logSpecialEventRequest,
+  createEscalationCallbackTask,
+} from './services/safety-resilience.service';
+export type {
+  SafetyIncidentType,
+  SafetyActionTaken,
+} from './services/safety-resilience.service';

@@ -20,10 +20,14 @@ import type { AIIntent, AISignal } from '@/src/shared/types/whatsapp';
 import { DEFAULT_MODELS } from '@/src/shared/config/ai-models';
 import {
   SafetyResilienceService,
+  logSafetyIncident,
+  logSpecialEventRequest,
   type EmergencyDetectionResult,
   type SafetyDetectionResult,
   type SpecialEventDetectionResult,
   type ConfigCompleteness,
+  type SafetyIncidentType,
+  type SafetyActionTaken,
 } from '../../services/safety-resilience.service';
 
 // ======================
@@ -355,6 +359,87 @@ export async function supervisorNode(
         specialEvent: specialEventResult.isSpecialEvent ? specialEventResult.eventType : 'none',
         configComplete: configCompleteness.isComplete,
       });
+
+      // =========================================================
+      // REVISIÓN 5.1 P2 FIX: Log incidents to database for compliance
+      // =========================================================
+      if (state.tenant?.tenant_id) {
+        // P2: Log emergencies
+        if (emergencyResult.isEmergency) {
+          const incidentType: SafetyIncidentType = emergencyResult.emergencyType === 'dental_emergency'
+            ? 'emergency_dental'
+            : emergencyResult.emergencyType === 'medical_emergency'
+              ? 'emergency_medical'
+              : emergencyResult.emergencyType === 'accident'
+                ? 'accident'
+                : 'severe_pain';
+
+          const actionTaken: SafetyActionTaken = emergencyResult.severity >= 4
+            ? 'escalated_immediate'
+            : emergencyResult.recommendedAction === 'urgent_care'
+              ? 'urgent_care_routing'
+              : 'human_notified';
+
+          // Fire and forget - don't block main flow
+          logSafetyIncident(
+            state.tenant.tenant_id,
+            state.conversation?.conversation_id,
+            state.lead?.lead_id,
+            incidentType,
+            emergencyResult.severity as 1 | 2 | 3 | 4 | 5,
+            state.current_message,
+            state.channel,
+            state.vertical,
+            actionTaken,
+            emergencyResult.keywords,
+            emergencyResult.emergencyMessage
+          ).catch(err => console.error('[Supervisor] Error logging emergency incident:', err));
+        }
+
+        // P2: Log safety requirements (allergies, etc.)
+        if (safetyResult.requiresSafetyDisclaimer) {
+          const safetyIncidentType: SafetyIncidentType =
+            safetyResult.category === 'food_allergy' ? 'food_allergy' :
+              safetyResult.category === 'dietary_restriction' ? 'dietary_restriction' :
+                'medical_condition';
+
+          const safetyAction: SafetyActionTaken = safetyResult.shouldEscalateToHuman
+            ? 'escalated_immediate'
+            : 'disclaimer_shown';
+
+          logSafetyIncident(
+            state.tenant.tenant_id,
+            state.conversation?.conversation_id,
+            state.lead?.lead_id,
+            safetyIncidentType,
+            safetyResult.shouldEscalateToHuman ? 4 : 3,
+            state.current_message,
+            state.channel,
+            state.vertical,
+            safetyAction,
+            safetyResult.detectedItems,
+            safetyResult.disclaimer
+          ).catch(err => console.error('[Supervisor] Error logging safety incident:', err));
+        }
+
+        // P3: Log special events
+        if (specialEventResult.isSpecialEvent && specialEventResult.shouldEscalate) {
+          logSpecialEventRequest(
+            state.tenant.tenant_id,
+            state.conversation?.conversation_id,
+            state.lead?.lead_id,
+            state.business_context?.branches?.[0]?.id,
+            specialEventResult.eventType,
+            specialEventResult.groupSize,
+            undefined, // requestedDate - to be extracted later
+            specialEventResult.specialRequirements,
+            undefined, // dietaryRestrictions
+            specialEventResult.escalationReason,
+            state.lead?.name,
+            state.lead?.phone
+          ).catch(err => console.error('[Supervisor] Error logging special event:', err));
+        }
+      }
     }
 
     // =========================================================

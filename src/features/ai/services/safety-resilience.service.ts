@@ -11,6 +11,7 @@
 // =====================================================
 
 import type { TISTISAgentStateType } from '../state';
+import { createServerClient } from '@/src/shared/lib/supabase';
 
 // ======================
 // TYPES
@@ -801,6 +802,189 @@ function isValidRFCDate(dateStr: string): boolean {
 }
 
 // ======================
+// REVISIÓN 5.1: DATABASE LOGGING (P2 FIX)
+// ======================
+
+export type SafetyIncidentType =
+  | 'emergency_dental'
+  | 'emergency_medical'
+  | 'severe_pain'
+  | 'accident'
+  | 'food_allergy'
+  | 'dietary_restriction'
+  | 'medical_condition'
+  | 'special_event_escalation'
+  | 'config_incomplete'
+  | 'escalation_failed';
+
+export type SafetyActionTaken =
+  | 'escalated_immediate'
+  | 'urgent_care_routing'
+  | 'human_notified'
+  | 'disclaimer_shown'
+  | 'fallback_response'
+  | 'callback_scheduled';
+
+/**
+ * REVISIÓN 5.1 P2 FIX: Log safety incidents to database
+ * Centralized function to log all safety-related incidents for audit/compliance
+ */
+export async function logSafetyIncident(
+  tenantId: string,
+  conversationId: string | undefined,
+  leadId: string | undefined,
+  incidentType: SafetyIncidentType,
+  severity: 1 | 2 | 3 | 4 | 5,
+  originalMessage: string,
+  channel: string,
+  vertical: string,
+  actionTaken: SafetyActionTaken,
+  detectedKeywords?: string[],
+  disclaimerShown?: string,
+  metadata?: Record<string, unknown>
+): Promise<string | null> {
+  if (!tenantId) {
+    console.warn('[SafetyResilience] Cannot log incident without tenantId');
+    return null;
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    const { data, error } = await supabase.rpc('log_safety_incident', {
+      p_tenant_id: tenantId,
+      p_conversation_id: conversationId || null,
+      p_lead_id: leadId || null,
+      p_incident_type: incidentType,
+      p_severity: severity,
+      p_original_message: originalMessage.substring(0, 1000), // Truncate for DB
+      p_channel: channel,
+      p_vertical: vertical,
+      p_action_taken: actionTaken,
+      p_detected_keywords: detectedKeywords || null,
+      p_disclaimer_shown: disclaimerShown || null,
+      p_metadata: metadata ? JSON.stringify(metadata) : '{}',
+    });
+
+    if (error) {
+      console.error('[SafetyResilience] Error logging safety incident:', error);
+      return null;
+    }
+
+    console.log(`[SafetyResilience] Safety incident logged: ${incidentType} (severity ${severity})`);
+    return data as string;
+  } catch (err) {
+    console.error('[SafetyResilience] Exception logging safety incident:', err);
+    return null;
+  }
+}
+
+/**
+ * REVISIÓN 5.1 P3 FIX: Log special event requests to database
+ */
+export async function logSpecialEventRequest(
+  tenantId: string,
+  conversationId: string | undefined,
+  leadId: string | undefined,
+  branchId: string | undefined,
+  eventType: SpecialEventType,
+  groupSize?: number,
+  requestedDate?: string,
+  specialRequirements?: string[],
+  dietaryRestrictions?: string[],
+  escalationReason?: string,
+  contactName?: string,
+  contactPhone?: string
+): Promise<string | null> {
+  if (!tenantId) {
+    console.warn('[SafetyResilience] Cannot log event without tenantId');
+    return null;
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    const { data, error } = await supabase
+      .from('special_event_requests')
+      .insert({
+        tenant_id: tenantId,
+        conversation_id: conversationId,
+        lead_id: leadId,
+        branch_id: branchId,
+        event_type: eventType,
+        group_size: groupSize,
+        requested_date: requestedDate,
+        special_requirements: specialRequirements,
+        dietary_restrictions: dietaryRestrictions,
+        escalation_reason: escalationReason,
+        contact_name: contactName,
+        contact_phone: contactPhone,
+        status: 'pending',
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('[SafetyResilience] Error logging special event:', error);
+      return null;
+    }
+
+    console.log(`[SafetyResilience] Special event logged: ${eventType}`);
+    return data?.id || null;
+  } catch (err) {
+    console.error('[SafetyResilience] Exception logging special event:', err);
+    return null;
+  }
+}
+
+/**
+ * REVISIÓN 5.1 P4 FIX: Create escalation callback when escalation fails
+ */
+export async function createEscalationCallbackTask(
+  tenantId: string,
+  conversationId: string | undefined,
+  leadId: string | undefined,
+  callbackType: 'voice_callback' | 'message_callback' | 'priority_contact',
+  originalChannel: string,
+  escalationReason: string,
+  phoneNumber?: string,
+  preferredTime?: string,
+  messageLeft?: string
+): Promise<string | null> {
+  if (!tenantId) {
+    console.warn('[SafetyResilience] Cannot create callback without tenantId');
+    return null;
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    const { data, error } = await supabase.rpc('create_escalation_callback', {
+      p_tenant_id: tenantId,
+      p_conversation_id: conversationId || null,
+      p_lead_id: leadId || null,
+      p_callback_type: callbackType,
+      p_original_channel: originalChannel,
+      p_escalation_reason: escalationReason,
+      p_phone_number: phoneNumber || null,
+      p_preferred_time: preferredTime || null,
+      p_message_left: messageLeft || null,
+    });
+
+    if (error) {
+      console.error('[SafetyResilience] Error creating callback:', error);
+      return null;
+    }
+
+    console.log(`[SafetyResilience] Escalation callback created: ${callbackType}`);
+    return data as string;
+  } catch (err) {
+    console.error('[SafetyResilience] Exception creating callback:', err);
+    return null;
+  }
+}
+
+// ======================
 // EXPORTS
 // ======================
 
@@ -832,4 +1016,9 @@ export const SafetyResilienceService = {
 
   // RFC validation (P30)
   validateRFC,
+
+  // REVISIÓN 5.1: Database logging (P2, P3, P4 FIX)
+  logSafetyIncident,
+  logSpecialEventRequest,
+  createEscalationCallbackTask,
 };
