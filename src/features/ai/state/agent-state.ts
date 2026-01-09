@@ -612,6 +612,39 @@ export const TISTISAgentState = Annotation.Root({
     reducer: (prev, next) => ({ ...prev, ...next }),
     default: () => ({}),
   }),
+
+  // =====================================================
+  // REVISIÓN 5.0: SAFETY & RESILIENCE ANALYSIS
+  // =====================================================
+
+  /**
+   * Resultados del análisis de seguridad y resiliencia
+   * Generado por el Supervisor Agent usando SafetyResilienceService
+   *
+   * P25: Detección de emergencias médicas/dentales
+   * P27: Detección de eventos especiales (restaurant)
+   * P29: Detección de alergias y safety requirements
+   * P23: Validación de configuración incompleta
+   */
+  safety_analysis: Annotation<{
+    // P25: Emergency detection
+    emergency_detected: boolean;
+    emergency_type: string;
+    emergency_severity: number;
+    emergency_message?: string;
+    // P29: Safety disclaimers
+    safety_disclaimer?: string;
+    safety_category: string;
+    // P27: Special events
+    special_event_type: string;
+    special_event_requirements: string[];
+    // P23: Config completeness
+    config_completeness_score: number;
+    config_missing_critical: string[];
+  } | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
 });
 
 // Tipo inferido del estado
@@ -663,6 +696,7 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
     processing_started_at: new Date().toISOString(),
     errors: [],
     metadata: {},
+    safety_analysis: null,
   };
 }
 

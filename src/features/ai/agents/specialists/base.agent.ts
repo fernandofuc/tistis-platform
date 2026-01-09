@@ -2,6 +2,10 @@
 // TIS TIS PLATFORM - Base Agent Class
 // Clase base para todos los agentes especialistas
 // =====================================================
+// REVISIÓN 5.0: Integración con SafetyResilienceService
+// - P29: Incluir disclaimers de seguridad automáticamente
+// - P23: Manejar configuración incompleta
+// =====================================================
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
@@ -11,6 +15,7 @@ import {
   addAgentTrace,
 } from '../../state';
 import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
+import { SafetyResilienceService } from '../../services/safety-resilience.service';
 
 // ======================
 // TYPES
@@ -234,15 +239,40 @@ export abstract class BaseAgent {
 
   /**
    * Llama al LLM con el contexto construido
+   *
+   * REVISIÓN 5.0:
+   * - P29: Incluye disclaimers de seguridad automáticamente si están presentes en safety_analysis
+   * - P23: Maneja configuración incompleta con respuesta apropiada
    */
   protected async callLLM(
     state: TISTISAgentStateType,
     additionalContext?: string
   ): Promise<{ response: string; tokens: number }> {
+    // P23 FIX: Check for incomplete configuration
+    const safetyAnalysis = state.safety_analysis;
+    if (safetyAnalysis?.config_missing_critical && safetyAnalysis.config_missing_critical.length > 0) {
+      const fallbackResponse = SafetyResilienceService.generateIncompleteConfigResponse(
+        safetyAnalysis.config_missing_critical,
+        state.vertical
+      );
+      console.warn(`[${this.config.name}] Using incomplete config fallback response`);
+      return { response: fallbackResponse, tokens: 50 };
+    }
+
     let systemPrompt = this.buildSystemPrompt(state);
 
     if (additionalContext) {
       systemPrompt += `\n\n${additionalContext}`;
+    }
+
+    // P29 FIX: Add safety context if available
+    if (safetyAnalysis?.safety_disclaimer) {
+      systemPrompt += `\n\n# IMPORTANTE - AVISO DE SEGURIDAD\nDebes incluir el siguiente aviso en tu respuesta:\n"${safetyAnalysis.safety_disclaimer}"`;
+    }
+
+    // P25 FIX: Add emergency context if detected
+    if (safetyAnalysis?.emergency_detected && safetyAnalysis.emergency_message) {
+      systemPrompt += `\n\n# EMERGENCIA DETECTADA\nEl cliente está en una situación de emergencia (${safetyAnalysis.emergency_type}). Prioriza su seguridad y proporciona información de contacto directo si es necesario.`;
     }
 
     const messages = [
@@ -253,9 +283,12 @@ export abstract class BaseAgent {
     try {
       const result = await this.llm.invoke(messages);
 
-      const response = typeof result.content === 'string'
+      let response = typeof result.content === 'string'
         ? result.content
         : 'Lo siento, no pude procesar tu mensaje.';
+
+      // P29 FIX: Append safety disclaimer if not already included in response
+      response = this.appendSafetyDisclaimer(response, state);
 
       // Estimar tokens (LangChain no siempre proporciona usage)
       const estimatedTokens = Math.ceil(
@@ -267,6 +300,35 @@ export abstract class BaseAgent {
       console.error(`[${this.config.name}] LLM error:`, error);
       throw error;
     }
+  }
+
+  /**
+   * P29 FIX: Appends safety disclaimer to response if needed and not already present
+   */
+  protected appendSafetyDisclaimer(response: string, state: TISTISAgentStateType): string {
+    const safetyAnalysis = state.safety_analysis;
+
+    // No disclaimer needed
+    if (!safetyAnalysis?.safety_disclaimer) {
+      return response;
+    }
+
+    // Check if LLM already included a safety-related message
+    const safetyIndicators = [
+      'alergia', 'seguridad', 'contaminación', 'informar', 'mesero',
+      'precaución', 'importante', 'recomendamos'
+    ];
+
+    const responseLower = response.toLowerCase();
+    const hasDisclaimer = safetyIndicators.some(indicator => responseLower.includes(indicator));
+
+    if (hasDisclaimer) {
+      // LLM already included safety info
+      return response;
+    }
+
+    // Append disclaimer
+    return `${response}\n\n${safetyAnalysis.safety_disclaimer}`;
   }
 
   /**

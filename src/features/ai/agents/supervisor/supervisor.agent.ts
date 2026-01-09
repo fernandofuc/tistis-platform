@@ -2,6 +2,12 @@
 // TIS TIS PLATFORM - Supervisor Agent
 // Agente principal que orquesta el flujo de conversación
 // =====================================================
+// REVISIÓN 5.0: Integración con SafetyResilienceService
+// - P25: Detección de emergencias médicas/dentales
+// - P27: Detección de eventos especiales (restaurant)
+// - P29: Detección de alergias y safety requirements
+// - P23: Validación de configuración incompleta
+// =====================================================
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
@@ -12,6 +18,13 @@ import {
 } from '../../state';
 import type { AIIntent, AISignal } from '@/src/shared/types/whatsapp';
 import { DEFAULT_MODELS } from '@/src/shared/config/ai-models';
+import {
+  SafetyResilienceService,
+  type EmergencyDetectionResult,
+  type SafetyDetectionResult,
+  type SpecialEventDetectionResult,
+  type ConfigCompleteness,
+} from '../../services/safety-resilience.service';
 
 // ======================
 // CONFIGURATION
@@ -33,6 +46,14 @@ interface SupervisorDecision {
   should_escalate: boolean;
   escalation_reason?: string;
   extracted_data: Partial<TISTISAgentStateType['extracted_data']>;
+}
+
+// P25/P27/P29: Safety & Resilience Detection Results
+interface SafetyAnalysisResult {
+  emergency: EmergencyDetectionResult;
+  safety: SafetyDetectionResult;
+  specialEvent: SpecialEventDetectionResult;
+  configCompleteness: ConfigCompleteness;
 }
 
 // ======================
@@ -278,6 +299,7 @@ function shouldEscalateImmediate(
  * 3. Extraer datos estructurados
  * 4. Decidir siguiente agente (routing)
  * 5. Determinar si escalar a humano
+ * 6. REVISIÓN 5.0: Detectar emergencias, alergias, eventos especiales
  */
 export async function supervisorNode(
   state: TISTISAgentStateType
@@ -297,41 +319,139 @@ export async function supervisorNode(
     // 3. Extraer datos estructurados
     const extractedData = extractData(state.current_message);
 
-    // 4. Verificar escalación inmediata
-    const escalationCheck = shouldEscalateImmediate(
+    // =========================================================
+    // REVISIÓN 5.0: Safety & Resilience Checks
+    // =========================================================
+
+    // P25: Detectar emergencias médicas/dentales
+    const emergencyResult = SafetyResilienceService.detectEmergency(
+      state.current_message,
+      state.vertical
+    );
+
+    // P29: Detectar requerimientos de seguridad (alergias, etc.)
+    const safetyResult = SafetyResilienceService.detectSafetyRequirements(
+      state.current_message,
+      state.vertical
+    );
+
+    // P27: Detectar eventos especiales (restaurante)
+    const specialEventResult = SafetyResilienceService.detectSpecialEvent(
+      state.current_message,
+      state.vertical
+    );
+
+    // P23: Validar configuración del negocio
+    const configCompleteness = SafetyResilienceService.validateBusinessConfiguration(
+      state.business_context,
+      state.vertical
+    );
+
+    // Log safety analysis for debugging
+    if (emergencyResult.isEmergency || safetyResult.requiresSafetyDisclaimer || specialEventResult.isSpecialEvent) {
+      console.log(`[Supervisor] Safety Analysis:`, {
+        emergency: emergencyResult.isEmergency ? emergencyResult.emergencyType : 'none',
+        safety: safetyResult.requiresSafetyDisclaimer ? safetyResult.category : 'none',
+        specialEvent: specialEventResult.isSpecialEvent ? specialEventResult.eventType : 'none',
+        configComplete: configCompleteness.isComplete,
+      });
+    }
+
+    // =========================================================
+    // Determinar escalación considerando safety checks
+    // =========================================================
+
+    // 4. Verificar escalación inmediata (original)
+    let escalationCheck = shouldEscalateImmediate(
       intent,
       signals,
       state.current_message,
       state.tenant?.ai_config.auto_escalate_keywords
     );
 
+    // P25: Override escalación si hay emergencia crítica
+    if (emergencyResult.isEmergency && emergencyResult.severity >= 4) {
+      escalationCheck = {
+        escalate: true,
+        reason: `EMERGENCIA: ${emergencyResult.emergencyType} (severidad ${emergencyResult.severity}/5)`,
+      };
+      console.warn(`[Supervisor] EMERGENCY DETECTED: ${emergencyResult.emergencyType}`);
+    }
+
+    // P29: Escalar si alergia severa requiere humano
+    if (safetyResult.shouldEscalateToHuman && !escalationCheck.escalate) {
+      escalationCheck = {
+        escalate: true,
+        reason: `SEGURIDAD: ${safetyResult.category} - requiere atención humana`,
+      };
+      console.warn(`[Supervisor] SAFETY ESCALATION: ${safetyResult.category}`);
+    }
+
+    // P27: Escalar si evento especial requiere coordinación
+    if (specialEventResult.shouldEscalate && !escalationCheck.escalate) {
+      escalationCheck = {
+        escalate: true,
+        reason: specialEventResult.escalationReason || `Evento especial: ${specialEventResult.eventType}`,
+      };
+      console.log(`[Supervisor] SPECIAL EVENT ESCALATION: ${specialEventResult.eventType}`);
+    }
+
     // 5. Determinar siguiente agente
-    const nextAgent = escalationCheck.escalate
-      ? 'escalation'
-      : determineNextAgent(intent, state.vertical);
+    let nextAgent: string;
+    if (escalationCheck.escalate) {
+      // P25: Si es emergencia pero no crítica, ir a urgent_care primero
+      if (emergencyResult.isEmergency && emergencyResult.recommendedAction === 'urgent_care') {
+        nextAgent = 'urgent_care';
+      } else {
+        nextAgent = 'escalation';
+      }
+    } else {
+      nextAgent = determineNextAgent(intent, state.vertical);
+    }
 
     // 6. Calcular score total
     const totalScoreChange = signals.reduce((sum, s) => sum + s.points, 0);
 
-    // 7. Crear traza del agente
+    // 7. Preparar metadata de safety para el estado
+    const safetyMetadata = {
+      emergency_detected: emergencyResult.isEmergency,
+      emergency_type: emergencyResult.emergencyType,
+      emergency_severity: emergencyResult.severity,
+      emergency_message: emergencyResult.emergencyMessage,
+      safety_disclaimer: safetyResult.disclaimer,
+      safety_category: safetyResult.category,
+      special_event_type: specialEventResult.eventType,
+      special_event_requirements: specialEventResult.specialRequirements,
+      config_completeness_score: configCompleteness.completenessScore,
+      config_missing_critical: configCompleteness.missingCritical,
+    };
+
+    // 8. Crear traza del agente
     const trace: AgentTrace = addAgentTrace(
       state,
       {
         agent_name: agentName,
         input_summary: `Message: "${state.current_message.substring(0, 50)}..."`,
-        output_summary: `Intent: ${intent}, Next: ${nextAgent}`,
-        decision: `Routing to ${nextAgent} because ${intent}`,
+        output_summary: `Intent: ${intent}, Next: ${nextAgent}${emergencyResult.isEmergency ? ' [EMERGENCY]' : ''}`,
+        decision: `Routing to ${nextAgent} because ${intent}${emergencyResult.isEmergency ? ` (Emergency: ${emergencyResult.emergencyType})` : ''}`,
         duration_ms: Date.now() - startTime,
       }
     );
 
     console.log(`[Supervisor] Intent: ${intent}, Next agent: ${nextAgent}, Score change: ${totalScoreChange}`);
 
-    // 8. Retornar actualizaciones al estado
+    // 9. Retornar actualizaciones al estado
     return {
       detected_intent: intent,
       detected_signals: signals,
-      extracted_data: { ...state.extracted_data, ...extractedData },
+      extracted_data: {
+        ...state.extracted_data,
+        ...extractedData,
+        // P25: Agregar nivel de dolor de emergency detection si es más preciso
+        pain_level: emergencyResult.severity > (extractedData.pain_level || 0)
+          ? emergencyResult.severity
+          : extractedData.pain_level,
+      },
       current_agent: agentName,
       next_agent: nextAgent,
       routing_reason: `Intent ${intent} detected with ${signals.length} signals`,
@@ -343,6 +463,8 @@ export async function supervisorNode(
         iteration_count: state.control.iteration_count + 1,
       },
       agent_trace: [trace],
+      // REVISIÓN 5.0: Agregar safety metadata al estado para uso en agentes
+      safety_analysis: safetyMetadata,
     };
   } catch (error) {
     console.error('[Supervisor] Error:', error);

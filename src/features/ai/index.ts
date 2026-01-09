@@ -68,3 +68,19 @@ export type {
   ConversationContext,
   AIProcessingResult,
 } from './services/ai.service';
+
+// ======================
+// REVISIÓN 5.0: SAFETY & RESILIENCE
+// ======================
+export { SafetyResilienceService } from './services/safety-resilience.service';
+export type {
+  EmergencyType,
+  SafetyCategory,
+  ConfigCompleteness,
+  SpecialEventType,
+  EmergencyDetectionResult,
+  SafetyDetectionResult,
+  SpecialEventDetectionResult,
+  CallReconnectionContext,
+  EscalationFallbackResult,
+} from './services/safety-resilience.service';

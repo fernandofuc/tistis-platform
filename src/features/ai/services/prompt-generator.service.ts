@@ -30,6 +30,9 @@ import {
   formatValidationReport,
   type ValidationResult,
 } from './prompt-validator.service';
+import {
+  SafetyResilienceService,
+} from './safety-resilience.service';
 
 // ======================
 // TYPES
@@ -617,11 +620,28 @@ export async function collectBusinessContext(
 
 /**
  * Genera un prompt profesional usando Gemini 3.0
+ *
+ * P34 FIX: Circuit breaker para proteger contra fallos de Gemini API
  */
 export async function generatePromptWithAI(
   context: BusinessContext,
   promptType: PromptType
 ): Promise<PromptGenerationResult> {
+  const CIRCUIT_NAME = 'gemini-prompt-generation';
+
+  // P34 FIX: Check circuit breaker before attempting API call
+  if (SafetyResilienceService.isCircuitOpen(CIRCUIT_NAME)) {
+    console.warn(`[PromptGenerator] Circuit breaker OPEN for ${CIRCUIT_NAME}. Skipping API call.`);
+    return {
+      success: false,
+      prompt: '',
+      error: 'Servicio de generación temporalmente no disponible. El sistema reintentará automáticamente en unos minutos.',
+      generatedAt: new Date().toISOString(),
+      model: 'circuit-breaker-open',
+      processingTimeMs: 0,
+    };
+  }
+
   // Verificar que Gemini está configurado
   if (!isGeminiConfigured()) {
     return {
@@ -646,13 +666,31 @@ export async function generatePromptWithAI(
   const metaPrompt = buildMetaPrompt(context, promptType, verticalConfig, currentDate);
 
   // Generar con Gemini 3.0
-  const result = await generateWithGemini(metaPrompt, {
-    model: DEFAULT_GEMINI_MODELS.PROMPT_GENERATION,
-    temperature: 0.7,
-    maxOutputTokens: 8192,
-  });
+  let result;
+  try {
+    result = await generateWithGemini(metaPrompt, {
+      model: DEFAULT_GEMINI_MODELS.PROMPT_GENERATION,
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    });
+  } catch (error) {
+    // P34 FIX: Record failure in circuit breaker
+    SafetyResilienceService.recordCircuitFailure(CIRCUIT_NAME);
+    console.error(`[PromptGenerator] Gemini API exception (circuit breaker notified):`, error);
+    return {
+      success: false,
+      prompt: '',
+      error: `Error de conexión con Gemini: ${error instanceof Error ? error.message : 'Unknown'}`,
+      generatedAt: new Date().toISOString(),
+      model: 'error',
+      processingTimeMs: 0,
+    };
+  }
 
   if (!result.success) {
+    // P34 FIX: Record failure in circuit breaker
+    SafetyResilienceService.recordCircuitFailure(CIRCUIT_NAME);
+    console.warn(`[PromptGenerator] Gemini API returned error (circuit breaker notified):`, result.error);
     return {
       success: false,
       prompt: '',
@@ -662,6 +700,9 @@ export async function generatePromptWithAI(
       processingTimeMs: result.processingTimeMs,
     };
   }
+
+  // P34 FIX: Record success in circuit breaker (resets failure count)
+  SafetyResilienceService.recordCircuitSuccess(CIRCUIT_NAME);
 
   // Limpiar el prompt generado (quitar markdown code blocks si existen)
   let cleanedPrompt = result.content;
