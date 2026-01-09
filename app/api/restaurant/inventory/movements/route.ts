@@ -131,63 +131,56 @@ export async function POST(request: NextRequest) {
       return errorResponse('Sin permisos para este tipo de movimiento', 403);
     }
 
-    // Get current stock
-    const { data: item } = await supabase
-      .from('inventory_items')
-      .select('current_stock, unit_cost')
-      .eq('id', item_id)
-      .single();
+    // Use atomic function to create movement with FOR UPDATE lock
+    // This prevents race conditions where two requests could read same stock
+    const { data: result, error: rpcError } = await supabase.rpc('create_inventory_movement', {
+      p_tenant_id: userRole.tenant_id,
+      p_branch_id: branch_id,
+      p_item_id: item_id,
+      p_batch_id: batch_id || null,
+      p_movement_type: movement_type,
+      p_quantity: quantity,
+      p_unit_cost: unit_cost || null,
+      p_reason: reason || null,
+      p_notes: notes || null,
+      p_reference_type: reference_type || null,
+      p_reference_id: reference_id || null,
+      p_performed_by: user.id,
+    });
 
-    if (!item) {
-      return errorResponse('Item no encontrado', 404);
+    if (rpcError) {
+      console.error('Error creating movement (RPC):', rpcError);
+      return errorResponse('Error al crear movimiento', 500);
     }
 
-    const previousStock = item.current_stock || 0;
-    const finalQuantity = ['sale', 'consumption', 'waste', 'transfer_out'].includes(movement_type)
-      ? -Math.abs(quantity)
-      : Math.abs(quantity);
-    const newStock = previousStock + finalQuantity;
-
-    // Prevent negative stock
-    if (newStock < 0) {
-      return errorResponse(`Stock insuficiente. Disponible: ${previousStock}`, 400);
+    const movementResult = result?.[0];
+    if (!movementResult?.success) {
+      return errorResponse(movementResult?.error_message || 'Error al crear movimiento', 400);
     }
 
-    const totalCost = Math.abs(finalQuantity) * (unit_cost || item.unit_cost || 0);
-
-    // Create movement (trigger will update stock)
-    const { data: movement, error: movementError } = await supabase
+    // Fetch the full movement data with relations
+    const { data: movement, error: fetchError } = await supabase
       .from('inventory_movements')
-      .insert({
-        tenant_id: userRole.tenant_id,
-        branch_id,
-        item_id,
-        batch_id,
-        movement_type,
-        quantity: finalQuantity,
-        previous_stock: previousStock,
-        new_stock: newStock,
-        unit_cost: unit_cost || item.unit_cost,
-        total_cost: totalCost,
-        reference_type,
-        reference_id,
-        performed_by: user.id,
-        reason,
-        notes,
-      })
       .select(`
         *,
         item:inventory_items(id, name, sku, unit)
       `)
+      .eq('id', movementResult.movement_id)
       .single();
 
-    if (movementError) {
-      console.error('Error creating movement:', movementError);
-      return errorResponse('Error al crear movimiento', 500);
+    if (fetchError) {
+      console.error('Error fetching movement:', fetchError);
+      // Movement was created successfully, just couldn't fetch full data
+      return successResponse({
+        id: movementResult.movement_id,
+        previous_stock: movementResult.previous_stock,
+        new_stock: movementResult.new_stock,
+      }, 201);
     }
 
-    // Update batch quantity if batch_id provided
-    if (batch_id && isValidUUID(batch_id) && finalQuantity < 0) {
+    // Update batch quantity if batch_id provided and it was an outbound movement
+    const isOutbound = ['sale', 'consumption', 'waste', 'transfer_out'].includes(movement_type);
+    if (batch_id && isValidUUID(batch_id) && isOutbound) {
       // Get current batch quantity first
       const { data: batch } = await supabase
         .from('inventory_batches')
@@ -196,7 +189,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (batch) {
-        const newBatchQuantity = Math.max(0, (batch.current_quantity || 0) - Math.abs(finalQuantity));
+        const newBatchQuantity = Math.max(0, (batch.current_quantity || 0) - Math.abs(quantity));
         await supabase
           .from('inventory_batches')
           .update({
