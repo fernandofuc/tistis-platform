@@ -185,9 +185,12 @@ export async function DELETE(
     }
 
     // Use soft delete function
+    // FIX: Updated to match migration 122 signature (UUID, UUID, TEXT)
+    // and new return type (success, appointments_cancelled, conversations_closed, message)
     const { data, error } = await supabase.rpc('soft_delete_lead', {
       p_lead_id: id,
-      p_deleted_by: user.id
+      p_deleted_by: user.id,
+      p_cancel_reason: 'Lead soft-deleted by user'
     });
 
     if (error) {
@@ -198,7 +201,7 @@ export async function DELETE(
       );
     }
 
-    // Check RPC result
+    // Check RPC result - new return type from migration 122
     const result = data?.[0];
     if (!result?.success) {
       return NextResponse.json(
@@ -209,8 +212,10 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: 'Lead moved to trash. Can be restored within 30 days.',
-      lead_id: result.lead_id
+      message: result.message || 'Lead moved to trash. Can be restored within 30 days.',
+      lead_id: id,
+      appointments_cancelled: result.appointments_cancelled || 0,
+      conversations_closed: result.conversations_closed || 0
     }, { status: 200 });
   } catch (error) {
     console.error('Lead API error:', error);
@@ -235,7 +240,8 @@ export async function POST(
       return createAuthErrorResponse(authContext);
     }
 
-    const { client: supabase, tenantId } = authContext;
+    // FIX: Added user to destructuring for p_restored_by parameter
+    const { client: supabase, tenantId, user } = authContext;
     const { id } = await params;
     const body = await request.json();
 
@@ -270,8 +276,11 @@ export async function POST(
     }
 
     // Use restore function
+    // FIX: Updated to match migration 122 signature (UUID, UUID)
+    // and new return type (success, restored_status, message)
     const { data, error } = await supabase.rpc('restore_lead', {
-      p_lead_id: id
+      p_lead_id: id,
+      p_restored_by: user.id
     });
 
     if (error) {
@@ -282,6 +291,7 @@ export async function POST(
       );
     }
 
+    // Check RPC result - new return type from migration 122
     const result = data?.[0];
     if (!result?.success) {
       return NextResponse.json(
@@ -292,8 +302,9 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: 'Lead restored successfully',
-      lead_id: result.lead_id
+      message: result.message || 'Lead restored successfully',
+      lead_id: id,
+      restored_status: result.restored_status
     }, { status: 200 });
   } catch (error) {
     console.error('Lead API error:', error);

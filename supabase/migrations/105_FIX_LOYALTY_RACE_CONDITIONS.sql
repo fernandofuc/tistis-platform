@@ -32,6 +32,11 @@ END $$;
 -- 2. FIXED: award_loyalty_tokens with FOR UPDATE lock
 -- Prevents race conditions when awarding tokens
 -- =====================================================
+-- FIX: Must DROP old function first because signature changed completely
+-- Old (migration 053): (p_tenant_id UUID, p_lead_id UUID, p_tokens INTEGER, p_source_type TEXT, p_source_id UUID, p_description TEXT, p_expires_in_days INTEGER)
+-- New: (p_program_id UUID, p_lead_id UUID, p_tokens INTEGER, p_transaction_type TEXT, p_description TEXT, p_reference_id UUID, p_reference_type TEXT)
+DROP FUNCTION IF EXISTS public.award_loyalty_tokens(UUID, UUID, INTEGER, TEXT, UUID, TEXT, INTEGER);
+
 CREATE OR REPLACE FUNCTION public.award_loyalty_tokens(
     p_program_id UUID,
     p_lead_id UUID,
@@ -116,7 +121,7 @@ BEGIN
 
     -- Record transaction
     INSERT INTO loyalty_transactions (
-        tenant_id, balance_id, transaction_type, tokens_amount,
+        tenant_id, balance_id, transaction_type, tokens,
         description, reference_id, reference_type, expires_at
     ) VALUES (
         v_tenant_id, v_balance_id, p_transaction_type, p_tokens,
@@ -135,6 +140,11 @@ $$;
 -- - Updates stock_used atomically
 -- - Validates membership benefits
 -- =====================================================
+-- FIX: Must DROP old function first because return type changed
+-- Old: RETURNS TABLE(success BOOLEAN, redemption_code TEXT, error_message TEXT)
+-- New: RETURNS TABLE(success BOOLEAN, redemption_id UUID, redemption_code TEXT, error_message TEXT)
+DROP FUNCTION IF EXISTS public.redeem_loyalty_reward(UUID, UUID, UUID);
+
 CREATE OR REPLACE FUNCTION public.redeem_loyalty_reward(
     p_tenant_id UUID,
     p_lead_id UUID,
@@ -261,7 +271,7 @@ BEGIN
 
     -- Record transaction
     INSERT INTO loyalty_transactions (
-        tenant_id, balance_id, transaction_type, tokens_amount,
+        tenant_id, balance_id, transaction_type, tokens,
         description, reference_id, reference_type
     ) VALUES (
         p_tenant_id, v_balance_id, 'redemption', -v_reward.tokens_required,

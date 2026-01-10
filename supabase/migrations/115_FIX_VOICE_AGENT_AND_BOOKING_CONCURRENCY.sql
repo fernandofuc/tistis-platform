@@ -25,7 +25,62 @@
 -- Prevents race condition between Voice and Message channels
 -- =====================================================
 
--- First, add a partial unique index to prevent duplicate appointments
+-- FIX: First, clean up duplicate appointments before creating unique index
+-- This handles existing data that would violate the unique constraint
+-- Strategy: Keep the NEWEST appointment (by created_at), cancel older duplicates
+DO $$
+DECLARE
+    v_duplicate RECORD;
+    v_cancelled_count INTEGER := 0;
+BEGIN
+    -- Handle duplicates WITH staff_id
+    FOR v_duplicate IN
+        SELECT branch_id, scheduled_at, staff_id,
+               array_agg(id ORDER BY created_at DESC) as ids,
+               COUNT(*) as cnt
+        FROM appointments
+        WHERE status IN ('scheduled', 'confirmed')
+          AND staff_id IS NOT NULL
+        GROUP BY branch_id, scheduled_at, staff_id
+        HAVING COUNT(*) > 1
+    LOOP
+        -- Cancel all except the first (newest) appointment
+        UPDATE appointments
+        SET status = 'cancelled',
+            notes = COALESCE(notes, '') || ' [Auto-cancelled: duplicate slot - Migration 115]',
+            updated_at = NOW()
+        WHERE id = ANY(v_duplicate.ids[2:]);  -- Skip first element (newest)
+
+        v_cancelled_count := v_cancelled_count + array_length(v_duplicate.ids, 1) - 1;
+    END LOOP;
+
+    -- Handle duplicates WITHOUT staff_id (staff_id IS NULL)
+    FOR v_duplicate IN
+        SELECT branch_id, scheduled_at,
+               array_agg(id ORDER BY created_at DESC) as ids,
+               COUNT(*) as cnt
+        FROM appointments
+        WHERE status IN ('scheduled', 'confirmed')
+          AND staff_id IS NULL
+        GROUP BY branch_id, scheduled_at
+        HAVING COUNT(*) > 1
+    LOOP
+        -- Cancel all except the first (newest) appointment
+        UPDATE appointments
+        SET status = 'cancelled',
+            notes = COALESCE(notes, '') || ' [Auto-cancelled: duplicate slot - Migration 115]',
+            updated_at = NOW()
+        WHERE id = ANY(v_duplicate.ids[2:]);  -- Skip first element (newest)
+
+        v_cancelled_count := v_cancelled_count + array_length(v_duplicate.ids, 1) - 1;
+    END LOOP;
+
+    IF v_cancelled_count > 0 THEN
+        RAISE NOTICE 'Migration 115: Cancelled % duplicate appointments', v_cancelled_count;
+    END IF;
+END $$;
+
+-- Now add partial unique indexes to prevent duplicate appointments
 -- This catches any races that slip through the advisory lock
 CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_unique_slot
     ON appointments(branch_id, scheduled_at, staff_id)

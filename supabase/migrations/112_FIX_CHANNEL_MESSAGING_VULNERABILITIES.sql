@@ -280,8 +280,9 @@ BEGIN
                 updated_at = NOW()
             WHERE id = v_conversation_id;
             v_is_new := false;
-        ELSIF v_current_status IN ('resolved', 'closed', 'archived') THEN
-            -- Was closed - reopen it
+        -- FIX: Removed 'closed' (not a valid status per CHECK constraint)
+        ELSIF v_current_status IN ('resolved', 'archived') THEN
+            -- Was resolved/archived - reopen it
             UPDATE conversations
             SET status = 'active',
                 last_message_at = NOW(),

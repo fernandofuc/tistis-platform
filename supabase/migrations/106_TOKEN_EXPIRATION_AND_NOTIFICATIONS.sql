@@ -38,7 +38,7 @@ BEGIN
         SELECT
             lt.id AS transaction_id,
             lt.balance_id,
-            lt.tokens_amount,
+            lt.tokens,
             lt.tenant_id,
             lb.current_balance,
             lb.lead_id
@@ -46,7 +46,7 @@ BEGIN
         JOIN loyalty_balances lb ON lt.balance_id = lb.id
         WHERE lt.expires_at IS NOT NULL
           AND lt.expires_at < NOW()
-          AND lt.tokens_amount > 0  -- Only expire earn transactions
+          AND lt.tokens > 0  -- Only expire earn transactions
           AND lt.transaction_type NOT IN ('expire', 'redemption')  -- Don't re-expire
           AND NOT EXISTS (
               -- Check if we already created an expiration record for this transaction
@@ -61,7 +61,7 @@ BEGIN
         DECLARE
             v_tokens_to_expire INTEGER;
         BEGIN
-            v_tokens_to_expire := LEAST(v_record.tokens_amount, v_record.current_balance);
+            v_tokens_to_expire := LEAST(v_record.tokens, v_record.current_balance);
 
             IF v_tokens_to_expire > 0 THEN
                 -- Deduct from balance
@@ -72,7 +72,7 @@ BEGIN
 
                 -- Create expiration transaction record
                 INSERT INTO loyalty_transactions (
-                    tenant_id, balance_id, transaction_type, tokens_amount,
+                    tenant_id, balance_id, transaction_type, tokens,
                     description, reference_id, reference_type
                 ) VALUES (
                     v_record.tenant_id, v_record.balance_id, 'expire', -v_tokens_to_expire,
@@ -130,7 +130,7 @@ BEGIN
         l.phone,
         l.email,
         lb.id AS balance_id,
-        COALESCE(SUM(lt.tokens_amount)::INTEGER, 0) AS tokens_expiring,
+        COALESCE(SUM(lt.tokens)::INTEGER, 0) AS tokens_expiring,
         MIN(lt.expires_at) AS earliest_expiry,
         lp.id AS program_id,
         lp.program_name
@@ -140,7 +140,7 @@ BEGIN
     JOIN loyalty_programs lp ON lb.program_id = lp.id
     WHERE lt.expires_at IS NOT NULL
       AND lt.expires_at BETWEEN NOW() AND NOW() + (p_days_before || ' days')::INTERVAL
-      AND lt.tokens_amount > 0
+      AND lt.tokens > 0
       AND lt.transaction_type NOT IN ('expire', 'redemption')
       AND l.deleted_at IS NULL  -- Exclude soft-deleted leads
       AND NOT EXISTS (
@@ -151,7 +151,7 @@ BEGIN
             AND lrl.created_at > NOW() - INTERVAL '7 days'
       )
     GROUP BY lb.tenant_id, lb.lead_id, l.full_name, l.first_name, l.last_name, l.phone, l.email, lb.id, lp.id, lp.program_name
-    HAVING SUM(lt.tokens_amount) > 0
+    HAVING SUM(lt.tokens) > 0
     ORDER BY MIN(lt.expires_at);
 END;
 $$;
@@ -354,9 +354,9 @@ BEGIN
 
     -- Calculate non-expired tokens
     SELECT COALESCE(SUM(
-        CASE WHEN lt.tokens_amount > 0 AND (lt.expires_at IS NULL OR lt.expires_at > NOW())
+        CASE WHEN lt.tokens > 0 AND (lt.expires_at IS NULL OR lt.expires_at > NOW())
              AND lt.transaction_type NOT IN ('expire', 'redemption')
-             THEN lt.tokens_amount
+             THEN lt.tokens
              ELSE 0
         END
     ), 0)::INTEGER INTO v_non_expired
@@ -365,17 +365,17 @@ BEGIN
 
     -- Subtract already redeemed/expired
     SELECT v_non_expired - COALESCE(ABS(SUM(
-        CASE WHEN lt.tokens_amount < 0 THEN lt.tokens_amount ELSE 0 END
+        CASE WHEN lt.tokens < 0 THEN lt.tokens ELSE 0 END
     )), 0)::INTEGER INTO v_non_expired
     FROM loyalty_transactions lt
     WHERE lt.balance_id = v_balance_id;
 
     -- Get tokens expiring in next 30 days
-    SELECT COALESCE(SUM(lt.tokens_amount), 0)::INTEGER INTO v_expiring_soon
+    SELECT COALESCE(SUM(lt.tokens), 0)::INTEGER INTO v_expiring_soon
     FROM loyalty_transactions lt
     WHERE lt.balance_id = v_balance_id
       AND lt.expires_at BETWEEN NOW() AND NOW() + INTERVAL '30 days'
-      AND lt.tokens_amount > 0
+      AND lt.tokens > 0
       AND lt.transaction_type NOT IN ('expire', 'redemption');
 
     -- Get next expiry date
@@ -383,7 +383,7 @@ BEGIN
     FROM loyalty_transactions lt
     WHERE lt.balance_id = v_balance_id
       AND lt.expires_at > NOW()
-      AND lt.tokens_amount > 0
+      AND lt.tokens > 0
       AND lt.transaction_type NOT IN ('expire', 'redemption');
 
     RETURN QUERY SELECT v_total, GREATEST(v_non_expired, 0), v_expiring_soon, v_next_expiry;
@@ -408,7 +408,8 @@ END $$;
 -- =====================================================
 DO $$
 BEGIN
-    -- Ensure message_type column exists with proper values
+    -- Add notification_type column if it doesn't exist
+    -- FIX: Removed reference to message_type column which doesn't exist in original schema (migration 053)
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'loyalty_reactivation_logs' AND column_name = 'notification_type'
@@ -416,10 +417,19 @@ BEGIN
         ALTER TABLE loyalty_reactivation_logs
         ADD COLUMN notification_type TEXT;
 
-        -- Update existing records
+        -- Set default value for existing records based on offer_type if available
         UPDATE loyalty_reactivation_logs
-        SET notification_type = message_type
+        SET notification_type = COALESCE(offer_type, 'reactivation')
         WHERE notification_type IS NULL;
+    END IF;
+
+    -- Also add message_type column for compatibility with functions that reference it
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'loyalty_reactivation_logs' AND column_name = 'message_type'
+    ) THEN
+        ALTER TABLE loyalty_reactivation_logs
+        ADD COLUMN message_type TEXT;
     END IF;
 END $$;
 
@@ -428,7 +438,7 @@ END $$;
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_expiring
 ON loyalty_transactions(expires_at, balance_id)
-WHERE expires_at IS NOT NULL AND tokens_amount > 0;
+WHERE expires_at IS NOT NULL AND tokens > 0;
 
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_type
 ON loyalty_transactions(transaction_type);

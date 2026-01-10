@@ -191,8 +191,9 @@ BEGIN
     )
     RETURNING id INTO v_message_id;
 
-    -- Reopen conversation if closed/resolved
-    IF v_conversation_status IN ('resolved', 'closed', 'archived') THEN
+    -- Reopen conversation if resolved/archived
+    -- FIX: Removed 'closed' (not a valid status per CHECK constraint)
+    IF v_conversation_status IN ('resolved', 'archived') THEN
         UPDATE conversations
         SET status = 'active',
             last_message_at = GREATEST(NOW(), COALESCE(p_external_timestamp, NOW())),
@@ -464,7 +465,9 @@ BEGIN
 END $$;
 
 -- Function to get connections with expiring tokens
-CREATE OR REPLACE FUNCTION public.get_expiring_tokens(
+-- FIX: Renamed to get_expiring_channel_tokens to avoid conflict with
+-- get_expiring_tokens (migration 106) which is for LOYALTY tokens
+CREATE OR REPLACE FUNCTION public.get_expiring_channel_tokens(
     p_hours_ahead INTEGER DEFAULT 24
 )
 RETURNS TABLE(
@@ -510,11 +513,11 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION get_expiring_tokens TO service_role;
+GRANT EXECUTE ON FUNCTION get_expiring_channel_tokens TO service_role;
 
-COMMENT ON FUNCTION get_expiring_tokens IS
-'Gets channel connections with tokens expiring within specified hours.
-Used by CRON to alert admins about expiring tokens.
+COMMENT ON FUNCTION get_expiring_channel_tokens IS
+'Gets channel connections with API tokens (WhatsApp/Instagram/etc) expiring within specified hours.
+Used by CRON to alert admins about expiring channel tokens.
 CREATED in migration 114 to fix U9.';
 
 -- =====================================================
@@ -537,7 +540,7 @@ CREATE INDEX IF NOT EXISTS idx_job_queue_cached_result
 -- [x] U3: Added external_timestamp tracking and out-of-order detection
 -- [x] U4: Added validate_channel_connection_for_job function
 -- [x] U7: Added channel_rate_limits table and check_rate_limit function
--- [x] U9: Added token expiration columns and get_expiring_tokens function
+-- [x] U9: Added token expiration columns and get_expiring_channel_tokens function
 -- =====================================================
 
 SELECT 'Migration 114: Ultra-Critical Edge Cases Fixed - COMPLETADA' as status;

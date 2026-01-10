@@ -26,6 +26,8 @@
 
 -- Create an overloaded version that accepts the old parameter names
 -- This ensures backward compatibility with existing code
+-- FIX: Return columns must match award_loyalty_tokens signature:
+--   (success BOOLEAN, balance_id UUID, new_balance INTEGER, transaction_id UUID)
 CREATE OR REPLACE FUNCTION public.award_loyalty_tokens_compat(
     p_program_id UUID,
     p_lead_id UUID,
@@ -36,9 +38,10 @@ CREATE OR REPLACE FUNCTION public.award_loyalty_tokens_compat(
     p_reference_type VARCHAR(50) DEFAULT NULL
 )
 RETURNS TABLE(
-    transaction_id UUID,
+    success BOOLEAN,
+    balance_id UUID,
     new_balance INTEGER,
-    success BOOLEAN
+    transaction_id UUID
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -46,14 +49,15 @@ SET search_path = public
 AS $$
 BEGIN
     -- Call the actual function with correct parameter names
+    -- The return columns match award_loyalty_tokens exactly
     RETURN QUERY SELECT * FROM award_loyalty_tokens(
         p_program_id := p_program_id,
         p_lead_id := p_lead_id,
         p_tokens := p_tokens,
-        p_transaction_type := p_transaction_type,
+        p_transaction_type := p_transaction_type::TEXT,
         p_description := p_description,
         p_source_id := p_reference_id,  -- Map old name to new name
-        p_source_type := p_reference_type  -- Map old name to new name
+        p_source_type := p_reference_type::TEXT  -- Map old name to new name
     );
 END;
 $$;
@@ -210,11 +214,12 @@ BEGIN
         END IF;
 
         -- Get stock level from menu_item_stock if exists
+        -- FIX: Changed menu_items to restaurant_menu_items (correct table name from migration 088)
         SELECT
             COALESCE(mis.current_stock, 999999),  -- Default to unlimited if no stock tracking
             mi.name
         INTO v_stock_level, v_item_name
-        FROM menu_items mi
+        FROM public.restaurant_menu_items mi
         LEFT JOIN menu_item_stock mis ON mi.id = mis.menu_item_id AND mis.branch_id = p_branch_id
         WHERE mi.id = v_menu_item_id;
 
@@ -258,10 +263,11 @@ CREATED in migration 111.';
 -- For restaurants that want to track inventory
 -- =====================================================
 
+-- FIX: Changed menu_items reference to restaurant_menu_items (correct table name from migration 088)
 CREATE TABLE IF NOT EXISTS menu_item_stock (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    menu_item_id UUID NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
-    branch_id UUID NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    menu_item_id UUID NOT NULL REFERENCES public.restaurant_menu_items(id) ON DELETE CASCADE,
+    branch_id UUID NOT NULL REFERENCES public.branches(id) ON DELETE CASCADE,
     current_stock INTEGER DEFAULT 999999,  -- Default unlimited
     low_stock_threshold INTEGER DEFAULT 5,
     track_stock BOOLEAN DEFAULT false,  -- Only track if enabled

@@ -11,13 +11,15 @@
 -- 1. FUNCTION: Create inventory movement atomically
 -- Uses FOR UPDATE to lock the row during read-check-write
 -- =====================================================
+-- FIX: Reordered parameters - required params first, then optional params with DEFAULT
+-- PostgreSQL requires: once a param has DEFAULT, all following params must also have DEFAULT
 CREATE OR REPLACE FUNCTION public.create_inventory_movement(
     p_tenant_id UUID,
     p_branch_id UUID,
     p_item_id UUID,
-    p_batch_id UUID DEFAULT NULL,
-    p_movement_type TEXT,
-    p_quantity NUMERIC,
+    p_movement_type TEXT,           -- Required: moved before optional params
+    p_quantity NUMERIC,             -- Required: moved before optional params
+    p_batch_id UUID DEFAULT NULL,   -- Optional: now after required params
     p_unit_cost NUMERIC DEFAULT NULL,
     p_reason TEXT DEFAULT NULL,
     p_notes TEXT DEFAULT NULL,

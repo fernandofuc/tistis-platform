@@ -214,7 +214,8 @@ BEGIN
     WHERE id = p_conversation_id
     FOR UPDATE;  -- Lock to prevent race condition
 
-    IF v_conversation_status IN ('resolved', 'closed', 'archived') THEN
+    -- FIX: Removed 'closed' (not a valid status per CHECK constraint)
+    IF v_conversation_status IN ('resolved', 'archived') THEN
         UPDATE conversations
         SET status = 'active',
             updated_at = NOW()
@@ -348,7 +349,7 @@ SELECT
     c.message_count,
     c.last_message_at,
     c.created_at,
-    c.assigned_staff_id,
+    l.assigned_staff_id,  -- FIX: assigned_staff_id is on leads table, not conversations
     l.full_name as lead_name,
     l.phone as lead_phone,
     l.classification as lead_classification,

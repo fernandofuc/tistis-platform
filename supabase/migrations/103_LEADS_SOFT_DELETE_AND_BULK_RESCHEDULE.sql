@@ -78,12 +78,14 @@ BEGIN
     WHERE id = p_lead_id;
 
     -- Also soft-close any open conversations
+    -- FIX: Changed 'closed' to 'resolved' (valid status per CHECK constraint in migration 012)
+    -- Valid statuses: 'active', 'waiting_response', 'escalated', 'resolved', 'archived'
     UPDATE conversations
     SET
-        status = 'closed',
+        status = 'resolved',
         updated_at = NOW()
     WHERE lead_id = p_lead_id
-      AND status NOT IN ('closed', 'resolved');
+      AND status NOT IN ('resolved', 'archived');
 
     success := true;
     message := 'Lead deleted successfully';
@@ -349,6 +351,9 @@ ADD COLUMN IF NOT EXISTS was_prepared_before_cancel BOOLEAN DEFAULT FALSE;
 
 -- 3.2 Modify the revert function to optionally register as waste
 -- This replaces the function in 101_INVENTORY_CONSUMPTION_SYSTEM.sql
+-- FIX: Must DROP the old function first because signature is different (3 params vs 4 params)
+DROP FUNCTION IF EXISTS public.revert_order_consumption(UUID, UUID, TEXT);
+
 CREATE OR REPLACE FUNCTION public.revert_order_consumption(
     p_order_id UUID,
     p_performed_by UUID DEFAULT NULL,
@@ -525,12 +530,13 @@ END;
 $$;
 
 -- 3.3 View for waste analysis
+-- FIX: Changed m.created_at to m.performed_at (correct column name in inventory_movements)
 CREATE OR REPLACE VIEW public.v_inventory_waste_summary AS
 SELECT
     m.tenant_id,
     m.branch_id,
     b.name as branch_name,
-    DATE_TRUNC('day', m.created_at) as waste_date,
+    DATE_TRUNC('day', m.performed_at) as waste_date,
     i.name as item_name,
     i.sku,
     SUM(m.quantity) as total_waste_qty,
@@ -545,7 +551,7 @@ GROUP BY
     m.tenant_id,
     m.branch_id,
     b.name,
-    DATE_TRUNC('day', m.created_at),
+    DATE_TRUNC('day', m.performed_at),
     i.name,
     i.sku
 ORDER BY waste_date DESC, total_waste_cost DESC;
@@ -576,11 +582,12 @@ COMMENT ON FUNCTION suggest_reschedule_slots IS
 'Suggests available time slots for rescheduling appointments.
 Checks staff availability and existing appointments to find free slots.';
 
-COMMENT ON FUNCTION revert_order_consumption IS
+COMMENT ON FUNCTION revert_order_consumption(UUID, UUID, TEXT, BOOLEAN) IS
 'Reverts inventory consumption for a cancelled order.
 If p_register_as_waste=true or order was already prepared (ready_at set),
 registers as waste instead of restoring stock.
-Use case: Customer cancels after food is prepared = waste, not recoverable stock.';
+Use case: Customer cancels after food is prepared = waste, not recoverable stock.
+REPLACES version from migration 101 (3 params -> 4 params).';
 
 COMMENT ON VIEW v_inventory_waste_summary IS
 'Summary view of inventory waste by date, branch, and item.

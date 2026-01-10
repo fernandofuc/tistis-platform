@@ -164,7 +164,7 @@ BEGIN
 
     -- Record transaction
     INSERT INTO loyalty_transactions (
-        tenant_id, balance_id, transaction_type, tokens_amount,
+        tenant_id, balance_id, transaction_type, tokens,
         description, reference_id, reference_type
     ) VALUES (
         p_tenant_id, v_balance_id, 'redemption', -v_reward.tokens_required,
@@ -286,7 +286,7 @@ BEGIN
 
     -- Record transaction
     INSERT INTO loyalty_transactions (
-        tenant_id, balance_id, transaction_type, tokens_amount,
+        tenant_id, balance_id, transaction_type, tokens,
         description, reference_id, reference_type, expires_at
     ) VALUES (
         v_tenant_id, v_balance_id, p_transaction_type, p_tokens,
@@ -301,6 +301,11 @@ $$;
 -- 3. FIXED: validate_redemption_code REQUIRES tenant_id
 -- No longer allows null tenant - security requirement
 -- =====================================================
+-- FIX: Must DROP old function first because we're removing the DEFAULT from p_tenant_id
+-- Old (migration 105): p_tenant_id UUID DEFAULT NULL
+-- New: p_tenant_id UUID (REQUIRED - no default)
+DROP FUNCTION IF EXISTS public.validate_redemption_code(TEXT, UUID);
+
 CREATE OR REPLACE FUNCTION public.validate_redemption_code(
     p_code TEXT,
     p_tenant_id UUID  -- Now REQUIRED, not optional

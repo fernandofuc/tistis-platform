@@ -429,14 +429,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Use the award_loyalty_tokens function
+    // FIX: Changed p_reference_id/p_reference_type to p_source_id/p_source_type
+    // to match migration 108 parameter names
     const { data: result, error } = await supabase.rpc('award_loyalty_tokens', {
       p_program_id: context.program.id,
       p_lead_id: lead_id,
       p_tokens: tokens,
       p_transaction_type: transaction_type || 'manual',
       p_description: description || 'Tokens otorgados manualmente',
-      p_reference_id: null,
-      p_reference_type: null,
+      p_source_id: null,
+      p_source_type: null,
     });
 
     if (error) {

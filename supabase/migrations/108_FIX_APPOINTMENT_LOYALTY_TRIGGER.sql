@@ -20,6 +20,10 @@
 --   - source_type, source_id (NOT reference_type, reference_id)
 --   - program_id (required column)
 -- =====================================================
+-- FIX: Must DROP old function first because parameter names changed
+-- Old (migration 107): p_reference_id, p_reference_type
+-- New: p_source_id, p_source_type (matches table columns)
+DROP FUNCTION IF EXISTS public.award_loyalty_tokens(UUID, UUID, INTEGER, TEXT, TEXT, UUID, TEXT);
 
 CREATE OR REPLACE FUNCTION public.award_loyalty_tokens(
     p_program_id UUID,
@@ -305,6 +309,10 @@ $$;
 -- =====================================================
 -- 3. FIX: expire_tokens function to use correct columns
 -- =====================================================
+-- FIX: Must DROP old function first because return type changed
+-- Old (migration 106): (expired_count INTEGER, total_tokens_expired INTEGER, affected_balances UUID[], details JSONB)
+-- New: (tenant_id UUID, transactions_expired INTEGER, tokens_expired INTEGER)
+DROP FUNCTION IF EXISTS public.expire_tokens();
 
 CREATE OR REPLACE FUNCTION public.expire_tokens()
 RETURNS TABLE(

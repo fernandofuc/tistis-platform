@@ -183,6 +183,10 @@ $$;
 -- Properly handles appointments and conversations
 -- =====================================================
 
+-- FIX: Must DROP old function first - signature changed from (UUID, UUID) to (UUID, UUID, TEXT)
+-- Also return type changed from (success, message, lead_id) to (success, appointments_cancelled, conversations_closed, message)
+DROP FUNCTION IF EXISTS public.soft_delete_lead(UUID, UUID);
+
 CREATE OR REPLACE FUNCTION public.soft_delete_lead(
     p_lead_id UUID,
     p_deleted_by UUID DEFAULT NULL,
@@ -244,16 +248,18 @@ BEGIN
     GET DIAGNOSTICS v_appointments_cancelled = ROW_COUNT;
 
     -- 3. Close all open conversations with reason
+    -- FIX: Changed 'closed' to 'resolved' (valid status per CHECK constraint in migration 012)
+    -- Valid statuses: 'active', 'waiting_response', 'escalated', 'resolved', 'archived'
     UPDATE conversations
     SET
-        status = 'closed',
+        status = 'resolved',
         updated_at = NOW(),
         metadata = COALESCE(metadata, '{}'::JSONB) || jsonb_build_object(
             '_closed_reason', 'lead_deleted',
             '_closed_at', NOW()::TEXT
         )
     WHERE lead_id = p_lead_id
-      AND status NOT IN ('closed', 'resolved', 'archived');
+      AND status NOT IN ('resolved', 'archived');
 
     GET DIAGNOSTICS v_conversations_closed = ROW_COUNT;
 
@@ -270,6 +276,10 @@ $$;
 -- 6. IMPROVED LEAD RESTORATION
 -- Restores original status and logs restoration
 -- =====================================================
+
+-- FIX: Must DROP old function first - signature changed from (UUID) to (UUID, UUID)
+-- Also return type changed from (success, message, lead_id) to (success, restored_status, message)
+DROP FUNCTION IF EXISTS public.restore_lead(UUID);
 
 CREATE OR REPLACE FUNCTION public.restore_lead(
     p_lead_id UUID,
@@ -328,6 +338,13 @@ BEGIN
     RETURN NEXT;
 END;
 $$;
+
+-- FIX: GRANT statements for the new function signatures
+-- (Old GRANTs from migration 103 were for old signatures)
+GRANT EXECUTE ON FUNCTION soft_delete_lead(UUID, UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION soft_delete_lead(UUID, UUID, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION restore_lead(UUID, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION restore_lead(UUID, UUID) TO service_role;
 
 -- =====================================================
 -- 7. IMPROVED ATOMIC BOOKING WITH SERIALIZABLE
@@ -577,7 +594,7 @@ BEGIN
         phone,
         email,
         lead_id,
-        preferred_branch_id,
+        branch_id,  -- FIX: was preferred_branch_id (column doesn't exist)
         status,
         source
     ) VALUES (
@@ -646,7 +663,7 @@ RETURNS TABLE (
     is_valid BOOLEAN,
     table_id UUID,
     table_name TEXT,
-    capacity INTEGER,
+    capacity INTEGER,  -- Return alias for max_capacity
     error_message TEXT
 )
 LANGUAGE plpgsql
@@ -659,12 +676,14 @@ BEGIN
     v_end_at := p_scheduled_at + (p_duration_minutes || ' minutes')::INTERVAL;
 
     -- Find available table with sufficient capacity
+    -- FIX: Changed t.capacity to t.max_capacity (correct column name from migration 088)
     FOR v_table IN
-        SELECT t.id, t.name, t.capacity
+        SELECT t.id, t.name, t.max_capacity
         FROM restaurant_tables t
         WHERE t.branch_id = p_branch_id
-          AND t.capacity >= p_party_size
-          AND t.is_available = true
+          AND t.max_capacity >= p_party_size
+          AND t.status = 'available'  -- FIX: was t.is_available (column doesn't exist)
+          AND t.is_active = true      -- Also check soft-delete status
           AND t.id NOT IN (
               -- Exclude tables with overlapping reservations
               SELECT DISTINCT rd.table_id
@@ -680,13 +699,13 @@ BEGIN
                     (a.scheduled_at < v_end_at AND a.scheduled_at >= p_scheduled_at)
                 )
           )
-        ORDER BY t.capacity ASC  -- Prefer smallest suitable table
+        ORDER BY t.max_capacity ASC  -- Prefer smallest suitable table
         LIMIT 1
     LOOP
         is_valid := true;
         table_id := v_table.id;
         table_name := v_table.name;
-        capacity := v_table.capacity;
+        capacity := v_table.max_capacity;  -- Return as 'capacity' for API compatibility
         error_message := NULL;
         RETURN NEXT;
         RETURN;
@@ -711,11 +730,13 @@ COMMIT;
 COMMENT ON FUNCTION public.create_appointment_atomic_v2 IS
 'V2: Uses SERIALIZABLE isolation and FOR UPDATE locking to completely prevent race conditions between Voice and WhatsApp channels.';
 
-COMMENT ON FUNCTION public.soft_delete_lead IS
-'Properly cascades soft-delete to appointments and conversations, storing original status for restoration.';
+COMMENT ON FUNCTION public.soft_delete_lead(UUID, UUID, TEXT) IS
+'Properly cascades soft-delete to appointments and conversations, storing original status for restoration.
+REPLACES version from migration 103 (2 params -> 3 params).';
 
-COMMENT ON FUNCTION public.restore_lead IS
-'Restores a soft-deleted lead to its original status.';
+COMMENT ON FUNCTION public.restore_lead(UUID, UUID) IS
+'Restores a soft-deleted lead to its original status.
+REPLACES version from migration 103 (1 param -> 2 params).';
 
 COMMENT ON FUNCTION public.create_patient_safe IS
 'Race-condition safe patient creation with proper duplicate handling.';
