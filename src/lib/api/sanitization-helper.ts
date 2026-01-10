@@ -4,17 +4,82 @@
 // =====================================================
 
 // ======================
+// SECURITY CONSTANTS
+// ======================
+
+// Keys that could lead to prototype pollution attacks
+const DANGEROUS_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
+]);
+
+/**
+ * Check if a key is safe (not a prototype pollution vector)
+ */
+export function isSafeKey(key: string): boolean {
+  return !DANGEROUS_KEYS.has(key);
+}
+
+/**
+ * Recursively sanitize an object to prevent prototype pollution
+ * Also limits nesting depth to prevent stack overflow
+ */
+export function sanitizeObject(
+  obj: unknown,
+  maxDepth = 5,
+  currentDepth = 0
+): Record<string, unknown> | null {
+  if (currentDepth > maxDepth) return null;
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+
+  const sanitized: Record<string, unknown> = {};
+  const source = obj as Record<string, unknown>;
+
+  for (const key of Object.keys(source)) {
+    // Skip dangerous keys
+    if (!isSafeKey(key)) continue;
+
+    const value = source[key];
+
+    if (value === null || value === undefined) {
+      sanitized[key] = null;
+    } else if (typeof value === 'object' && !Array.isArray(value)) {
+      // Recursively sanitize nested objects
+      sanitized[key] = sanitizeObject(value, maxDepth, currentDepth + 1);
+    } else if (Array.isArray(value)) {
+      // Sanitize arrays (limit size and depth)
+      sanitized[key] = value.slice(0, 100).map((item) => {
+        if (typeof item === 'object' && item !== null) {
+          return sanitizeObject(item, maxDepth, currentDepth + 1);
+        }
+        return item;
+      });
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
+// ======================
 // TEXT SANITIZATION
 // ======================
 
 /**
- * Sanitize text to prevent XSS - strips HTML tags and limits length
+ * Sanitize text to prevent XSS - strips HTML tags, null bytes, and limits length
  */
 export function sanitizeText(text: unknown, maxLength = 1000): string | null {
   if (text === null || text === undefined) return null;
   if (typeof text !== 'string') return null;
 
   const sanitized = text
+    .replace(/\x00/g, '')    // Remove null bytes (H22)
     .replace(/<[^>]*>/g, '') // Remove HTML tags
     .replace(/[<>]/g, '')    // Remove any remaining angle brackets
     .trim();
@@ -211,6 +276,31 @@ export function sanitizeUUIDs(
   return ids
     .slice(0, maxItems)
     .filter((id): id is string => typeof id === 'string' && isValidUUID(id));
+}
+
+/**
+ * Sanitize URL - validates protocol and returns sanitized URL or null
+ */
+export function sanitizeUrl(url: unknown, maxLength = 2000): string | null {
+  if (typeof url !== 'string') return null;
+  const trimmed = url.trim().slice(0, maxLength);
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    // Only allow http and https protocols
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return null;
+    }
+    return parsed.href;
+  } catch {
+    // If not a valid URL but could be a relative path, sanitize it
+    // Allow paths starting with / for internal URLs
+    if (trimmed.startsWith('/') && !trimmed.includes('..')) {
+      return sanitizeText(trimmed, maxLength);
+    }
+    return null;
+  }
 }
 
 // ======================

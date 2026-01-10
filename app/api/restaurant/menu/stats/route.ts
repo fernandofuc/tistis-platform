@@ -12,7 +12,8 @@ import {
   getUserAndTenant,
   isAuthError,
   errorResponse,
-  successResponse
+  successResponse,
+  isValidUUID,
 } from '@/src/lib/api/auth-helper';
 
 // ======================
@@ -28,9 +29,14 @@ export async function GET(request: NextRequest) {
     const { userRole, supabase } = auth;
     const tenantId = userRole.tenant_id;
 
-    // Parse query params
+    // Parse query params with validation
     const searchParams = request.nextUrl.searchParams;
     const branchId = searchParams.get('branch_id');
+
+    // Validate UUID if provided
+    if (branchId && !isValidUUID(branchId)) {
+      return errorResponse('branch_id inválido', 400);
+    }
 
     // NOTE: restaurant_menu_items does NOT have branch_id column
     // But restaurant_menu_categories DOES have branch_id (optional)

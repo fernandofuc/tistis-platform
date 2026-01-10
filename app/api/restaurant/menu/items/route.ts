@@ -7,24 +7,84 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import {
   getUserAndTenant,
   isAuthError,
   errorResponse,
   successResponse,
-  canWrite
+  canWrite,
+  isValidUUID,
 } from '@/src/lib/api/auth-helper';
+import {
+  sanitizeText,
+  sanitizePrice,
+  sanitizeInteger,
+  isSafeKey,
+  LIMITS,
+} from '@/src/lib/api/sanitization-helper';
+
+// Valid currencies
+const VALID_CURRENCIES = ['MXN', 'USD', 'EUR'];
+
+// Max items for bulk operations
+const MAX_BULK_ITEMS = 100;
+
+// Sanitize JSONB variant structure (H13: prototype pollution protection)
+function sanitizeVariant(v: unknown): Record<string, unknown> | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const variant = v as Record<string, unknown>;
+
+  // Check for dangerous keys
+  for (const key of Object.keys(variant)) {
+    if (!isSafeKey(key)) return null;
+  }
+
+  return {
+    name: sanitizeText(variant.name, 100) || 'Sin nombre',
+    price: sanitizePrice(variant.price),
+    price_modifier: sanitizePrice(variant.price_modifier),
+    is_default: Boolean(variant.is_default),
+  };
+}
+
+// Sanitize JSONB size structure (H13: prototype pollution protection)
+function sanitizeSize(s: unknown): Record<string, unknown> | null {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+  const size = s as Record<string, unknown>;
+
+  // Check for dangerous keys
+  for (const key of Object.keys(size)) {
+    if (!isSafeKey(key)) return null;
+  }
+
+  return {
+    name: sanitizeText(size.name, 50) || 'Regular',
+    price: sanitizePrice(size.price),
+    price_modifier: sanitizePrice(size.price_modifier),
+    is_default: Boolean(size.is_default),
+  };
+}
+
+// Sanitize JSONB add-on structure (H13: prototype pollution protection)
+function sanitizeAddOnMenu(a: unknown): Record<string, unknown> | null {
+  if (!a || typeof a !== 'object' || Array.isArray(a)) return null;
+  const addon = a as Record<string, unknown>;
+
+  // Check for dangerous keys
+  for (const key of Object.keys(addon)) {
+    if (!isSafeKey(key)) return null;
+  }
+
+  return {
+    name: sanitizeText(addon.name, 100) || 'Extra',
+    price: sanitizePrice(addon.price),
+    max_quantity: sanitizeInteger(addon.max_quantity, 1, 10, 1),
+  };
+}
 
 // ======================
 // GET - List Menu Items
-// Schema columns: id, tenant_id, category_id, name, slug, description, short_description,
-// price, price_lunch, price_happy_hour, currency, variants (JSONB), sizes (JSONB), add_ons (JSONB),
-// calories, protein_g, carbs_g, fat_g, allergens (TEXT[]), is_vegetarian, is_vegan,
-// is_gluten_free, is_spicy, spice_level, is_new, is_house_special, is_chef_recommendation, prep_time_minutes,
-// cooking_instructions, image_url, image_gallery (TEXT[]), is_available, available_quantity,
-// out_of_stock_until, display_order, is_featured, times_ordered, average_rating, metadata
-// NOTE: NO branch_id column, NO sku column, NO parent_category_id in category join
 // ======================
 export async function GET(request: NextRequest) {
   try {
@@ -47,11 +107,17 @@ export async function GET(request: NextRequest) {
     const minPrice = searchParams.get('min_price');
     const maxPrice = searchParams.get('max_price');
     const search = searchParams.get('search');
-    const limit = parseInt(searchParams.get('limit') || '100');
-    const offset = parseInt(searchParams.get('offset') || '0');
+
+    // Sanitize pagination params
+    const limit = sanitizeInteger(searchParams.get('limit'), 1, LIMITS.MAX_QUERY_LIMIT, 100);
+    const offset = sanitizeInteger(searchParams.get('offset'), 0, 10000, 0);
+
+    // Validate category_id if provided
+    if (categoryId && !isValidUUID(categoryId)) {
+      return errorResponse('category_id inválido', 400);
+    }
 
     // Build query with SCHEMA-CORRECT columns
-    // Note: category.parent_id NOT parent_category_id
     let query = supabase
       .from('restaurant_menu_items')
       .select(`
@@ -125,15 +191,25 @@ export async function GET(request: NextRequest) {
     if (isGlutenFree === 'true') {
       query = query.eq('is_gluten_free', true);
     }
+
+    // Validate and sanitize price filters
     if (minPrice) {
-      query = query.gte('price', parseFloat(minPrice));
+      const min = sanitizePrice(minPrice);
+      if (min > 0) {
+        query = query.gte('price', min);
+      }
     }
     if (maxPrice) {
-      query = query.lte('price', parseFloat(maxPrice));
+      const max = sanitizePrice(maxPrice);
+      if (max > 0) {
+        query = query.lte('price', max);
+      }
     }
+
+    // Sanitize search to prevent SQL injection in ilike
     if (search) {
-      // No sku column in schema - only search name and description
-      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
+      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
+      query = query.or(`name.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%`);
     }
 
     const { data: items, error: itemsError, count } = await query;
@@ -143,7 +219,6 @@ export async function GET(request: NextRequest) {
       return errorResponse(`Error al cargar items del menú: ${itemsError.message}`, 500);
     }
 
-    // variants, sizes, add_ons are already JSONB columns in the item - no extra queries needed!
     return successResponse({
       items: items || [],
       total: count || 0,
@@ -151,16 +226,14 @@ export async function GET(request: NextRequest) {
       offset,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Menu items API error:', error);
-    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
 // ======================
 // POST - Create Menu Item
-// Schema: NO branch_id, NO sku, NO cost, NO min_per_order, NO max_per_order
-// variants/sizes/add_ons are JSONB columns NOT separate tables
 // ======================
 export async function POST(request: NextRequest) {
   try {
@@ -171,62 +244,40 @@ export async function POST(request: NextRequest) {
 
     const { userRole, supabase } = auth;
 
-    // Check permissions
     if (!canWrite(userRole.role)) {
       return errorResponse('Sin permisos para crear items', 403);
     }
 
     const tenantId = userRole.tenant_id;
-
-    // Parse body
     const body = await request.json();
-    const {
-      category_id,
-      name,
-      description,
-      short_description,
-      price,
-      price_lunch,
-      price_happy_hour,
-      currency = 'MXN',
-      image_url,
-      image_gallery,
-      prep_time_minutes,
-      cooking_instructions,
-      calories,
-      protein_g,
-      carbs_g,
-      fat_g,
-      allergens = [],
-      is_vegetarian = false,
-      is_vegan = false,
-      is_gluten_free = false,
-      is_spicy = false,
-      spice_level,
-      is_new = false,
-      is_house_special = false,
-      is_chef_recommendation = false,
-      is_available = true,
-      available_quantity,
-      is_featured = false,
-      display_order,
-      metadata,
-      // JSONB columns - store directly
-      variants = [],
-      sizes = [],
-      add_ons = [],
-    } = body;
 
-    // Validate required fields - NO branch_id required (schema doesn't have it)
-    if (!category_id || !name || price === undefined) {
-      return errorResponse('category_id, name y price son requeridos', 400);
+    // Validate and sanitize required fields
+    const name = sanitizeText(body.name, LIMITS.MAX_TEXT_MEDIUM);
+    if (!name) {
+      return errorResponse('name es requerido', 400);
+    }
+
+    if (!body.category_id || !isValidUUID(body.category_id)) {
+      return errorResponse('category_id inválido o requerido', 400);
+    }
+
+    // Validate price
+    const price = sanitizePrice(body.price);
+    if (price <= 0) {
+      return errorResponse('price debe ser mayor a 0', 400);
+    }
+
+    // Validate currency
+    const currency = body.currency || 'MXN';
+    if (!VALID_CURRENCIES.includes(currency)) {
+      return errorResponse(`Moneda inválida. Permitidas: ${VALID_CURRENCIES.join(', ')}`, 400);
     }
 
     // Verify category belongs to tenant
     const { data: category, error: catError } = await supabase
       .from('restaurant_menu_categories')
       .select('id')
-      .eq('id', category_id)
+      .eq('id', body.category_id)
       .eq('tenant_id', tenantId)
       .is('deleted_at', null)
       .single();
@@ -257,15 +308,16 @@ export async function POST(request: NextRequest) {
 
       if (!existingSlug) break;
       slug = `${baseSlug}-${slugCounter++}`;
+      if (slugCounter > 100) break; // Prevent infinite loop
     }
 
     // Get max display_order if not provided
-    let finalDisplayOrder = display_order;
+    let finalDisplayOrder = body.display_order;
     if (finalDisplayOrder === undefined) {
       const { data: maxOrderResult } = await supabase
         .from('restaurant_menu_items')
         .select('display_order')
-        .eq('category_id', category_id)
+        .eq('category_id', body.category_id)
         .order('display_order', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -273,93 +325,122 @@ export async function POST(request: NextRequest) {
       finalDisplayOrder = (maxOrderResult?.display_order || 0) + 1;
     }
 
-    // Build insert data with SCHEMA-CORRECT columns
-    const insertData: Record<string, any> = {
+    // Sanitize JSONB arrays
+    let variants: Record<string, unknown>[] = [];
+    if (Array.isArray(body.variants)) {
+      variants = (body.variants as unknown[])
+        .slice(0, 20)
+        .map((v: unknown) => sanitizeVariant(v))
+        .filter((v): v is Record<string, unknown> => v !== null);
+    }
+
+    let sizes: Record<string, unknown>[] = [];
+    if (Array.isArray(body.sizes)) {
+      sizes = (body.sizes as unknown[])
+        .slice(0, 10)
+        .map((s: unknown) => sanitizeSize(s))
+        .filter((s): s is Record<string, unknown> => s !== null);
+    }
+
+    let addOns: Record<string, unknown>[] = [];
+    if (Array.isArray(body.add_ons)) {
+      addOns = (body.add_ons as unknown[])
+        .slice(0, 30)
+        .map((a: unknown) => sanitizeAddOnMenu(a))
+        .filter((a): a is Record<string, unknown> => a !== null);
+    }
+
+    // Sanitize allergens array
+    let allergens: string[] = [];
+    if (Array.isArray(body.allergens)) {
+      allergens = (body.allergens as unknown[])
+        .slice(0, 20)
+        .map((a: unknown) => sanitizeText(a, 50))
+        .filter((a): a is string => a !== null);
+    }
+
+    // Sanitize image_gallery array
+    let imageGallery: string[] = [];
+    if (Array.isArray(body.image_gallery)) {
+      imageGallery = (body.image_gallery as unknown[])
+        .slice(0, 10)
+        .map((url: unknown) => sanitizeText(url, 500))
+        .filter((url): url is string => url !== null);
+    }
+
+    // Build insert data with sanitized fields
+    const insertData: Record<string, unknown> = {
       tenant_id: tenantId,
-      category_id,
+      category_id: body.category_id,
       name,
       slug,
       price,
       currency,
-      is_vegetarian,
-      is_vegan,
-      is_gluten_free,
-      is_spicy,
-      is_new,
-      is_house_special,
-      is_chef_recommendation,
-      is_available,
-      is_featured,
+      is_vegetarian: Boolean(body.is_vegetarian),
+      is_vegan: Boolean(body.is_vegan),
+      is_gluten_free: Boolean(body.is_gluten_free),
+      is_spicy: Boolean(body.is_spicy),
+      is_new: Boolean(body.is_new),
+      is_house_special: Boolean(body.is_house_special),
+      is_chef_recommendation: Boolean(body.is_chef_recommendation),
+      is_available: body.is_available !== false,
+      is_featured: Boolean(body.is_featured),
       display_order: finalDisplayOrder,
-      // JSONB columns stored directly
-      variants: variants || [],
-      sizes: sizes || [],
-      add_ons: add_ons || [],
-      allergens: allergens || [],
+      variants,
+      sizes,
+      add_ons: addOns,
+      allergens,
     };
 
-    // Optional fields
-    if (description) insertData.description = description;
-    if (short_description) insertData.short_description = short_description;
-    if (price_lunch !== undefined) insertData.price_lunch = price_lunch;
-    if (price_happy_hour !== undefined) insertData.price_happy_hour = price_happy_hour;
-    if (image_url) insertData.image_url = image_url;
-    if (image_gallery) insertData.image_gallery = image_gallery;
-    if (prep_time_minutes !== undefined) insertData.prep_time_minutes = prep_time_minutes;
-    if (cooking_instructions) insertData.cooking_instructions = cooking_instructions;
-    if (calories !== undefined) insertData.calories = calories;
-    if (protein_g !== undefined) insertData.protein_g = protein_g;
-    if (carbs_g !== undefined) insertData.carbs_g = carbs_g;
-    if (fat_g !== undefined) insertData.fat_g = fat_g;
-    if (spice_level !== undefined) insertData.spice_level = spice_level;
-    if (available_quantity !== undefined) insertData.available_quantity = available_quantity;
-    if (metadata) insertData.metadata = metadata;
+    // Optional sanitized fields
+    if (body.description) {
+      insertData.description = sanitizeText(body.description, LIMITS.MAX_TEXT_XLARGE);
+    }
+    if (body.short_description) {
+      insertData.short_description = sanitizeText(body.short_description, LIMITS.MAX_TEXT_MEDIUM);
+    }
+    if (body.price_lunch !== undefined) {
+      insertData.price_lunch = sanitizePrice(body.price_lunch);
+    }
+    if (body.price_happy_hour !== undefined) {
+      insertData.price_happy_hour = sanitizePrice(body.price_happy_hour);
+    }
+    if (body.image_url) {
+      insertData.image_url = sanitizeText(body.image_url, 500);
+    }
+    if (imageGallery.length > 0) {
+      insertData.image_gallery = imageGallery;
+    }
+    if (body.prep_time_minutes !== undefined) {
+      insertData.prep_time_minutes = sanitizeInteger(body.prep_time_minutes, 0, 480, 0);
+    }
+    if (body.cooking_instructions) {
+      insertData.cooking_instructions = sanitizeText(body.cooking_instructions, LIMITS.MAX_TEXT_XLARGE);
+    }
+    if (body.calories !== undefined) {
+      insertData.calories = sanitizeInteger(body.calories, 0, 10000, 0);
+    }
+    if (body.protein_g !== undefined) {
+      insertData.protein_g = sanitizeInteger(body.protein_g, 0, 1000, 0);
+    }
+    if (body.carbs_g !== undefined) {
+      insertData.carbs_g = sanitizeInteger(body.carbs_g, 0, 1000, 0);
+    }
+    if (body.fat_g !== undefined) {
+      insertData.fat_g = sanitizeInteger(body.fat_g, 0, 1000, 0);
+    }
+    if (body.spice_level !== undefined) {
+      insertData.spice_level = sanitizeInteger(body.spice_level, 0, 5, 0);
+    }
+    if (body.available_quantity !== undefined) {
+      insertData.available_quantity = sanitizeInteger(body.available_quantity, 0, 999999, 0);
+    }
 
     const { data: newItem, error: insertError } = await supabase
       .from('restaurant_menu_items')
       .insert(insertData)
       .select(`
-        id,
-        tenant_id,
-        category_id,
-        name,
-        slug,
-        description,
-        short_description,
-        price,
-        price_lunch,
-        price_happy_hour,
-        currency,
-        variants,
-        sizes,
-        add_ons,
-        calories,
-        protein_g,
-        carbs_g,
-        fat_g,
-        allergens,
-        is_vegetarian,
-        is_vegan,
-        is_gluten_free,
-        is_spicy,
-        spice_level,
-        is_new,
-        is_house_special,
-        is_chef_recommendation,
-        prep_time_minutes,
-        cooking_instructions,
-        image_url,
-        image_gallery,
-        is_available,
-        available_quantity,
-        out_of_stock_until,
-        display_order,
-        is_featured,
-        times_ordered,
-        average_rating,
-        metadata,
-        created_at,
-        updated_at,
+        *,
         category:restaurant_menu_categories(id, name)
       `)
       .single();
@@ -369,17 +450,14 @@ export async function POST(request: NextRequest) {
       if (insertError.code === '23505') {
         return errorResponse('Ya existe un item con ese nombre/slug', 409);
       }
-      if (insertError.code === '42P01') {
-        return errorResponse('Tabla restaurant_menu_items no existe', 500);
-      }
       return errorResponse(`Error al crear item del menú: ${insertError.message}`, 500);
     }
 
-    return successResponse(newItem);
+    return successResponse(newItem, 201);
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Create menu item error:', error);
-    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -395,46 +473,80 @@ export async function PUT(request: NextRequest) {
 
     const { userRole, supabase } = auth;
 
-    // Check permissions
     if (!canWrite(userRole.role)) {
       return errorResponse('Sin permisos para actualizar items', 403);
     }
 
     const tenantId = userRole.tenant_id;
-
-    // Parse body
     const body = await request.json();
     const { action, item_ids, data } = body;
 
-    if (!action || !Array.isArray(item_ids) || item_ids.length === 0) {
-      return errorResponse('action e item_ids son requeridos', 400);
+    // Valid actions
+    const validActions = ['toggle_availability', 'toggle_featured', 'update_category', 'update_price', 'reorder'];
+
+    if (!action || !validActions.includes(action)) {
+      return errorResponse(`action inválida. Permitidas: ${validActions.join(', ')}`, 400);
+    }
+
+    if (!Array.isArray(item_ids) || item_ids.length === 0) {
+      return errorResponse('item_ids es requerido y debe ser un array', 400);
+    }
+
+    // Limit bulk operations
+    if (item_ids.length > MAX_BULK_ITEMS) {
+      return errorResponse(`Máximo ${MAX_BULK_ITEMS} items por operación`, 400);
+    }
+
+    // Validate all UUIDs
+    const validItemIds = item_ids.filter((id): id is string =>
+      typeof id === 'string' && isValidUUID(id)
+    );
+
+    if (validItemIds.length === 0) {
+      return errorResponse('No se encontraron IDs válidos', 400);
     }
 
     let updateData: Record<string, unknown> = {};
 
     switch (action) {
       case 'toggle_availability':
-        updateData = { is_available: data?.is_available ?? true };
+        updateData = { is_available: Boolean(data?.is_available) };
         break;
+
       case 'toggle_featured':
-        updateData = { is_featured: data?.is_featured ?? false };
+        updateData = { is_featured: Boolean(data?.is_featured) };
         break;
+
       case 'update_category':
-        if (!data?.category_id) {
-          return errorResponse('category_id es requerido', 400);
+        if (!data?.category_id || !isValidUUID(data.category_id)) {
+          return errorResponse('category_id inválido', 400);
+        }
+        // Verify category belongs to tenant
+        const { data: cat } = await supabase
+          .from('restaurant_menu_categories')
+          .select('id')
+          .eq('id', data.category_id)
+          .eq('tenant_id', tenantId)
+          .is('deleted_at', null)
+          .single();
+        if (!cat) {
+          return errorResponse('Categoría no encontrada', 404);
         }
         updateData = { category_id: data.category_id };
         break;
+
       case 'update_price':
-        if (data?.price === undefined) {
-          return errorResponse('price es requerido', 400);
+        const newPrice = sanitizePrice(data?.price);
+        if (newPrice <= 0) {
+          return errorResponse('price debe ser mayor a 0', 400);
         }
-        updateData = { price: data.price };
+        updateData = { price: newPrice };
         break;
+
       case 'reorder':
-        // For reorder, we expect item_ids to be in order
+        // For reorder, update each item's display_order
         const reorderUpdates = await Promise.all(
-          item_ids.map(async (id, index) => {
+          validItemIds.map(async (id, index) => {
             const { error } = await supabase
               .from('restaurant_menu_items')
               .update({ display_order: index })
@@ -446,15 +558,13 @@ export async function PUT(request: NextRequest) {
         return successResponse({
           updated: reorderUpdates.filter(u => u.success).length,
         });
-      default:
-        return errorResponse('Acción no válida', 400);
     }
 
     // Apply bulk update
     const { data: updatedItems, error: updateError } = await supabase
       .from('restaurant_menu_items')
       .update(updateData)
-      .in('id', item_ids)
+      .in('id', validItemIds)
       .eq('tenant_id', tenantId)
       .select('id');
 
@@ -467,8 +577,8 @@ export async function PUT(request: NextRequest) {
       updated: updatedItems?.length || 0,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Bulk update items error:', error);
-    return errorResponse(`Error interno: ${error?.message || 'Unknown'}`, 500);
+    return errorResponse('Error interno del servidor', 500);
   }
 }

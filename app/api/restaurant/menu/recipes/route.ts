@@ -12,8 +12,56 @@ import {
   errorResponse,
   successResponse,
   canWrite,
-  canDelete
+  canDelete,
+  isValidUUID,
 } from '@/src/lib/api/auth-helper';
+import { sanitizeText, sanitizeInteger, isSafeKey, LIMITS } from '@/src/lib/api/sanitization-helper';
+
+// Constants for recipe limits
+const MAX_INGREDIENTS_PER_RECIPE = 100;
+const MAX_QUANTITY = 100000; // Reasonable max for ingredient quantities
+
+// Sanitize a single ingredient entry (H13: prototype pollution protection)
+function sanitizeIngredient(
+  ingredient: unknown,
+  index: number
+): {
+  inventory_item_id: string;
+  quantity: number;
+  unit: string;
+  preparation_notes: string | null;
+  is_optional: boolean;
+  display_order: number;
+} | null {
+  if (!ingredient || typeof ingredient !== 'object' || Array.isArray(ingredient)) return null;
+  const ing = ingredient as Record<string, unknown>;
+
+  // Check for dangerous keys (prototype pollution)
+  for (const key of Object.keys(ing)) {
+    if (!isSafeKey(key)) return null;
+  }
+
+  // Validate inventory_item_id as UUID
+  if (!ing.inventory_item_id || !isValidUUID(ing.inventory_item_id as string)) {
+    return null;
+  }
+
+  // Sanitize quantity (must be positive)
+  const quantity = sanitizeInteger(ing.quantity, 0.001, MAX_QUANTITY, 1);
+  if (quantity === undefined || quantity <= 0) return null;
+
+  // Sanitize unit
+  const unit = sanitizeText(ing.unit, 50) || 'unidad';
+
+  return {
+    inventory_item_id: ing.inventory_item_id as string,
+    quantity: typeof ing.quantity === 'number' ? Math.min(Math.max(ing.quantity, 0.001), MAX_QUANTITY) : 1,
+    unit,
+    preparation_notes: ing.preparation_notes ? sanitizeText(ing.preparation_notes, LIMITS.MAX_TEXT_MEDIUM) : null,
+    is_optional: Boolean(ing.is_optional),
+    display_order: typeof ing.display_order === 'number' ? sanitizeInteger(ing.display_order, 0, 1000, index) ?? index : index,
+  };
+}
 
 // ======================
 // GET - Get Recipe for Menu Item
@@ -28,12 +76,16 @@ export async function GET(request: NextRequest) {
     const { userRole, supabase } = auth;
     const tenantId = userRole.tenant_id;
 
-    // Parse query params
+    // Parse query params with UUID validation
     const searchParams = request.nextUrl.searchParams;
     const menuItemId = searchParams.get('menu_item_id');
 
     if (!menuItemId) {
       return errorResponse('menu_item_id es requerido', 400);
+    }
+
+    if (!isValidUUID(menuItemId)) {
+      return errorResponse('menu_item_id inválido', 400);
     }
 
     // Verify menu item belongs to tenant
@@ -116,19 +168,38 @@ export async function POST(request: NextRequest) {
 
     // Parse body
     const body = await request.json();
-    const {
-      menu_item_id,
-      yield_quantity = 1,
-      yield_unit = 'porcion',
-      preparation_notes,
-      storage_notes,
-      ingredients = [],
-    } = body;
 
-    // Validate required fields
+    // Validate and sanitize menu_item_id
+    const menu_item_id = body.menu_item_id;
     if (!menu_item_id) {
       return errorResponse('menu_item_id es requerido', 400);
     }
+    if (!isValidUUID(menu_item_id)) {
+      return errorResponse('menu_item_id inválido', 400);
+    }
+
+    // Sanitize yield fields
+    const yield_quantity = sanitizeInteger(body.yield_quantity, 0.001, MAX_QUANTITY, 1) ?? 1;
+    const yield_unit = sanitizeText(body.yield_unit, 50) || 'porcion';
+
+    // Sanitize text fields
+    const preparation_notes = body.preparation_notes
+      ? sanitizeText(body.preparation_notes, LIMITS.MAX_TEXT_LONG)
+      : null;
+    const storage_notes = body.storage_notes
+      ? sanitizeText(body.storage_notes, LIMITS.MAX_TEXT_LONG)
+      : null;
+
+    // Sanitize ingredients array with limit
+    const rawIngredients = Array.isArray(body.ingredients) ? body.ingredients : [];
+    if (rawIngredients.length > MAX_INGREDIENTS_PER_RECIPE) {
+      return errorResponse(`Máximo ${MAX_INGREDIENTS_PER_RECIPE} ingredientes por receta`, 400);
+    }
+
+    // Filter and sanitize each ingredient
+    const sanitizedIngredients = (rawIngredients as unknown[])
+      .map((ing: unknown, idx: number) => sanitizeIngredient(ing, idx))
+      .filter((ing): ing is NonNullable<ReturnType<typeof sanitizeIngredient>> => ing !== null);
 
     // Verify menu item belongs to tenant
     const { data: menuItem, error: menuItemError } = await supabase
@@ -204,10 +275,10 @@ export async function POST(request: NextRequest) {
       recipeId = newRecipe.id;
     }
 
-    // Insert ingredients if provided
-    if (ingredients.length > 0) {
+    // Insert sanitized ingredients if provided
+    if (sanitizedIngredients.length > 0) {
       // Verify all inventory items belong to tenant
-      const inventoryItemIds = ingredients.map((i: { inventory_item_id: string }) => i.inventory_item_id);
+      const inventoryItemIds = sanitizedIngredients.map((i) => i.inventory_item_id);
       const { data: inventoryItems } = await supabase
         .from('inventory_items')
         .select('id, unit_cost')
@@ -215,19 +286,12 @@ export async function POST(request: NextRequest) {
         .eq('tenant_id', tenantId)
         .is('deleted_at', null);
 
-      const validItemIds = new Set(inventoryItems?.map(i => i.id) || []);
-      const itemCosts = new Map(inventoryItems?.map(i => [i.id, i.unit_cost || 0]) || []);
+      const validItemIds = new Set(inventoryItems?.map((i: { id: string }) => i.id) || []);
+      const itemCosts = new Map(inventoryItems?.map((i: { id: string; unit_cost: number | null }) => [i.id, i.unit_cost || 0]) || []);
 
-      const ingredientsToInsert = ingredients
-        .filter((i: { inventory_item_id: string }) => validItemIds.has(i.inventory_item_id))
-        .map((ingredient: {
-          inventory_item_id: string;
-          quantity: number;
-          unit: string;
-          preparation_notes?: string;
-          is_optional?: boolean;
-          display_order?: number;
-        }, index: number) => {
+      const ingredientsToInsert = sanitizedIngredients
+        .filter((i) => validItemIds.has(i.inventory_item_id))
+        .map((ingredient) => {
           const unitCost = itemCosts.get(ingredient.inventory_item_id) || 0;
           return {
             tenant_id: tenantId,
@@ -237,9 +301,9 @@ export async function POST(request: NextRequest) {
             unit: ingredient.unit,
             unit_cost: unitCost,
             total_cost: unitCost * ingredient.quantity,
-            preparation_notes: ingredient.preparation_notes || null,
-            is_optional: ingredient.is_optional || false,
-            display_order: ingredient.display_order ?? index,
+            preparation_notes: ingredient.preparation_notes,
+            is_optional: ingredient.is_optional,
+            display_order: ingredient.display_order,
           };
         });
 
@@ -296,7 +360,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ======================
-// DELETE - Delete Recipe
+// DELETE - Soft Delete Recipe
 // ======================
 export async function DELETE(request: NextRequest) {
   try {
@@ -313,12 +377,16 @@ export async function DELETE(request: NextRequest) {
 
     const tenantId = userRole.tenant_id;
 
-    // Parse query params
+    // Parse query params with UUID validation
     const searchParams = request.nextUrl.searchParams;
     const menuItemId = searchParams.get('menu_item_id');
 
     if (!menuItemId) {
       return errorResponse('menu_item_id es requerido', 400);
+    }
+
+    if (!isValidUUID(menuItemId)) {
+      return errorResponse('menu_item_id inválido', 400);
     }
 
     // Get recipe
@@ -327,22 +395,26 @@ export async function DELETE(request: NextRequest) {
       .select('id')
       .eq('menu_item_id', menuItemId)
       .eq('tenant_id', tenantId)
+      .eq('is_active', true)
       .single();
 
     if (fetchError || !recipe) {
       return errorResponse('Receta no encontrada', 404);
     }
 
-    // Delete ingredients first
+    // Soft delete ingredients (mark as inactive)
     await supabase
       .from('recipe_ingredients')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('recipe_id', recipe.id);
 
-    // Delete recipe
+    // Soft delete recipe (mark as inactive)
     const { error: deleteError } = await supabase
       .from('menu_item_recipes')
-      .delete()
+      .update({
+        is_active: false,
+        deleted_at: new Date().toISOString(),
+      })
       .eq('id', recipe.id);
 
     if (deleteError) {

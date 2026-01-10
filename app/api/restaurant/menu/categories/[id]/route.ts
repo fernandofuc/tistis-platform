@@ -16,6 +16,40 @@ import {
   canDelete,
   isValidUUID
 } from '@/src/lib/api/auth-helper';
+import { sanitizeText, sanitizeUrl, sanitizeInteger, LIMITS } from '@/src/lib/api/sanitization-helper';
+
+const VALID_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+// Sanitize available_times JSONB structure
+function sanitizeAvailableTimes(times: unknown): Record<string, unknown> | null {
+  if (!times || typeof times !== 'object') return null;
+  const t = times as Record<string, unknown>;
+
+  const sanitized: Record<string, unknown> = {};
+
+  if (t.all_day !== undefined) {
+    sanitized.all_day = Boolean(t.all_day);
+  }
+
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if (typeof t.start === 'string' && timeRegex.test(t.start)) {
+    sanitized.start = t.start;
+  }
+  if (typeof t.end === 'string' && timeRegex.test(t.end)) {
+    sanitized.end = t.end;
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
+// Sanitize available_days array
+function sanitizeAvailableDays(days: unknown): string[] | null {
+  if (!Array.isArray(days)) return null;
+  return days
+    .filter((d): d is string => typeof d === 'string' && VALID_DAYS.includes(d.toLowerCase()))
+    .map(d => d.toLowerCase())
+    .slice(0, 7);
+}
 
 // ======================
 // GET - Get Single Category
@@ -155,7 +189,13 @@ export async function PUT(
     const body = await request.json();
 
     // Support both parent_id and parent_category_id from frontend
-    const newParentId = body.parent_id ?? body.parent_category_id;
+    const rawParentId = body.parent_id ?? body.parent_category_id;
+
+    // Validate parent_id UUID if provided
+    if (rawParentId !== undefined && rawParentId !== null && !isValidUUID(rawParentId)) {
+      return errorResponse('parent_id inválido', 400);
+    }
+    const newParentId = rawParentId;
 
     // Validate parent_id if changing
     if (newParentId !== undefined && newParentId !== existingCategory.parent_id) {
@@ -185,32 +225,60 @@ export async function PUT(
       }
     }
 
-    // Prepare update data - SCHEMA-CORRECT columns only
-    const updateData: Record<string, unknown> = {};
-    const allowedFields = [
-      'name',
-      'description',
-      'parent_id',
-      'icon',
-      'image_url',
-      'display_order',
-      'is_active',
-      'is_featured',
-      'available_days',      // TEXT[]
-      'available_times',     // JSONB
-      'metadata',            // JSONB
-    ];
+    // Build sanitized update data using whitelist approach
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
 
-    allowedFields.forEach(field => {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
+    // Sanitize text fields
+    if (body.name !== undefined) {
+      const sanitizedName = sanitizeText(body.name, LIMITS.MAX_TEXT_MEDIUM);
+      if (!sanitizedName) {
+        return errorResponse('name inválido', 400);
       }
-    });
+      updateData.name = sanitizedName;
+    }
 
-    // Handle parent_id from parent_category_id
+    if (body.description !== undefined) {
+      updateData.description = sanitizeText(body.description, LIMITS.MAX_TEXT_LONG);
+    }
+
+    if (body.icon !== undefined) {
+      updateData.icon = sanitizeText(body.icon, 100);
+    }
+
+    if (body.image_url !== undefined) {
+      updateData.image_url = sanitizeUrl(body.image_url);
+    }
+
+    // Numeric fields
+    if (body.display_order !== undefined) {
+      updateData.display_order = sanitizeInteger(body.display_order, 0, 10000, 0);
+    }
+
+    // Boolean fields
+    if (body.is_active !== undefined) {
+      updateData.is_active = Boolean(body.is_active);
+    }
+
+    if (body.is_featured !== undefined) {
+      updateData.is_featured = Boolean(body.is_featured);
+    }
+
+    // JSONB/Array fields with structure validation
+    if (body.available_days !== undefined) {
+      updateData.available_days = sanitizeAvailableDays(body.available_days);
+    }
+
+    if (body.available_times !== undefined) {
+      updateData.available_times = sanitizeAvailableTimes(body.available_times);
+    }
+
+    // Handle parent_id
     if (newParentId !== undefined) {
       updateData.parent_id = newParentId;
     }
+    // Note: metadata is intentionally excluded - use specific fields instead
 
     // Update category
     const { data: updatedCategory, error: updateError } = await supabase

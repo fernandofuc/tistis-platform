@@ -12,8 +12,47 @@ import {
   isAuthError,
   errorResponse,
   successResponse,
-  canWrite
+  canWrite,
+  isValidUUID,
 } from '@/src/lib/api/auth-helper';
+import { sanitizeText, sanitizeUrl, sanitizeInteger, LIMITS } from '@/src/lib/api/sanitization-helper';
+
+// Constants for bulk operations
+const MAX_REORDER_ITEMS = 100;
+const VALID_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+// Sanitize available_times JSONB structure
+function sanitizeAvailableTimes(times: unknown): Record<string, unknown> | null {
+  if (!times || typeof times !== 'object') return null;
+  const t = times as Record<string, unknown>;
+
+  const sanitized: Record<string, unknown> = {};
+
+  // Validate all_day flag
+  if (t.all_day !== undefined) {
+    sanitized.all_day = Boolean(t.all_day);
+  }
+
+  // Validate time strings (HH:MM format)
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if (typeof t.start === 'string' && timeRegex.test(t.start)) {
+    sanitized.start = t.start;
+  }
+  if (typeof t.end === 'string' && timeRegex.test(t.end)) {
+    sanitized.end = t.end;
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
+// Sanitize available_days array
+function sanitizeAvailableDays(days: unknown): string[] | null {
+  if (!Array.isArray(days)) return null;
+  return days
+    .filter((d): d is string => typeof d === 'string' && VALID_DAYS.includes(d.toLowerCase()))
+    .map(d => d.toLowerCase())
+    .slice(0, 7); // Max 7 days
+}
 
 // ======================
 // GET - List Categories
@@ -28,12 +67,20 @@ export async function GET(request: NextRequest) {
     const { userRole, supabase } = auth;
     const tenantId = userRole.tenant_id;
 
-    // Parse query params
+    // Parse query params with validation
     const searchParams = request.nextUrl.searchParams;
     const branchId = searchParams.get('branch_id');
     const parentId = searchParams.get('parent_id');
     const isActive = searchParams.get('is_active');
     const includeItems = searchParams.get('include_items') === 'true';
+
+    // Validate UUID parameters
+    if (branchId && branchId !== 'null' && !isValidUUID(branchId)) {
+      return errorResponse('branch_id inválido', 400);
+    }
+    if (parentId && parentId !== 'null' && !isValidUUID(parentId)) {
+      return errorResponse('parent_id inválido', 400);
+    }
 
     // Build query - Schema columns:
     // id, tenant_id, branch_id, name, slug, description, parent_id,
@@ -152,30 +199,57 @@ export async function POST(request: NextRequest) {
 
     // Parse body
     const body = await request.json();
-    const {
-      branch_id,
-      name,
-      description,
-      parent_category_id,
-      parent_id, // Support both names
-      icon,
-      image_url,
-      display_order,
-      is_active = true,
-      is_featured = false,
-      // Schema uses: available_times (JSONB) and available_days (TEXT[])
-      available_days, // TEXT[] e.g. ['monday', 'tuesday', ...]
-      available_times, // JSONB e.g. {"all_day": true} or {"start": "09:00", "end": "22:00"}
-      metadata,
-    } = body;
 
-    // Support both parent_id and parent_category_id
-    const finalParentId = parent_category_id || parent_id || null;
-
-    // Validate required fields
-    if (!name) {
+    // Sanitize and validate required fields
+    const sanitizedName = sanitizeText(body.name, LIMITS.MAX_TEXT_MEDIUM);
+    if (!sanitizedName) {
       return errorResponse('El campo name es requerido', 400);
     }
+
+    // Sanitize optional text fields
+    const sanitizedDescription = body.description !== undefined
+      ? sanitizeText(body.description, LIMITS.MAX_TEXT_LONG)
+      : undefined;
+    const sanitizedIcon = body.icon !== undefined
+      ? sanitizeText(body.icon, 100) // Icon names are short
+      : undefined;
+    const sanitizedImageUrl = body.image_url !== undefined
+      ? sanitizeUrl(body.image_url)
+      : undefined;
+
+    // Validate and sanitize UUIDs
+    const branch_id = body.branch_id;
+    const parent_category_id = body.parent_category_id;
+    const parent_id = body.parent_id;
+
+    if (branch_id && !isValidUUID(branch_id)) {
+      return errorResponse('branch_id inválido', 400);
+    }
+
+    // Support both parent_id and parent_category_id
+    const rawParentId = parent_category_id || parent_id || null;
+    if (rawParentId && !isValidUUID(rawParentId)) {
+      return errorResponse('parent_id inválido', 400);
+    }
+    const finalParentId = rawParentId;
+
+    // Sanitize JSONB/array fields
+    const sanitizedAvailableTimes = body.available_times !== undefined
+      ? sanitizeAvailableTimes(body.available_times)
+      : undefined;
+    const sanitizedAvailableDays = body.available_days !== undefined
+      ? sanitizeAvailableDays(body.available_days)
+      : undefined;
+
+    // Sanitize numeric fields - keep undefined if not provided (auto-calculate later)
+    const providedDisplayOrder = body.display_order !== undefined
+      ? sanitizeInteger(body.display_order, 0, 10000, -1)
+      : -1;
+    const display_order = providedDisplayOrder >= 0 ? providedDisplayOrder : undefined;
+
+    // Boolean fields
+    const is_active = body.is_active !== undefined ? Boolean(body.is_active) : true;
+    const is_featured = body.is_featured !== undefined ? Boolean(body.is_featured) : false;
 
     // branch_id is optional in schema (NULL = aplica a todas las sucursales)
     // but verify it belongs to tenant if provided
@@ -207,8 +281,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate slug from name
-    const baseSlug = name
+    // Generate slug from sanitized name
+    const baseSlug = sanitizedName
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -249,25 +323,25 @@ export async function POST(request: NextRequest) {
       finalDisplayOrder = (maxOrderResult?.display_order || 0) + 1;
     }
 
-    // Insert category with SCHEMA-CORRECT columns
-    const insertData: Record<string, any> = {
+    // Insert category with SCHEMA-CORRECT columns using sanitized values
+    const insertData: Record<string, unknown> = {
       tenant_id: tenantId,
-      name,
+      name: sanitizedName,
       slug,
       display_order: finalDisplayOrder,
       is_active,
       is_featured,
     };
 
-    // Optional fields
+    // Optional fields - use sanitized values
     if (branch_id) insertData.branch_id = branch_id;
-    if (description) insertData.description = description;
+    if (sanitizedDescription) insertData.description = sanitizedDescription;
     if (finalParentId) insertData.parent_id = finalParentId;
-    if (icon) insertData.icon = icon;
-    if (image_url) insertData.image_url = image_url;
-    if (available_days) insertData.available_days = available_days;
-    if (available_times) insertData.available_times = available_times;
-    if (metadata) insertData.metadata = metadata;
+    if (sanitizedIcon) insertData.icon = sanitizedIcon;
+    if (sanitizedImageUrl) insertData.image_url = sanitizedImageUrl;
+    if (sanitizedAvailableDays) insertData.available_days = sanitizedAvailableDays;
+    if (sanitizedAvailableTimes) insertData.available_times = sanitizedAvailableTimes;
+    // Note: metadata is intentionally not included - use specific fields instead
 
     const { data: newCategory, error: insertError } = await supabase
       .from('restaurant_menu_categories')
@@ -342,12 +416,25 @@ export async function PUT(request: NextRequest) {
       return errorResponse('Se espera un array de categorías con id y display_order', 400);
     }
 
-    // Update each category's display_order
+    // Limit bulk operations to prevent DoS
+    if (categories.length > MAX_REORDER_ITEMS) {
+      return errorResponse(`Máximo ${MAX_REORDER_ITEMS} categorías por operación`, 400);
+    }
+
+    // Validate all UUIDs upfront
+    for (const cat of categories) {
+      if (!cat.id || !isValidUUID(cat.id)) {
+        return errorResponse(`ID de categoría inválido: ${cat.id}`, 400);
+      }
+    }
+
+    // Update each category's display_order with sanitized values
     const updates = await Promise.all(
       categories.map(async (cat: { id: string; display_order: number }) => {
+        const sanitizedOrder = sanitizeInteger(cat.display_order, 0, 10000, 0);
         const { error } = await supabase
           .from('restaurant_menu_categories')
-          .update({ display_order: cat.display_order })
+          .update({ display_order: sanitizedOrder })
           .eq('id', cat.id)
           .eq('tenant_id', tenantId);
 
