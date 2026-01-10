@@ -477,35 +477,37 @@ export function FloorPlanEditor({
   }, [draggingTableId, dragOffset, showGrid, getSvgPoint]);
 
   const handleTableDragEnd = useCallback(async (e: React.MouseEvent) => {
-    if (!draggingTableId || !dragPosition) {
-      setDraggingTableId(null);
-      setDragPosition(null);
+    // FIX: Capture values and clear state IMMEDIATELY (synchronously)
+    // This prevents the table from following the cursor while the async update runs
+    const tableId = draggingTableId;
+    const finalPosition = dragPosition;
+
+    // Clear drag state FIRST, before any async operations
+    setDraggingTableId(null);
+    setDragPosition(null);
+
+    if (!tableId || !finalPosition) {
       return;
     }
 
-    const table = tables.find(t => t.id === draggingTableId);
+    const table = tables.find(t => t.id === tableId);
     if (!table) {
-      setDraggingTableId(null);
-      setDragPosition(null);
       return;
     }
 
-    // Use the final drag position
-    const newX = dragPosition.x;
-    const newY = dragPosition.y;
+    // Use the captured final position
+    const newX = finalPosition.x;
+    const newY = finalPosition.y;
 
     // Only update if position changed
     if (newX !== table.position_x || newY !== table.position_y) {
       try {
-        await onUpdatePosition(draggingTableId, newX, newY);
+        await onUpdatePosition(tableId, newX, newY);
         setHasChanges(true);
       } catch (error) {
         console.error('Error updating position:', error);
       }
     }
-
-    setDraggingTableId(null);
-    setDragPosition(null);
   }, [draggingTableId, dragPosition, tables, onUpdatePosition]);
 
   // Wheel zoom
