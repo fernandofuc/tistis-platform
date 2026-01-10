@@ -5,46 +5,19 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  isValidUUID,
+  canWrite,
+} from '@/src/lib/api/auth-helper';
+import { sanitizeText, LIMITS } from '@/src/lib/api/sanitization-helper';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
-
-function isValidUUID(str: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
+// Valid batch statuses
+const VALID_BATCH_STATUSES = ['available', 'reserved', 'consumed', 'expired', 'damaged'];
 
 // ======================
 // GET - Get Batch
@@ -57,15 +30,15 @@ export async function GET(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de lote inválido' }, { status: 400 });
+      return errorResponse('ID de lote inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
     const { data: batch, error } = await supabase
       .from('inventory_batches')
@@ -79,7 +52,7 @@ export async function GET(
       .single();
 
     if (error || !batch) {
-      return NextResponse.json({ success: false, error: 'Lote no encontrado' }, { status: 404 });
+      return errorResponse('Lote no encontrado', 404);
     }
 
     // Get movements for this batch
@@ -89,14 +62,11 @@ export async function GET(
       .eq('batch_id', id)
       .order('performed_at', { ascending: false });
 
-    return NextResponse.json({
-      success: true,
-      data: { ...batch, movements: movements || [] }
-    });
+    return successResponse({ ...batch, movements: movements || [] });
 
   } catch (error) {
     console.error('Get batch error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -111,29 +81,60 @@ export async function PUT(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de lote inválido' }, { status: 400 });
+      return errorResponse('ID de lote inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para actualizar lotes' }, { status: 403 });
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para actualizar lotes', 403);
     }
 
     const body = await request.json();
-    const allowedFields = ['status', 'expiration_date', 'notes', 'batch_number', 'lot_number'];
 
-    const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
-    allowedFields.forEach(field => {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
+    // Build sanitized update data
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    // Validate and set status
+    if (body.status !== undefined) {
+      if (!VALID_BATCH_STATUSES.includes(body.status)) {
+        return errorResponse(`Estado inválido. Permitidos: ${VALID_BATCH_STATUSES.join(', ')}`, 400);
       }
-    });
+      updateData.status = body.status;
+    }
+
+    // Validate expiration_date
+    if (body.expiration_date !== undefined) {
+      if (body.expiration_date === null) {
+        updateData.expiration_date = null;
+      } else {
+        const expDate = new Date(body.expiration_date);
+        if (isNaN(expDate.getTime())) {
+          return errorResponse('Fecha de expiración inválida', 400);
+        }
+        updateData.expiration_date = expDate.toISOString();
+      }
+    }
+
+    // Sanitize text fields
+    if (body.notes !== undefined) {
+      updateData.notes = sanitizeText(body.notes, LIMITS.MAX_TEXT_LONG);
+    }
+
+    if (body.batch_number !== undefined) {
+      updateData.batch_number = sanitizeText(body.batch_number, 50);
+    }
+
+    if (body.lot_number !== undefined) {
+      updateData.lot_number = sanitizeText(body.lot_number, 50);
+    }
 
     const { data: batch, error } = await supabase
       .from('inventory_batches')
@@ -149,13 +150,13 @@ export async function PUT(
 
     if (error || !batch) {
       console.error('Error updating batch:', error);
-      return NextResponse.json({ success: false, error: 'Error al actualizar lote' }, { status: 500 });
+      return errorResponse('Error al actualizar lote', 500);
     }
 
-    return NextResponse.json({ success: true, data: batch });
+    return successResponse(batch);
 
   } catch (error) {
     console.error('Update batch error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }

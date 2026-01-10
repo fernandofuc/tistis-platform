@@ -136,7 +136,20 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
   useEffect(() => {
     if (!branch_id) return;
 
-    // Subscribe to order changes
+    // Debounce timer to prevent excessive fetches from rapid changes
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let isMounted = true;
+
+    const debouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (isMounted) {
+          fetchData();
+        }
+      }, 300); // 300ms debounce
+    };
+
+    // Subscribe to order changes - filtered by branch_id
     const ordersChannel = supabase
       .channel(`kds-orders-${branch_id}`)
       .on(
@@ -148,13 +161,16 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
           filter: `branch_id=eq.${branch_id}`,
         },
         () => {
-          // Refetch on any order change
-          fetchData();
+          // Refetch on order change for this branch
+          debouncedFetch();
         }
       )
       .subscribe();
 
     // Subscribe to order item changes
+    // NOTE: Cannot filter items by branch_id directly since that column doesn't exist on items
+    // We rely on the order subscription + RLS to ensure data integrity
+    // The debounce prevents excessive API calls from unrelated item changes
     const itemsChannel = supabase
       .channel(`kds-items-${branch_id}`)
       .on(
@@ -165,13 +181,15 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
           table: 'restaurant_order_items',
         },
         () => {
-          // Refetch on any item change
-          fetchData();
+          // Debounced refetch - RLS will filter out data from other tenants
+          debouncedFetch();
         }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(ordersChannel);
       supabase.removeChannel(itemsChannel);
     };

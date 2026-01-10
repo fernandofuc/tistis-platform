@@ -15,6 +15,31 @@ import {
   canWrite,
 } from '@/src/lib/api/auth-helper';
 
+// Valid station types
+const VALID_STATION_TYPES = ['main', 'grill', 'fry', 'salad', 'sushi', 'pizza', 'dessert', 'bar', 'expeditor', 'prep', 'assembly'] as const;
+
+// Sanitize text to prevent XSS
+function sanitizeText(text: unknown, maxLength = 500): string | null {
+  if (text === null || text === undefined) return null;
+  if (typeof text !== 'string') return null;
+  const sanitized = text.replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
+  return sanitized.slice(0, maxLength) || null;
+}
+
+// Validate hex color
+function sanitizeColor(color: unknown): string {
+  if (typeof color !== 'string') return '#3B82F6';
+  const hexRegex = /^#[0-9A-Fa-f]{6}$/;
+  return hexRegex.test(color) ? color : '#3B82F6';
+}
+
+// Validate IP address
+function sanitizeIP(ip: unknown): string | null {
+  if (typeof ip !== 'string' || !ip) return null;
+  const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  return ipRegex.test(ip) ? ip : null;
+}
+
 // ======================
 // GET - List Stations
 // ======================
@@ -90,16 +115,39 @@ export async function POST(request: NextRequest) {
       return errorResponse('branch_id inválido', 400);
     }
 
-    if (!code || !name) {
+    // Sanitize inputs
+    const sanitizedCode = sanitizeText(code, 50);
+    const sanitizedName = sanitizeText(name, 100);
+
+    if (!sanitizedCode || !sanitizedName) {
       return errorResponse('code y name son requeridos', 400);
     }
+
+    // Validate station_type
+    const validStationType = VALID_STATION_TYPES.includes(station_type) ? station_type : 'prep';
+
+    // Sanitize other fields
+    const sanitizedDescription = sanitizeText(description, 500);
+    const sanitizedPrinterName = sanitizeText(printer_name, 100);
+    const sanitizedPrinterIP = sanitizeIP(printer_ip);
+    const sanitizedDisplayColor = sanitizeColor(display_color);
+
+    // Validate handles_categories (array of UUIDs)
+    const validCategories = Array.isArray(handles_categories)
+      ? handles_categories.filter((id: unknown) => typeof id === 'string' && isValidUUID(id)).slice(0, 50)
+      : [];
+
+    // Validate default_staff_ids (array of UUIDs)
+    const validStaffIds = Array.isArray(default_staff_ids)
+      ? default_staff_ids.filter((id: unknown) => typeof id === 'string' && isValidUUID(id)).slice(0, 20)
+      : [];
 
     // Check for duplicate code
     const { data: existing } = await supabase
       .from('kitchen_stations')
       .select('id')
       .eq('branch_id', branch_id)
-      .eq('code', code)
+      .eq('code', sanitizedCode)
       .is('deleted_at', null)
       .single();
 
@@ -124,17 +172,17 @@ export async function POST(request: NextRequest) {
       .insert({
         tenant_id: userRole.tenant_id,
         branch_id,
-        code,
-        name,
-        description,
-        station_type: station_type || 'prep',
-        handles_categories: handles_categories || [],
-        printer_name,
-        printer_ip,
-        display_color: display_color || '#3B82F6',
+        code: sanitizedCode,
+        name: sanitizedName,
+        description: sanitizedDescription,
+        station_type: validStationType,
+        handles_categories: validCategories,
+        printer_name: sanitizedPrinterName,
+        printer_ip: sanitizedPrinterIP,
+        display_color: sanitizedDisplayColor,
         display_order: displayOrder,
         is_active: is_active !== false,
-        default_staff_ids: default_staff_ids || [],
+        default_staff_ids: validStaffIds,
       })
       .select()
       .single();

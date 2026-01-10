@@ -94,15 +94,27 @@ export async function PUT(
     const { user, userRole, supabase } = auth;
 
     const body = await request.json();
-    const { action, associated_order_id, ...updateData } = body;
+    const { action, associated_order_id } = body;
 
     // Validate associated_order_id if provided
     if (associated_order_id && !isValidUUID(associated_order_id)) {
       return errorResponse('ID de orden inválido', 400);
     }
 
+    // Build update data using whitelist approach - no spread operator
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    // Valid actions
+    const validActions = ['acknowledge', 'mark_ordered', 'resolve', 'reopen'];
+
     // Manejar acciones específicas
     if (action) {
+      if (!validActions.includes(action)) {
+        return errorResponse(`Acción no válida. Permitidas: ${validActions.join(', ')}`, 400);
+      }
+
       switch (action) {
         case 'acknowledge':
           updateData.status = 'acknowledged';
@@ -128,18 +140,12 @@ export async function PUT(
           updateData.resolved_by = null;
           updateData.resolved_at = null;
           break;
-
-        default:
-          return errorResponse('Acción no válida', 400);
       }
     }
 
     const { data: alert, error } = await supabase
       .from('low_stock_alerts')
-      .update({
-        ...updateData,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id)
       .eq('tenant_id', userRole.tenant_id)
       .select(`

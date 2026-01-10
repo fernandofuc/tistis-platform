@@ -14,6 +14,11 @@ import {
   isValidUUID,
   canWrite,
 } from '@/src/lib/api/auth-helper';
+import { sanitizeText, sanitizePrice, sanitizeInteger, LIMITS } from '@/src/lib/api/sanitization-helper';
+
+// Valid item types
+const VALID_ITEM_TYPES = ['ingredient', 'product', 'supply', 'packaging'];
+const VALID_STORAGE_TYPES = ['dry', 'refrigerated', 'frozen', 'room_temp'];
 
 // ======================
 // GET - List Items
@@ -32,7 +37,7 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get('category_id');
     const search = searchParams.get('search');
     const lowStockOnly = searchParams.get('low_stock_only') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const limit = sanitizeInteger(searchParams.get('limit'), 1, LIMITS.MAX_QUERY_LIMIT, 100);
 
     if (!branchId || !isValidUUID(branchId)) {
       return errorResponse('branch_id requerido', 400);
@@ -123,57 +128,77 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      branch_id,
-      name,
-      sku,
-      description,
-      category_id,
-      item_type,
-      unit,
-      unit_cost,
-      minimum_stock,
-      maximum_stock,
-      reorder_quantity,
-      storage_location,
-      storage_type,
-      is_perishable,
-      default_shelf_life_days,
-      track_expiration,
-      preferred_supplier_id,
-      image_url,
-      allergens,
-      is_active,
-    } = body;
 
-    if (!name || !unit) {
-      return errorResponse('Nombre y unidad son requeridos', 400);
+    // Validate and sanitize required fields
+    const name = sanitizeText(body.name, LIMITS.MAX_TEXT_MEDIUM);
+    if (!name) {
+      return errorResponse('Nombre es requerido', 400);
+    }
+
+    const unit = sanitizeText(body.unit, 20);
+    if (!unit) {
+      return errorResponse('Unidad es requerida', 400);
+    }
+
+    // Validate optional UUID fields
+    if (body.branch_id && !isValidUUID(body.branch_id)) {
+      return errorResponse('branch_id inválido', 400);
+    }
+
+    if (body.category_id && !isValidUUID(body.category_id)) {
+      return errorResponse('category_id inválido', 400);
+    }
+
+    if (body.preferred_supplier_id && !isValidUUID(body.preferred_supplier_id)) {
+      return errorResponse('preferred_supplier_id inválido', 400);
+    }
+
+    // Validate enum fields
+    const itemType = body.item_type || 'ingredient';
+    if (!VALID_ITEM_TYPES.includes(itemType)) {
+      return errorResponse(`Tipo de item inválido. Permitidos: ${VALID_ITEM_TYPES.join(', ')}`, 400);
+    }
+
+    const storageType = body.storage_type || 'dry';
+    if (!VALID_STORAGE_TYPES.includes(storageType)) {
+      return errorResponse(`Tipo de almacenamiento inválido. Permitidos: ${VALID_STORAGE_TYPES.join(', ')}`, 400);
+    }
+
+    // Sanitize allergens array
+    let allergens: string[] = [];
+    if (Array.isArray(body.allergens)) {
+      allergens = body.allergens
+        .slice(0, 20)
+        .map((a: unknown) => sanitizeText(a, 50))
+        .filter((a: string | null): a is string => a !== null);
     }
 
     const { data: item, error } = await supabase
       .from('inventory_items')
       .insert({
         tenant_id: userRole.tenant_id,
-        branch_id,
+        branch_id: body.branch_id || null,
         name,
-        sku,
-        description,
-        category_id,
-        item_type: item_type || 'ingredient',
+        sku: sanitizeText(body.sku, 50),
+        description: sanitizeText(body.description, LIMITS.MAX_TEXT_XLARGE),
+        category_id: body.category_id || null,
+        item_type: itemType,
         unit,
-        unit_cost: unit_cost || 0,
-        minimum_stock: minimum_stock || 0,
-        maximum_stock,
-        reorder_quantity,
-        storage_location,
-        storage_type: storage_type || 'dry',
-        is_perishable: is_perishable !== false,
-        default_shelf_life_days,
-        track_expiration: track_expiration !== false,
-        preferred_supplier_id,
-        image_url,
-        allergens: allergens || [],
-        is_active: is_active !== false,
+        unit_cost: sanitizePrice(body.unit_cost),
+        minimum_stock: sanitizeInteger(body.minimum_stock, 0, 999999, 0),
+        maximum_stock: body.maximum_stock !== undefined ? sanitizeInteger(body.maximum_stock, 0, 999999, 0) : null,
+        reorder_quantity: body.reorder_quantity !== undefined ? sanitizeInteger(body.reorder_quantity, 0, 99999, 0) : null,
+        storage_location: sanitizeText(body.storage_location, 100),
+        storage_type: storageType,
+        is_perishable: body.is_perishable !== false,
+        default_shelf_life_days: body.default_shelf_life_days !== undefined
+          ? sanitizeInteger(body.default_shelf_life_days, 0, 3650, 0)
+          : null,
+        track_expiration: body.track_expiration !== false,
+        preferred_supplier_id: body.preferred_supplier_id || null,
+        image_url: sanitizeText(body.image_url, 500),
+        allergens,
+        is_active: body.is_active !== false,
         current_stock: 0,
       })
       .select(`

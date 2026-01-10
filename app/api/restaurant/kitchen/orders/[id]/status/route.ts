@@ -1,6 +1,6 @@
 // =====================================================
-// TIS TIS PLATFORM - Kitchen Order Priority API
-// PATCH: Update order priority
+// TIS TIS PLATFORM - Kitchen Order Status API
+// PATCH: Update order status directly
 // =====================================================
 
 export const dynamic = 'force-dynamic';
@@ -11,10 +11,22 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Priority is a number 1-5 (matching database schema and frontend types)
-// 1 = Baja, 2 = Normal-Baja, 3 = Normal, 4 = Alta, 5 = Urgente
-const MIN_PRIORITY = 1;
-const MAX_PRIORITY = 5;
+// Valid order statuses
+const VALID_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served', 'completed', 'cancelled'];
+
+// Status transition rules
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  pending: ['confirmed', 'preparing', 'cancelled'],
+  confirmed: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['served', 'completed', 'preparing'],
+  served: ['completed'],
+};
+
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
 
 async function getUserAndTenant(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
@@ -46,13 +58,8 @@ async function getUserAndTenant(request: NextRequest) {
   return { user, userRole, supabase };
 }
 
-function isValidUUID(str: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
-
 // ======================
-// PATCH - Update Priority
+// PATCH - Update Status
 // ======================
 export async function PATCH(
   request: NextRequest,
@@ -73,46 +80,80 @@ export async function PATCH(
     const { user, userRole, supabase } = result;
 
     const body = await request.json();
-    const { priority } = body;
+    const { status, reason } = body;
 
-    // Validate priority is a number between 1-5
-    const priorityNum = typeof priority === 'number' ? priority : parseInt(priority, 10);
-    if (isNaN(priorityNum) || priorityNum < MIN_PRIORITY || priorityNum > MAX_PRIORITY) {
+    // Validate status value
+    if (!status || !VALID_STATUSES.includes(status)) {
       return NextResponse.json({
         success: false,
-        error: `Prioridad inválida. Debe ser un número entre ${MIN_PRIORITY} y ${MAX_PRIORITY}`
+        error: `Estado inválido. Valores permitidos: ${VALID_STATUSES.join(', ')}`
       }, { status: 400 });
     }
 
     // Get current order
     const { data: order, error: orderError } = await supabase
       .from('restaurant_orders')
-      .select('id, priority, branch_id')
+      .select('id, status, branch_id')
       .eq('id', id)
       .eq('tenant_id', userRole.tenant_id)
+      .is('deleted_at', null)
       .single();
 
     if (orderError || !order) {
       return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 });
     }
 
-    const previousPriority = order.priority || 3; // Default to normal (3)
-
-    if (previousPriority === priorityNum) {
+    // Validate transition
+    if (!VALID_TRANSITIONS[order.status]?.includes(status)) {
       return NextResponse.json({
-        success: true,
-        data: order,
-        message: 'La prioridad ya está configurada'
-      });
+        success: false,
+        error: `No se puede cambiar de "${order.status}" a "${status}"`
+      }, { status: 400 });
     }
 
-    // Update order priority
+    // Prepare update data
+    const updateData: Record<string, unknown> = { status };
+
+    // Handle cancellation
+    if (status === 'cancelled') {
+      if (!reason) {
+        return NextResponse.json({
+          success: false,
+          error: 'Se requiere una razón para cancelar'
+        }, { status: 400 });
+      }
+      updateData.cancel_reason = reason;
+      updateData.cancelled_by = user.id;
+
+      // Cancel all items
+      await supabase
+        .from('restaurant_order_items')
+        .update({ status: 'cancelled' })
+        .eq('order_id', id);
+    }
+
+    // If moving to preparing, start pending items
+    if (status === 'preparing') {
+      await supabase
+        .from('restaurant_order_items')
+        .update({ status: 'preparing', started_at: new Date().toISOString() })
+        .eq('order_id', id)
+        .eq('status', 'pending');
+    }
+
+    // If completing from ready, mark items as served
+    if (status === 'completed' && order.status === 'ready') {
+      await supabase
+        .from('restaurant_order_items')
+        .update({ status: 'served', served_at: new Date().toISOString() })
+        .eq('order_id', id)
+        .in('status', ['ready', 'preparing']);
+    }
+
+    // Update order
     const { data: updatedOrder, error: updateError } = await supabase
       .from('restaurant_orders')
-      .update({
-        priority: priorityNum,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id)
       .select(`
         *,
@@ -121,8 +162,8 @@ export async function PATCH(
       .single();
 
     if (updateError) {
-      console.error('Error updating priority:', updateError);
-      return NextResponse.json({ success: false, error: 'Error al actualizar prioridad' }, { status: 500 });
+      console.error('Error updating status:', updateError);
+      return NextResponse.json({ success: false, error: 'Error al actualizar estado' }, { status: 500 });
     }
 
     // Log the activity
@@ -130,25 +171,21 @@ export async function PATCH(
       tenant_id: userRole.tenant_id,
       branch_id: order.branch_id,
       order_id: id,
-      action: 'priority_change',
-      previous_status: String(previousPriority),
-      new_status: String(priorityNum),
+      action: 'status_changed',
+      previous_status: order.status,
+      new_status: status,
       performed_by: user.id,
+      notes: reason,
     });
-
-    // Priority labels for response message
-    const PRIORITY_LABELS: Record<number, string> = {
-      1: 'Baja', 2: 'Normal-Baja', 3: 'Normal', 4: 'Alta', 5: 'Urgente'
-    };
 
     return NextResponse.json({
       success: true,
       data: updatedOrder,
-      message: `Prioridad actualizada a: ${PRIORITY_LABELS[priorityNum] || priorityNum}`
+      message: `Estado actualizado a: ${status}`
     });
 
   } catch (error) {
-    console.error('Update priority error:', error);
+    console.error('Update status error:', error);
     return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
   }
 }

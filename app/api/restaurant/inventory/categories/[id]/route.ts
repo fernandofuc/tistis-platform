@@ -5,46 +5,18 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-async function getUserAndTenant(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'No autorizado', status: 401 };
-  }
-  const token = authHeader.substring(7);
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user) {
-    return { error: 'Token inválido', status: 401 };
-  }
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!userRole) {
-    return { error: 'Sin tenant asociado', status: 403 };
-  }
-
-  return { user, userRole, supabase };
-}
-
-function isValidUUID(str: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
+import { NextRequest } from 'next/server';
+import {
+  getUserAndTenant,
+  isAuthError,
+  errorResponse,
+  successResponse,
+  successMessage,
+  isValidUUID,
+  canWrite,
+  canDelete,
+} from '@/src/lib/api/auth-helper';
+import { sanitizeText, sanitizeColor, LIMITS } from '@/src/lib/api/sanitization-helper';
 
 // ======================
 // GET - Get Category
@@ -57,15 +29,15 @@ export async function GET(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de categoría inválido' }, { status: 400 });
+      return errorResponse('ID de categoría inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
     const { data: category, error } = await supabase
       .from('inventory_categories')
@@ -79,14 +51,14 @@ export async function GET(
       .single();
 
     if (error || !category) {
-      return NextResponse.json({ success: false, error: 'Categoría no encontrada' }, { status: 404 });
+      return errorResponse('Categoría no encontrada', 404);
     }
 
-    return NextResponse.json({ success: true, data: category });
+    return successResponse(category);
 
   } catch (error) {
     console.error('Get category error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -101,32 +73,68 @@ export async function PUT(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de categoría inválido' }, { status: 400 });
+      return errorResponse('ID de categoría inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
-    if (!['owner', 'admin', 'manager'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para actualizar categorías' }, { status: 403 });
+    if (!canWrite(userRole.role)) {
+      return errorResponse('Sin permisos para actualizar categorías', 403);
     }
 
     const body = await request.json();
 
-    // Don't allow updating tenant_id
-    delete body.tenant_id;
-    delete body.id;
+    // Build sanitized update data using whitelist approach
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    // Sanitize text fields
+    if (body.name !== undefined) {
+      const sanitizedName = sanitizeText(body.name, LIMITS.MAX_TEXT_MEDIUM);
+      if (!sanitizedName) {
+        return errorResponse('Nombre inválido', 400);
+      }
+      updateData.name = sanitizedName;
+      // Generate slug from name
+      updateData.slug = sanitizedName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    }
+
+    if (body.description !== undefined) {
+      updateData.description = sanitizeText(body.description, LIMITS.MAX_TEXT_LONG);
+    }
+
+    // Validate and sanitize color
+    if (body.color !== undefined) {
+      updateData.color = sanitizeColor(body.color);
+    }
+
+    // Validate branch_id
+    if (body.branch_id !== undefined) {
+      if (body.branch_id !== null && !isValidUUID(body.branch_id)) {
+        return errorResponse('ID de sucursal inválido', 400);
+      }
+      updateData.branch_id = body.branch_id;
+    }
+
+    // Boolean fields
+    if (body.is_active !== undefined) {
+      updateData.is_active = Boolean(body.is_active);
+    }
 
     const { data: category, error } = await supabase
       .from('inventory_categories')
-      .update({
-        ...body,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id)
       .eq('tenant_id', userRole.tenant_id)
       .is('deleted_at', null)
@@ -135,14 +143,14 @@ export async function PUT(
 
     if (error || !category) {
       console.error('Error updating category:', error);
-      return NextResponse.json({ success: false, error: 'Error al actualizar categoría' }, { status: 500 });
+      return errorResponse('Error al actualizar categoría', 500);
     }
 
-    return NextResponse.json({ success: true, data: category });
+    return successResponse(category);
 
   } catch (error) {
     console.error('Update category error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }
 
@@ -157,18 +165,18 @@ export async function DELETE(
     const { id } = await params;
 
     if (!isValidUUID(id)) {
-      return NextResponse.json({ success: false, error: 'ID de categoría inválido' }, { status: 400 });
+      return errorResponse('ID de categoría inválido', 400);
     }
 
-    const result = await getUserAndTenant(request);
-    if ('error' in result) {
-      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    const auth = await getUserAndTenant(request);
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    const { userRole, supabase } = result;
+    const { userRole, supabase } = auth;
 
-    if (!['owner', 'admin'].includes(userRole.role)) {
-      return NextResponse.json({ success: false, error: 'Sin permisos para eliminar categorías' }, { status: 403 });
+    if (!canDelete(userRole.role)) {
+      return errorResponse('Sin permisos para eliminar categorías', 403);
     }
 
     // Check if category has items
@@ -179,10 +187,7 @@ export async function DELETE(
       .is('deleted_at', null);
 
     if (count && count > 0) {
-      return NextResponse.json({
-        success: false,
-        error: `No se puede eliminar: hay ${count} items en esta categoría`
-      }, { status: 400 });
+      return errorResponse(`No se puede eliminar: hay ${count} items en esta categoría`, 400);
     }
 
     const { error } = await supabase
@@ -196,13 +201,13 @@ export async function DELETE(
 
     if (error) {
       console.error('Error deleting category:', error);
-      return NextResponse.json({ success: false, error: 'Error al eliminar categoría' }, { status: 500 });
+      return errorResponse('Error al eliminar categoría', 500);
     }
 
-    return NextResponse.json({ success: true, message: 'Categoría eliminada' });
+    return successMessage('Categoría eliminada');
 
   } catch (error) {
     console.error('Delete category error:', error);
-    return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
+    return errorResponse('Error interno del servidor', 500);
   }
 }

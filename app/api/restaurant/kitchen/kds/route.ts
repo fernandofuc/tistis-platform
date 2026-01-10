@@ -14,6 +14,9 @@ import {
   isValidUUID,
 } from '@/src/lib/api/auth-helper';
 
+// Valid kitchen stations
+const VALID_STATIONS = ['main', 'grill', 'fry', 'salad', 'sushi', 'pizza', 'dessert', 'bar', 'expeditor', 'prep', 'assembly', 'all'] as const;
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await getUserAndTenant(request);
@@ -28,6 +31,11 @@ export async function GET(request: NextRequest) {
 
     if (!branchId || !isValidUUID(branchId)) {
       return errorResponse('branch_id requerido', 400);
+    }
+
+    // Validate station parameter if provided
+    if (station && !VALID_STATIONS.includes(station as typeof VALID_STATIONS[number])) {
+      return errorResponse(`Estación inválida. Valores permitidos: ${VALID_STATIONS.join(', ')}`, 400);
     }
 
     // Get active orders with items

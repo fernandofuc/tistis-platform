@@ -12,7 +12,12 @@ import {
   errorResponse,
   successResponse,
   canWrite,
+  isValidUUID,
 } from '@/src/lib/api/auth-helper';
+import { sanitizeText, sanitizePrice, sanitizeInteger, LIMITS } from '@/src/lib/api/sanitization-helper';
+
+// Valid currencies
+const VALID_CURRENCIES = ['MXN', 'USD', 'EUR'];
 
 // ======================
 // GET - List Suppliers
@@ -28,20 +33,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const activeOnly = searchParams.get('active_only') !== 'false';
+    const limit = sanitizeInteger(searchParams.get('limit'), 1, LIMITS.MAX_QUERY_LIMIT, 100);
 
     let query = supabase
       .from('inventory_suppliers')
       .select('*')
       .eq('tenant_id', userRole.tenant_id)
       .is('deleted_at', null)
-      .order('name', { ascending: true });
+      .order('name', { ascending: true })
+      .limit(limit);
 
     if (activeOnly) {
       query = query.eq('is_active', true);
     }
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,contact_name.ilike.%${search}%,email.ilike.%${search}%`);
+      // Sanitize search to prevent SQL-like injection in ilike patterns
+      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
+      query = query.or(`name.ilike.%${sanitizedSearch}%,contact_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`);
     }
 
     const { data: suppliers, error } = await query;
@@ -76,34 +85,46 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      name,
-      code,
-      tax_id,
-      contact_name,
-      email,
-      phone,
-      mobile,
-      whatsapp,
-      website,
-      address,
-      city,
-      state,
-      postal_code,
-      country,
-      payment_terms,
-      credit_limit,
-      currency,
-      categories,
-      supplied_item_ids,
-      delivery_branch_ids,
-      rating,
-      notes,
-      is_active,
-    } = body;
 
+    // Validate and sanitize required fields
+    const name = sanitizeText(body.name, LIMITS.MAX_TEXT_MEDIUM);
     if (!name) {
       return errorResponse('El nombre es requerido', 400);
+    }
+
+    // Validate email if provided
+    const email = sanitizeText(body.email, 100);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return errorResponse('Email inválido', 400);
+    }
+
+    // Validate currency
+    const currency = body.currency || 'MXN';
+    if (!VALID_CURRENCIES.includes(currency)) {
+      return errorResponse(`Moneda inválida. Permitidas: ${VALID_CURRENCIES.join(', ')}`, 400);
+    }
+
+    // Sanitize array fields with UUID validation
+    let suppliedItemIds: string[] = [];
+    if (Array.isArray(body.supplied_item_ids)) {
+      suppliedItemIds = body.supplied_item_ids
+        .slice(0, 100)
+        .filter((id: unknown): id is string => typeof id === 'string' && isValidUUID(id));
+    }
+
+    let deliveryBranchIds: string[] = [];
+    if (Array.isArray(body.delivery_branch_ids)) {
+      deliveryBranchIds = body.delivery_branch_ids
+        .slice(0, 50)
+        .filter((id: unknown): id is string => typeof id === 'string' && isValidUUID(id));
+    }
+
+    let categories: string[] = [];
+    if (Array.isArray(body.categories)) {
+      categories = body.categories
+        .slice(0, 20)
+        .map((c: unknown) => sanitizeText(c, 50))
+        .filter((c: string | null): c is string => c !== null);
     }
 
     const { data: supplier, error } = await supabase
@@ -111,28 +132,28 @@ export async function POST(request: NextRequest) {
       .insert({
         tenant_id: userRole.tenant_id,
         name,
-        code,
-        tax_id,
-        contact_name,
+        code: sanitizeText(body.code, 50),
+        tax_id: sanitizeText(body.tax_id, 30),
+        contact_name: sanitizeText(body.contact_name, LIMITS.MAX_TEXT_SHORT),
         email,
-        phone,
-        mobile,
-        whatsapp,
-        website,
-        address,
-        city,
-        state,
-        postal_code,
-        country: country || 'México',
-        payment_terms,
-        credit_limit,
-        currency: currency || 'MXN',
-        categories: categories || [],
-        supplied_item_ids: supplied_item_ids || [],
-        delivery_branch_ids: delivery_branch_ids || [],
-        rating,
-        notes,
-        is_active: is_active !== false,
+        phone: sanitizeText(body.phone, 20),
+        mobile: sanitizeText(body.mobile, 20),
+        whatsapp: sanitizeText(body.whatsapp, 20),
+        website: sanitizeText(body.website, 200),
+        address: sanitizeText(body.address, LIMITS.MAX_TEXT_MEDIUM),
+        city: sanitizeText(body.city, 100),
+        state: sanitizeText(body.state, 100),
+        postal_code: sanitizeText(body.postal_code, 20),
+        country: sanitizeText(body.country, 100) || 'México',
+        payment_terms: sanitizeText(body.payment_terms, LIMITS.MAX_TEXT_MEDIUM),
+        credit_limit: sanitizePrice(body.credit_limit),
+        currency,
+        categories,
+        supplied_item_ids: suppliedItemIds,
+        delivery_branch_ids: deliveryBranchIds,
+        rating: body.rating !== undefined ? sanitizeInteger(body.rating, 1, 5, 3) : null,
+        notes: sanitizeText(body.notes, LIMITS.MAX_TEXT_XLARGE),
+        is_active: body.is_active !== false,
       })
       .select()
       .single();

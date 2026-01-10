@@ -14,6 +14,7 @@ import {
   isValidUUID,
   canWrite,
 } from '@/src/lib/api/auth-helper';
+import { sanitizeText, sanitizeColor, sanitizeInteger, LIMITS } from '@/src/lib/api/sanitization-helper';
 
 function slugify(text: string): string {
   return text
@@ -116,27 +117,37 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, branch_id, color } = body;
 
+    // Sanitize and validate required fields
+    const name = sanitizeText(body.name, LIMITS.MAX_TEXT_MEDIUM);
     if (!name) {
       return errorResponse('El nombre es requerido', 400);
     }
 
     const slug = slugify(name);
 
-    // Build insert data with only essential fields
+    // Validate branch_id if provided
+    if (body.branch_id && !isValidUUID(body.branch_id)) {
+      return errorResponse('ID de sucursal inválido', 400);
+    }
+
+    // Build insert data with sanitized fields
     const insertData: Record<string, unknown> = {
       tenant_id: userRole.tenant_id,
       name,
       slug,
     };
 
-    // Add optional fields only if they have values
-    if (branch_id && isValidUUID(branch_id)) insertData.branch_id = branch_id;
-    if (description) insertData.description = description;
-    if (color) insertData.color = color;
-
-    console.log('[Categories API] Creating category:', insertData);
+    // Add optional fields only if they have values (sanitized)
+    if (body.branch_id && isValidUUID(body.branch_id)) {
+      insertData.branch_id = body.branch_id;
+    }
+    if (body.description) {
+      insertData.description = sanitizeText(body.description, LIMITS.MAX_TEXT_LONG);
+    }
+    if (body.color) {
+      insertData.color = sanitizeColor(body.color);
+    }
 
     const { data: category, error } = await supabase
       .from('inventory_categories')
@@ -156,7 +167,6 @@ export async function POST(request: NextRequest) {
       return errorResponse(`Error al crear categoría: ${error.message || error.code || 'Unknown'}`, 500);
     }
 
-    console.log('[Categories API] Category created:', category?.id);
     return successResponse(category, 201);
 
   } catch (error) {

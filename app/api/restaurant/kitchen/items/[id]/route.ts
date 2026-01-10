@@ -11,6 +11,31 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+// UUID validation helper
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+// Sanitize text to prevent XSS
+function sanitizeText(text: unknown, maxLength = 500): string | null {
+  if (text === null || text === undefined) return null;
+  if (typeof text !== 'string') return null;
+  const sanitized = text.replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
+  return sanitized.slice(0, maxLength) || null;
+}
+
+// Validate positive number
+function sanitizeNumber(value: unknown, min: number, max: number, defaultValue: number): number {
+  if (value === null || value === undefined) return defaultValue;
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
+  if (isNaN(num) || !isFinite(num)) return defaultValue;
+  return Math.max(min, Math.min(max, num));
+}
+
+// Valid kitchen stations
+const VALID_STATIONS = ['main', 'grill', 'fry', 'salad', 'sushi', 'pizza', 'dessert', 'bar', 'expeditor', 'prep', 'assembly'] as const;
+
 // Helper to get user and verify item
 async function getUserAndVerifyItem(request: NextRequest, itemId: string) {
   const authHeader = request.headers.get('Authorization');
@@ -62,10 +87,16 @@ async function getUserAndVerifyItem(request: NextRequest, itemId: string) {
 // ======================
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerifyItem(request, params.id);
+    const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      return NextResponse.json({ success: false, error: 'ID de item inválido' }, { status: 400 });
+    }
+
+    const result = await getUserAndVerifyItem(request, id);
     if ('error' in result) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
@@ -73,25 +104,40 @@ export async function PUT(
     const { item, supabase } = result;
     const body = await request.json();
 
-    const allowedFields = [
-      'quantity',
-      'special_instructions',
-      'allergen_notes',
-      'kitchen_station',
-      'is_complimentary',
-      'complimentary_reason',
-    ];
-
     const updateData: Record<string, unknown> = {};
-    allowedFields.forEach(field => {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
-      }
-    });
 
-    // Recalculate subtotal if quantity changed
-    if (body.quantity) {
-      updateData.subtotal = body.quantity * item.unit_price + item.variant_price + item.size_price;
+    // Sanitize and validate each field
+    if (body.quantity !== undefined) {
+      updateData.quantity = sanitizeNumber(body.quantity, 1, 100, item.quantity);
+    }
+
+    if (body.special_instructions !== undefined) {
+      updateData.special_instructions = sanitizeText(body.special_instructions, 500);
+    }
+
+    if (body.allergen_notes !== undefined) {
+      updateData.allergen_notes = sanitizeText(body.allergen_notes, 255);
+    }
+
+    if (body.kitchen_station !== undefined) {
+      if (VALID_STATIONS.includes(body.kitchen_station)) {
+        updateData.kitchen_station = body.kitchen_station;
+      }
+    }
+
+    if (body.is_complimentary !== undefined) {
+      updateData.is_complimentary = Boolean(body.is_complimentary);
+    }
+
+    if (body.complimentary_reason !== undefined) {
+      updateData.complimentary_reason = sanitizeText(body.complimentary_reason, 255);
+    }
+
+    // Recalculate subtotal if quantity changed (with overflow protection)
+    if (updateData.quantity) {
+      const qty = updateData.quantity as number;
+      const subtotal = qty * item.unit_price + (item.variant_price || 0) + (item.size_price || 0);
+      updateData.subtotal = Math.max(0, Math.min(999999.99, Math.round(subtotal * 100) / 100));
     }
 
     const { data: updatedItem, error } = await supabase
@@ -119,10 +165,16 @@ export async function PUT(
 // ======================
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await getUserAndVerifyItem(request, params.id);
+    const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      return NextResponse.json({ success: false, error: 'ID de item inválido' }, { status: 400 });
+    }
+
+    const result = await getUserAndVerifyItem(request, id);
     if ('error' in result) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }

@@ -1,6 +1,6 @@
 // =====================================================
-// TIS TIS PLATFORM - Kitchen Order Bump API
-// POST: Bump order to next status
+// TIS TIS PLATFORM - Kitchen Order Cancel API
+// POST: Cancel an order with reason
 // =====================================================
 
 export const dynamic = 'force-dynamic';
@@ -11,16 +11,13 @@ import {
   isAuthError,
   isValidUUID,
 } from '@/src/lib/api/auth-helper';
+import { sanitizeText, LIMITS } from '@/src/lib/api/sanitization-helper';
 
-// Status progression for orders
-const STATUS_FLOW: Record<string, string> = {
-  pending: 'preparing',
-  preparing: 'ready',
-  ready: 'served',
-};
+// Statuses that can be cancelled
+const CANCELLABLE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready'];
 
 // ======================
-// POST - Bump Order
+// POST - Cancel Order
 // ======================
 export async function POST(
   request: NextRequest,
@@ -40,47 +37,55 @@ export async function POST(
 
     const { user, userRole, supabase } = auth;
 
+    const body = await request.json();
+
+    // Sanitize and validate reason
+    const sanitizedReason = sanitizeText(body.reason, LIMITS.MAX_TEXT_LONG);
+    if (!sanitizedReason) {
+      return NextResponse.json({
+        success: false,
+        error: 'Se requiere una razón para cancelar la orden'
+      }, { status: 400 });
+    }
+
     // Get current order
     const { data: order, error: orderError } = await supabase
       .from('restaurant_orders')
       .select('id, status, branch_id')
       .eq('id', id)
       .eq('tenant_id', userRole.tenant_id)
+      .is('deleted_at', null)
       .single();
 
     if (orderError || !order) {
       return NextResponse.json({ success: false, error: 'Orden no encontrada' }, { status: 404 });
     }
 
-    const currentStatus = order.status;
-    const nextStatus = STATUS_FLOW[currentStatus];
-
-    if (!nextStatus) {
+    // Check if order can be cancelled
+    if (!CANCELLABLE_STATUSES.includes(order.status)) {
       return NextResponse.json({
         success: false,
-        error: `No se puede avanzar desde el estado "${currentStatus}"`
+        error: `No se puede cancelar una orden con estado "${order.status}". Solo órdenes en estado: ${CANCELLABLE_STATUSES.join(', ')}`
       }, { status: 400 });
     }
 
-    // Prepare update data
-    const updateData: Record<string, unknown> = {
-      status: nextStatus,
-      updated_at: new Date().toISOString(),
-    };
+    // Cancel all items first
+    await supabase
+      .from('restaurant_order_items')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('order_id', id)
+      .neq('status', 'cancelled');
 
-    // Set timestamps based on status
-    if (nextStatus === 'preparing') {
-      updateData.started_preparing_at = new Date().toISOString();
-    } else if (nextStatus === 'ready') {
-      updateData.ready_at = new Date().toISOString();
-    } else if (nextStatus === 'served') {
-      updateData.served_at = new Date().toISOString();
-    }
-
-    // Update order
+    // Cancel the order with proper timestamp
     const { data: updatedOrder, error: updateError } = await supabase
       .from('restaurant_orders')
-      .update(updateData)
+      .update({
+        status: 'cancelled',
+        cancel_reason: sanitizedReason.slice(0, 255), // DB column limit
+        cancelled_by: user.id,
+        cancelled_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', id)
       .select(`
         *,
@@ -89,8 +94,8 @@ export async function POST(
       .single();
 
     if (updateError) {
-      console.error('Error bumping order:', updateError);
-      return NextResponse.json({ success: false, error: 'Error al avanzar orden' }, { status: 500 });
+      console.error('Error cancelling order:', updateError);
+      return NextResponse.json({ success: false, error: 'Error al cancelar orden' }, { status: 500 });
     }
 
     // Log the activity
@@ -98,20 +103,21 @@ export async function POST(
       tenant_id: userRole.tenant_id,
       branch_id: order.branch_id,
       order_id: id,
-      action: 'bump',
-      previous_status: currentStatus,
-      new_status: nextStatus,
+      action: 'order_cancelled',
+      previous_status: order.status,
+      new_status: 'cancelled',
       performed_by: user.id,
+      notes: sanitizedReason,
     });
 
     return NextResponse.json({
       success: true,
       data: updatedOrder,
-      message: `Orden avanzada a: ${nextStatus}`
+      message: 'Orden cancelada exitosamente'
     });
 
   } catch (error) {
-    console.error('Bump order error:', error);
+    console.error('Cancel order error:', error);
     return NextResponse.json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
   }
 }
