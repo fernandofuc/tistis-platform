@@ -127,9 +127,9 @@ function TableNode({
   const color = colorBy === 'status' ? STATUS_COLORS[table.status] : ZONE_COLORS[table.zone];
   const statusConfig = STATUS_CONFIG[table.status];
 
-  // Use drag position if dragging, otherwise use saved position
-  const x = isDragging && dragPosition ? dragPosition.x : (table.position_x ?? 100);
-  const y = isDragging && dragPosition ? dragPosition.y : (table.position_y ?? 100);
+  // Use drag position if available (during drag OR during async save), otherwise use saved position
+  const x = dragPosition ? dragPosition.x : (table.position_x ?? 100);
+  const y = dragPosition ? dragPosition.y : (table.position_y ?? 100);
 
   const width = shape === 'rectangle' ? TABLE_SIZE * 1.5 : TABLE_SIZE;
   const height = TABLE_SIZE;
@@ -360,6 +360,8 @@ export function FloorPlanEditor({
   const [draggingTableId, setDraggingTableId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
   const [dragPosition, setDragPosition] = useState<Position | null>(null);
+  // Track which table is being updated (to maintain position during async save)
+  const [updatingTableId, setUpdatingTableId] = useState<string | null>(null);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
@@ -477,30 +479,34 @@ export function FloorPlanEditor({
   }, [draggingTableId, dragOffset, showGrid, getSvgPoint]);
 
   const handleTableDragEnd = useCallback(async (e: React.MouseEvent) => {
-    // FIX: Capture values and clear state IMMEDIATELY (synchronously)
-    // This prevents the table from following the cursor while the async update runs
+    // FIX: Capture values and clear drag state IMMEDIATELY
     const tableId = draggingTableId;
     const finalPosition = dragPosition;
 
-    // Clear drag state FIRST, before any async operations
+    // Clear dragging state (stops following cursor)
     setDraggingTableId(null);
-    setDragPosition(null);
 
     if (!tableId || !finalPosition) {
+      setDragPosition(null);
+      setUpdatingTableId(null);
       return;
     }
 
     const table = tables.find(t => t.id === tableId);
     if (!table) {
+      setDragPosition(null);
+      setUpdatingTableId(null);
       return;
     }
 
-    // Use the captured final position
     const newX = finalPosition.x;
     const newY = finalPosition.y;
 
     // Only update if position changed
     if (newX !== table.position_x || newY !== table.position_y) {
+      // Mark table as updating to maintain visual position during async save
+      setUpdatingTableId(tableId);
+
       try {
         await onUpdatePosition(tableId, newX, newY);
         setHasChanges(true);
@@ -508,6 +514,10 @@ export function FloorPlanEditor({
         console.error('Error updating position:', error);
       }
     }
+
+    // Clear states AFTER async update completes
+    setDragPosition(null);
+    setUpdatingTableId(null);
   }, [draggingTableId, dragPosition, tables, onUpdatePosition]);
 
   // Wheel zoom
@@ -740,6 +750,7 @@ export function FloorPlanEditor({
             handlePanEnd();
             setDraggingTableId(null);
             setDragPosition(null);
+            setUpdatingTableId(null);
           }}
           onClick={handleBackgroundClick}
         >
@@ -773,23 +784,30 @@ export function FloorPlanEditor({
             )}
 
             {/* Tables */}
-            {tables.map(table => (
-              <TableNode
-                key={table.id}
-                table={table}
-                isSelected={selectedTableId === table.id}
-                isDragging={draggingTableId === table.id}
-                dragPosition={draggingTableId === table.id ? dragPosition ?? undefined : undefined}
-                zoom={zoom}
-                showLabels={showLabels}
-                colorBy={colorBy}
-                onSelect={() => {
-                  setSelectedTableId(table.id);
-                  onSelectTable?.(table);
-                }}
-                onDragStart={(e) => handleTableDragStart(table.id, e)}
-              />
-            ))}
+            {tables.map(table => {
+              // Show drag position during drag OR during async update
+              const isBeingDragged = draggingTableId === table.id;
+              const isBeingUpdated = updatingTableId === table.id;
+              const showDragPosition = (isBeingDragged || isBeingUpdated) && dragPosition;
+
+              return (
+                <TableNode
+                  key={table.id}
+                  table={table}
+                  isSelected={selectedTableId === table.id}
+                  isDragging={isBeingDragged}
+                  dragPosition={showDragPosition ? dragPosition : undefined}
+                  zoom={zoom}
+                  showLabels={showLabels}
+                  colorBy={colorBy}
+                  onSelect={() => {
+                    setSelectedTableId(table.id);
+                    onSelectTable?.(table);
+                  }}
+                  onDragStart={(e) => handleTableDragStart(table.id, e)}
+                />
+              );
+            })}
           </g>
         </svg>
 

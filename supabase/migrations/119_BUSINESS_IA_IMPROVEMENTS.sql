@@ -20,9 +20,10 @@ CREATE TABLE IF NOT EXISTS public.system_locks (
 );
 
 -- Índice para búsqueda eficiente de locks expirados
+-- NOTE: Removed partial index with NOW() - PostgreSQL requires IMMUTABLE functions in index predicates
+-- The index still helps queries that filter by expires_at
 CREATE INDEX IF NOT EXISTS idx_system_locks_expires
-ON public.system_locks (expires_at)
-WHERE expires_at < NOW();
+ON public.system_locks (expires_at);
 
 -- Índice para búsqueda por nombre
 CREATE INDEX IF NOT EXISTS idx_system_locks_name

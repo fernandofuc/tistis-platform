@@ -281,8 +281,8 @@ ALTER TABLE public.lead_conversion_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "lead_conversion_log_tenant_isolation" ON public.lead_conversion_log;
 CREATE POLICY "lead_conversion_log_tenant_isolation" ON public.lead_conversion_log
     FOR ALL
-    USING (tenant_id = auth.jwt() ->> 'tenant_id')
-    WITH CHECK (tenant_id = auth.jwt() ->> 'tenant_id');
+    USING (tenant_id = (auth.jwt() ->> 'tenant_id')::UUID)
+    WITH CHECK (tenant_id = (auth.jwt() ->> 'tenant_id')::UUID);
 
 -- Service role bypass
 DROP POLICY IF EXISTS "lead_conversion_log_service_role" ON public.lead_conversion_log;
@@ -573,8 +573,8 @@ ALTER TABLE public.ai_booking_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "ai_booking_log_tenant_isolation" ON public.ai_booking_log;
 CREATE POLICY "ai_booking_log_tenant_isolation" ON public.ai_booking_log
     FOR ALL
-    USING (tenant_id = auth.jwt() ->> 'tenant_id')
-    WITH CHECK (tenant_id = auth.jwt() ->> 'tenant_id');
+    USING (tenant_id = (auth.jwt() ->> 'tenant_id')::UUID)
+    WITH CHECK (tenant_id = (auth.jwt() ->> 'tenant_id')::UUID);
 
 DROP POLICY IF EXISTS "ai_booking_log_service_role" ON public.ai_booking_log;
 CREATE POLICY "ai_booking_log_service_role" ON public.ai_booking_log

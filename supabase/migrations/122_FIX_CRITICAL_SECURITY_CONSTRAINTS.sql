@@ -381,8 +381,8 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
--- Use SERIALIZABLE to prevent race conditions
-SET transaction_isolation = 'SERIALIZABLE'
+-- NOTE: Cannot use SET transaction_isolation here as it must be called before any query
+-- Race conditions are prevented by: advisory lock + FOR UPDATE + serialization_failure handler
 AS $$
 DECLARE
     v_appointment_id UUID;

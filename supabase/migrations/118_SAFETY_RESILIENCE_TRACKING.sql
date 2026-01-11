@@ -200,9 +200,10 @@ CREATE INDEX IF NOT EXISTS idx_voice_sessions_phone
 ON public.voice_call_sessions (tenant_id, caller_phone, session_start DESC);
 
 -- Index for reconnection lookup (recent sessions)
+-- FIX: Cannot use NOW() in index predicate (must be IMMUTABLE)
+-- Create regular index; time filtering will be done in queries
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_reconnection
-ON public.voice_call_sessions (tenant_id, caller_phone, session_start DESC)
-WHERE session_end IS NULL OR session_start > NOW() - INTERVAL '5 minutes';
+ON public.voice_call_sessions (tenant_id, caller_phone, session_start DESC, session_end);
 
 -- RLS
 ALTER TABLE public.voice_call_sessions ENABLE ROW LEVEL SECURITY;
@@ -261,9 +262,11 @@ CREATE TABLE IF NOT EXISTS public.escalation_callbacks (
 );
 
 -- Index for pending callbacks
+-- FIX: Cannot use NOW() in index predicate (must be IMMUTABLE)
+-- Create partial index only on status; time filtering done in queries
 CREATE INDEX IF NOT EXISTS idx_callbacks_pending
-ON public.escalation_callbacks (tenant_id, status, created_at)
-WHERE status = 'pending' AND expires_at > NOW();
+ON public.escalation_callbacks (tenant_id, status, expires_at, created_at)
+WHERE status = 'pending';
 
 -- RLS
 ALTER TABLE public.escalation_callbacks ENABLE ROW LEVEL SECURITY;
@@ -526,7 +529,8 @@ CREATE TRIGGER update_voice_call_sessions_updated_at
 -- Log migration
 -- =====================================================
 
-INSERT INTO public.audit_logs (action, entity_type, changes, created_at)
+-- FIX: audit_logs uses 'metadata' column, not 'changes'
+INSERT INTO public.audit_logs (action, entity_type, metadata, created_at)
 VALUES (
   'migration_applied',
   'database',

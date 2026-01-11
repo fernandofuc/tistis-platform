@@ -27,9 +27,10 @@ CREATE TABLE IF NOT EXISTS public.conversation_prompt_locks (
   UNIQUE(conversation_id, channel)
 );
 
+-- FIX: Cannot use NOW() in index predicate (must be IMMUTABLE)
+-- Instead, create a regular index on expires_at for efficient filtering
 CREATE INDEX IF NOT EXISTS idx_conversation_prompt_locks_lookup
-ON public.conversation_prompt_locks (tenant_id, conversation_id, channel)
-WHERE expires_at > NOW();
+ON public.conversation_prompt_locks (tenant_id, conversation_id, channel, expires_at);
 
 -- Function to get or lock prompt for a conversation
 CREATE OR REPLACE FUNCTION public.get_locked_prompt_for_conversation(
@@ -308,9 +309,10 @@ CREATE TABLE IF NOT EXISTS public.agent_error_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- FIX: Cannot use NOW() in index predicate (must be IMMUTABLE)
+-- Instead, create a regular index with created_at for efficient time-based filtering
 CREATE INDEX IF NOT EXISTS idx_agent_error_log_recent
-ON public.agent_error_log (tenant_id, agent_name, created_at DESC)
-WHERE created_at > NOW() - INTERVAL '1 hour';
+ON public.agent_error_log (tenant_id, agent_name, created_at DESC);
 
 -- Function to determine recovery action based on error history
 CREATE OR REPLACE FUNCTION public.get_agent_recovery_action(
@@ -446,7 +448,8 @@ GRANT SELECT ON public.v_agent_health_dashboard TO authenticated;
 -- Log migration
 -- =====================================================
 
-INSERT INTO public.audit_logs (action, entity_type, changes, created_at)
+-- FIX: audit_logs uses 'metadata' column, not 'changes'
+INSERT INTO public.audit_logs (action, entity_type, metadata, created_at)
 VALUES (
   'migration_applied',
   'database',

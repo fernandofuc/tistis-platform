@@ -64,12 +64,13 @@ BEGIN
       AND status = 'active';
 
     -- Log the invalidation
+    -- FIX: audit_logs table uses 'metadata' column, not 'changes'
     INSERT INTO public.audit_logs (
       tenant_id,
       action,
       entity_type,
       entity_id,
-      changes,
+      metadata,
       created_at
     ) VALUES (
       NEW.tenant_id,
@@ -451,7 +452,8 @@ ON public.ai_generated_prompts (tenant_id, channel, generation_status, status)
 WHERE status = 'active';
 
 -- Log migration
-INSERT INTO public.audit_logs (action, entity_type, changes, created_at)
+-- FIX: audit_logs table uses 'metadata' column, not 'changes'
+INSERT INTO public.audit_logs (action, entity_type, metadata, created_at)
 VALUES (
   'migration_applied',
   'database',

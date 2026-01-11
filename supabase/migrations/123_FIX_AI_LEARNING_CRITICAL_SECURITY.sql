@@ -255,6 +255,11 @@ Validates content length to prevent DoS.';
 -- delete data from other tenants
 -- =====================================================
 
+-- FIX: Must DROP old function first because signature changed
+-- Old (migration 119): (p_max_age_days INTEGER, p_max_items INTEGER)
+-- New: (p_max_age_days INTEGER, p_max_items INTEGER, p_tenant_id UUID)
+DROP FUNCTION IF EXISTS public.cleanup_learning_queue(INTEGER, INTEGER);
+
 CREATE OR REPLACE FUNCTION cleanup_learning_queue(
     p_max_age_days INTEGER DEFAULT 7,
     p_max_items INTEGER DEFAULT 10000,
@@ -350,9 +355,9 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION cleanup_learning_queue TO service_role;
+GRANT EXECUTE ON FUNCTION cleanup_learning_queue(INTEGER, INTEGER, UUID) TO service_role;
 
-COMMENT ON FUNCTION cleanup_learning_queue IS
+COMMENT ON FUNCTION cleanup_learning_queue(INTEGER, INTEGER, UUID) IS
 'SECURITY: Global cleanup only for service_role.
 Optional p_tenant_id for tenant-isolated cleanup.';
 
