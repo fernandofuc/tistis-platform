@@ -196,7 +196,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'signup' }: AuthModal
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+          className="absolute top-4 right-4 w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md active:scale-95 transition-all"
           aria-label="Cerrar"
         >
           <X size={20} />

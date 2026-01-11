@@ -118,12 +118,12 @@ interface CategorySidebarProps {
 
 function CategorySidebar({ categories, selectedCategory, onSelect, onAddCategory }: CategorySidebarProps) {
   return (
-    <div className="w-64 bg-white rounded-2xl border border-slate-200/80 p-4">
+    <div className="hidden lg:block w-64 flex-shrink-0 bg-white rounded-2xl border border-slate-200/80 p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-slate-900">Categorías</h3>
         <button
           onClick={onAddCategory}
-          className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+          className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-lg hover:bg-slate-100 active:bg-slate-200 active:scale-95 transition-all"
           title="Nueva categoría"
         >
           <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,10 +136,10 @@ function CategorySidebar({ categories, selectedCategory, onSelect, onAddCategory
         <button
           onClick={() => onSelect(null)}
           className={cn(
-            'w-full px-3 py-2 text-left text-sm rounded-lg transition-colors',
+            'w-full px-3 py-2.5 min-h-[44px] text-left text-sm rounded-lg transition-all active:scale-95',
             selectedCategory === null
               ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
+              : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'
           )}
         >
           Todos los platillos
@@ -150,10 +150,10 @@ function CategorySidebar({ categories, selectedCategory, onSelect, onAddCategory
             key={cat.id}
             onClick={() => onSelect(cat.id)}
             className={cn(
-              'w-full px-3 py-2 text-left text-sm rounded-lg transition-colors flex items-center justify-between',
+              'w-full px-3 py-2.5 min-h-[44px] text-left text-sm rounded-lg transition-all flex items-center justify-between active:scale-95',
               selectedCategory === cat.id
                 ? 'bg-slate-900 text-white'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'
             )}
           >
             <span className="truncate">{cat.name}</span>
@@ -218,8 +218,8 @@ function ItemsList({
   return (
     <div className="flex-1">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-6">
+        <div className="relative flex-1">
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
             fill="none"
@@ -233,7 +233,7 @@ function ItemsList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar platillo..."
-            className="w-full pl-10 pr-4 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:border-tis-coral"
+            className="w-full pl-10 pr-4 py-2.5 min-h-[44px] text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:border-tis-coral"
           />
         </div>
 
@@ -242,7 +242,7 @@ function ItemsList({
             <button
               onClick={() => setViewMode('grid')}
               className={cn(
-                'p-2 rounded-lg transition-all',
+                'p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-all active:scale-95',
                 viewMode === 'grid' ? 'bg-white shadow-sm' : 'text-slate-500'
               )}
             >
@@ -253,7 +253,7 @@ function ItemsList({
             <button
               onClick={() => setViewMode('list')}
               className={cn(
-                'p-2 rounded-lg transition-all',
+                'p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-all active:scale-95',
                 viewMode === 'list' ? 'bg-white shadow-sm' : 'text-slate-500'
               )}
             >
@@ -265,12 +265,12 @@ function ItemsList({
 
           <button
             onClick={onAddItem}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 min-h-[44px] bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 active:scale-95 transition-all"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Nuevo Platillo
+            <span className="hidden sm:inline">Nuevo Platillo</span>
           </button>
         </div>
       </div>
@@ -302,7 +302,7 @@ function ItemsList({
           )}
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredItems.map((item) => (
             <MenuItemCard
               key={item.id}
@@ -369,11 +369,11 @@ function CategoriesTab({ categories, onEdit, onDelete, onAdd }: CategoriesTabPro
           <p className="text-slate-500">No hay categorías configuradas</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {categories.map((cat) => (
             <div
               key={cat.id}
-              className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-all"
+              className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 hover:shadow-md transition-all"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
@@ -422,13 +422,13 @@ function CategoriesTab({ categories, onEdit, onDelete, onAdd }: CategoriesTabPro
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   onClick={() => onEdit(cat)}
-                  className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-3 py-2 min-h-[44px] text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 active:scale-95 rounded-lg transition-all"
                 >
                   Editar
                 </button>
                 <button
                   onClick={() => onDelete(cat)}
-                  className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  className="px-3 py-2 min-h-[44px] text-sm text-red-600 hover:bg-red-50 active:bg-red-100 active:scale-95 rounded-lg transition-all"
                 >
                   Eliminar
                 </button>
@@ -722,14 +722,14 @@ export default function MenuPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-6">
+      <div className="border-b border-slate-200 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <nav className="-mb-px flex space-x-2 sm:space-x-6 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200',
+                'py-2.5 sm:py-3 px-3 sm:px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200 min-h-[44px] active:scale-95',
                 activeTab === tab.id
                   ? 'border-tis-coral text-tis-coral'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'

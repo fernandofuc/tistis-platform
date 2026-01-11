@@ -150,7 +150,7 @@ export default function UseCasesSection() {
               ))}
             </ul>
 
-            <button className="group flex items-center gap-2 text-tis-coral font-semibold hover:gap-3 transition-all">
+            <button className="group flex items-center gap-2 py-2 min-h-[44px] text-tis-coral font-semibold hover:gap-3 active:scale-[0.98] transition-all">
               Ver demo completa
               <ChevronRight className="w-5 h-5" />
             </button>

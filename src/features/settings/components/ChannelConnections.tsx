@@ -1042,7 +1042,7 @@ function ChannelSetupModal({
               </div>
               <button
                 onClick={onClose}
-                className="w-10 h-10 rounded-xl bg-white/80 hover:bg-white shadow-sm border border-gray-200/50 flex items-center justify-center transition-all hover:scale-105"
+                className="w-10 h-10 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-xl bg-white/80 hover:bg-white shadow-sm border border-gray-200/50 flex items-center justify-center active:scale-95 transition-all hover:scale-105"
               >
                 <XIcon className="w-5 h-5 text-gray-600" />
               </button>

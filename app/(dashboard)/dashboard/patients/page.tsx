@@ -509,13 +509,13 @@ export default function PatientsPage() {
       </div>
 
       {/* Tabs - Premium Design */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setStatusFilter(tab.key)}
             className={cn(
-              'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200',
+              'flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl font-medium text-sm transition-all duration-200 whitespace-nowrap active:scale-95',
               statusFilter === tab.key
                 ? `${tab.bgColor} ${tab.color} shadow-sm ring-1 ring-slate-200/50`
                 : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
@@ -634,24 +634,24 @@ export default function PatientsPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => handleCallClick(e, patient)}
-                      className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-50 active:bg-green-100 active:scale-95 rounded-lg transition-all"
                       title="Llamar"
                     >
                       {icons.phone}
                     </button>
                     <button
                       onClick={(e) => handleMessageClick(e, patient)}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 active:bg-blue-100 active:scale-95 rounded-lg transition-all"
                       title="Enviar mensaje"
                     >
                       {icons.message}
                     </button>
                     <button
                       onClick={(e) => handleCalendarClick(e, patient)}
-                      className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                      className="hidden sm:flex p-2 min-h-[44px] min-w-[44px] items-center justify-center text-slate-400 hover:text-purple-600 hover:bg-purple-50 active:bg-purple-100 active:scale-95 rounded-lg transition-all"
                       title={`Ver/Agendar ${terminology.appointment.toLowerCase()}`}
                     >
                       {icons.calendar}
@@ -703,7 +703,7 @@ export default function PatientsPage() {
                       setShowDetailPanel(false);
                       setSelectedPatient(null);
                     }}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 active:bg-slate-200 active:scale-95 rounded-lg transition-all"
                   >
                     {icons.close}
                   </button>
@@ -753,21 +753,21 @@ export default function PatientsPage() {
                 >
                   <button
                     onClick={(e) => handleCallClick(e, selectedPatient)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-xl bg-green-50 hover:bg-green-100 transition-colors"
+                    className="flex flex-col items-center gap-2 p-4 min-h-[72px] rounded-xl bg-green-50 hover:bg-green-100 active:bg-green-200 active:scale-95 transition-all"
                   >
                     <div className="text-green-600">{icons.phone}</div>
                     <span className="text-xs font-medium text-green-700">Llamar</span>
                   </button>
                   <button
                     onClick={(e) => handleMessageClick(e, selectedPatient)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors"
+                    className="flex flex-col items-center gap-2 p-4 min-h-[72px] rounded-xl bg-blue-50 hover:bg-blue-100 active:bg-blue-200 active:scale-95 transition-all"
                   >
                     <div className="text-blue-600">{icons.message}</div>
                     <span className="text-xs font-medium text-blue-700">Mensaje</span>
                   </button>
                   <button
                     onClick={(e) => handleCalendarClick(e, selectedPatient)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-xl bg-purple-50 hover:bg-purple-100 transition-colors"
+                    className="flex flex-col items-center gap-2 p-4 min-h-[72px] rounded-xl bg-purple-50 hover:bg-purple-100 active:bg-purple-200 active:scale-95 transition-all"
                   >
                     <div className="text-purple-600">{icons.calendar}</div>
                     <span className="text-xs font-medium text-purple-700">Agendar</span>
@@ -902,7 +902,7 @@ export default function PatientsPage() {
                   </div>
                   <button
                     onClick={() => setShowNewPatientModal(false)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-xl transition-colors"
+                    className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-xl active:scale-95 transition-all"
                   >
                     {icons.close}
                   </button>
@@ -970,7 +970,7 @@ export default function PatientsPage() {
                           value={newPatient.gender}
                           onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
                           className={cn(
-                            'w-full px-4 py-3 border border-slate-200 rounded-xl text-sm',
+                            'w-full px-4 py-3 min-h-[48px] border border-slate-200 rounded-xl text-sm',
                             'focus:ring-2 focus:ring-emerald-500 focus:border-transparent',
                             'transition-all duration-200 appearance-none bg-white',
                             'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'

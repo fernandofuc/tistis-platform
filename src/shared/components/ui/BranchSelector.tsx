@@ -90,10 +90,10 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
       <button
         onClick={() => !singleBranch && setIsOpen(!isOpen)}
         className={cn(
-          'flex items-center gap-2 w-full px-3 py-2 rounded-lg transition-colors',
+          'flex items-center gap-2 w-full px-3 py-2.5 sm:py-2 rounded-lg transition-colors min-h-[44px] sm:min-h-0',
           'bg-gray-50 border border-gray-200',
           'text-left',
-          singleBranch ? 'cursor-default' : 'hover:bg-gray-100 cursor-pointer',
+          singleBranch ? 'cursor-default' : 'hover:bg-gray-100 active:bg-gray-200 cursor-pointer',
           collapsed && 'justify-center px-2'
         )}
         title={collapsed ? displayText : undefined}
@@ -126,8 +126,8 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
       {/* Dropdown Menu - only show if multiple branches */}
       {isOpen && !singleBranch && (
         <div className={cn(
-          'absolute z-50 mt-1 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-1',
-          collapsed ? 'left-full ml-2 top-0' : 'left-0 right-0'
+          'absolute z-50 mt-1 w-[calc(100vw-2rem)] sm:w-64 max-w-[280px] bg-white rounded-xl shadow-lg border border-gray-200 py-1',
+          collapsed ? 'left-full ml-2 top-0' : 'left-0 sm:right-0'
         )}>
           {/* Header */}
           <div className="px-3 py-2 border-b border-gray-100">
@@ -140,10 +140,10 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
           <button
             onClick={() => handleSelect(null)}
             className={cn(
-              'flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors',
+              'flex items-center gap-3 w-full px-3 py-3 sm:py-2.5 text-left transition-colors min-h-[48px] sm:min-h-0',
               selectedBranchId === null
                 ? 'bg-purple-50 text-purple-700'
-                : 'hover:bg-gray-50 text-gray-700'
+                : 'hover:bg-gray-50 active:bg-gray-100 text-gray-700'
             )}
           >
             <span className={cn(
@@ -170,10 +170,10 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
               key={branch.id}
               onClick={() => handleSelect(branch.id)}
               className={cn(
-                'flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors',
+                'flex items-center gap-3 w-full px-3 py-3 sm:py-2.5 text-left transition-colors min-h-[48px] sm:min-h-0',
                 selectedBranchId === branch.id
                   ? 'bg-purple-50 text-purple-700'
-                  : 'hover:bg-gray-50 text-gray-700'
+                  : 'hover:bg-gray-50 active:bg-gray-100 text-gray-700'
               )}
             >
               <span className={cn(

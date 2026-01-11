@@ -299,7 +299,7 @@ export function ChannelAISettings({ connection, onClose, onSaved }: ChannelAISet
             </div>
             <button
               onClick={onClose}
-              className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+              className="w-10 h-10 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center active:scale-95 transition-all"
             >
               <XIcon className="w-5 h-5 text-gray-600" />
             </button>

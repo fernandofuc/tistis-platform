@@ -180,7 +180,7 @@ function ItemsListTab({ items, categories, loading, onAddItem, onEditItem, onDel
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
         <div className="flex-1 relative">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -190,28 +190,30 @@ function ItemsListTab({ items, categories, loading, onAddItem, onEditItem, onDel
             placeholder="Buscar productos..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
+            className="w-full pl-10 pr-4 py-2.5 min-h-[44px] border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral"
           />
         </div>
-        <select
-          value={categoryFilter}
-          onChange={e => setCategoryFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
-        >
-          <option value="all">Todas las categorías</option>
-          {categories.map(cat => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
-          ))}
-        </select>
-        <button
-          onClick={onAddItem}
-          className="px-4 py-2 bg-tis-coral text-white font-medium rounded-lg hover:bg-tis-coral/90 transition-colors flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          Agregar
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="flex-1 sm:flex-none px-3 py-2.5 min-h-[44px] border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
+          >
+            <option value="all">Todas las categorías</option>
+            {categories.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={onAddItem}
+            className="px-4 py-2.5 min-h-[44px] bg-tis-coral text-white font-medium rounded-lg hover:bg-tis-coral/90 active:scale-95 transition-all flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <span className="hidden sm:inline">Agregar</span>
+          </button>
+        </div>
       </div>
 
       {/* Items List */}
@@ -241,8 +243,8 @@ function ItemsListTab({ items, categories, loading, onAddItem, onEditItem, onDel
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
-          <table className="w-full">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <table className="w-full min-w-[700px]">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Producto</th>
@@ -320,7 +322,7 @@ function ItemsListTab({ items, categories, loading, onAddItem, onEditItem, onDel
                       <div className="relative">
                         <button
                           onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
-                          className="text-slate-400 hover:text-slate-600 p-1"
+                          className="text-slate-400 hover:text-slate-600 p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center active:scale-95 transition-transform"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -335,7 +337,7 @@ function ItemsListTab({ items, categories, loading, onAddItem, onEditItem, onDel
                                   onEditItem?.(item);
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                className="w-full px-3 py-2.5 min-h-[44px] text-left text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100 flex items-center gap-2"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -349,7 +351,7 @@ function ItemsListTab({ items, categories, loading, onAddItem, onEditItem, onDel
                                   }
                                   setOpenMenuId(null);
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                className="w-full px-3 py-2.5 min-h-[44px] text-left text-sm text-red-600 hover:bg-red-50 active:bg-red-100 flex items-center gap-2"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -714,7 +716,7 @@ export default function InventarioPage() {
           {/* Preferences Button */}
           <button
             onClick={handleOpenPreferences}
-            className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] min-w-[44px] text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl active:scale-95 transition-all"
             title="Configurar preferencias de reabastecimiento"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -737,14 +739,14 @@ export default function InventarioPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-6">
+      <div className="border-b border-slate-200 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <nav className="-mb-px flex space-x-2 sm:space-x-6 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200',
+                'py-2.5 sm:py-3 px-3 sm:px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200 min-h-[44px] active:scale-95',
                 activeTab === tab.id
                   ? 'border-tis-coral text-tis-coral'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'

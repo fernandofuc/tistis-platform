@@ -40,9 +40,9 @@ const dotStyles = {
 };
 
 const sizeStyles = {
-  sm: 'px-2 py-0.5 text-xs',
-  md: 'px-2.5 py-1 text-xs',
-  lg: 'px-3 py-1.5 text-sm',
+  sm: 'px-2 py-1 sm:py-0.5 text-xs',
+  md: 'px-2.5 py-1.5 sm:py-1 text-xs',
+  lg: 'px-3 py-2 sm:py-1.5 text-sm',
 };
 
 // ======================
@@ -180,9 +180,9 @@ export function LeadScoreBadge({
   }[autoClassification];
 
   const sizeClass = {
-    sm: 'w-9 h-9 text-xs',
-    md: 'w-11 h-11 text-sm',
-    lg: 'w-14 h-14 text-base',
+    sm: 'w-10 h-10 sm:w-9 sm:h-9 text-xs',
+    md: 'w-12 h-12 sm:w-11 sm:h-11 text-sm',
+    lg: 'w-16 h-16 sm:w-14 sm:h-14 text-base',
   }[size];
 
   const labels = {

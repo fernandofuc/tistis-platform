@@ -146,7 +146,7 @@ function StationsConfigTab({ stations, loading }: StationsConfigTabProps) {
         <p className="text-slate-500 mb-6 max-w-md mx-auto">
           Configura las estaciones de tu cocina para organizar mejor el flujo de trabajo.
         </p>
-        <button className="px-6 py-2.5 bg-slate-900 text-white font-medium rounded-xl hover:bg-slate-800 transition-colors">
+        <button className="px-6 py-2.5 min-h-[44px] bg-slate-900 text-white font-medium rounded-xl hover:bg-slate-800 active:scale-95 transition-all">
           Crear primera estación
         </button>
       </div>
@@ -154,7 +154,7 @@ function StationsConfigTab({ stations, loading }: StationsConfigTabProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {stations.map(station => (
         <div
           key={station.id}
@@ -188,10 +188,10 @@ function StationsConfigTab({ stations, loading }: StationsConfigTabProps) {
             <p className="text-sm text-slate-500 mt-3">{station.description}</p>
           )}
           <div className="flex gap-2 mt-4">
-            <button className="flex-1 text-xs py-1.5 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
+            <button className="flex-1 text-xs py-2.5 min-h-[44px] text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 active:bg-slate-300 active:scale-95 transition-all">
               Editar
             </button>
-            <button className="text-xs py-1.5 px-3 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+            <button className="text-xs py-2.5 px-3 min-h-[44px] text-red-600 bg-red-50 rounded-lg hover:bg-red-100 active:bg-red-200 active:scale-95 transition-all">
               Eliminar
             </button>
           </div>
@@ -379,14 +379,14 @@ export default function CocinaPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-6">
+      <div className="border-b border-slate-200 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <nav className="-mb-px flex space-x-2 sm:space-x-6 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200',
+                'py-2.5 sm:py-3 px-3 sm:px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200 min-h-[44px] active:scale-95',
                 activeTab === tab.id
                   ? 'border-tis-coral text-tis-coral'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'

@@ -663,7 +663,7 @@ function CheckoutContent() {
                       disabled={isAnyLoading}
                       aria-label="Continuar con Google"
                       aria-busy={oauthLoading === 'google'}
-                      className="w-full h-12 flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full h-12 min-h-[48px] flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {oauthLoading === 'google' ? (
                         <Loader2 className="w-5 h-5 animate-spin text-gray-500" aria-hidden="true" />
@@ -682,7 +682,7 @@ function CheckoutContent() {
                       disabled={isAnyLoading}
                       aria-label="Continuar con GitHub"
                       aria-busy={oauthLoading === 'github'}
-                      className="w-full h-12 flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full h-12 min-h-[48px] flex items-center justify-center gap-3 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {oauthLoading === 'github' ? (
                         <Loader2 className="w-5 h-5 animate-spin text-gray-500" aria-hidden="true" />
@@ -711,7 +711,7 @@ function CheckoutContent() {
                       type="button"
                       onClick={() => setAuthMode('email')}
                       disabled={isAnyLoading}
-                      className="w-full h-12 flex items-center justify-center gap-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors text-[15px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full h-12 min-h-[48px] flex items-center justify-center gap-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] text-[15px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Mail className="w-5 h-5" aria-hidden="true" />
                       Continuar con email

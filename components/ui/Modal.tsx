@@ -66,7 +66,7 @@ export default function Modal({
             </h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-tis-bg-primary rounded-lg transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-tis-bg-primary rounded-lg active:scale-95 transition-all"
             >
               <X className="w-5 h-5" />
             </button>

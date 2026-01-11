@@ -406,36 +406,40 @@ export default function InboxPage() {
         : `${conversations.length} conversaciones activas`
       }
     >
-      <div className="flex gap-6 h-[calc(100vh-12rem)]">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 h-[calc(100vh-10rem)] lg:h-[calc(100vh-12rem)]">
         {/* ============================================ */}
         {/* LEFT PANEL: Conversations List */}
         {/* ============================================ */}
-        <div className="w-[380px] flex-shrink-0 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden">
+        <div className={cn(
+          "bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden",
+          "w-full lg:w-[380px] lg:flex-shrink-0",
+          selectedConversation ? "hidden lg:flex" : "flex"
+        )}>
           {/* Search & Filters Header */}
-          <div className="p-4 border-b border-slate-100">
+          <div className="p-3 sm:p-4 border-b border-slate-100">
             <SearchInput
               placeholder="Buscar conversación..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onClear={() => setSearch('')}
-              className="mb-4"
+              className="mb-3 sm:mb-4"
             />
 
             {/* Filter Tabs - TIS TIS Style */}
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1">
               {FILTER_TABS.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setFilter(tab.key as typeof filter)}
                   className={cn(
-                    'px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+                    'px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full text-xs font-medium transition-all duration-200 whitespace-nowrap min-h-[36px] sm:min-h-0 active:scale-95',
                     filter === tab.key
                       ? 'bg-tis-coral/10 text-tis-coral border border-tis-coral/20'
                       : 'text-slate-500 hover:bg-slate-50 border border-transparent'
                   )}
                 >
                   {tab.label}
-                  <span className="ml-1.5 text-[10px] opacity-70">
+                  <span className="ml-1 sm:ml-1.5 text-[10px] opacity-70">
                     ({counts[tab.key as keyof typeof counts]})
                   </span>
                 </button>
@@ -443,7 +447,7 @@ export default function InboxPage() {
             </div>
 
             {/* Channel Filters */}
-            <div className="flex gap-1.5 mt-3 flex-wrap">
+            <div className="flex gap-1 sm:gap-1.5 mt-2 sm:mt-3 flex-wrap">
               {CHANNEL_FILTERS.map((channel) => {
                 const count = channelCounts[channel.key] || 0;
                 // Solo mostrar canales que tienen conversaciones (excepto "all")
@@ -454,7 +458,7 @@ export default function InboxPage() {
                     key={channel.key}
                     onClick={() => setChannelFilter(channel.key)}
                     className={cn(
-                      'inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all duration-200',
+                      'inline-flex items-center gap-1 px-2 py-1.5 sm:py-1 rounded-lg text-[11px] font-medium transition-all duration-200 min-h-[32px] sm:min-h-0 active:scale-95',
                       channelFilter === channel.key
                         ? 'bg-slate-800 text-white'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -463,7 +467,7 @@ export default function InboxPage() {
                     {channel.icon && (
                       <ChannelIcon channel={channel.icon} size="xs" />
                     )}
-                    <span>{channel.label}</span>
+                    <span className="hidden sm:inline">{channel.label}</span>
                     {count > 0 && (
                       <span className={cn(
                         'ml-0.5 text-[10px]',
@@ -585,15 +589,27 @@ export default function InboxPage() {
         {/* ============================================ */}
         {/* RIGHT PANEL: Chat Area */}
         {/* ============================================ */}
-        <div className="flex-1 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden">
+        <div className={cn(
+          "flex-1 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden",
+          selectedConversation ? "flex" : "hidden lg:flex"
+        )}>
           {selectedConversation ? (
             <>
               {/* Chat Header */}
-              <div className="px-6 py-4 border-b border-slate-100 bg-white">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-white">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                    {/* Back button for mobile */}
+                    <button
+                      onClick={() => setSelectedConversation(null)}
+                      className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg active:bg-slate-200 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
                     {/* Avatar with channel indicator */}
-                    <div className="relative">
+                    <div className="relative flex-shrink-0">
                       <Avatar
                         name={selectedConversation.leads?.full_name || '?'}
                         size="md"
@@ -605,37 +621,40 @@ export default function InboxPage() {
                         </span>
                       )}
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-900">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-slate-900 text-sm sm:text-base truncate">
                         {selectedConversation.leads?.full_name || 'Sin nombre'}
                       </h3>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm text-slate-500">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs sm:text-sm text-slate-500 truncate">
                           {selectedConversation.leads?.phone}
                         </p>
-                        {/* Channel badge */}
+                        {/* Channel badge - hidden on small screens */}
                         {selectedConversation.channel && (
-                          <ChannelBadge
-                            channel={selectedConversation.channel}
-                            size="xs"
-                            showLabel
-                          />
+                          <span className="hidden sm:inline-flex">
+                            <ChannelBadge
+                              channel={selectedConversation.channel}
+                              size="xs"
+                              showLabel
+                            />
+                          </span>
                         )}
                       </div>
                     </div>
                   </div>
 
                   {/* Status Badge */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                     {selectedConversation.ai_handling ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
+                      <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
                         {icons.ai}
-                        <span>IA Activa</span>
+                        <span className="hidden sm:inline">IA Activa</span>
+                        <span className="sm:hidden">IA</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200">
+                      <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200">
                         {icons.user}
-                        <span>Humano</span>
+                        <span className="hidden sm:inline">Humano</span>
                       </span>
                     )}
                   </div>
@@ -644,7 +663,7 @@ export default function InboxPage() {
 
               {/* Messages Area */}
               <div className="flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 to-white">
-                <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
+                <div className="max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
                   {messages.map((message) => {
                     const isUser = message.role === 'user';
 
@@ -655,18 +674,18 @@ export default function InboxPage() {
                       >
                         <div
                           className={cn(
-                            'max-w-[75%] px-4 py-3 rounded-2xl',
+                            'max-w-[85%] sm:max-w-[75%] px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl',
                             isUser
                               ? 'bg-white border border-slate-200 rounded-bl-md'
                               : 'bg-tis-coral text-white rounded-br-md shadow-sm'
                           )}
                         >
-                          <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                          <p className="text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap">
                             {message.content}
                           </p>
                           <p
                             className={cn(
-                              'text-[11px] mt-2',
+                              'text-[10px] sm:text-[11px] mt-1.5 sm:mt-2',
                               isUser ? 'text-slate-400' : 'text-white/70'
                             )}
                           >
@@ -681,9 +700,9 @@ export default function InboxPage() {
               </div>
 
               {/* Message Input */}
-              <div className="p-4 border-t border-slate-100 bg-white">
+              <div className="p-3 sm:p-4 border-t border-slate-100 bg-white pb-safe">
                 <div className={cn(
-                  'flex items-center gap-3 p-3 rounded-2xl border-2 transition-all duration-200',
+                  'flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-2xl border-2 transition-all duration-200',
                   'bg-slate-50 border-slate-200 focus-within:border-tis-coral focus-within:bg-white focus-within:shadow-sm'
                 )}>
                   <input
@@ -691,7 +710,7 @@ export default function InboxPage() {
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     placeholder="Escribe un mensaje..."
-                    className="flex-1 px-2 py-1 text-[15px] text-slate-700 placeholder:text-slate-400 bg-transparent border-none focus:outline-none"
+                    className="flex-1 px-2 py-1.5 sm:py-1 text-sm sm:text-[15px] text-slate-700 placeholder:text-slate-400 bg-transparent border-none focus:outline-none min-h-[40px] sm:min-h-0"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey && messageText.trim() && !sending) {
                         e.preventDefault();
@@ -704,7 +723,7 @@ export default function InboxPage() {
                     onClick={handleSendMessage}
                     disabled={!messageText.trim() || sending}
                     className={cn(
-                      'p-2.5 rounded-xl transition-all duration-200',
+                      'p-2.5 sm:p-2.5 rounded-xl transition-all duration-200 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center active:scale-95',
                       messageText.trim() && !sending
                         ? 'bg-tis-coral text-white hover:bg-tis-pink shadow-sm'
                         : 'bg-slate-100 text-slate-300 cursor-not-allowed'

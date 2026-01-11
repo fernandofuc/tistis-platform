@@ -676,7 +676,7 @@ export default function FacturacionAIConfigPage() {
                   Regimen Fiscal *
                 </label>
                 <select
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
+                  className="w-full px-3 py-2.5 min-h-[44px] border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
                   value={config.regimen_fiscal}
                   onChange={(e) => setConfig({ ...config, regimen_fiscal: e.target.value })}
                 >
@@ -742,7 +742,7 @@ export default function FacturacionAIConfigPage() {
                 Tasa IVA
               </label>
               <select
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
+                className="w-full px-3 py-2.5 min-h-[44px] border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tis-coral/20 focus:border-tis-coral transition-colors"
                 value={config.tasa_iva}
                 onChange={(e) => setConfig({ ...config, tasa_iva: parseFloat(e.target.value) })}
               >

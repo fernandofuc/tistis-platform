@@ -383,7 +383,7 @@ export function RestockPreferencesForm({
             <button
               type="button"
               onClick={onCancel}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 active:scale-95 transition-all"
             >
               <X className="w-6 h-6" />
             </button>

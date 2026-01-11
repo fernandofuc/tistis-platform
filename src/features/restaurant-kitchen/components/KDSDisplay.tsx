@@ -64,24 +64,24 @@ function StatsBar({ stats, loading }: StatsBarProps) {
   if (!stats) return null;
 
   return (
-    <div className="flex items-center gap-6 py-2 overflow-x-auto">
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 rounded-lg">
+    <div className="flex items-center gap-3 sm:gap-6 py-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 rounded-lg whitespace-nowrap">
         <span className="text-2xl font-bold text-blue-700">{stats.active_orders}</span>
         <span className="text-xs text-blue-600">Órdenes activas</span>
       </div>
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 rounded-lg">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 rounded-lg whitespace-nowrap">
         <span className="text-2xl font-bold text-yellow-700">{stats.pending_items}</span>
         <span className="text-xs text-yellow-600">En cola</span>
       </div>
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-100 rounded-lg">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-100 rounded-lg whitespace-nowrap">
         <span className="text-2xl font-bold text-orange-700">{stats.preparing_items}</span>
         <span className="text-xs text-orange-600">Preparando</span>
       </div>
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 rounded-lg">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 rounded-lg whitespace-nowrap">
         <span className="text-2xl font-bold text-green-700">{stats.ready_items}</span>
         <span className="text-xs text-green-600">Listos</span>
       </div>
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg whitespace-nowrap">
         <span className="text-2xl font-bold text-slate-700">{stats.avg_prep_time}m</span>
         <span className="text-xs text-slate-600">Tiempo prom.</span>
       </div>
@@ -115,14 +115,14 @@ function FilterBar({
   onRefresh,
 }: FilterBarProps) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200">
-      <div className="flex items-center gap-4">
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 py-3 border-b border-slate-200">
+      <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
         {/* View mode toggle */}
-        <div className="flex bg-slate-100 rounded-lg p-1">
+        <div className="flex bg-slate-100 rounded-lg p-1 flex-shrink-0">
           <button
             onClick={() => onViewModeChange('all')}
             className={cn(
-              'px-3 py-1.5 text-sm font-medium rounded transition-colors',
+              'px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-all active:scale-95 whitespace-nowrap',
               viewMode === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
             )}
           >
@@ -131,7 +131,7 @@ function FilterBar({
           <button
             onClick={() => onViewModeChange('station')}
             className={cn(
-              'px-3 py-1.5 text-sm font-medium rounded transition-colors',
+              'px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-all active:scale-95 whitespace-nowrap',
               viewMode === 'station' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
             )}
           >
@@ -140,7 +140,7 @@ function FilterBar({
           <button
             onClick={() => onViewModeChange('status')}
             className={cn(
-              'px-3 py-1.5 text-sm font-medium rounded transition-colors',
+              'px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-all active:scale-95 whitespace-nowrap',
               viewMode === 'status' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
             )}
           >
@@ -153,7 +153,7 @@ function FilterBar({
           <select
             value={selectedStation}
             onChange={e => onStationChange(e.target.value as KitchenStation | 'all')}
-            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
+            className="px-3 py-2 min-h-[44px] text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-tis-coral/20 flex-shrink-0"
           >
             <option value="all">Todas las estaciones</option>
             {stations.map(s => (
@@ -177,7 +177,7 @@ function FilterBar({
           <select
             value={selectedStatus}
             onChange={e => onStatusChange(e.target.value as FilterStatus)}
-            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-tis-coral/20"
+            className="px-3 py-2 min-h-[44px] text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-tis-coral/20 flex-shrink-0"
           >
             <option value="all">Todos los estados</option>
             {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
@@ -193,7 +193,7 @@ function FilterBar({
       {onRefresh && (
         <button
           onClick={onRefresh}
-          className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+          className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 active:scale-95 rounded-lg transition-all flex-shrink-0"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

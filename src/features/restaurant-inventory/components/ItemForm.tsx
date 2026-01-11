@@ -733,7 +733,7 @@ export function ItemForm({
             </div>
             <button
               onClick={onCancel}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
             >
               <X className="w-5 h-5" />
             </button>

@@ -800,7 +800,7 @@ export function KnowledgeBase() {
                     </div>
                     <button
                       onClick={() => setShowModal(false)}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-white/10 rounded-lg active:scale-95 transition-all text-white"
                     >
                       {icons.close}
                     </button>

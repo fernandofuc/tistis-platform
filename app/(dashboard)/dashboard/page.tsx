@@ -353,6 +353,7 @@ function RestaurantDashboard() {
             variant="outline"
             leftIcon={icons.menu}
             onClick={() => router.push('/dashboard/menu')}
+            className="hidden sm:inline-flex"
           >
             Menú
           </Button>
@@ -360,43 +361,44 @@ function RestaurantDashboard() {
             leftIcon={icons.plus}
             onClick={() => router.push('/dashboard/calendario')}
           >
-            Nueva Reservación
+            <span className="hidden sm:inline">Nueva Reservación</span>
+            <span className="sm:hidden">Reservar</span>
           </Button>
         </div>
       }
     >
       {/* Stats Cards - Restaurant Specific - Premium Design */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {/* Tables Status */}
         <motion.div
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          className="bg-white rounded-xl border border-slate-200/60 p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer active:bg-slate-50"
           onClick={() => router.push('/dashboard/mesas')}
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2.5 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl">
               <span className="text-indigo-600">{icons.tables}</span>
             </div>
             <Badge variant="info" size="sm">Mesas</Badge>
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-16 bg-slate-200 rounded animate-pulse" />
-              <div className="h-4 w-24 bg-slate-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-14 sm:w-16 bg-slate-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-20 sm:w-24 bg-slate-100 rounded animate-pulse" />
             </div>
           ) : (
             <>
-              <div className="text-3xl font-bold text-slate-800">
-                {stats.tablesAvailable}<span className="text-lg text-slate-400">/{stats.tablesTotal}</span>
+              <div className="text-2xl sm:text-3xl font-bold text-slate-800">
+                {stats.tablesAvailable}<span className="text-base sm:text-lg text-slate-400">/{stats.tablesTotal}</span>
               </div>
-              <p className="text-sm text-slate-500 mt-1">Mesas disponibles</p>
-              <div className="flex gap-2 mt-3">
-                <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Mesas disponibles</p>
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2 sm:mt-3">
+                <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
                   {stats.tablesOccupied} ocupadas
                 </span>
-                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
                   {stats.tablesReserved} reservadas
                 </span>
               </div>
@@ -409,24 +411,24 @@ function RestaurantDashboard() {
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200/60 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200/60 p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer active:bg-emerald-100/50"
           onClick={() => router.push('/dashboard/calendario')}
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2.5 bg-emerald-100 rounded-xl">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="p-2 sm:p-2.5 bg-emerald-100 rounded-xl">
               <span className="text-emerald-600">{icons.calendar}</span>
             </div>
             <Badge variant="success" size="sm">Hoy</Badge>
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-10 bg-emerald-200 rounded animate-pulse" />
-              <div className="h-4 w-20 bg-emerald-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-8 sm:w-10 bg-emerald-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-16 sm:w-20 bg-emerald-100 rounded animate-pulse" />
             </div>
           ) : (
             <>
-              <div className="text-3xl font-bold text-emerald-700">{stats.todayReservations}</div>
-              <p className="text-sm text-emerald-600 mt-1">Reservaciones hoy</p>
+              <div className="text-2xl sm:text-3xl font-bold text-emerald-700">{stats.todayReservations}</div>
+              <p className="text-xs sm:text-sm text-emerald-600 mt-1">Reservaciones hoy</p>
             </>
           )}
         </motion.div>
@@ -437,16 +439,16 @@ function RestaurantDashboard() {
           initial="rest"
           whileHover="hover"
           className={cn(
-            'rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
+            'rounded-xl border p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
             stats.preparingOrders > 0
-              ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200/60'
-              : 'bg-white border-slate-200/60'
+              ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200/60 active:bg-orange-100/50'
+              : 'bg-white border-slate-200/60 active:bg-slate-50'
           )}
           onClick={() => router.push('/dashboard/cocina')}
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className={cn(
-              'p-2.5 rounded-xl',
+              'p-2 sm:p-2.5 rounded-xl',
               stats.preparingOrders > 0 ? 'bg-orange-100' : 'bg-slate-100'
             )}>
               <span className={stats.preparingOrders > 0 ? 'text-orange-600' : 'text-slate-600'}>
@@ -461,26 +463,26 @@ function RestaurantDashboard() {
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-10 bg-slate-200 rounded animate-pulse" />
-              <div className="h-4 w-20 bg-slate-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-8 sm:w-10 bg-slate-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-16 sm:w-20 bg-slate-100 rounded animate-pulse" />
             </div>
           ) : (
             <>
               <div className={cn(
-                'text-3xl font-bold',
+                'text-2xl sm:text-3xl font-bold',
                 stats.preparingOrders > 0 ? 'text-orange-700' : 'text-slate-800'
               )}>
                 {stats.pendingOrders + stats.preparingOrders}
               </div>
               <p className={cn(
-                'text-sm mt-1',
+                'text-xs sm:text-sm mt-1',
                 stats.preparingOrders > 0 ? 'text-orange-600' : 'text-slate-500'
               )}>
                 Órdenes activas
               </p>
               {stats.preparingOrders > 0 && (
-                <div className="flex gap-2 mt-3">
-                  <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">
+                <div className="flex gap-1.5 sm:gap-2 mt-2 sm:mt-3">
+                  <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">
                     {stats.preparingOrders} preparando
                   </span>
                 </div>
@@ -495,16 +497,16 @@ function RestaurantDashboard() {
           initial="rest"
           whileHover="hover"
           className={cn(
-            'rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
+            'rounded-xl border p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
             stats.lowStockItems > 0
-              ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60'
-              : 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200/60'
+              ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60 active:bg-red-100/50'
+              : 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200/60 active:bg-purple-100/50'
           )}
           onClick={() => router.push(stats.lowStockItems > 0 ? '/dashboard/inventario' : '/dashboard/analytics')}
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className={cn(
-              'p-2.5 rounded-xl',
+              'p-2 sm:p-2.5 rounded-xl',
               stats.lowStockItems > 0 ? 'bg-red-100' : 'bg-purple-100'
             )}>
               <span className={stats.lowStockItems > 0 ? 'text-red-600' : 'text-purple-600'}>
@@ -519,27 +521,27 @@ function RestaurantDashboard() {
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-20 bg-purple-200 rounded animate-pulse" />
-              <div className="h-4 w-24 bg-purple-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-16 sm:w-20 bg-purple-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-20 sm:w-24 bg-purple-100 rounded animate-pulse" />
             </div>
           ) : stats.lowStockItems > 0 ? (
             <>
-              <div className="text-3xl font-bold text-red-700">{stats.lowStockItems}</div>
-              <p className="text-sm text-red-600 mt-1">Productos bajo stock</p>
+              <div className="text-2xl sm:text-3xl font-bold text-red-700">{stats.lowStockItems}</div>
+              <p className="text-xs sm:text-sm text-red-600 mt-1">Productos bajo stock</p>
             </>
           ) : (
             <>
-              <div className="text-3xl font-bold text-purple-700">{stats.vipCustomersToday}</div>
-              <p className="text-sm text-purple-600 mt-1">Clientes VIP</p>
+              <div className="text-2xl sm:text-3xl font-bold text-purple-700">{stats.vipCustomersToday}</div>
+              <p className="text-xs sm:text-sm text-purple-600 mt-1">Clientes VIP</p>
             </>
           )}
         </motion.div>
       </div>
 
       {/* Content Grid - Two Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Content - Orders & Actions (2/3) */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Active Orders */}
           <Card variant="bordered" className="overflow-hidden">
             <CardHeader
@@ -635,7 +637,7 @@ function RestaurantDashboard() {
           </Card>
 
           {/* Quick Actions - Restaurant Specific */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             {[
               {
                 label: 'Ver Mesas',
@@ -678,12 +680,12 @@ function RestaurantDashboard() {
                 key={action.label}
                 href={action.href}
                 className={cn(
-                  'flex flex-col items-center gap-2 p-4 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                  'flex flex-col items-center gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 min-h-[80px] sm:min-h-0',
                   `bg-gradient-to-br ${action.gradient} ${action.hoverGradient} ${action.border}`
                 )}
               >
-                <span className="text-2xl">{action.emoji}</span>
-                <span className={cn('text-sm font-semibold text-center', action.text)}>{action.label}</span>
+                <span className="text-xl sm:text-2xl">{action.emoji}</span>
+                <span className={cn('text-xs sm:text-sm font-semibold text-center', action.text)}>{action.label}</span>
               </Link>
             ))}
           </div>
@@ -1033,30 +1035,30 @@ function DefaultDashboard() {
       }
     >
       {/* Stats Cards - Premium Design */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {/* Total Leads */}
         <motion.div
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          className="bg-white rounded-xl border border-slate-200/60 p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer active:bg-slate-50"
           onClick={() => router.push('/dashboard/leads')}
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2.5 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl">
               <span className="text-blue-600">{icons.leads}</span>
             </div>
             <Badge variant="info" size="sm">Leads</Badge>
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-16 bg-slate-200 rounded animate-pulse" />
-              <div className="h-4 w-24 bg-slate-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-14 sm:w-16 bg-slate-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-20 sm:w-24 bg-slate-100 rounded animate-pulse" />
             </div>
           ) : (
             <>
-              <div className="text-3xl font-bold text-slate-800">{stats.totalLeads}</div>
-              <p className="text-sm text-slate-500 mt-1">Leads activos</p>
+              <div className="text-2xl sm:text-3xl font-bold text-slate-800">{stats.totalLeads}</div>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Leads activos</p>
             </>
           )}
         </motion.div>
@@ -1066,24 +1068,24 @@ function DefaultDashboard() {
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border border-orange-200/60 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border border-orange-200/60 p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer active:bg-orange-100/50"
           onClick={() => router.push('/dashboard/leads?filter=hot')}
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2.5 bg-orange-100 rounded-xl">
-              <span className="text-lg">🔥</span>
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="p-2 sm:p-2.5 bg-orange-100 rounded-xl">
+              <span className="text-base sm:text-lg">🔥</span>
             </div>
             <Badge variant="hot" size="sm">Prioridad</Badge>
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-12 bg-orange-200 rounded animate-pulse" />
-              <div className="h-4 w-20 bg-orange-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-10 sm:w-12 bg-orange-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-16 sm:w-20 bg-orange-100 rounded animate-pulse" />
             </div>
           ) : (
             <>
-              <div className="text-3xl font-bold text-orange-700">{stats.hotLeads}</div>
-              <p className="text-sm text-orange-600 mt-1">Leads calientes</p>
+              <div className="text-2xl sm:text-3xl font-bold text-orange-700">{stats.hotLeads}</div>
+              <p className="text-xs sm:text-sm text-orange-600 mt-1">Leads calientes</p>
             </>
           )}
         </motion.div>
@@ -1093,24 +1095,24 @@ function DefaultDashboard() {
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200/60 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200/60 p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer active:bg-emerald-100/50"
           onClick={() => router.push('/dashboard/calendario')}
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2.5 bg-emerald-100 rounded-xl">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="p-2 sm:p-2.5 bg-emerald-100 rounded-xl">
               <span className="text-emerald-600">{icons.calendar}</span>
             </div>
             <Badge variant="success" size="sm">Hoy</Badge>
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-10 bg-emerald-200 rounded animate-pulse" />
-              <div className="h-4 w-16 bg-emerald-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-8 sm:w-10 bg-emerald-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-14 sm:w-16 bg-emerald-100 rounded animate-pulse" />
             </div>
           ) : (
             <>
-              <div className="text-3xl font-bold text-emerald-700">{stats.todayAppointments}</div>
-              <p className="text-sm text-emerald-600 mt-1">{t('todayScheduledLabel')}</p>
+              <div className="text-2xl sm:text-3xl font-bold text-emerald-700">{stats.todayAppointments}</div>
+              <p className="text-xs sm:text-sm text-emerald-600 mt-1">{t('todayScheduledLabel')}</p>
             </>
           )}
         </motion.div>
@@ -1121,16 +1123,16 @@ function DefaultDashboard() {
           initial="rest"
           whileHover="hover"
           className={cn(
-            'rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
+            'rounded-xl border p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer',
             stats.escalatedConversations > 0
-              ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200/60'
-              : 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200/60'
+              ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200/60 active:bg-amber-100/50'
+              : 'bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200/60 active:bg-purple-100/50'
           )}
           onClick={() => router.push('/dashboard/inbox')}
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className={cn(
-              'p-2.5 rounded-xl',
+              'p-2 sm:p-2.5 rounded-xl',
               stats.escalatedConversations > 0 ? 'bg-amber-100' : 'bg-purple-100'
             )}>
               <span className={stats.escalatedConversations > 0 ? 'text-amber-600' : 'text-purple-600'}>
@@ -1147,19 +1149,19 @@ function DefaultDashboard() {
           </div>
           {loading ? (
             <div className="space-y-2">
-              <div className="h-8 w-10 bg-purple-200 rounded animate-pulse" />
-              <div className="h-4 w-24 bg-purple-100 rounded animate-pulse" />
+              <div className="h-7 sm:h-8 w-8 sm:w-10 bg-purple-200 rounded animate-pulse" />
+              <div className="h-3.5 sm:h-4 w-20 sm:w-24 bg-purple-100 rounded animate-pulse" />
             </div>
           ) : (
             <>
               <div className={cn(
-                'text-3xl font-bold',
+                'text-2xl sm:text-3xl font-bold',
                 stats.escalatedConversations > 0 ? 'text-amber-700' : 'text-purple-700'
               )}>
                 {stats.activeConversations}
               </div>
               <p className={cn(
-                'text-sm mt-1',
+                'text-xs sm:text-sm mt-1',
                 stats.escalatedConversations > 0 ? 'text-amber-600' : 'text-purple-600'
               )}>
                 Conversaciones activas
@@ -1170,9 +1172,9 @@ function DefaultDashboard() {
       </div>
 
       {/* Content Grid - Two Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Content - Leads Recientes (2/3) */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Leads Recientes */}
           <Card variant="bordered" className="overflow-hidden">
             <CardHeader
@@ -1268,7 +1270,7 @@ function DefaultDashboard() {
                             e.stopPropagation();
                             router.push(`/dashboard/inbox?lead_id=${lead.id}`);
                           }}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg active:scale-95 transition-all"
                           title="Enviar mensaje"
                         >
                           {icons.message}
@@ -1278,7 +1280,7 @@ function DefaultDashboard() {
                             e.stopPropagation();
                             router.push(`/dashboard/calendario?lead_id=${lead.id}`);
                           }}
-                          className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg active:scale-95 transition-all"
                           title={t('scheduleAction')}
                         >
                           {icons.calendar}
@@ -1297,7 +1299,7 @@ function DefaultDashboard() {
           </Card>
 
           {/* Quick Actions - Premium Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             {[
               {
                 label: 'Nuevo Lead',
@@ -1344,19 +1346,19 @@ function DefaultDashboard() {
                 key={action.label}
                 href={action.href}
                 className={cn(
-                  'flex flex-col items-center gap-2 p-4 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                  'flex flex-col items-center gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 min-h-[80px] sm:min-h-0',
                   `bg-gradient-to-br ${action.gradient} ${action.hoverGradient} ${action.border}`
                 )}
               >
-                <span className="text-2xl">{action.emoji}</span>
-                <span className={cn('text-sm font-semibold', action.text)}>{action.label}</span>
+                <span className="text-xl sm:text-2xl">{action.emoji}</span>
+                <span className={cn('text-xs sm:text-sm font-semibold text-center', action.text)}>{action.label}</span>
               </Link>
             ))}
           </div>
         </div>
 
         {/* Sidebar - Today's Appointments (1/3) - Uses dynamic terminology via t('todayAppointments') */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <Card variant="bordered" className="overflow-hidden">
             <CardHeader
               title={t('todayAppointments')}

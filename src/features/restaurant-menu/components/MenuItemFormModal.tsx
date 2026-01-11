@@ -217,7 +217,7 @@ function VariantsEditor({
                 />
                 Default
               </label>
-              <button type="button" onClick={() => removeVariant(index)} className="p-1 text-slate-400 hover:text-red-500">
+              <button type="button" onClick={() => removeVariant(index)} className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg active:scale-95 transition-all">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -279,7 +279,7 @@ function SizesEditor({
                   className="w-full pl-6 pr-2 py-1.5 text-sm border border-slate-200 rounded"
                 />
               </div>
-              <button type="button" onClick={() => removeSize(index)} className="p-1 text-slate-400 hover:text-red-500">
+              <button type="button" onClick={() => removeSize(index)} className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg active:scale-95 transition-all">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -341,7 +341,7 @@ function AddOnsEditor({
                   className="w-full pl-6 pr-2 py-1.5 text-sm border border-slate-200 rounded"
                 />
               </div>
-              <button type="button" onClick={() => removeAddOn(index)} className="p-1 text-slate-400 hover:text-red-500">
+              <button type="button" onClick={() => removeAddOn(index)} className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg active:scale-95 transition-all">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -524,7 +524,7 @@ export function MenuItemFormModal({
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+            <button onClick={onClose} className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition-all">
               <X className="w-5 h-5" />
             </button>
           </div>

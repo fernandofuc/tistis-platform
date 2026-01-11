@@ -272,7 +272,7 @@ export default function SettingsPage() {
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
                     className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
+                      'w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-left transition-colors min-h-[48px] sm:min-h-0 active:bg-gray-100 dark:active:bg-[#505050]',
                       activeTab === tab.key
                         ? 'bg-tis-coral/10 text-tis-coral dark:bg-tis-coral/20'
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#404040] hover:text-gray-900 dark:hover:text-white'
@@ -297,18 +297,18 @@ export default function SettingsPage() {
               <CardHeader title="Mi Perfil" subtitle="Actualiza tu información personal" />
               <CardContent>
                 {/* Profile Header */}
-                <div className="flex items-center gap-6 mb-6 pb-6 border-b border-gray-100">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 mb-6 pb-6 border-b border-gray-100 text-center sm:text-left">
                   <Avatar
                     name={staff?.display_name || expectedDisplayName || 'Usuario'}
                     src={staff?.avatar_url || undefined}
                     size="xl"
                   />
                   <div>
-                    <h3 className="font-semibold text-gray-900 text-lg">
+                    <h3 className="font-semibold text-gray-900 text-base sm:text-lg">
                       {staff?.display_name || expectedDisplayName || 'Sin nombre'}
                     </h3>
                     <p className="text-sm text-gray-500">{staff?.email || user?.email}</p>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
                       <Badge variant="info" size="sm">
                         {staff?.role_title || roleLabels[staff?.role || ''] || staff?.role}
                       </Badge>
@@ -394,8 +394,8 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="mt-6 flex items-center justify-between">
-                  <p className="text-sm text-gray-500">
+                <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                  <p className="text-sm text-gray-500 text-center sm:text-left">
                     {displayNameNeedsUpdate && !formHasChanges
                       ? 'Guarda para sincronizar tu nombre de perfil'
                       : hasChanges
@@ -407,6 +407,7 @@ export default function SettingsPage() {
                     onClick={handleSaveProfile}
                     isLoading={saving}
                     disabled={!hasChanges}
+                    className="w-full sm:w-auto"
                   >
                     Guardar Cambios
                   </Button>
@@ -473,12 +474,12 @@ export default function SettingsPage() {
 
                       <div className="space-y-1 bg-gray-50 rounded-xl p-4">
                         {/* Master Toggle */}
-                        <div className="flex items-center justify-between py-3 px-2 bg-white rounded-lg mb-3">
-                          <div>
-                            <p className="font-medium text-gray-900">Activar Notificaciones</p>
-                            <p className="text-sm text-gray-500">Habilitar todas las notificaciones in-app</p>
+                        <div className="flex items-center justify-between py-3 px-2 bg-white rounded-lg mb-3 gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-sm sm:text-base">Activar Notificaciones</p>
+                            <p className="text-xs sm:text-sm text-gray-500">Habilitar todas las notificaciones in-app</p>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer">
+                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 min-w-[44px] min-h-[44px] justify-center">
                             <input
                               type="checkbox"
                               className="sr-only peer"
@@ -499,15 +500,15 @@ export default function SettingsPage() {
                           <div
                             key={item.key}
                             className={cn(
-                              "flex items-center justify-between py-3 px-2 rounded-lg transition-opacity",
+                              "flex items-center justify-between py-3 px-2 rounded-lg transition-opacity gap-3",
                               !notificationPrefs.enable_in_app && "opacity-50 pointer-events-none"
                             )}
                           >
-                            <div>
-                              <p className="font-medium text-gray-900">{item.label}</p>
-                              <p className="text-sm text-gray-500">{item.desc}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 text-sm sm:text-base">{item.label}</p>
+                              <p className="text-xs sm:text-sm text-gray-500">{item.desc}</p>
                             </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
+                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 min-w-[44px] min-h-[44px] justify-center">
                               <input
                                 type="checkbox"
                                 className="sr-only peer"
@@ -544,15 +545,15 @@ export default function SettingsPage() {
                           <div
                             key={item.key}
                             className={cn(
-                              "flex items-center justify-between py-3 px-2 rounded-lg transition-opacity",
+                              "flex items-center justify-between py-3 px-2 rounded-lg transition-opacity gap-3",
                               item.key === 'email_daily_digest' && !notificationPrefs.enable_email && "opacity-50 pointer-events-none"
                             )}
                           >
-                            <div>
-                              <p className="font-medium text-gray-900">{item.label}</p>
-                              <p className="text-sm text-gray-500">{item.desc}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 text-sm sm:text-base">{item.label}</p>
+                              <p className="text-xs sm:text-sm text-gray-500">{item.desc}</p>
                             </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
+                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 min-w-[44px] min-h-[44px] justify-center">
                               <input
                                 type="checkbox"
                                 className="sr-only peer"
@@ -583,12 +584,12 @@ export default function SettingsPage() {
 
                       <div className="space-y-3 bg-gray-50 rounded-xl p-4">
                         {/* WhatsApp Toggle */}
-                        <div className="flex items-center justify-between py-3 px-2 bg-white rounded-lg">
-                          <div>
-                            <p className="font-medium text-gray-900">Activar WhatsApp</p>
-                            <p className="text-sm text-gray-500">Recibir notificaciones críticas por WhatsApp</p>
+                        <div className="flex items-center justify-between py-3 px-2 bg-white rounded-lg gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-sm sm:text-base">Activar WhatsApp</p>
+                            <p className="text-xs sm:text-sm text-gray-500">Recibir notificaciones críticas por WhatsApp</p>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer">
+                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 min-w-[44px] min-h-[44px] justify-center">
                             <input
                               type="checkbox"
                               className="sr-only peer"
@@ -644,8 +645,8 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Save Button */}
-                    <div className="flex justify-end pt-4 border-t border-gray-100">
-                      <Button onClick={handleSaveNotifications} isLoading={savingNotifications}>
+                    <div className="flex justify-center sm:justify-end pt-4 border-t border-gray-100">
+                      <Button onClick={handleSaveNotifications} isLoading={savingNotifications} className="w-full sm:w-auto">
                         Guardar Preferencias
                       </Button>
                     </div>

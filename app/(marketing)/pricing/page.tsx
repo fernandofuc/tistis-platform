@@ -145,21 +145,21 @@ function VerticalSelector({
       className="flex flex-col items-center gap-4 mb-8"
     >
       <p className="text-sm text-slate-500 font-medium">Selecciona tu tipo de negocio</p>
-      <div className="inline-flex bg-white rounded-2xl p-1.5 shadow-lg border border-slate-200">
+      <div className="inline-flex flex-col sm:flex-row bg-white rounded-xl sm:rounded-2xl p-1 sm:p-1.5 shadow-lg border border-slate-200 w-full sm:w-auto max-w-xs sm:max-w-none">
         {VERTICALS_DISPLAY.map((vertical) => (
           <button
             key={vertical.id}
             onClick={() => onSelect(vertical.id)}
             className={`
-              flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200
+              flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-200 min-h-[44px]
               ${selectedVertical === vertical.id
                 ? 'bg-gradient-to-r from-tis-coral to-tis-pink text-white shadow-md'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 active:bg-slate-100'
               }
             `}
           >
-            <span className="text-xl">{vertical.icon}</span>
-            <span>{vertical.name}</span>
+            <span className="text-lg sm:text-xl">{vertical.icon}</span>
+            <span className="text-sm sm:text-base">{vertical.name}</span>
           </button>
         ))}
       </div>
@@ -205,10 +205,10 @@ function PlanCard({
       transition={{ duration: 0.4 }}
       onClick={onSelect}
       className={`
-        relative rounded-2xl p-6 cursor-pointer transition-all duration-300
+        relative rounded-xl sm:rounded-2xl p-4 sm:p-6 cursor-pointer transition-all duration-300
         ${isSelected
-          ? 'bg-white ring-2 ring-tis-coral shadow-xl scale-[1.02]'
-          : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg'
+          ? 'bg-white ring-2 ring-tis-coral shadow-xl scale-[1.01] sm:scale-[1.02]'
+          : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg active:bg-slate-50'
         }
         ${plan.highlighted && !isSelected ? 'border-tis-coral/30' : ''}
       `}
@@ -230,25 +230,25 @@ function PlanCard({
       )}
 
       {/* Header del plan */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <div className={`
-          w-12 h-12 rounded-xl flex items-center justify-center mb-4
+          w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center mb-3 sm:mb-4
           ${isSelected ? 'bg-tis-coral text-white' : 'bg-slate-100 text-slate-600'}
         `}>
           {plan.icon}
         </div>
 
-        <h3 className="text-xl font-bold text-slate-800 mb-1">{plan.name}</h3>
-        <p className="text-sm text-slate-500">{plan.description}</p>
+        <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">{plan.name}</h3>
+        <p className="text-xs sm:text-sm text-slate-500">{plan.description}</p>
       </div>
 
       {/* Precio */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-bold text-slate-800">
+          <span className="text-3xl sm:text-4xl font-bold text-slate-800">
             ${totalPrice.toLocaleString()}
           </span>
-          <span className="text-slate-400">/mes</span>
+          <span className="text-slate-400 text-sm sm:text-base">/mes</span>
         </div>
         {branchCost > 0 && (
           <p className="text-xs text-slate-400 mt-1">
@@ -259,17 +259,17 @@ function PlanCard({
 
       {/* Selector de sucursales */}
       {plan.branchLimit > 1 && isSelected && (
-        <div className="mb-6 p-4 bg-slate-50 rounded-xl">
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-slate-700">Sucursales</span>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={(e) => { e.stopPropagation(); onBranchChange(-1); }}
                 disabled={!canRemove}
                 className={`
-                  w-8 h-8 rounded-lg flex items-center justify-center transition-all
+                  w-10 h-10 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-all
                   ${canRemove
-                    ? 'bg-white border border-slate-200 text-slate-600 hover:border-tis-coral hover:text-tis-coral'
+                    ? 'bg-white border border-slate-200 text-slate-600 hover:border-tis-coral hover:text-tis-coral active:bg-slate-100'
                     : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                   }
                 `}
@@ -281,9 +281,9 @@ function PlanCard({
                 onClick={(e) => { e.stopPropagation(); onBranchChange(1); }}
                 disabled={!canAdd}
                 className={`
-                  w-8 h-8 rounded-lg flex items-center justify-center transition-all
+                  w-10 h-10 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-all
                   ${canAdd
-                    ? 'bg-white border border-slate-200 text-slate-600 hover:border-tis-coral hover:text-tis-coral'
+                    ? 'bg-white border border-slate-200 text-slate-600 hover:border-tis-coral hover:text-tis-coral active:bg-slate-100'
                     : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                   }
                 `}
@@ -301,7 +301,7 @@ function PlanCard({
       )}
 
       {/* Features - Combinadas: generales + verticales */}
-      <ul className="space-y-3 mb-6">
+      <ul className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
         {/* Features específicas de la vertical primero */}
         {verticalFeatures.map((feature, index) => (
           <li key={`vertical-${index}`} className="flex items-start gap-3">
@@ -330,7 +330,7 @@ function PlanCard({
 
       {/* Indicador de selección */}
       <div className={`
-        w-full py-3 rounded-xl text-center font-medium transition-all
+        w-full py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-center font-medium transition-all text-sm sm:text-base min-h-[44px] flex items-center justify-center
         ${isSelected
           ? 'bg-tis-coral text-white'
           : 'bg-slate-100 text-slate-600'
@@ -352,7 +352,7 @@ function CustomSoftwareCard() {
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.4, delay: 0.3 }}
-      className="mt-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-8 text-white"
+      className="mt-6 sm:mt-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl sm:rounded-2xl p-5 sm:p-8 text-white"
     >
       <div className="max-w-4xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -420,20 +420,20 @@ function InvestmentSummary({
     <motion.div
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-2xl z-40"
+      className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-2xl z-40 pb-safe"
     >
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+        <div className="flex items-center justify-between gap-3">
           {/* Info del plan */}
-          <div className="flex items-center gap-6">
-            <div>
-              <p className="text-sm text-slate-500">Plan seleccionado</p>
-              <p className="text-lg font-semibold text-slate-800">
+          <div className="flex items-center gap-3 sm:gap-6 min-w-0">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-slate-500">Plan seleccionado</p>
+              <p className="text-sm sm:text-lg font-semibold text-slate-800 truncate">
                 {selectedPlan.name}
-                {branches > 1 && ` (${branches} sucursales)`}
+                {branches > 1 && ` (${branches} suc.)`}
               </p>
             </div>
-            <div className="hidden md:block h-10 w-px bg-slate-200" />
+            <div className="hidden md:block h-10 w-px bg-slate-200 flex-shrink-0" />
             <div className="hidden md:block">
               <p className="text-sm text-slate-500">
                 {isStarterWithTrial ? 'Prueba gratuita' : 'Total mensual'}
@@ -461,13 +461,14 @@ function InvestmentSummary({
           {/* CTA */}
           <button
             onClick={onCheckout}
-            className={`px-8 py-3 font-semibold rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 ${
+            className={`px-4 sm:px-8 py-3 font-semibold rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center gap-2 min-h-[48px] flex-shrink-0 ${
               isStarterWithTrial
                 ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white'
                 : 'bg-tis-coral text-white hover:bg-tis-pink'
             }`}
           >
-            <span>{isStarterWithTrial ? 'Comenzar Gratis' : 'Continuar'}</span>
+            <span className="hidden sm:inline">{isStarterWithTrial ? 'Comenzar Gratis' : 'Continuar'}</span>
+            <span className="sm:hidden">{isStarterWithTrial ? 'Gratis' : 'Seguir'}</span>
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
@@ -592,7 +593,7 @@ function PricingContent() {
       )}
 
       {/* Hero Section - Estilo Apple */}
-      <section className={`${isNewUser ? 'pt-16' : 'pt-24'} pb-12 px-6`}>
+      <section className={`${isNewUser ? 'pt-12 sm:pt-16' : 'pt-16 sm:pt-24'} pb-8 sm:pb-12 px-4 sm:px-6`}>
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
@@ -602,7 +603,7 @@ function PricingContent() {
             <span className="inline-block px-4 py-1.5 bg-tis-coral/10 text-tis-coral text-sm font-medium rounded-full mb-6">
               {isNewUser ? 'Paso 2: Elige tu plan' : 'Invierte en tiempo, no en tareas'}
             </span>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 mb-6 leading-tight">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 mb-4 sm:mb-6 leading-tight">
               {isNewUser ? (
                 <>
                   Elige el plan perfecto para{' '}
@@ -619,7 +620,7 @@ function PricingContent() {
                 </>
               )}
             </h1>
-            <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed px-2">
               {isNewUser
                 ? 'Tu cuenta está lista. Solo falta elegir tu plan para activar tu asistente IA.'
                 : 'Cada dia sin automatizar son horas perdidas y clientes que no atiendes. Empieza hoy. Sin contratos. Sin riesgos.'
@@ -630,7 +631,7 @@ function PricingContent() {
       </section>
 
       {/* Vertical Selector */}
-      <section className="px-6 pb-4">
+      <section className="px-4 sm:px-6 pb-4">
         <div className="max-w-6xl mx-auto">
           <VerticalSelector
             selectedVertical={selectedVertical}
@@ -640,9 +641,9 @@ function PricingContent() {
       </section>
 
       {/* Plans Grid */}
-      <section className="px-6 pb-8">
+      <section className="px-4 sm:px-6 pb-6 sm:pb-8">
         <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {PLANS_DISPLAY.map((plan) => (
               <PlanCard
                 key={plan.id}
@@ -662,7 +663,7 @@ function PricingContent() {
       </section>
 
       {/* Trust Section - Urgencia sutil */}
-      <section className="px-6 py-16 bg-white">
+      <section className="px-4 sm:px-6 py-12 sm:py-16 bg-white">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
@@ -670,7 +671,7 @@ function PricingContent() {
             viewport={{ once: true }}
             className="text-center mb-12"
           >
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-3">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 mb-3">
               Mientras lo piensas, tu competencia avanza
             </h2>
             <p className="text-slate-500">
@@ -678,15 +679,15 @@ function PricingContent() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 text-center">
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               whileInView={{ y: 0, opacity: 1 }}
               viewport={{ once: true }}
               transition={{ delay: 0.1 }}
             >
-              <div className="w-14 h-14 bg-tis-coral/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <MessageSquare className="w-7 h-7 text-tis-coral" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-tis-coral/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7 text-tis-coral" />
               </div>
               <h3 className="font-bold text-slate-900 mb-2">Nunca duerme</h3>
               <p className="text-sm text-slate-600">
@@ -699,8 +700,8 @@ function PricingContent() {
               viewport={{ once: true }}
               transition={{ delay: 0.2 }}
             >
-              <div className="w-14 h-14 bg-tis-coral/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Clock className="w-7 h-7 text-tis-coral" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-tis-coral/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Clock className="w-6 h-6 sm:w-7 sm:h-7 text-tis-coral" />
               </div>
               <h3 className="font-bold text-slate-900 mb-2">48 horas y listo</h3>
               <p className="text-sm text-slate-600">
@@ -713,8 +714,8 @@ function PricingContent() {
               viewport={{ once: true }}
               transition={{ delay: 0.3 }}
             >
-              <div className="w-14 h-14 bg-tis-coral/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-7 h-7 text-tis-coral" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-tis-coral/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Shield className="w-6 h-6 sm:w-7 sm:h-7 text-tis-coral" />
               </div>
               <h3 className="font-bold text-slate-900 mb-2">Cero riesgo</h3>
               <p className="text-sm text-slate-600">
@@ -726,9 +727,9 @@ function PricingContent() {
       </section>
 
       {/* FAQ Preview */}
-      <section className="px-6 py-16">
+      <section className="px-4 sm:px-6 py-12 sm:py-16">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-2xl font-bold text-slate-800 mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-3 sm:mb-4">
             Preguntas frecuentes
           </h2>
           <p className="text-slate-500 mb-8">

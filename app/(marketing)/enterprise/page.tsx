@@ -515,7 +515,7 @@ export default function EnterprisePage() {
                     required
                     value={formData.industry}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-transparent transition-all text-white"
+                    className="w-full px-4 py-3 min-h-[48px] bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-transparent transition-all text-white"
                   >
                     <option value="" className="bg-gray-800">Selecciona una industria</option>
                     {industries.map((ind) => (
@@ -533,7 +533,7 @@ export default function EnterprisePage() {
                     required
                     value={formData.branchCount}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-transparent transition-all text-white"
+                    className="w-full px-4 py-3 min-h-[48px] bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-tis-coral focus:border-transparent transition-all text-white"
                   >
                     <option value="" className="bg-gray-800">Selecciona un rango</option>
                     {branchRanges.map((range) => (

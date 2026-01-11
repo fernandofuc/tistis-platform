@@ -592,7 +592,7 @@ export function BranchManagement() {
                   {isAdmin && (
                     <div className="flex items-center gap-2">
                       <button
-                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg active:scale-95 transition-all"
                         onClick={() => startEditing(branch)}
                         title="Editar"
                       >
@@ -600,7 +600,7 @@ export function BranchManagement() {
                       </button>
                       {!branch.is_headquarters && (
                         <button
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg active:scale-95 transition-all"
                           onClick={() => setShowDeleteModal(branch)}
                           title="Eliminar"
                         >

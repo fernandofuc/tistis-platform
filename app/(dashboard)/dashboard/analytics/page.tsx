@@ -691,7 +691,7 @@ export default function AnalyticsPage() {
         title="Analítica"
         subtitle={selectedBranch ? `${selectedBranch.name} • ${periodLabels[period]}` : periodLabels[period]}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Period Selector */}
             <div className="flex items-center bg-slate-100 rounded-xl p-1">
               {(['7d', '30d', '90d'] as Period[]).map((p) => (
@@ -699,7 +699,7 @@ export default function AnalyticsPage() {
                   key={p}
                   onClick={() => setPeriod(p)}
                   className={cn(
-                    'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                    'px-3 sm:px-4 py-2 min-h-[40px] sm:min-h-[44px] rounded-lg text-sm font-medium transition-all duration-200 active:scale-95',
                     period === p
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
@@ -735,7 +735,7 @@ export default function AnalyticsPage() {
       title="Analítica"
       subtitle={selectedBranch ? `${selectedBranch.name} • ${periodLabels[period]}` : periodLabels[period]}
       actions={
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Period Selector */}
           <div className="flex items-center bg-slate-100 rounded-xl p-1">
             {(['7d', '30d', '90d'] as Period[]).map((p) => (
@@ -743,7 +743,7 @@ export default function AnalyticsPage() {
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                  'px-3 sm:px-4 py-2 min-h-[40px] sm:min-h-[44px] rounded-lg text-sm font-medium transition-all duration-200 active:scale-95',
                   period === p
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'

@@ -122,7 +122,7 @@ export default function ForgotPasswordPage() {
               </p>
               <Link
                 href="/auth/login"
-                className="inline-flex items-center justify-center px-6 py-3 bg-tis-coral text-white font-medium rounded-lg hover:bg-tis-coral/90 transition-colors"
+                className="inline-flex items-center justify-center px-6 py-3 min-h-[48px] bg-tis-coral text-white font-medium rounded-lg hover:bg-tis-coral/90 active:scale-[0.98] transition-all"
               >
                 Volver al Inicio de Sesión
               </Link>
@@ -191,7 +191,7 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="tu@email.com"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-coral focus:border-transparent outline-none transition-all"
+                    className="w-full pl-10 pr-4 py-3 min-h-[48px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-coral focus:border-transparent outline-none transition-all"
                     autoComplete="email"
                     autoFocus
                   />
@@ -201,7 +201,7 @@ export default function ForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={loading || !email.trim()}
-                className="w-full py-3 px-4 bg-tis-coral text-white font-semibold rounded-lg hover:bg-tis-coral/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                className="w-full py-3 px-4 min-h-[48px] bg-tis-coral text-white font-semibold rounded-lg hover:bg-tis-coral/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
               >
                 {loading ? (
                   <>

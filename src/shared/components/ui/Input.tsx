@@ -60,7 +60,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               'focus:outline-none focus:ring-2 focus:ring-offset-0',
               leftIcon ? 'pl-10' : 'pl-4',
               rightIcon ? 'pr-10' : 'pr-4',
-              'py-2.5 text-sm',
+              'py-3 sm:py-2.5 text-base sm:text-sm min-h-[44px] sm:min-h-0',
               error
                 ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
                 : 'border-gray-300 focus:border-tis-coral focus:ring-tis-coral/30',
@@ -119,7 +119,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
             <button
               type="button"
               onClick={onClear}
-              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-2 sm:p-1 hover:bg-gray-100 rounded-full transition-colors min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
             >
               <svg
                 className="w-4 h-4"
@@ -174,7 +174,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={textareaId}
           className={cn(
-            'block w-full rounded-lg border px-4 py-2.5 text-sm',
+            'block w-full rounded-lg border px-4 py-3 sm:py-2.5 text-base sm:text-sm min-h-[100px] sm:min-h-[80px]',
             'text-gray-900 placeholder:text-gray-400',
             'bg-white',
             'focus:outline-none focus:ring-2 focus:ring-offset-0',

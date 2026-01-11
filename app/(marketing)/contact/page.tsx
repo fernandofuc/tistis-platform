@@ -286,7 +286,7 @@ export default function ContactPage() {
                       required
                       value={formData.subject}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-tis-coral focus:ring-2 focus:ring-tis-coral/20 outline-none transition-all bg-white"
+                      className="w-full px-4 py-3 min-h-[48px] rounded-xl border border-slate-200 focus:border-tis-coral focus:ring-2 focus:ring-tis-coral/20 outline-none transition-all bg-white"
                     >
                       <option value="general">Consulta general</option>
                       <option value="ventas">Información de ventas</option>

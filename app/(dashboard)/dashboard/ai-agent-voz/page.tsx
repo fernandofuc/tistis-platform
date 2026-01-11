@@ -337,19 +337,19 @@ function TabBar({
   ];
 
   return (
-    <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+    <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl w-full sm:w-fit overflow-x-auto scrollbar-hide">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
-          className={`px-4 py-2 font-medium rounded-lg transition-all flex items-center gap-2 text-sm ${
+          className={`px-3 sm:px-4 py-2.5 min-h-[44px] font-medium rounded-lg transition-all flex items-center gap-2 text-sm whitespace-nowrap active:scale-95 ${
             activeTab === tab.id
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-500 hover:text-slate-700'
           }`}
         >
           {tab.icon}
-          <span className="hidden md:inline">{tab.label}</span>
+          <span className="hidden sm:inline">{tab.label}</span>
           {tab.badge !== undefined && tab.badge > 0 && (
             <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
               activeTab === tab.id
@@ -447,9 +447,9 @@ function VoicePersonalityTab({
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
               >
-                <EditIcon className="w-4 h-4" />
+                <EditIcon className="w-5 h-5" />
               </button>
             ) : (
               <div className="flex items-center gap-2">
@@ -844,9 +844,9 @@ function PhoneNumbersTab({
                   </div>
                   <button
                     onClick={() => onReleaseNumber(number.id)}
-                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                    className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg active:scale-95 transition-all opacity-0 group-hover:opacity-100"
                   >
-                    <TrashIcon className="w-4 h-4" />
+                    <TrashIcon className="w-5 h-5" />
                   </button>
                 </div>
               </div>
@@ -883,9 +883,9 @@ function PhoneNumbersTab({
                     setShowAreaCodes(false);
                     setSelectedAreaCode(null);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+                  className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
                 >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M18 6L6 18M6 6l12 12" />
                   </svg>
                 </button>
@@ -1099,9 +1099,9 @@ function CallHistoryTab({
                         e.stopPropagation();
                         onCallClick?.(call);
                       }}
-                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
                     >
-                      <ChevronRightIcon className="w-4 h-4" />
+                      <ChevronRightIcon className="w-5 h-5" />
                     </button>
                   </td>
                 </tr>

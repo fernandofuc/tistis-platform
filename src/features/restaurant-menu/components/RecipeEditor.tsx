@@ -201,7 +201,7 @@ function IngredientSearchModal({
                 e.stopPropagation();
                 onClose();
               }}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
             >
               <XIcon className="w-5 h-5" />
             </button>
@@ -440,10 +440,9 @@ function IngredientRow({
         <button
           type="button"
           onClick={() => onRemove(index)}
-          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg
-            opacity-0 group-hover:opacity-100 transition-all"
+          className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 active:scale-95 transition-all"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-5 h-5" />
         </button>
       </div>
     </div>

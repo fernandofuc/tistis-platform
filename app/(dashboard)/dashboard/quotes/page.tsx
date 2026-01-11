@@ -253,7 +253,7 @@ export default function QuotesPage() {
                 placeholder="Buscar por numero de cotizacion..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent"
               />
             </div>
           </div>
@@ -264,7 +264,7 @@ export default function QuotesPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent bg-white"
+              className="px-3 py-2.5 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent bg-white"
             >
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -276,10 +276,10 @@ export default function QuotesPage() {
             {/* New Quote Button */}
             <button
               onClick={() => setShowNewQuoteModal(true)}
-              className="px-4 py-2 bg-gradient-primary text-white rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2 font-medium"
+              className="px-4 py-2.5 min-h-[44px] bg-gradient-primary text-white rounded-lg hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 font-medium"
             >
               <Plus className="w-5 h-5" />
-              Nueva Cotizacion
+              <span className="hidden sm:inline">Nueva Cotizacion</span>
             </button>
           </div>
         </div>
@@ -299,7 +299,7 @@ export default function QuotesPage() {
       )}
 
       {/* Quotes Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-tis-purple"></div>
@@ -406,13 +406,13 @@ export default function QuotesPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <button
-                            className="p-1.5 text-tis-purple hover:bg-tis-purple/10 rounded-lg transition-colors"
+                            className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-tis-purple hover:bg-tis-purple/10 active:bg-tis-purple/20 active:scale-95 rounded-lg transition-all"
                             title="Ver detalle"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-gray-500 hover:bg-gray-100 active:bg-gray-200 active:scale-95 rounded-lg transition-all"
                             title="Mas opciones"
                           >
                             <MoreHorizontal className="w-4 h-4" />
@@ -430,8 +430,8 @@ export default function QuotesPage() {
 
       {/* Pagination */}
       {!loading && quotes.length > 0 && pagination && (
-        <div className="mt-6 flex items-center justify-between">
-          <div className="text-sm text-tis-text-secondary">
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-sm text-tis-text-secondary text-center sm:text-left">
             Mostrando {quotes.length} de {pagination.total} cotizaciones
             (Pagina {pagination.page} de {pagination.totalPages})
           </div>
@@ -439,14 +439,14 @@ export default function QuotesPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 min-h-[44px] border border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Anterior
             </button>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={page >= (pagination?.totalPages || 1)}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 min-h-[44px] border border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Siguiente
             </button>
@@ -465,7 +465,7 @@ export default function QuotesPage() {
                 </h2>
                 <button
                   onClick={() => setShowNewQuoteModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg active:scale-95 transition-all"
                 >
                   <XCircle className="w-6 h-6" />
                 </button>
@@ -670,7 +670,7 @@ function NewQuoteForm({ onSuccess, onCancel }: NewQuoteFormProps) {
           <select
             value={formData.patient_id}
             onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent"
+            className="w-full px-3 py-2.5 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent"
           >
             <option value="">Seleccionar...</option>
             {patients.map((patient) => (
@@ -690,7 +690,7 @@ function NewQuoteForm({ onSuccess, onCancel }: NewQuoteFormProps) {
           <select
             value={formData.lead_id}
             onChange={(e) => setFormData({ ...formData, lead_id: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent"
+            className="w-full px-3 py-2.5 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-tis-purple focus:border-transparent"
           >
             <option value="">Seleccionar...</option>
             {leads.map((lead) => (
@@ -748,7 +748,7 @@ function NewQuoteForm({ onSuccess, onCancel }: NewQuoteFormProps) {
                 <button
                   type="button"
                   onClick={() => removeItem(index)}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                  className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-lg active:scale-95 transition-all"
                 >
                   <XCircle className="w-5 h-5" />
                 </button>

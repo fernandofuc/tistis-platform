@@ -214,7 +214,7 @@ function CapacitySelector({ min, max, onMinChange, onMaxChange }: CapacitySelect
             <button
               type="button"
               onClick={() => min > 1 && onMinChange(min - 1)}
-              className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center"
+              className="w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
@@ -231,7 +231,7 @@ function CapacitySelector({ min, max, onMinChange, onMaxChange }: CapacitySelect
             <button
               type="button"
               onClick={() => min < max && onMinChange(min + 1)}
-              className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center"
+              className="w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -246,7 +246,7 @@ function CapacitySelector({ min, max, onMinChange, onMaxChange }: CapacitySelect
             <button
               type="button"
               onClick={() => max > min && onMaxChange(max - 1)}
-              className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center"
+              className="w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
@@ -263,7 +263,7 @@ function CapacitySelector({ min, max, onMinChange, onMaxChange }: CapacitySelect
             <button
               type="button"
               onClick={() => max < 20 && onMaxChange(max + 1)}
-              className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center"
+              className="w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -436,7 +436,7 @@ export function TableFormModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-slate-100 transition-colors"
+            className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-xl hover:bg-slate-100 active:scale-95 transition-all"
           >
             <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -133,7 +133,7 @@ function PlanCard({ plan, onEdit, onToggle, onDelete, onAssignMember, terminolog
           </button>
           <button
             onClick={() => onEdit(plan)}
-            className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+            className="w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 active:scale-95 transition-all"
             title="Editar"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +142,7 @@ function PlanCard({ plan, onEdit, onToggle, onDelete, onAssignMember, terminolog
           </button>
           <button
             onClick={() => onDelete(plan)}
-            className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition-colors"
+            className="w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 active:scale-95 transition-all"
             title="Eliminar"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -621,7 +621,7 @@ function AssignMembershipModal({ plan, onAssign, onClose, terminology }: AssignM
               <button
                 type="button"
                 onClick={onClose}
-                className="w-10 h-10 rounded-xl bg-white/80 hover:bg-white shadow-sm border border-gray-200/50 flex items-center justify-center transition-all hover:scale-105"
+                className="w-10 h-10 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-xl bg-white/80 hover:bg-white shadow-sm border border-gray-200/50 flex items-center justify-center active:scale-95 transition-all hover:scale-105"
               >
                 <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -667,7 +667,7 @@ function AssignMembershipModal({ plan, onAssign, onClose, terminology }: AssignM
                   <button
                     type="button"
                     onClick={() => setSelectedLead(null)}
-                    className="w-8 h-8 rounded-lg bg-white shadow-sm border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                    className="w-8 h-8 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 rounded-lg bg-white shadow-sm border border-gray-200 flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all"
                   >
                     <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

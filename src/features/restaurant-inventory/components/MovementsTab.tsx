@@ -231,11 +231,11 @@ function MovementCard({
               {item && <span className="text-xs ml-1 opacity-70">{item.unit}</span>}
             </div>
 
-            <button className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
+            <button className="p-2.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-slate-100 rounded-lg active:scale-95 transition-all">
               {isExpanded ? (
-                <ChevronUp className="w-4 h-4 text-slate-400" />
+                <ChevronUp className="w-5 h-5 text-slate-400" />
               ) : (
-                <ChevronDown className="w-4 h-4 text-slate-400" />
+                <ChevronDown className="w-5 h-5 text-slate-400" />
               )}
             </button>
           </div>

@@ -102,7 +102,7 @@ function UpgradePrompt() {
 
             <button
               onClick={() => router.push('/dashboard/settings/subscription')}
-              className="w-full bg-slate-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"
+              className="w-full min-h-[48px] bg-slate-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-slate-800 active:scale-95 transition-all shadow-lg hover:shadow-xl"
             >
               Desbloquear Gestión de Mesas
             </button>
@@ -153,7 +153,7 @@ function DeleteModal({ isOpen, table, onClose, onConfirm, loading }: DeleteModal
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+              className="flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 active:scale-95 active:bg-slate-300 transition-all"
             >
               Cancelar
             </button>
@@ -161,8 +161,8 @@ function DeleteModal({ isOpen, table, onClose, onConfirm, loading }: DeleteModal
               onClick={onConfirm}
               disabled={loading}
               className={cn(
-                'flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl transition-colors',
-                loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'
+                'flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium text-white bg-red-600 rounded-xl transition-all active:scale-95',
+                loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700 active:bg-red-800'
               )}
             >
               {loading ? 'Eliminando...' : 'Eliminar'}
@@ -349,14 +349,14 @@ export default function MesasPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-6">
+      <div className="border-b border-slate-200 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <nav className="-mb-px flex space-x-2 sm:space-x-6 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200',
+                'py-2.5 sm:py-3 px-3 sm:px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200 min-h-[44px] active:scale-95',
                 activeTab === tab.id
                   ? 'border-tis-coral text-tis-coral'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'

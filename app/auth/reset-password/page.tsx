@@ -156,7 +156,7 @@ export default function ResetPasswordPage() {
             <p className="text-gray-600 mb-6">{error}</p>
             <Link
               href="/login"
-              className="inline-flex items-center justify-center px-6 py-3 bg-[#7C5CFC] text-white font-medium rounded-lg hover:bg-[#6B4FE0] transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 min-h-[48px] bg-[#7C5CFC] text-white font-medium rounded-lg hover:bg-[#6B4FE0] active:scale-[0.98] transition-all"
             >
               Volver al Inicio de Sesión
             </Link>
@@ -223,7 +223,7 @@ export default function ResetPasswordPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Mínimo 8 caracteres"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7C5CFC] focus:border-transparent outline-none transition-all"
+                className="w-full px-4 py-3 min-h-[48px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7C5CFC] focus:border-transparent outline-none transition-all"
                 required
               />
               <p className="mt-1.5 text-xs text-gray-500">
@@ -240,7 +240,7 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repite la contraseña"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7C5CFC] focus:border-transparent outline-none transition-all"
+                className="w-full px-4 py-3 min-h-[48px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7C5CFC] focus:border-transparent outline-none transition-all"
                 required
               />
             </div>
@@ -248,7 +248,7 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={loading || !newPassword || !confirmPassword}
-              className="w-full py-3 px-4 bg-[#7C5CFC] text-white font-semibold rounded-lg hover:bg-[#6B4FE0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              className="w-full py-3 px-4 min-h-[48px] bg-[#7C5CFC] text-white font-semibold rounded-lg hover:bg-[#6B4FE0] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
             >
               {loading ? (
                 <>

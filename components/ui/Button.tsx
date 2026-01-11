@@ -20,7 +20,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     disabled,
     ...props
   }, ref) => {
-    const baseStyles = "inline-flex items-center justify-center font-medium transition-all rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2";
+    const baseStyles = "inline-flex items-center justify-center font-medium transition-all rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 active:scale-[0.98]";
 
     const variants = {
       primary: "bg-tis-coral text-white hover:opacity-90 focus:ring-tis-coral",
@@ -30,10 +30,10 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizes = {
-      sm: "px-3 py-1.5 text-sm",
-      md: "px-4 py-2.5 text-base",
-      lg: "px-6 py-3 text-lg",
-      xl: "px-8 py-4 text-xl",
+      sm: "px-3 py-1.5 min-h-[36px] text-sm",
+      md: "px-4 py-2.5 min-h-[44px] text-base",
+      lg: "px-6 py-3 min-h-[48px] text-lg",
+      xl: "px-8 py-4 min-h-[56px] text-xl",
     };
 
     return (

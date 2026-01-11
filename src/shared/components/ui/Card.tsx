@@ -24,11 +24,12 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       hero: 'card-hero text-white',
     };
 
+    // Padding responsive - less on mobile, more on desktop
     const paddingStyles = {
       none: '',
-      sm: 'p-3',
-      md: 'p-5',
-      lg: 'p-6',
+      sm: 'p-2.5 sm:p-3',
+      md: 'p-4 sm:p-5',
+      lg: 'p-4 sm:p-6',
     };
 
     const hoverStyles = hover && variant !== 'hero'
@@ -69,19 +70,19 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
     return (
       <div
         ref={ref}
-        className={cn('flex items-start justify-between mb-4', className)}
+        className={cn('flex items-start justify-between mb-3 sm:mb-4 gap-2', className)}
         {...props}
       >
-        <div>
+        <div className="min-w-0 flex-1">
           {title && (
-            <h3 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h3>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight truncate">{title}</h3>
           )}
           {subtitle && (
-            <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5 line-clamp-2">{subtitle}</p>
           )}
           {children}
         </div>
-        {action && <div className="ml-4 flex-shrink-0">{action}</div>}
+        {action && <div className="ml-2 sm:ml-4 flex-shrink-0">{action}</div>}
       </div>
     );
   }

@@ -106,20 +106,20 @@ export function MobileBottomNav() {
               )}
             >
               <span className={cn(
-                'p-1.5 rounded-xl transition-colors',
+                'p-2 sm:p-1.5 rounded-xl transition-colors',
                 isActive && 'bg-tis-coral-100'
               )}>
                 {item.icon}
               </span>
-              <span className="text-xs font-medium">{item.name}</span>
+              <span className="text-[11px] sm:text-xs font-medium">{item.name}</span>
             </Link>
           );
         })}
-        <button className="bottom-nav-item">
-          <span className="p-1.5 rounded-xl">
+        <button className="bottom-nav-item min-h-[48px]">
+          <span className="p-2 sm:p-1.5 rounded-xl">
             {icons.more}
           </span>
-          <span className="text-xs font-medium">Más</span>
+          <span className="text-[11px] sm:text-xs font-medium">Más</span>
         </button>
       </div>
     </nav>
@@ -188,7 +188,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+            className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 active:bg-slate-200 rounded-xl transition-colors min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
           >
             {icons.close}
           </button>
@@ -206,10 +206,10 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
                 prefetch={true}
                 onTouchStart={() => handlePrefetch(item.href)}
                 className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
+                  'flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 min-h-[52px]',
                   isActive
                     ? 'bg-tis-coral-100 text-tis-coral'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    : 'text-slate-600 hover:bg-slate-50 active:bg-slate-100 hover:text-slate-900'
                 )}
               >
                 <span className={cn(

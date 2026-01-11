@@ -279,7 +279,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         <div className="flex items-center gap-4">
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+            className="lg:hidden p-2.5 text-slate-500 hover:bg-slate-100 active:bg-slate-200 rounded-xl transition-colors min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
           >
             {icons.menu}
           </button>
@@ -354,7 +354,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                               setSearchQuery('');
                               clearSearchResults();
                             }}
-                            className="w-full p-3 text-left hover:bg-slate-50 transition-colors flex items-center gap-3"
+                            className="w-full p-3 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors flex items-center gap-3 min-h-[56px]"
                           >
                             <div className={cn(
                               'flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center',
@@ -452,7 +452,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative" ref={notificationsRef}>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+              className="relative p-2.5 text-slate-500 hover:bg-slate-100 active:bg-slate-200 rounded-xl transition-colors min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
             >
               {icons.bell}
               {unreadCount > 0 && (
@@ -463,7 +463,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-96 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[400px] bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
                 {/* Header */}
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <div>
@@ -510,7 +510,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                             }
                           }}
                           className={cn(
-                            'w-full p-4 text-left hover:bg-slate-50 transition-colors flex gap-3',
+                            'w-full p-3 sm:p-4 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors flex gap-3 min-h-[64px]',
                             !notification.read && 'bg-slate-50/80'
                           )}
                         >
@@ -593,7 +593,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-72 max-w-[300px] bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
                 {/* User Info Header */}
                 <div className="px-4 py-4 bg-slate-50/80 border-b border-slate-100">
                   <div className="flex items-center gap-3">
@@ -623,7 +623,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 <div className="py-2">
                   <Link
                     href="/dashboard"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 sm:py-2.5 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors min-h-[48px] sm:min-h-0"
                     onClick={() => setShowUserMenu(false)}
                   >
                     <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -633,7 +633,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </Link>
                   <Link
                     href="/dashboard/settings"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 sm:py-2.5 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors min-h-[48px] sm:min-h-0"
                     onClick={() => setShowUserMenu(false)}
                   >
                     <span className="text-slate-400">{icons.user}</span>
@@ -645,7 +645,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 <div className="border-t border-slate-100 py-2">
                   <button
                     onClick={handleSignOut}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    className="flex items-center gap-3 w-full px-4 py-3 sm:py-2.5 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors min-h-[48px] sm:min-h-0"
                   >
                     {icons.logout}
                     <span>Cerrar Sesión</span>

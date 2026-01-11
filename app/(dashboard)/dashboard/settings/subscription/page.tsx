@@ -671,7 +671,7 @@ export default function SubscriptionPage() {
           <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
             <XCircle className="w-5 h-5 flex-shrink-0" />
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">
+            <button onClick={() => setError(null)} className="ml-auto p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg active:scale-95 transition-all">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -682,7 +682,7 @@ export default function SubscriptionPage() {
         {/* Plans Grid - 3 plans + Enterprise card */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Planes Disponibles</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {DASHBOARD_PLANS.map((plan) => {
               const isCurrentPlan = currentPlan === plan.id;
               const isPlanUpgrade = isUpgrade(plan.id);
@@ -731,13 +731,13 @@ export default function SubscriptionPage() {
                     </ul>
 
                     {isCurrentPlan ? (
-                      <Button variant="outline" disabled className="w-full">
+                      <Button variant="outline" disabled className="w-full min-h-[44px]">
                         Plan Actual
                       </Button>
                     ) : (
                       <Button
                         variant={isPlanUpgrade ? 'primary' : 'outline'}
-                        className="w-full"
+                        className="w-full min-h-[44px] active:scale-95 transition-transform"
                         onClick={() => handleSelectPlan(plan.id)}
                       >
                         {isPlanUpgrade ? 'Mejorar Plan' : 'Cambiar a Este Plan'}

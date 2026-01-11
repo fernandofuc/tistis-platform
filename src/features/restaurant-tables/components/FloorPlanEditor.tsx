@@ -580,29 +580,29 @@ export function FloorPlanEditor({
           <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1">
             <button
               onClick={handleZoomOut}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
               title="Alejar"
             >
-              <ZoomOut className="w-4 h-4 text-slate-600" />
+              <ZoomOut className="w-5 h-5 text-slate-600" />
             </button>
             <span className="px-2 text-sm font-medium text-slate-700 min-w-[50px] text-center">
               {Math.round(zoom * 100)}%
             </span>
             <button
               onClick={handleZoomIn}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
               title="Acercar"
             >
-              <ZoomIn className="w-4 h-4 text-slate-600" />
+              <ZoomIn className="w-5 h-5 text-slate-600" />
             </button>
           </div>
 
           <button
             onClick={handleResetView}
-            className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+            className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all"
             title="Restablecer vista"
           >
-            <RotateCcw className="w-4 h-4 text-slate-600" />
+            <RotateCcw className="w-5 h-5 text-slate-600" />
           </button>
 
           <div className="h-6 w-px bg-slate-200 mx-1" />

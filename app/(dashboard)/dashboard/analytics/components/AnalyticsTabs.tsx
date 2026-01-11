@@ -140,10 +140,10 @@ export function AnalyticsTabs({ activeTab, onTabChange }: AnalyticsTabsProps) {
                 tabIndex={isActive ? 0 : -1}
                 title={tab.description}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200',
+                  'flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 active:scale-95',
                   isActive
                     ? 'bg-tis-coral text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 active:bg-slate-300'
                 )}
               >
                 <span aria-hidden="true">{tab.icon}</span>

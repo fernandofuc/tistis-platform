@@ -155,20 +155,20 @@ function AnalysisPanel({
       </div>
 
       {/* Contenido principal */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-8">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
         {/* Logo TIS TIS */}
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5 }}
-          className="mb-8"
+          className="mb-6 sm:mb-8"
         >
           <Image
             src="/logos/tis-brain-logo.png"
             alt="TIS TIS"
             width={80}
             height={80}
-            className="w-20 h-20 object-contain"
+            className="w-16 h-16 sm:w-20 sm:h-20 object-contain"
           />
         </motion.div>
 
@@ -177,9 +177,9 @@ function AnalysisPanel({
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="text-center mb-12"
+          className="text-center mb-8 sm:mb-12"
         >
-          <h2 className="text-2xl font-semibold text-slate-800 mb-2">
+          <h2 className="text-xl sm:text-2xl font-semibold text-slate-800 mb-2">
             {analysisComplete
               ? 'Analisis Completado'
               : isAnalyzing
@@ -198,7 +198,7 @@ function AnalysisPanel({
         </motion.div>
 
         {/* Etapas del análisis */}
-        <div className="w-full max-w-sm space-y-4 mb-8">
+        <div className="w-full max-w-sm space-y-3 sm:space-y-4 mb-6 sm:mb-8">
           {ANALYSIS_STAGES.map((stage, index) => {
             const isActive = currentStage === index;
             const isComplete = currentStage > index || analysisComplete;
@@ -213,13 +213,13 @@ function AnalysisPanel({
                 className="relative"
               >
                 <div className={`
-                  flex items-center gap-3 p-3 rounded-xl transition-all duration-300
+                  flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-300
                   ${isActive ? 'bg-white shadow-md' : 'bg-white/50'}
                   ${isComplete ? 'bg-white' : ''}
                 `}>
                   {/* Icono de estado */}
                   <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center transition-all
+                    w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0
                     ${isComplete
                       ? 'bg-tis-coral text-white'
                       : isActive
@@ -238,7 +238,7 @@ function AnalysisPanel({
 
                   {/* Texto */}
                   <span className={`
-                    text-sm font-medium transition-colors
+                    text-xs sm:text-sm font-medium transition-colors
                     ${isComplete || isActive ? 'text-slate-700' : 'text-slate-400'}
                   `}>
                     {stage.label}
@@ -543,19 +543,19 @@ export default function DiscoveryPage() {
   }, [isLoading]);
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex flex-col lg:flex-row h-screen bg-white">
       {/* ============================================ */}
-      {/* PANEL IZQUIERDO: Chat */}
+      {/* PANEL IZQUIERDO: Chat (Full en mobile, 1/2 en desktop) */}
       {/* ============================================ */}
-      <div className="w-1/2 flex flex-col border-r border-slate-100">
+      <div className="w-full lg:w-1/2 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-100 min-h-[60vh] lg:min-h-0">
         {/* Header minimalista */}
-        <header className="h-16 px-6 flex items-center justify-between border-b border-slate-100 bg-white">
+        <header className="h-14 sm:h-16 px-4 sm:px-6 flex items-center justify-between border-b border-slate-100 bg-white">
           <Link
             href="/"
-            className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors"
+            className="flex items-center gap-2 text-slate-400 hover:text-slate-600 active:text-slate-700 transition-colors min-h-[44px] min-w-[44px]"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">Volver</span>
+            <span className="text-sm font-medium hidden sm:inline">Volver</span>
           </Link>
 
           <div className="flex items-center gap-3">
@@ -580,7 +580,7 @@ export default function DiscoveryPage() {
 
         {/* Área de mensajes */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
             {messages.map((msg) => (
               <motion.div
                 key={msg.id}
@@ -590,14 +590,14 @@ export default function DiscoveryPage() {
               >
                 <div
                   className={`
-                    max-w-[85%] rounded-2xl px-5 py-3.5
+                    max-w-[90%] sm:max-w-[85%] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5
                     ${msg.role === 'user'
                       ? 'bg-tis-coral text-white'
                       : 'bg-slate-100 text-slate-700'
                     }
                   `}
                 >
-                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                  <p className="text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap">
                     {msg.content}
                   </p>
                 </div>
@@ -611,8 +611,8 @@ export default function DiscoveryPage() {
                 animate={{ y: 0, opacity: 1 }}
                 className="flex justify-start"
               >
-                <div className="max-w-[85%] rounded-2xl px-5 py-3.5 bg-slate-100 text-slate-700">
-                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                <div className="max-w-[90%] sm:max-w-[85%] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 bg-slate-100 text-slate-700">
+                  <p className="text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap">
                     {rawStreamingContent ? (
                       /* Mostrar el texto que va llegando del servidor */
                       <>
@@ -652,10 +652,10 @@ export default function DiscoveryPage() {
         </div>
 
         {/* Input de mensaje */}
-        <div className="p-6 border-t border-slate-100 bg-white">
+        <div className="p-4 sm:p-6 border-t border-slate-100 bg-white pb-safe">
           <form onSubmit={handleSendMessage}>
             <div className={`
-              flex items-end gap-3 p-4 rounded-2xl border-2 transition-all duration-200
+              flex items-end gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all duration-200
               ${analysis
                 ? 'bg-slate-50 border-slate-100'
                 : 'bg-white border-slate-200 focus-within:border-tis-coral focus-within:shadow-sm'
@@ -672,7 +672,7 @@ export default function DiscoveryPage() {
                   }
                 }}
                 placeholder={analysis ? 'Analisis completado' : 'Escribe tu respuesta...'}
-                className="flex-1 text-[15px] text-slate-700 placeholder:text-slate-400 bg-transparent border-none focus:outline-none resize-none"
+                className="flex-1 text-sm sm:text-[15px] text-slate-700 placeholder:text-slate-400 bg-transparent border-none focus:outline-none resize-none min-h-[44px]"
                 rows={1}
                 disabled={isLoading || !!analysis}
                 style={{ minHeight: '24px', maxHeight: '120px' }}
@@ -682,10 +682,10 @@ export default function DiscoveryPage() {
                 type="submit"
                 disabled={!currentInput.trim() || isLoading || !!analysis}
                 className={`
-                  p-3 rounded-xl transition-all duration-200
+                  p-3 rounded-xl transition-all duration-200 min-w-[48px] min-h-[48px] flex items-center justify-center
                   ${!currentInput.trim() || isLoading || analysis
                     ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                    : 'bg-tis-coral text-white hover:bg-tis-pink shadow-sm hover:shadow'
+                    : 'bg-tis-coral text-white hover:bg-tis-pink active:bg-tis-pink shadow-sm hover:shadow'
                   }
                 `}
               >
@@ -693,7 +693,7 @@ export default function DiscoveryPage() {
               </button>
             </div>
 
-            <p className="mt-2 text-xs text-slate-400 text-center">
+            <p className="mt-2 text-xs text-slate-400 text-center hidden sm:block">
               Presiona Enter para enviar
             </p>
           </form>
@@ -701,9 +701,9 @@ export default function DiscoveryPage() {
       </div>
 
       {/* ============================================ */}
-      {/* PANEL DERECHO: Análisis */}
+      {/* PANEL DERECHO: Análisis (Hidden en mobile, muestra solo cuando hay análisis) */}
       {/* ============================================ */}
-      <div className="w-1/2">
+      <div className={`w-full lg:w-1/2 ${!analysis && !isAnalyzing ? 'hidden lg:block' : ''}`}>
         <AnalysisPanel
           messageCount={messages.length}
           isAnalyzing={isAnalyzing}

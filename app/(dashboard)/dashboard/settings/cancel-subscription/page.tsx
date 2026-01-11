@@ -231,7 +231,7 @@ export default function CancelSubscriptionPage() {
                 {CANCELLATION_REASONS.map((reason) => (
                   <label
                     key={reason.id}
-                    className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    className={`flex items-center p-4 min-h-[56px] rounded-lg border-2 cursor-pointer transition-all active:scale-[0.99] ${
                       selectedReason === reason.id
                         ? 'border-red-500 bg-red-50'
                         : 'border-gray-200 hover:border-gray-300'
@@ -269,7 +269,7 @@ export default function CancelSubscriptionPage() {
                     value={otherReason}
                     onChange={(e) => setOtherReason(e.target.value)}
                     placeholder="¿Qué podríamos mejorar?"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                    className="w-full px-4 py-3 min-h-[100px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
                     rows={3}
                   />
                 </div>
@@ -352,7 +352,7 @@ export default function CancelSubscriptionPage() {
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
                   placeholder="CANCELAR"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none font-mono"
+                  className="w-full px-4 py-3 min-h-[48px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none font-mono"
                 />
               </div>
 

@@ -272,7 +272,7 @@ export function RestockOrderForm({
           </div>
           <button
             onClick={onCancel}
-            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+            className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-slate-100 rounded-xl active:scale-95 transition-all"
             aria-label="Cerrar"
           >
             <X className="w-5 h-5 text-slate-400" />
@@ -385,9 +385,9 @@ export function RestockOrderForm({
                         <button
                           type="button"
                           onClick={() => updateQuantity(orderItem.inventory_item_id, -1)}
-                          className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
+                          className="p-2.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-lg bg-white border border-slate-200 hover:bg-slate-100 active:scale-95 transition-all"
                         >
-                          <Minus className="w-4 h-4 text-slate-600" />
+                          <Minus className="w-5 h-5 text-slate-600" />
                         </button>
                         <input
                           type="number"
@@ -409,9 +409,9 @@ export function RestockOrderForm({
                         <button
                           type="button"
                           onClick={() => updateQuantity(orderItem.inventory_item_id, 1)}
-                          className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
+                          className="p-2.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-lg bg-white border border-slate-200 hover:bg-slate-100 active:scale-95 transition-all"
                         >
-                          <Plus className="w-4 h-4 text-slate-600" />
+                          <Plus className="w-5 h-5 text-slate-600" />
                         </button>
                         <span className="text-xs text-slate-500 w-12">{orderItem.unit}</span>
                       </div>
@@ -441,9 +441,9 @@ export function RestockOrderForm({
                       <button
                         type="button"
                         onClick={() => removeItem(orderItem.inventory_item_id)}
-                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                        className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 active:scale-95 transition-all"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
                   ))}
@@ -578,9 +578,9 @@ export function RestockOrderForm({
                     setShowItemSelector(false);
                     setItemSearch('');
                   }}
-                  className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
                 >
-                  <X className="w-4 h-4 text-slate-400" />
+                  <X className="w-5 h-5 text-slate-400" />
                 </button>
               </div>
 

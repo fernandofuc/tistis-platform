@@ -34,10 +34,11 @@ const variantStyles = {
     'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 disabled:bg-green-300',
 };
 
+// Size styles - ensure minimum touch target of 44px on mobile (Apple HIG)
 const sizeStyles = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-6 py-3 text-base',
+  sm: 'px-3 py-2 sm:py-1.5 text-sm min-h-[40px] sm:min-h-0',
+  md: 'px-4 py-2.5 sm:py-2 text-sm min-h-[44px] sm:min-h-0',
+  lg: 'px-6 py-3 text-base min-h-[48px] sm:min-h-0',
 };
 
 // ======================
@@ -63,9 +64,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           'inline-flex items-center justify-center font-medium rounded-lg',
-          'transition-colors duration-200',
+          'transition-all duration-200',
           'focus:outline-none focus:ring-2 focus:ring-offset-2',
           'disabled:cursor-not-allowed',
+          'active:scale-[0.98]',
           variantStyles[variant],
           sizeStyles[size],
           className

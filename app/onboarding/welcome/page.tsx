@@ -234,7 +234,7 @@ function WelcomeContent() {
           </div>
 
           {/* Status steps */}
-          <div className="grid grid-cols-4 gap-2 text-center text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-2 text-center text-sm">
             {['Inicializando', 'Configurando', 'Desplegando', 'Listo'].map((step, index) => {
               const stepProgress = (index + 1) * 25;
               const isComplete = status.progress >= stepProgress || status.ready;

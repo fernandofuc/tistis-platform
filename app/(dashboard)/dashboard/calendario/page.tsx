@@ -255,9 +255,9 @@ export default function CalendarPage() {
         </Button>
       }
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Calendar */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 order-2 lg:order-1">
           <Card variant="bordered">
             <CardHeader>
               <div className="flex items-center justify-between w-full">
@@ -265,18 +265,18 @@ export default function CalendarPage() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={goToPreviousMonth}
-                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 active:scale-95 rounded-lg transition-all"
                     >
                       {icons.chevronLeft}
                     </button>
                     <button
                       onClick={goToNextMonth}
-                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 active:scale-95 rounded-lg transition-all"
                     >
                       {icons.chevronRight}
                     </button>
                   </div>
-                  <h2 className="text-lg font-semibold text-gray-900">
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">
                     {MONTHS[month]} {year}
                   </h2>
                 </div>
@@ -308,9 +308,9 @@ export default function CalendarPage() {
                       key={index}
                       onClick={() => setSelectedDate(day.date)}
                       className={cn(
-                        'aspect-square p-1 rounded-lg relative',
+                        'aspect-square p-1 sm:p-1.5 rounded-lg relative min-h-[40px] sm:min-h-[44px]',
                         'flex flex-col items-center justify-start',
-                        'hover:bg-gray-100 transition-colors',
+                        'hover:bg-gray-100 active:bg-gray-200 active:scale-95 transition-all',
                         !day.isCurrentMonth && 'text-gray-300',
                         isToday(day.date) && 'bg-blue-50',
                         isSelected(day.date) && 'ring-2 ring-blue-500'
@@ -348,7 +348,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Selected Date Details */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 order-1 lg:order-2">
           <Card variant="bordered">
             <CardHeader
               title={selectedDate ? formatDate(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' }) : 'Selecciona un día'}
@@ -386,7 +386,7 @@ export default function CalendarPage() {
                           variants={listItemVariants}
                           onClick={() => handleAppointmentClick(apt)}
                           className={cn(
-                            'w-full p-4 rounded-xl text-left',
+                            'w-full p-3 sm:p-4 rounded-xl text-left min-h-[44px]',
                             'border transition-all duration-200',
                             'hover:shadow-md hover:scale-[1.02] active:scale-[0.98]',
                             'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',

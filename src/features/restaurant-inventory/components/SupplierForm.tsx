@@ -237,7 +237,7 @@ export function SupplierForm({
           </div>
           <button
             onClick={onCancel}
-            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+            className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center hover:bg-slate-100 rounded-xl active:scale-95 transition-all"
             aria-label="Cerrar"
           >
             <X className="w-5 h-5 text-slate-400" />

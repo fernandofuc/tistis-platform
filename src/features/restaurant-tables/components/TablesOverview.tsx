@@ -215,7 +215,7 @@ function QuickActions({ onAddTable, onViewFloorPlan, onBulkEdit }: QuickActionsP
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <button
         onClick={onAddTable}
-        className="flex items-center gap-3 p-4 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-all"
+        className="flex items-center gap-3 p-4 min-h-[72px] rounded-xl bg-slate-900 text-white hover:bg-slate-800 active:scale-95 active:bg-slate-700 transition-all"
       >
         <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,7 +230,7 @@ function QuickActions({ onAddTable, onViewFloorPlan, onBulkEdit }: QuickActionsP
 
       <button
         onClick={onViewFloorPlan}
-        className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all"
+        className="flex items-center gap-3 p-4 min-h-[72px] rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 active:bg-slate-100 transition-all"
       >
         <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,7 +245,7 @@ function QuickActions({ onAddTable, onViewFloorPlan, onBulkEdit }: QuickActionsP
 
       <button
         onClick={onBulkEdit}
-        className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all"
+        className="flex items-center gap-3 p-4 min-h-[72px] rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 active:bg-slate-100 transition-all"
       >
         <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

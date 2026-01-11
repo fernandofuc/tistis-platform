@@ -395,16 +395,16 @@ export default function LeadsPage() {
       }
     >
       {/* Hero Section - Explica qué son los Leads */}
-      <div className="mb-8 p-6 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 rounded-2xl border border-slate-200/60">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20">
+      <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 rounded-2xl border border-slate-200/60">
+        <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+          <div className="p-2.5 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20">
             <span className="text-white">{icons.target}</span>
           </div>
           <div className="flex-1">
-            <h2 className="text-lg font-semibold text-slate-800 mb-1">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-800 mb-1">
               ¿Qué son los Leads?
             </h2>
-            <p className="text-sm text-slate-600 leading-relaxed max-w-2xl">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-2xl">
               Los leads son <span className="font-medium text-slate-700">prospectos interesados</span> que aún no se han convertido en pacientes.
               Aquí puedes dar seguimiento a personas que te contactaron por WhatsApp, teléfono o redes sociales.
               Cuando un lead agenda y asiste a su primera cita, se convierte automáticamente en <span className="font-medium text-blue-600">paciente</span>.
@@ -414,22 +414,22 @@ export default function LeadsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {/* Total Leads */}
         <motion.div
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+          className="bg-white rounded-xl border border-slate-200/60 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow active:bg-slate-50"
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 bg-slate-100 rounded-lg">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2 bg-slate-100 rounded-lg">
               <span className="text-slate-600">{icons.users}</span>
             </div>
             <Badge variant="default" size="sm">Total</Badge>
           </div>
-          <div className="text-2xl font-bold text-slate-800">{counts.all}</div>
-          <p className="text-xs text-slate-500 mt-1">Leads registrados</p>
+          <div className="text-xl sm:text-2xl font-bold text-slate-800">{counts.all}</div>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-1">Leads registrados</p>
         </motion.div>
 
         {/* Hot Leads */}
@@ -437,16 +437,16 @@ export default function LeadsPage() {
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border border-orange-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+          className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border border-orange-200/60 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow active:bg-orange-100/50"
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <span className="text-lg">🔥</span>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2 bg-orange-100 rounded-lg">
+              <span className="text-base sm:text-lg">🔥</span>
             </div>
             <Badge variant="hot" size="sm">Prioridad</Badge>
           </div>
-          <div className="text-2xl font-bold text-orange-700">{counts.hot}</div>
-          <p className="text-xs text-orange-600 mt-1">Muy interesados</p>
+          <div className="text-xl sm:text-2xl font-bold text-orange-700">{counts.hot}</div>
+          <p className="text-[10px] sm:text-xs text-orange-600 mt-1">Muy interesados</p>
         </motion.div>
 
         {/* Warm Leads */}
@@ -454,16 +454,16 @@ export default function LeadsPage() {
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl border border-amber-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+          className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl border border-amber-200/60 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow active:bg-amber-100/50"
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <span className="text-lg">🌡️</span>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2 bg-amber-100 rounded-lg">
+              <span className="text-base sm:text-lg">🌡️</span>
             </div>
             <Badge variant="warm" size="sm">Potencial</Badge>
           </div>
-          <div className="text-2xl font-bold text-amber-700">{counts.warm}</div>
-          <p className="text-xs text-amber-600 mt-1">Con interés moderado</p>
+          <div className="text-xl sm:text-2xl font-bold text-amber-700">{counts.warm}</div>
+          <p className="text-[10px] sm:text-xs text-amber-600 mt-1">Con interés moderado</p>
         </motion.div>
 
         {/* Cold Leads */}
@@ -471,36 +471,36 @@ export default function LeadsPage() {
           variants={cardHoverVariants}
           initial="rest"
           whileHover="hover"
-          className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200/60 p-4 shadow-sm hover:shadow-md transition-shadow"
+          className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200/60 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow active:bg-blue-100/50"
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <span className="text-lg">❄️</span>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+              <span className="text-base sm:text-lg">❄️</span>
             </div>
             <Badge variant="cold" size="sm">Nuevos</Badge>
           </div>
-          <div className="text-2xl font-bold text-blue-700">{counts.cold}</div>
-          <p className="text-xs text-blue-600 mt-1">Por contactar</p>
+          <div className="text-xl sm:text-2xl font-bold text-blue-700">{counts.cold}</div>
+          <p className="text-[10px] sm:text-xs text-blue-600 mt-1">Por contactar</p>
         </motion.div>
       </div>
 
       {/* Tabs - Premium Design */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 -mx-1 px-1">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200',
+              'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap min-h-[44px] active:scale-95',
               activeTab === tab.key
                 ? `${tab.bgColor} ${tab.color} shadow-sm ring-1 ring-slate-200/50`
                 : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
             )}
           >
-            <span className="text-base">{tab.emoji}</span>
-            <span>{tab.label}</span>
+            <span className="text-sm sm:text-base">{tab.emoji}</span>
+            <span className="hidden sm:inline">{tab.label}</span>
             <span className={cn(
-              'ml-1 px-2 py-0.5 rounded-full text-xs font-semibold',
+              'px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold',
               activeTab === tab.key
                 ? 'bg-white/80 text-slate-700'
                 : 'bg-slate-100 text-slate-500'
@@ -512,7 +512,7 @@ export default function LeadsPage() {
       </div>
 
       {/* Search */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <SearchInput
           placeholder="Buscar por nombre, teléfono o email..."
           value={search}
@@ -622,21 +622,21 @@ export default function LeadsPage() {
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => handleCallClick(e, lead)}
-                      className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg active:scale-95 transition-all"
                       title="Llamar"
                     >
                       {icons.phone}
                     </button>
                     <button
                       onClick={(e) => handleMessageClick(e, lead)}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg active:scale-95 transition-all"
                       title="Enviar mensaje"
                     >
                       {icons.message}
                     </button>
                     <button
                       onClick={(e) => handleCalendarClick(e, lead)}
-                      className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg active:scale-95 transition-all"
                       title={`Ver/Agendar ${terminology.appointment.toLowerCase()}`}
                     >
                       {icons.calendar}
@@ -688,7 +688,7 @@ export default function LeadsPage() {
                       setShowDetailPanel(false);
                       setSelectedLead(null);
                     }}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
                   >
                     {icons.close}
                   </button>
@@ -1013,7 +1013,7 @@ export default function LeadsPage() {
                   </div>
                   <button
                     onClick={() => setShowCreatePanel(false)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-xl transition-colors"
+                    className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-xl active:scale-95 transition-all"
                   >
                     {icons.close}
                   </button>
@@ -1138,7 +1138,7 @@ export default function LeadsPage() {
                         value={newLeadForm.source}
                         onChange={(e) => setNewLeadForm(prev => ({ ...prev, source: e.target.value }))}
                         className={cn(
-                          'w-full px-4 py-3 border border-slate-200 rounded-xl text-sm',
+                          'w-full px-4 py-3 min-h-[48px] border border-slate-200 rounded-xl text-sm',
                           'focus:ring-2 focus:ring-purple-500 focus:border-transparent',
                           'transition-all duration-200 appearance-none bg-white',
                           'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
@@ -1158,7 +1158,7 @@ export default function LeadsPage() {
                         value={newLeadForm.status}
                         onChange={(e) => setNewLeadForm(prev => ({ ...prev, status: e.target.value }))}
                         className={cn(
-                          'w-full px-4 py-3 border border-slate-200 rounded-xl text-sm',
+                          'w-full px-4 py-3 min-h-[48px] border border-slate-200 rounded-xl text-sm',
                           'focus:ring-2 focus:ring-purple-500 focus:border-transparent',
                           'transition-all duration-200 appearance-none bg-white',
                           'bg-[url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat'
