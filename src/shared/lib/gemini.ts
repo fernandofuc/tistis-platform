@@ -10,17 +10,21 @@ import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 // ======================
 
 /**
- * Modelos Gemini disponibles (Diciembre 2025)
+ * Modelos Gemini disponibles (Enero 2026)
  *
- * | Modelo                  | Uso Recomendado                       |
- * |-------------------------|---------------------------------------|
- * | gemini-2.0-flash-exp    | Modelo más reciente y estable         |
- * | gemini-1.5-pro          | Fallback estable si 2.0 no funciona   |
+ * | Modelo                  | Uso Recomendado                       | Pricing (per 1M tokens)     |
+ * |-------------------------|---------------------------------------|----------------------------|
+ * | gemini-3-flash-preview  | Generación de prompts, Business IA    | $0.50 input / $3.00 output |
+ * | gemini-2.0-flash-exp    | Fallback si 3.0 no está disponible    | $0.10 input / $0.40 output |
+ * | gemini-1.5-pro          | Fallback legacy                       | $1.25 input / $5.00 output |
  */
 export const GEMINI_MODELS = {
-  // Gemini 2.0 - Modelo experimental más reciente (Diciembre 2025)
+  // Gemini 3.0 Flash - Modelo más reciente y potente (Enero 2026)
+  // Pro-grade reasoning at Flash-level speed, 1M context window
+  GEMINI_3_FLASH: 'gemini-3-flash-preview',
+  // Gemini 2.0 - Fallback estable
   GEMINI_2_FLASH: 'gemini-2.0-flash-exp',
-  // Gemini 1.5 - Modelo estable como fallback
+  // Gemini 1.5 - Modelo legacy como último fallback
   GEMINI_1_5_PRO: 'gemini-1.5-pro',
 } as const;
 
@@ -28,16 +32,17 @@ export type GeminiModelId = typeof GEMINI_MODELS[keyof typeof GEMINI_MODELS];
 
 /**
  * Modelo por defecto para todos los casos de uso
+ * Actualizado a Gemini 3.0 Flash (Enero 2026)
  */
 export const DEFAULT_GEMINI_MODELS = {
-  /** Generación de prompts profesionales */
-  PROMPT_GENERATION: GEMINI_MODELS.GEMINI_2_FLASH,
+  /** Generación de prompts profesionales - Gemini 3.0 Flash */
+  PROMPT_GENERATION: GEMINI_MODELS.GEMINI_3_FLASH,
 
-  /** Análisis de negocios y generación de insights */
-  BUSINESS_INSIGHTS: GEMINI_MODELS.GEMINI_2_FLASH,
+  /** Análisis de negocios y generación de insights - Gemini 3.0 Flash */
+  BUSINESS_INSIGHTS: GEMINI_MODELS.GEMINI_3_FLASH,
 
-  /** Tareas generales */
-  GENERAL: GEMINI_MODELS.GEMINI_2_FLASH,
+  /** Tareas generales - Gemini 3.0 Flash */
+  GENERAL: GEMINI_MODELS.GEMINI_3_FLASH,
 } as const;
 
 // ======================
@@ -68,8 +73,9 @@ export function getGeminiClient(): GoogleGenerativeAI | null {
 
 /**
  * Obtiene un modelo específico de Gemini
+ * Default: Gemini 3.0 Flash (Enero 2026)
  */
-export function getGeminiModel(modelId: GeminiModelId = GEMINI_MODELS.GEMINI_2_FLASH): GenerativeModel | null {
+export function getGeminiModel(modelId: GeminiModelId = GEMINI_MODELS.GEMINI_3_FLASH): GenerativeModel | null {
   const client = getGeminiClient();
 
   if (!client) {
