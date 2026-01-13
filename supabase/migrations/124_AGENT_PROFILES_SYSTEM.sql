@@ -20,6 +20,123 @@
 -- =====================================================
 
 -- =====================================================
+-- 0. PRE-REQUISITO: TABLA ai_agents
+-- Tabla que almacena los agentes de IA por canal
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS ai_agents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    -- Tipo de canal
+    channel_type VARCHAR(50) NOT NULL CHECK (channel_type IN (
+        'whatsapp',
+        'instagram',
+        'facebook',
+        'tiktok',
+        'webchat'
+    )),
+
+    -- Identificador del canal (phone_number_id para WhatsApp, page_id para Meta, etc.)
+    channel_identifier VARCHAR(255),
+
+    -- Número de cuenta (para múltiples cuentas del mismo canal)
+    account_number INTEGER DEFAULT 1 CHECK (account_number IN (1, 2)),
+
+    -- Estado del agente
+    is_active BOOLEAN NOT NULL DEFAULT true,
+
+    -- Configuración específica del canal
+    channel_config JSONB DEFAULT '{}'::jsonb,
+
+    -- Estadísticas
+    messages_processed INTEGER DEFAULT 0,
+    last_message_at TIMESTAMPTZ,
+
+    -- Auditoría
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Un agente por canal+cuenta por tenant
+    UNIQUE(tenant_id, channel_type, account_number)
+);
+
+-- Índices para ai_agents
+CREATE INDEX IF NOT EXISTS idx_ai_agents_tenant ON ai_agents(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ai_agents_channel ON ai_agents(channel_type);
+CREATE INDEX IF NOT EXISTS idx_ai_agents_active ON ai_agents(tenant_id, is_active) WHERE is_active = true;
+
+-- Trigger para updated_at en ai_agents
+CREATE OR REPLACE FUNCTION update_ai_agents_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_ai_agents_updated_at ON ai_agents;
+CREATE TRIGGER trigger_ai_agents_updated_at
+    BEFORE UPDATE ON ai_agents
+    FOR EACH ROW
+    EXECUTE FUNCTION update_ai_agents_updated_at();
+
+-- RLS para ai_agents
+ALTER TABLE ai_agents ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ai_agents_select_policy" ON ai_agents;
+CREATE POLICY "ai_agents_select_policy" ON ai_agents
+    FOR SELECT
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM user_roles
+            WHERE user_id = auth.uid()
+        )
+    );
+
+DROP POLICY IF EXISTS "ai_agents_insert_policy" ON ai_agents;
+CREATE POLICY "ai_agents_insert_policy" ON ai_agents
+    FOR INSERT
+    WITH CHECK (
+        tenant_id IN (
+            SELECT tenant_id FROM user_roles
+            WHERE user_id = auth.uid()
+            AND role IN ('owner', 'admin')
+        )
+    );
+
+DROP POLICY IF EXISTS "ai_agents_update_policy" ON ai_agents;
+CREATE POLICY "ai_agents_update_policy" ON ai_agents
+    FOR UPDATE
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM user_roles
+            WHERE user_id = auth.uid()
+            AND role IN ('owner', 'admin')
+        )
+    );
+
+DROP POLICY IF EXISTS "ai_agents_delete_policy" ON ai_agents;
+CREATE POLICY "ai_agents_delete_policy" ON ai_agents
+    FOR DELETE
+    USING (
+        tenant_id IN (
+            SELECT tenant_id FROM user_roles
+            WHERE user_id = auth.uid()
+            AND role = 'owner'
+        )
+    );
+
+DROP POLICY IF EXISTS "ai_agents_service_role_policy" ON ai_agents;
+CREATE POLICY "ai_agents_service_role_policy" ON ai_agents
+    FOR ALL
+    USING (auth.role() = 'service_role');
+
+COMMENT ON TABLE ai_agents IS
+'Agentes de IA configurados por canal de mensajería. Cada tenant puede tener múltiples agentes
+para diferentes canales (WhatsApp, Instagram, etc.) con hasta 2 cuentas por canal.';
+
+-- =====================================================
 -- 1. TABLA: agent_profiles
 -- Perfiles de agente (business o personal)
 -- =====================================================
