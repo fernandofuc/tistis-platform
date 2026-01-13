@@ -290,7 +290,7 @@ export function ProfileCard({
             <span className="text-sm font-medium">Sin configurar</span>
           </div>
           <p className="text-xs text-amber-600 mt-1">
-            Haz clic en "Configurar Perfil" para seleccionar un tipo de asistente
+            Haz clic en &quot;Configurar Perfil&quot; para seleccionar un tipo de asistente
           </p>
         </div>
       )}
