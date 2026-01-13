@@ -359,7 +359,7 @@ export function ProfileCard({
       )}
 
       {/* Response Delay (for personal profile) */}
-      {!isBusiness && (profile?.response_delay_minutes ?? 0) > 0 && (
+      {!isBusiness && profile && profile.response_delay_minutes > 0 && (
         <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
           {icons.clock}
           <span>

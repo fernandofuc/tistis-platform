@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { AgentProfileService } from '@/src/features/ai/services/agent-profile.service';
+import { invalidatePromptCache } from '@/src/features/ai/services/prompt-generator.service';
 import type { ProfileType } from '@/src/shared/config/agent-templates';
 
 // =====================================================
@@ -148,6 +149,15 @@ export async function PUT(
       profileType as ProfileType,
       body
     );
+
+    // Invalidar cache de prompts para forzar regeneración
+    // cuando se actualiza el perfil (especialmente custom_instructions_override)
+    if (body.custom_instructions_override || body.response_style || body.agent_template) {
+      console.log('[API agent-profiles] Profile updated, invalidating prompt cache');
+      await invalidatePromptCache(auth.tenantId).catch(err => {
+        console.warn('[API agent-profiles] Could not invalidate cache:', err);
+      });
+    }
 
     return NextResponse.json({
       success: true,

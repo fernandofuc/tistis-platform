@@ -14,6 +14,7 @@ export {
   type BusinessContext,
   type AgentTrace,
   type ControlFlags,
+  type AgentProfileInfo,
   createInitialState,
   addAgentTrace,
   shouldEscalate,

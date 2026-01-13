@@ -403,7 +403,7 @@ export async function getProfileForAI(
     profile,
     template_key: profile.agent_template,
     response_style: profile.response_style,
-    custom_instructions: profile.custom_instructions_override,
+    custom_instructions: profile.custom_instructions_override ?? null,
     delay_config: {
       minutes: profile.response_delay_minutes,
       first_only: profile.response_delay_first_only,

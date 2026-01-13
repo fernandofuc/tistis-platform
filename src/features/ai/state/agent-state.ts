@@ -12,6 +12,23 @@ import type { AIIntent, AISignal } from '@/src/shared/types/whatsapp';
 // ======================
 
 /**
+ * Configuración del Agent Profile integrado
+ */
+export interface AgentProfileInfo {
+  profile_id?: string;
+  profile_type: 'business' | 'personal';
+  template_key: string;
+  response_delay_minutes: number;
+  response_delay_first_only: boolean;
+  ai_learning_config: {
+    learn_patterns: boolean;
+    learn_vocabulary: boolean;
+    learn_preferences: boolean;
+    sync_to_business_ia?: boolean;
+  };
+}
+
+/**
  * Información del tenant (negocio)
  */
 export interface TenantInfo {
@@ -35,6 +52,8 @@ export interface TenantInfo {
       days: number[];
     };
   };
+  // Agent Profile System integration (v4.6)
+  agent_profile?: AgentProfileInfo;
 }
 
 /**

@@ -28,6 +28,8 @@ import {
   type CacheChannel,
 } from './prompt-generator.service';
 import { PromptSanitizer } from './prompt-sanitizer.service';
+import { getProfileForAI } from './agent-profile.service';
+import type { ProfileType } from '@/src/shared/config/agent-templates';
 
 // ======================
 // LEARNING INTEGRATION
@@ -90,26 +92,33 @@ async function queueForLearning(
  * OPTIMIZACIÓN: Usa el prompt pre-cacheado de ai_generated_prompts
  * en lugar de reconstruir el system_prompt desde los datos raw.
  * Esto reduce significativamente los tokens por request.
+ *
+ * INTEGRACIÓN Agent Profiles: Aplica configuración del perfil activo
+ * (response_style, custom_instructions_override, etc.)
  */
 async function loadTenantContext(
   tenantId: string,
-  channel: CacheChannel = 'whatsapp'
+  channel: CacheChannel = 'whatsapp',
+  profileType: ProfileType = 'business'
 ): Promise<TenantInfo | null> {
   const supabase = createServerClient();
 
-  // 1. Cargar datos básicos del tenant y AI config
-  const { data, error } = await supabase.rpc('get_tenant_ai_context', {
-    p_tenant_id: tenantId,
-  });
+  // 1. Cargar datos básicos del tenant, AI config y Agent Profile EN PARALELO
+  const [rpcResult, agentProfile, promptResult] = await Promise.all([
+    supabase.rpc('get_tenant_ai_context', { p_tenant_id: tenantId }),
+    getProfileForAI(tenantId, profileType),
+    getOptimizedPrompt(tenantId, channel),
+  ]);
+
+  const { data, error } = rpcResult;
 
   if (error || !data) {
     console.error('[LangGraph AI] Error loading tenant context:', error);
     return null;
   }
 
-  // 2. Obtener prompt optimizado del caché
-  // Este es el prompt pre-generado por Gemini, mucho más conciso y estructurado
-  const { prompt: cachedPrompt, fromCache, version } = await getOptimizedPrompt(tenantId, channel);
+  // 2. Extraer datos del prompt cacheado
+  const { prompt: cachedPrompt, fromCache, version } = promptResult;
 
   if (fromCache) {
     console.log(`[LangGraph AI] Using cached prompt v${version} for channel ${channel}`);
@@ -117,8 +126,26 @@ async function loadTenantContext(
     console.log(`[LangGraph AI] Using freshly generated prompt for channel ${channel}`);
   }
 
-  // 3. Usar el prompt cacheado si existe, sino usar el de ai_config
-  const systemPrompt = cachedPrompt || data.ai_config?.system_prompt || '';
+  // 3. Aplicar configuración del Agent Profile si existe
+  let finalSystemPrompt = cachedPrompt || data.ai_config?.system_prompt || '';
+  let responseStyle = data.ai_config?.response_style || 'professional';
+
+  if (agentProfile) {
+    console.log(`[LangGraph AI] Using Agent Profile: ${agentProfile.profile?.profile_name || profileType}`);
+
+    // Aplicar response_style del perfil
+    responseStyle = agentProfile.response_style || responseStyle;
+
+    // Si el perfil tiene custom_instructions_override, añadirlo al prompt
+    if (agentProfile.custom_instructions) {
+      finalSystemPrompt = `${finalSystemPrompt}\n\n## INSTRUCCIONES ADICIONALES DEL PERFIL\n${agentProfile.custom_instructions}`;
+    }
+
+    // Logging para debugging
+    if (agentProfile.delay_config.minutes > 0) {
+      console.log(`[LangGraph AI] Profile has response delay: ${agentProfile.delay_config.minutes}min`);
+    }
+  }
 
   // Mapear al formato del estado
   return {
@@ -127,10 +154,10 @@ async function loadTenantContext(
     vertical: data.vertical || 'general',
     timezone: data.timezone || 'America/Mexico_City',
     ai_config: {
-      system_prompt: systemPrompt,
+      system_prompt: finalSystemPrompt,
       model: data.ai_config?.model || 'gpt-5-mini',
       temperature: data.ai_config?.temperature || 0.7,
-      response_style: data.ai_config?.response_style || 'professional',
+      response_style: responseStyle,
       max_response_length: data.ai_config?.max_response_length || 300,
       enable_scoring: data.ai_config?.enable_scoring ?? true,
       auto_escalate_keywords: data.ai_config?.auto_escalate_keywords || [],
@@ -140,6 +167,15 @@ async function loadTenantContext(
         days: [1, 2, 3, 4, 5],
       },
     },
+    // Añadir datos del Agent Profile para uso posterior
+    agent_profile: agentProfile ? {
+      profile_id: agentProfile.profile?.id,
+      profile_type: profileType,
+      template_key: agentProfile.template_key,
+      response_delay_minutes: agentProfile.delay_config.minutes,
+      response_delay_first_only: agentProfile.delay_config.first_only,
+      ai_learning_config: agentProfile.learning_config,
+    } : undefined,
   };
 }
 

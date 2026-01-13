@@ -55,7 +55,7 @@ const icons = {
 // ======================
 
 export default function AIAgentsPage() {
-  const { tenant, loading: tenantLoading } = useTenant();
+  const { tenant, isLoading: tenantLoading } = useTenant();
   const { vertical } = useVerticalTerminology();
   const {
     business,
@@ -174,7 +174,7 @@ export default function AIAgentsPage() {
   return (
     <PageWrapper
       title="Mis Agentes de IA"
-      description="Configura cómo tu negocio responde automáticamente a clientes"
+      subtitle="Configura cómo tu negocio responde automáticamente a clientes"
     >
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header Section */}
