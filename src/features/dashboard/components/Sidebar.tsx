@@ -1,11 +1,11 @@
 // =====================================================
 // TIS TIS PLATFORM - Dashboard Sidebar Component
-// With Feature Flags and Multi-tenant Support
+// With Feature Flags, Multi-tenant Support & Expandable Submenus
 // =====================================================
 
 'use client';
 
-import { useMemo, useTransition, useCallback, useEffect } from 'react';
+import { useMemo, useTransition, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -120,6 +120,29 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
     </svg>
   ),
+  // Submenu icons
+  chevronDown: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  ),
+  chevronRight: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  ),
+  // Agente Mensajes icon
+  agenteMensajes: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  ),
+  // Configuración de agentes icon
+  agenteConfig: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+    </svg>
+  ),
 };
 
 // ======================
@@ -132,6 +155,8 @@ interface NavItemWithFlag extends NavItem {
   section?: string; // Section grouping for visual organization
   verticals?: string[]; // Only show for these verticals (empty = all)
   excludeVerticals?: string[]; // Hide for these verticals
+  children?: NavItemWithFlag[]; // Submenu items
+  isExpandable?: boolean; // If true, clicking expands submenu instead of navigating
 }
 
 // ======================
@@ -251,6 +276,27 @@ const navItemsConfig: NavItemWithFlag[] = [
     icon: icons.aiAgents,
     alwaysShow: true,
     section: NAV_SECTIONS.AI_PREMIUM,
+    isExpandable: true,
+    children: [
+      {
+        name: 'Agente Mensajes',
+        href: '/dashboard/ai-agents/mensajes',
+        icon: icons.agenteMensajes,
+        alwaysShow: true,
+      },
+      {
+        name: 'Agente Voz',
+        href: '/dashboard/ai-agents/voz',
+        icon: icons.voiceAgent,
+        alwaysShow: true,
+      },
+      {
+        name: 'Configuración',
+        href: '/dashboard/ai-agents/configuracion',
+        icon: icons.agenteConfig,
+        alwaysShow: true,
+      },
+    ],
   },
   {
     name: 'Business IA',
@@ -267,13 +313,7 @@ const navItemsConfig: NavItemWithFlag[] = [
     section: NAV_SECTIONS.AI_PREMIUM,
     verticals: ['restaurant'], // Solo para restaurantes
   },
-  {
-    name: 'AI Agent Voz',
-    href: '/dashboard/ai-agent-voz',
-    icon: icons.voiceAgent,
-    alwaysShow: true,
-    section: NAV_SECTIONS.AI_PREMIUM,
-  },
+  // AI Agent Voz ahora está dentro de Mis Agentes como "Agente Voz"
   // === SYSTEM ===
   {
     name: 'Lealtad',
@@ -330,6 +370,43 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   const { tenant, isLoading: tenantLoading } = useTenant();
   const { flagsLoading, isEnabled } = useFeatureFlags();
   const { unseenCount: businessInsightsCount } = useBusinessInsights();
+
+  // State for expanded submenus
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(() => {
+    // Auto-expand "Mis Agentes" if user is on any of its child routes
+    const initialExpanded = new Set<string>();
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/dashboard/ai-agents')) {
+        initialExpanded.add('/dashboard/ai-agents');
+      }
+    }
+    return initialExpanded;
+  });
+
+  // Auto-expand parent menu when navigating to child route
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/ai-agents')) {
+      setExpandedMenus(prev => {
+        const newSet = new Set(prev);
+        newSet.add('/dashboard/ai-agents');
+        return newSet;
+      });
+    }
+  }, [pathname]);
+
+  // Toggle submenu expansion
+  const toggleSubmenu = useCallback((href: string) => {
+    setExpandedMenus(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(href)) {
+        newSet.delete(href);
+      } else {
+        newSet.add(href);
+      }
+      return newSet;
+    });
+  }, []);
 
   // Use props if explicitly provided, otherwise use store state
   const collapsed = isCollapsed !== undefined ? isCollapsed : sidebarCollapsed;
@@ -502,8 +579,86 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
               <div className="space-y-1">
                 {sectionItems.map((item) => {
                   const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const isChildActive = item.children?.some(child =>
+                    pathname === child.href || pathname.startsWith(`${child.href}/`)
+                  );
                   const displayName = getDisplayName(item);
+                  const isExpanded = expandedMenus.has(item.href);
 
+                  // Expandable item with children (like "Mis Agentes")
+                  if (item.isExpandable && item.children && item.children.length > 0) {
+                    return (
+                      <div key={item.href}>
+                        {/* Parent item - clickable to expand/collapse */}
+                        <button
+                          onClick={() => toggleSubmenu(item.href)}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full text-left',
+                            (isActive || isChildActive)
+                              ? 'bg-tis-coral/10 text-tis-coral font-medium'
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                            collapsed && 'justify-center px-2'
+                          )}
+                          title={collapsed ? displayName : undefined}
+                        >
+                          <span className={cn(
+                            'flex-shrink-0 transition-colors',
+                            (isActive || isChildActive) ? 'text-tis-coral' : 'text-slate-400'
+                          )}>
+                            {item.icon}
+                          </span>
+                          {!collapsed && (
+                            <>
+                              <span className="text-sm flex-1">{displayName}</span>
+                              <span className={cn(
+                                'transition-transform duration-200',
+                                isExpanded ? 'rotate-0' : '-rotate-90'
+                              )}>
+                                {icons.chevronDown}
+                              </span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Children items - show when expanded and not collapsed */}
+                        {!collapsed && isExpanded && (
+                          <div className="mt-1 ml-4 pl-3 border-l-2 border-slate-200/60 space-y-1">
+                            {item.children.map((child) => {
+                              const isChildItemActive = pathname === child.href || pathname.startsWith(`${child.href}/`);
+                              const childDisplayName = getDisplayName(child);
+
+                              return (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  prefetch={true}
+                                  onClick={(e) => handleNavigation(child.href, e)}
+                                  onMouseEnter={() => handlePrefetch(child.href)}
+                                  className={cn(
+                                    'flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
+                                    isChildItemActive
+                                      ? 'bg-tis-coral/10 text-tis-coral font-medium'
+                                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700',
+                                    isPending && 'opacity-70 pointer-events-none'
+                                  )}
+                                >
+                                  <span className={cn(
+                                    'flex-shrink-0 transition-colors w-4 h-4',
+                                    isChildItemActive ? 'text-tis-coral' : 'text-slate-400'
+                                  )}>
+                                    {child.icon}
+                                  </span>
+                                  <span className="text-sm">{childDisplayName}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Regular nav item (no children)
                   return (
                     <Link
                       key={item.href}

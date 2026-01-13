@@ -10,7 +10,6 @@ import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import {
   ChannelConnections,
-  AIConfiguration,
   SecuritySection,
   PaymentsSection,
   BillingSection,
@@ -18,6 +17,7 @@ import {
   updateNotificationPreferences,
   type NotificationPreferences,
 } from '@/src/features/settings';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { IntegrationHub } from '@/src/features/integrations';
 import { cn } from '@/src/shared/utils';
 
@@ -85,12 +85,12 @@ const icons = {
 // ======================
 // TABS
 // ======================
-type SettingsTab = 'profile' | 'notifications' | 'channels' | 'ai' | 'payments' | 'billing' | 'integrations' | 'security';
+// NOTA: El tab 'ai' fue migrado a /dashboard/ai-agents/configuracion
+type SettingsTab = 'profile' | 'notifications' | 'channels' | 'payments' | 'billing' | 'integrations' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
   { key: 'channels', label: 'Canales', icon: icons.channels },
-  { key: 'ai', label: 'AI Agent', icon: icons.ai },
   { key: 'payments', label: 'Pagos', icon: icons.payments },
   { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
   { key: 'billing', label: 'Facturación', icon: icons.billing },
@@ -117,10 +117,20 @@ const roleLabels: Record<string, string> = {
 // ======================
 export default function SettingsPage() {
   const { staff, user, updateStaff } = useAuthContext();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Redirect legacy ?tab=ai-agent to new location
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'ai-agent' || tab === 'ai') {
+      router.replace('/dashboard/ai-agents/configuracion');
+    }
+  }, [searchParams, router]);
 
   // Profile form state - controlled inputs
   const [profileForm, setProfileForm] = useState<ProfileFormData>({
@@ -419,8 +429,8 @@ export default function SettingsPage() {
           {/* Channels Tab */}
           {activeTab === 'channels' && <ChannelConnections />}
 
-          {/* AI Agent Tab */}
-          {activeTab === 'ai' && <AIConfiguration />}
+          {/* AI Agent Tab - Migrado a /dashboard/ai-agents/configuracion */}
+          {/* El contenido de configuración de IA ahora está en Mis Agentes > Configuración */}
 
           {/* Notifications Tab */}
           {activeTab === 'notifications' && (
