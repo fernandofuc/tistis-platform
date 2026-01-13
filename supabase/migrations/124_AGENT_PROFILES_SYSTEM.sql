@@ -302,6 +302,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_templates_active ON agent_templates(is_acti
 ALTER TABLE agent_profiles ENABLE ROW LEVEL SECURITY;
 
 -- SELECT: Usuarios pueden ver perfiles de sus tenants
+DROP POLICY IF EXISTS "agent_profiles_select_policy" ON agent_profiles;
 CREATE POLICY "agent_profiles_select_policy" ON agent_profiles
     FOR SELECT
     USING (
@@ -312,6 +313,7 @@ CREATE POLICY "agent_profiles_select_policy" ON agent_profiles
     );
 
 -- INSERT: Solo owners/admins pueden crear perfiles
+DROP POLICY IF EXISTS "agent_profiles_insert_policy" ON agent_profiles;
 CREATE POLICY "agent_profiles_insert_policy" ON agent_profiles
     FOR INSERT
     WITH CHECK (
@@ -323,6 +325,7 @@ CREATE POLICY "agent_profiles_insert_policy" ON agent_profiles
     );
 
 -- UPDATE: Solo owners/admins pueden actualizar
+DROP POLICY IF EXISTS "agent_profiles_update_policy" ON agent_profiles;
 CREATE POLICY "agent_profiles_update_policy" ON agent_profiles
     FOR UPDATE
     USING (
@@ -334,6 +337,7 @@ CREATE POLICY "agent_profiles_update_policy" ON agent_profiles
     );
 
 -- DELETE: Solo owners pueden eliminar
+DROP POLICY IF EXISTS "agent_profiles_delete_policy" ON agent_profiles;
 CREATE POLICY "agent_profiles_delete_policy" ON agent_profiles
     FOR DELETE
     USING (
@@ -345,6 +349,7 @@ CREATE POLICY "agent_profiles_delete_policy" ON agent_profiles
     );
 
 -- Service role bypass
+DROP POLICY IF EXISTS "agent_profiles_service_role_policy" ON agent_profiles;
 CREATE POLICY "agent_profiles_service_role_policy" ON agent_profiles
     FOR ALL
     USING (auth.role() = 'service_role');
@@ -356,11 +361,13 @@ CREATE POLICY "agent_profiles_service_role_policy" ON agent_profiles
 ALTER TABLE agent_templates ENABLE ROW LEVEL SECURITY;
 
 -- Templates son de solo lectura para usuarios autenticados
+DROP POLICY IF EXISTS "agent_templates_select_policy" ON agent_templates;
 CREATE POLICY "agent_templates_select_policy" ON agent_templates
     FOR SELECT
     USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
 
 -- Solo service_role puede modificar templates
+DROP POLICY IF EXISTS "agent_templates_service_role_policy" ON agent_templates;
 CREATE POLICY "agent_templates_service_role_policy" ON agent_templates
     FOR ALL
     USING (auth.role() = 'service_role');
@@ -381,8 +388,7 @@ BEGIN
         agent_template,
         response_style,
         ai_learning_enabled,
-        is_active,
-        created_by
+        is_active
     ) VALUES (
         NEW.id,
         'business',
@@ -390,8 +396,7 @@ BEGIN
         'full_service',
         'professional_friendly',
         true,
-        true,
-        NEW.owner_id
+        true
     )
     ON CONFLICT (tenant_id, profile_type) DO NOTHING;
 
@@ -472,7 +477,7 @@ DECLARE
 BEGIN
     -- Para cada tenant que tenga ai_agents pero no tenga profile
     FOR tenant_record IN
-        SELECT DISTINCT t.id as tenant_id, t.name, t.owner_id
+        SELECT DISTINCT t.id as tenant_id, t.name
         FROM tenants t
         JOIN ai_agents aa ON aa.tenant_id = t.id
         WHERE NOT EXISTS (
