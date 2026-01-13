@@ -21,6 +21,19 @@ import type { ProfileType, VerticalType, ResponseStyle } from '@/src/shared/conf
 import { getDefaultTemplate } from '@/src/shared/config/agent-templates';
 
 // =====================================================
+// LOCAL TYPES
+// =====================================================
+
+interface AIAgentRow {
+  id: string;
+  channel_type: string;
+  channel_identifier: string;
+  is_active: boolean;
+  account_number: number | null;
+  profile_id: string | null;
+}
+
+// =====================================================
 // SUPABASE CLIENT
 // =====================================================
 
@@ -41,6 +54,8 @@ function createServerClient() {
 
 /**
  * Obtiene todos los perfiles de un tenant
+ * RESILIENTE: Funciona incluso si la tabla agent_profiles no existe
+ * En ese caso, construye un perfil virtual basado en ai_agents y voice_agent_config
  */
 export async function getAgentProfiles(tenantId: string): Promise<{
   business: AgentProfileWithChannels | null;
@@ -48,19 +63,32 @@ export async function getAgentProfiles(tenantId: string): Promise<{
 }> {
   const supabase = createServerClient();
 
-  // Ejecutar todas las queries en paralelo para mejor performance
-  const [profilesResult, aiAgentsResult, voiceConfigResult, voicePhoneResult] = await Promise.all([
-    supabase
+  // Ejecutar queries en paralelo - agent_profiles puede no existir
+  // Primero intentamos cargar agent_profiles, si falla asumimos que no existe
+  let profilesData: AgentProfile[] = [];
+  try {
+    const profilesResult = await supabase
       .from('agent_profiles')
       .select('*')
-      .eq('tenant_id', tenantId),
+      .eq('tenant_id', tenantId);
+
+    if (!profilesResult.error) {
+      profilesData = profilesResult.data || [];
+    }
+  } catch {
+    // Tabla no existe, continuar con perfil virtual
+    console.log('[AgentProfile] agent_profiles table not found, using virtual profile');
+  }
+
+  // Cargar el resto en paralelo
+  const [aiAgentsResult, voiceConfigResult, voicePhoneResult, tenantResult] = await Promise.all([
     supabase
       .from('ai_agents')
       .select('id, channel_type, channel_identifier, is_active, account_number, profile_id')
       .eq('tenant_id', tenantId),
     supabase
       .from('voice_agent_config')
-      .select('voice_enabled, assistant_name, selected_voice_id, profile_id')
+      .select('voice_enabled, assistant_name, selected_voice_id, profile_id, is_active')
       .eq('tenant_id', tenantId)
       .single(),
     supabase
@@ -69,21 +97,49 @@ export async function getAgentProfiles(tenantId: string): Promise<{
       .eq('tenant_id', tenantId)
       .eq('status', 'active')
       .single(),
+    supabase
+      .from('tenants')
+      .select('name, vertical')
+      .eq('id', tenantId)
+      .single(),
   ]);
 
-  if (profilesResult.error) {
-    console.error('[AgentProfile] Error fetching profiles:', profilesResult.error);
-    throw new Error('Error al obtener perfiles');
-  }
-
-  const profiles = profilesResult.data;
-  const aiAgents = aiAgentsResult.data;
+  const aiAgents: AIAgentRow[] = (aiAgentsResult.data || []) as AIAgentRow[];
   const voiceConfig = voiceConfigResult.data;
   const voicePhone = voicePhoneResult.data;
+  const tenant = tenantResult.data;
 
-  // Mapear perfiles con canales
-  const businessProfile = profiles?.find(p => p.profile_type === 'business') || null;
-  const personalProfile = profiles?.find(p => p.profile_type === 'personal') || null;
+  // Buscar perfiles existentes
+  let businessProfile = profilesData.find(p => p.profile_type === 'business') || null;
+  let personalProfile = profilesData.find(p => p.profile_type === 'personal') || null;
+
+  // Si no hay perfil business pero hay ai_agents o voice_config, crear perfil virtual
+  if (!businessProfile && (aiAgents.length > 0 || voiceConfig)) {
+    businessProfile = {
+      id: 'virtual-business',
+      tenant_id: tenantId,
+      profile_type: 'business' as ProfileType,
+      profile_name: tenant?.name ? `${tenant.name}` : 'Perfil de Negocio',
+      profile_description: 'Perfil principal del negocio',
+      agent_template: tenant?.vertical === 'dental' ? 'dental_full' :
+                      tenant?.vertical === 'restaurant' ? 'resto_full' : 'general_full',
+      response_style: 'professional_friendly' as ResponseStyle,
+      response_delay_minutes: 0,
+      response_delay_first_only: true,
+      custom_instructions_override: undefined,
+      ai_learning_enabled: true,
+      ai_learning_config: {
+        learn_patterns: true,
+        learn_vocabulary: false,
+        learn_preferences: true,
+        sync_to_business_ia: true,
+      },
+      settings: {},
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
 
   const mapProfileWithChannels = (profile: AgentProfile | null, type: ProfileType): AgentProfileWithChannels | null => {
     if (!profile) return null;
@@ -125,26 +181,37 @@ export async function getAgentProfiles(tenantId: string): Promise<{
 
 /**
  * Obtiene un perfil específico por tipo
+ * RESILIENTE: Usa getAgentProfiles que maneja tabla no existente
  */
 export async function getAgentProfile(
   tenantId: string,
   profileType: ProfileType
 ): Promise<AgentProfile | null> {
-  const supabase = createServerClient();
-
-  const { data, error } = await supabase
-    .from('agent_profiles')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('profile_type', profileType)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
+  try {
+    const profiles = await getAgentProfiles(tenantId);
+    const profile = profileType === 'business' ? profiles.business : profiles.personal;
+    return profile ? {
+      id: profile.id,
+      tenant_id: profile.tenant_id,
+      profile_type: profile.profile_type,
+      profile_name: profile.profile_name,
+      profile_description: profile.profile_description,
+      agent_template: profile.agent_template,
+      response_style: profile.response_style,
+      response_delay_minutes: profile.response_delay_minutes,
+      response_delay_first_only: profile.response_delay_first_only,
+      custom_instructions_override: profile.custom_instructions_override,
+      ai_learning_enabled: profile.ai_learning_enabled,
+      ai_learning_config: profile.ai_learning_config,
+      settings: profile.settings,
+      is_active: profile.is_active,
+      created_at: profile.created_at,
+      updated_at: profile.updated_at,
+    } : null;
+  } catch (error) {
     console.error('[AgentProfile] Error fetching profile:', error);
-    throw new Error('Error al obtener perfil');
+    return null;
   }
-
-  return data;
 }
 
 // =====================================================

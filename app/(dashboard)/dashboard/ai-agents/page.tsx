@@ -14,6 +14,7 @@ import { ProfileCard, ProfileConfigModal } from '@/src/features/ai-agents';
 import { useAgentProfiles } from '@/src/hooks/useAgentProfiles';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
+import { cn } from '@/src/shared/utils';
 import type { ProfileType, VerticalType } from '@/src/shared/config/agent-templates';
 import type { AgentProfileInput } from '@/src/shared/types/agent-profiles';
 import { getDefaultTemplate } from '@/src/shared/config/agent-templates';
@@ -230,7 +231,11 @@ export default function AIAgentsPage() {
         )}
 
         {/* Profiles Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={cn(
+          "grid gap-6",
+          // Solo mostrar 2 columnas si hay perfil personal disponible
+          vertical === 'dental' ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1 max-w-2xl mx-auto"
+        )}>
           {/* Business Profile */}
           <ProfileCard
             profile={business}
@@ -241,19 +246,21 @@ export default function AIAgentsPage() {
             onConfigure={() => handleConfigure('business')}
           />
 
-          {/* Personal Profile */}
-          <ProfileCard
-            profile={personal}
-            profileType="personal"
-            vertical={vertical}
-            tenantName={tenant?.name}
-            isLoading={isLoading}
-            isActivating={creatingPersonal}
-            isTogglingActive={isTogglingPersonal}
-            onConfigure={() => handleConfigure('personal')}
-            onActivate={handleActivatePersonal}
-            onToggleActive={personal ? handleTogglePersonal : undefined}
-          />
+          {/* Personal Profile - Solo para vertical dental */}
+          {vertical === 'dental' && (
+            <ProfileCard
+              profile={personal}
+              profileType="personal"
+              vertical={vertical}
+              tenantName={tenant?.name}
+              isLoading={isLoading}
+              isActivating={creatingPersonal}
+              isTogglingActive={isTogglingPersonal}
+              onConfigure={() => handleConfigure('personal')}
+              onActivate={handleActivatePersonal}
+              onToggleActive={personal ? handleTogglePersonal : undefined}
+            />
+          )}
         </div>
 
         {/* Knowledge Base Quick Access */}
@@ -292,22 +299,31 @@ export default function AIAgentsPage() {
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                   <span>
-                    <strong>Perfil de Negocio:</strong> Ideal para las cuentas oficiales de tu clínica/restaurante.
-                    Incluye voz para llamadas.
+                    <strong>Perfil de Negocio:</strong> Para las cuentas oficiales de tu {vertical === 'restaurant' ? 'restaurante' : 'clínica'}.
+                    Incluye mensajería y agente de voz para llamadas.
+                  </span>
+                </li>
+                {vertical === 'dental' && (
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                    <span>
+                      <strong>Perfil Personal:</strong> Para redes sociales del doctor. Tiene delay de respuesta
+                      para parecer más humano y no mezclar consultas médicas.
+                    </span>
+                  </li>
+                )}
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                  <span>
+                    <strong>Base de Conocimiento:</strong> Define servicios, precios, horarios y políticas.
+                    El asistente usará esta información para responder.
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                   <span>
-                    <strong>Perfil Personal:</strong> Para redes sociales del doctor/dueño. Tiene delay de respuesta
-                    para parecer más humano.
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
-                  <span>
-                    <strong>Base de Conocimiento:</strong> Se comparte entre ambos perfiles. Configúrala bien
-                    para mejores respuestas.
+                    <strong>Agente de Voz:</strong> Configúralo en Business IA para recibir y hacer llamadas
+                    automatizadas con tu asistente.
                   </span>
                 </li>
               </ul>
