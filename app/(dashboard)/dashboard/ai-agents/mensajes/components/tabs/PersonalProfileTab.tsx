@@ -61,6 +61,27 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
     </svg>
   ),
+  // Iconos para tipos de asistente personal
+  assistantFull: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  ),
+  redirectOnly: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    </svg>
+  ),
+  check: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    </svg>
+  ),
+  x: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  ),
 };
 
 // ======================
@@ -71,6 +92,47 @@ const PERSONAL_DELAY_OPTIONS = [
   { value: 5, label: '5 minutos', description: 'Delay natural' },
   { value: 8, label: '8 minutos', description: 'Más humano', recommended: true },
   { value: 15, label: '15 minutos', description: 'Muy ocupado' },
+];
+
+// ======================
+// PERSONAL ASSISTANT TYPES
+// ======================
+interface PersonalAssistantType {
+  key: string;
+  name: string;
+  description: string;
+  capabilities: { text: string; enabled: boolean }[];
+  recommended?: boolean;
+  icon: 'assistantFull' | 'redirectOnly';
+}
+
+const PERSONAL_ASSISTANT_TYPES: PersonalAssistantType[] = [
+  {
+    key: 'personal_full',
+    name: 'Asistente Personal',
+    description: 'Responde consultas educativas, comparte tips y deriva servicios al negocio',
+    capabilities: [
+      { text: 'Tips educativos', enabled: true },
+      { text: 'Engagement', enabled: true },
+      { text: 'Citas', enabled: false },
+      { text: 'Precios', enabled: false },
+    ],
+    recommended: true,
+    icon: 'assistantFull',
+  },
+  {
+    key: 'personal_redirect',
+    name: 'Solo Derivación',
+    description: 'Solo redirige al negocio, no responde consultas educativas',
+    capabilities: [
+      { text: 'Tips educativos', enabled: false },
+      { text: 'Engagement', enabled: false },
+      { text: 'Citas', enabled: false },
+      { text: 'Precios', enabled: false },
+    ],
+    recommended: false,
+    icon: 'redirectOnly',
+  },
 ];
 
 // ======================
@@ -102,9 +164,24 @@ export function PersonalProfileTab({
   isActivating,
   isTogglingActive,
 }: PersonalProfileTabProps) {
+  // Helper: Map template key to assistant type
+  const getAssistantTypeFromTemplate = useCallback((template: string): string => {
+    if (template.includes('redirect')) return 'personal_redirect';
+    return 'personal_full';
+  }, []);
+
+  // Helper: Get template key for vertical and type
+  const getTemplateKeyForType = useCallback((type: string): string => {
+    const prefix = vertical === 'dental' ? 'dental' : vertical === 'restaurant' ? 'resto' : 'general';
+    return type === 'personal_redirect' ? `${prefix}_personal_redirect` : `${prefix}_personal_full`;
+  }, [vertical]);
+
   // Form state
   const [profileName, setProfileName] = useState(profile?.profile_name || '');
   const [selectedTemplate, setSelectedTemplate] = useState(profile?.agent_template || '');
+  const [assistantType, setAssistantType] = useState<string>(
+    profile?.agent_template ? getAssistantTypeFromTemplate(profile.agent_template) : 'personal_full'
+  );
   const [responseStyle, setResponseStyle] = useState<ResponseStyle>(profile?.response_style || 'professional_friendly');
   const [responseDelay, setResponseDelay] = useState(profile?.response_delay_minutes || 8);
   const [delayFirstOnly, setDelayFirstOnly] = useState(profile?.response_delay_first_only ?? true);
@@ -132,6 +209,7 @@ export function PersonalProfileTab({
     if (profile) {
       setProfileName(profile.profile_name || '');
       setSelectedTemplate(profile.agent_template || '');
+      setAssistantType(getAssistantTypeFromTemplate(profile.agent_template || ''));
       setResponseStyle(profile.response_style || 'professional_friendly');
       setResponseDelay(profile.response_delay_minutes || 8);
       setDelayFirstOnly(profile.response_delay_first_only ?? true);
@@ -139,7 +217,7 @@ export function PersonalProfileTab({
       setCustomInstructions(profile.custom_instructions_override || '');
       setHasChanges(false);
     }
-  }, [profile]);
+  }, [profile, getAssistantTypeFromTemplate]);
 
   // Set default template if none selected and templates are available
   useEffect(() => {
@@ -155,15 +233,27 @@ export function PersonalProfileTab({
     setSaveError(null);
   }, []);
 
+  // Handle assistant type change
+  const handleAssistantTypeChange = useCallback((type: string) => {
+    setAssistantType(type);
+    // Update template based on type and vertical
+    const newTemplate = getTemplateKeyForType(type);
+    setSelectedTemplate(newTemplate);
+    markChange();
+  }, [getTemplateKeyForType, markChange]);
+
   // Handle save
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
 
+    // Get the correct template based on selected type
+    const templateToSave = getTemplateKeyForType(assistantType);
+
     const data: AgentProfileInput = {
       profile_name: profileName || 'Perfil Personal',
-      agent_template: selectedTemplate,
+      agent_template: templateToSave,
       response_style: responseStyle,
       response_delay_minutes: responseDelay,
       response_delay_first_only: delayFirstOnly,
@@ -185,7 +275,7 @@ export function PersonalProfileTab({
     } finally {
       setIsSaving(false);
     }
-  }, [profileName, selectedTemplate, responseStyle, responseDelay, delayFirstOnly, aiLearningEnabled, customInstructions, onSave]);
+  }, [profileName, assistantType, getTemplateKeyForType, responseStyle, responseDelay, delayFirstOnly, aiLearningEnabled, customInstructions, onSave]);
 
   // Handle toggle active
   const handleToggle = useCallback(async () => {
@@ -288,7 +378,11 @@ export function PersonalProfileTab({
             </div>
             <div>
               <h2 className="text-xl font-bold">Perfil Personal</h2>
-              <p className="text-white/80 text-sm">Marca personal del doctor</p>
+              <p className="text-white/80 text-sm">
+                {vertical === 'dental' ? 'Marca personal del doctor' :
+                 vertical === 'restaurant' ? 'Marca personal del chef' :
+                 'Marca personal del profesional'}
+              </p>
             </div>
           </div>
 
@@ -317,6 +411,79 @@ export function PersonalProfileTab({
               </div>
             </label>
           </div>
+        </div>
+      </div>
+
+      {/* Assistant Type Selection */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <label className="block text-sm font-medium text-slate-700 mb-3">
+          Tipo de asistente
+        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {PERSONAL_ASSISTANT_TYPES.map((type) => (
+            <button
+              key={type.key}
+              onClick={() => handleAssistantTypeChange(type.key)}
+              className={cn(
+                'relative p-4 rounded-xl border-2 text-left transition-all',
+                assistantType === type.key
+                  ? 'border-orange-500 bg-orange-50'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              )}
+            >
+              {/* Recommended badge */}
+              {type.recommended && (
+                <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-orange-500 text-white text-xs font-medium rounded-full">
+                  Recomendado
+                </span>
+              )}
+
+              <div className="flex items-start gap-3">
+                {/* Icon */}
+                <div className={cn(
+                  'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
+                  assistantType === type.key
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                )}>
+                  {icons[type.icon]}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900">{type.name}</div>
+                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{type.description}</p>
+
+                  {/* Capabilities */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {type.capabilities.map((cap, idx) => (
+                      <span
+                        key={idx}
+                        className={cn(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs',
+                          cap.enabled
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-400'
+                        )}
+                      >
+                        {cap.enabled ? icons.check : icons.x}
+                        {cap.text}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Selected indicator */}
+              {assistantType === type.key && (
+                <div className="absolute top-4 right-4">
+                  <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-white">
+                    {icons.check}
+                  </div>
+                </div>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 

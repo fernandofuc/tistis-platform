@@ -839,8 +839,10 @@ function buildCompiledInstructionsSection(
   // Descripción del tipo de asistente
   const typeDescription = assistantType === 'appointments_only'
     ? 'Este asistente está configurado para SOLO AGENDAR CITAS. Redirige todas las demás consultas hacia la cita.'
-    : assistantType === 'personal_brand'
-    ? 'Este asistente es para MARCA PERSONAL. Redirige consultas de servicios a la clínica/negocio oficial.'
+    : assistantType === 'personal_redirect'
+    ? 'Este asistente es para PERFIL PERSONAL - SOLO DERIVACIÓN. NO responde consultas, SOLO redirige al negocio oficial.'
+    : assistantType === 'personal_full' || assistantType === 'personal_brand'
+    ? 'Este asistente es para PERFIL PERSONAL. Responde preguntas educativas, comparte tips y redirige servicios/citas/precios al negocio oficial.'
     : 'Este asistente tiene CAPACIDADES COMPLETAS: puede agendar citas, dar precios, responder FAQs y más.';
 
   // Descripción de la vertical

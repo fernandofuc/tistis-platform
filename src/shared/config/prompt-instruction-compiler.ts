@@ -7,7 +7,7 @@
 // y tipo de asistente en un texto de instrucciones unificado
 // para incluir en el meta-prompt del agente.
 //
-// PRE-COMPILA las 24 combinaciones (4 estilos × 3 tipos × 2 canales)
+// PRE-COMPILA las 32 combinaciones (4 estilos × 4 tipos × 2 canales)
 // para acceso rápido en runtime.
 // =====================================================
 
@@ -28,6 +28,7 @@ import {
   ASSISTANT_TYPE_INSTRUCTIONS,
   getTypeInstructions,
   isValidType,
+  isPersonalType,
   mapTemplateKeyToType,
 } from './assistant-type-instructions';
 
@@ -236,7 +237,8 @@ function buildSituationsSection(
   lines.push(formatCategory(style.situations.askingForInfo));
 
   // Comportamiento de ventas del tipo (si aplica)
-  if (type.key !== 'personal_brand') {
+  // Los tipos personales no tienen comportamiento de ventas
+  if (!isPersonalType(type.key)) {
     lines.push('');
     lines.push('## COMPORTAMIENTO DE VENTAS');
     lines.push('');
@@ -423,13 +425,14 @@ function getCacheKey(
 }
 
 /**
- * Pre-compila todas las 24 combinaciones
+ * Pre-compila todas las 32 combinaciones (4 estilos × 4 tipos × 2 canales)
  */
 export function precompileAllCombinations(): CompiledInstructionsCache {
   const cache: CompiledInstructionsCache = new Map();
 
   const styles: ResponseStyleKey[] = ['professional', 'professional_friendly', 'casual', 'formal'];
-  const types: AssistantTypeKey[] = ['full', 'appointments_only', 'personal_brand'];
+  // NOTA: personal_brand omitido porque es alias deprecated de personal_full
+  const types: AssistantTypeKey[] = ['full', 'appointments_only', 'personal_full', 'personal_redirect'];
   const channels: ChannelContext[] = ['voice', 'messaging'];
 
   for (const style of styles) {
