@@ -28,13 +28,13 @@ export const BUSINESS_DELAY_OPTIONS: DelayOption[] = [
 
 /**
  * Delay options for Personal Profile
- * Personal profiles use longer delays to appear more human
+ * Now unified with Business Profile for consistency
  */
 export const PERSONAL_DELAY_OPTIONS: DelayOption[] = [
-  { value: 3, label: '3 minutos', description: 'Delay corto' },
+  { value: 0, label: 'Inmediato', description: 'Responde al instante' },
+  { value: 1, label: '1 minuto', description: 'Delay corto' },
+  { value: 3, label: '3 minutos', description: 'Delay moderado' },
   { value: 5, label: '5 minutos', description: 'Delay natural' },
-  { value: 8, label: '8 minutos', description: 'Más humano', recommended: true },
-  { value: 15, label: '15 minutos', description: 'Muy ocupado' },
 ];
 
 // ======================
