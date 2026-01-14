@@ -592,11 +592,32 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Call OpenAI for preview response
-    const model = DEFAULT_MODELS.MESSAGING; // gpt-5-mini
+    // NOTE: Using gpt-4o-mini as fallback since DEFAULT_MODELS.MESSAGING may reference
+    // future models (gpt-5-mini) that don't exist yet in OpenAI API
+    const configuredModel = DEFAULT_MODELS.MESSAGING;
+    const model = configuredModel.startsWith('gpt-5') ? 'gpt-4o-mini' : configuredModel;
     const temperature = tenantContext.ai_config?.temperature || OPENAI_CONFIG.defaultTemperature;
 
     let aiResponse: string;
     let tokensUsed = 0;
+
+    // Verify OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('[AI Preview] OPENAI_API_KEY is not configured');
+      return NextResponse.json<PreviewResponse>({
+        success: true,
+        response: '⚠️ El servicio de AI no está configurado. Contacta al administrador para configurar la API key de OpenAI.',
+        intent,
+        signals,
+        processing_time_ms: Date.now() - startTime,
+        model_used: model,
+        prompt_from_cache: promptFromCache,
+        prompt_version: promptVersion,
+        tokens_used: 0,
+        vertical: tenantContext.vertical,
+        profile_type,
+      });
+    }
 
     try {
       const completion = await openai.chat.completions.create({
@@ -618,13 +639,16 @@ export async function POST(request: NextRequest) {
 
       // Provide helpful error message based on error type
       if (errorMessage.includes('timeout')) {
-        aiResponse = 'La respuesta está tardando demasiado. Intenta con un mensaje más corto.';
+        aiResponse = '⏱️ La respuesta está tardando demasiado. Intenta con un mensaje más corto.';
       } else if (errorMessage.includes('rate_limit') || errorMessage.includes('429')) {
-        aiResponse = 'Límite de uso alcanzado. Espera unos segundos e intenta de nuevo.';
+        aiResponse = '⚠️ Límite de uso alcanzado. Espera unos segundos e intenta de nuevo.';
       } else if (errorMessage.includes('insufficient_quota')) {
-        aiResponse = 'El servicio de AI no está disponible. Contacta al administrador.';
+        aiResponse = '💳 El servicio de AI no está disponible. Verifica los créditos de OpenAI.';
+      } else if (errorMessage.includes('model') || errorMessage.includes('does not exist')) {
+        aiResponse = '🔧 Error de configuración: el modelo de AI no está disponible. Usando modelo de respaldo.';
+        console.error(`[AI Preview] Model error - requested: ${model}, message: ${errorMessage}`);
       } else {
-        aiResponse = 'Error al generar la respuesta. Verifica la configuración de tu asistente.';
+        aiResponse = `❌ Error al generar la respuesta: ${errorMessage.slice(0, 100)}`;
       }
     }
 
