@@ -528,12 +528,15 @@ export async function POST(request: NextRequest) {
     const tenantContext = await loadTenantContextDirect(supabase, tenantId);
 
     if (!tenantContext) {
-      console.error(`[AI Preview] Failed to load context for tenant ${tenantId}`);
+      console.error(`[AI Preview] Failed to load context for tenant ${tenantId}. This usually means the tenant doesn't exist or RLS policies are blocking access.`);
       return NextResponse.json<PreviewResponse>(
-        { success: false, error: 'No se pudo cargar el contexto del negocio. Verifica que el tenant tenga datos configurados.' },
+        { success: false, error: 'No se pudo cargar el contexto del negocio. Verifica que el tenant exista y que tengas permisos de acceso.' },
         { status: 500 }
       );
     }
+
+    // Log successful context load for debugging
+    console.log(`[AI Preview] Successfully loaded context: tenant="${tenantContext.tenant_name}", services=${tenantContext.services.length}, branches=${tenantContext.branches.length}`);
 
     // 4. Detect intent and signals
     const intent = detectIntent(trimmedMessage);
