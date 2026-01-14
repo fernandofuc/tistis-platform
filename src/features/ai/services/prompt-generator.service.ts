@@ -33,6 +33,14 @@ import {
 import {
   SafetyResilienceService,
 } from './safety-resilience.service';
+import {
+  getFullCompiledInstructions,
+  mapTemplateKeyToType,
+  isValidStyle,
+  type ChannelContext,
+  type ResponseStyleKey,
+  type AssistantTypeKey,
+} from '@/src/shared/config/prompt-instruction-compiler';
 
 // ======================
 // TYPES
@@ -69,6 +77,8 @@ export interface BusinessContext {
   assistantName?: string;
   assistantPersonality?: string;
   customInstructions?: string;
+  // Template del agente (determina tipo de asistente)
+  template_key?: string;
   // Datos del negocio
   branches: Array<{
     name: string;
@@ -484,15 +494,27 @@ export async function collectBusinessContext(
       competitor_handling_count: (rpcData.competitor_handling || []).length,
     });
 
-    // 2. Obtener configuración específica según el tipo de prompt
+    // 2. Obtener el Agent Profile activo para business (configuración del agente)
+    const { data: agentProfile } = await supabase
+      .from('agent_profiles')
+      .select('agent_template, response_style')
+      .eq('tenant_id', tenantId)
+      .eq('profile_type', 'business')
+      .eq('is_active', true)
+      .single();
+
+    // 3. Obtener configuración específica según el tipo de prompt
     let assistantName = 'Asistente';
-    let assistantPersonality = rpcData.ai_config?.response_style || 'professional_friendly';
+    // Priorizar Agent Profile > ai_config para response_style
+    let assistantPersonality = agentProfile?.response_style || rpcData.ai_config?.response_style || 'professional_friendly';
     let customInstructions = rpcData.ai_config?.system_prompt || '';
     let escalationEnabled = false;
     let escalationPhone = '';
     let goodbyeMessage = '';
     let useFillerPhrases = true;  // Default: activado
     let fillerPhrases: string[] = [];
+    // Template del agente desde Agent Profile
+    let agentTemplateKey = agentProfile?.agent_template || undefined;
 
     if (promptType === 'voice') {
       // Para voice, obtener config específica de voice_agent_config
@@ -592,6 +614,8 @@ export async function collectBusinessContext(
       assistantName,
       assistantPersonality,
       customInstructions,
+      // Priorizar Agent Profile > ai_config para template_key
+      template_key: agentTemplateKey || rpcData.ai_config?.agent_template || undefined,
       branches,
       services,
       staff,
@@ -751,6 +775,122 @@ export async function generatePromptWithAI(
 }
 
 /**
+ * Construye la sección de instrucciones compiladas de estilo y tipo
+ * para incluir en el meta-prompt
+ *
+ * INCLUYE: Instrucciones específicas de VERTICAL (dental vs restaurant vs general)
+ */
+function buildCompiledInstructionsSection(
+  context: BusinessContext,
+  promptType: PromptType
+): string {
+  // Determinar el canal para las instrucciones compiladas
+  const channel: ChannelContext = promptType === 'voice' ? 'voice' : 'messaging';
+
+  // Obtener el template key o usar default basado en vertical
+  const templateKey = context.template_key ||
+    (context.vertical === 'dental' ? 'dental_full' :
+     context.vertical === 'restaurant' ? 'resto_full' : 'general_full');
+
+  // Obtener el estilo de respuesta y validarlo
+  const styleKey = context.assistantPersonality || 'professional_friendly';
+
+  // Validar estilo
+  if (!isValidStyle(styleKey)) {
+    console.error(`[PromptGenerator] Invalid style key: ${styleKey}, using professional_friendly`);
+  }
+
+  // Mapear template a tipo de asistente
+  const assistantType: AssistantTypeKey = mapTemplateKeyToType(templateKey);
+
+  // Determinar vertical normalizada
+  const vertical: 'dental' | 'restaurant' | 'general' =
+    context.vertical === 'dental' ? 'dental' :
+    context.vertical === 'restaurant' ? 'restaurant' : 'general';
+
+  // Usar la versión COMPLETA que incluye instrucciones de vertical
+  const validStyleKey: ResponseStyleKey = isValidStyle(styleKey)
+    ? styleKey as ResponseStyleKey
+    : 'professional_friendly';
+
+  const compiledInstructions = getFullCompiledInstructions(
+    validStyleKey,
+    assistantType,
+    channel,
+    vertical
+  );
+
+  if (!compiledInstructions) {
+    // Fallback: instrucciones básicas si no se pueden compilar
+    console.warn(`[PromptGenerator] Could not compile instructions for ${styleKey}/${templateKey}/${channel}/${vertical}`);
+    return `
+   ### CANAL: ${channel === 'voice' ? 'VOZ (LLAMADAS TELEFÓNICAS)' : 'MENSAJERÍA (TEXTO ESCRITO)'}
+
+   **Personalidad configurada:** ${styleKey}
+   **Vertical del negocio:** ${vertical}
+
+   - Mantén un tono ${styleKey === 'casual' ? 'informal y cercano' : styleKey === 'formal' ? 'muy formal y respetuoso' : 'profesional pero cálido'}
+   ${channel === 'voice' ? '- Usa muletillas conversacionales naturales para que suene humano' : '- NO uses muletillas de voz (es texto escrito)'}
+   ${channel === 'voice' ? '- Las respuestas deben ser CONCISAS (2-3 oraciones por turno)' : '- Las respuestas pueden ser más detalladas (es texto, pueden releerlo)'}
+   ${channel === 'voice' ? '- NUNCA uses emojis (es una llamada de voz)' : '- Solo usa emojis funcionales: ✅ ❌ 📍 📞 ⏰ 📅'}
+   `;
+  }
+
+  // Descripción del tipo de asistente
+  const typeDescription = assistantType === 'appointments_only'
+    ? 'Este asistente está configurado para SOLO AGENDAR CITAS. Redirige todas las demás consultas hacia la cita.'
+    : assistantType === 'personal_brand'
+    ? 'Este asistente es para MARCA PERSONAL. Redirige consultas de servicios a la clínica/negocio oficial.'
+    : 'Este asistente tiene CAPACIDADES COMPLETAS: puede agendar citas, dar precios, responder FAQs y más.';
+
+  // Descripción de la vertical
+  const verticalDescription =
+    vertical === 'dental' ? 'CLÍNICA DENTAL: Prioriza urgencias de dolor, no diagnostiques, recomienda valoración.'
+    : vertical === 'restaurant' ? 'RESTAURANTE: Confirma personas, pregunta alergias, ofrece alternativas de horario.'
+    : 'NEGOCIO GENERAL: Adapta vocabulario al tipo de servicio.';
+
+  // Construir sección con instrucciones compiladas
+  return `
+   ### CANAL: ${channel === 'voice' ? 'VOZ (LLAMADAS TELEFÓNICAS)' : 'MENSAJERÍA (TEXTO ESCRITO)'}
+
+   **Estilo de comunicación:** ${compiledInstructions.metadata.styleName}
+   **Tipo de asistente:** ${compiledInstructions.metadata.typeName}
+   **Vertical del negocio:** ${vertical.toUpperCase()}
+   **${typeDescription}**
+   **${verticalDescription}**
+
+   === INSTRUCCIONES DETALLADAS DE COMUNICACIÓN ===
+
+   A continuación se incluyen las instrucciones EXHAUSTIVAS que el asistente DEBE seguir.
+   Estas instrucciones definen CÓMO debe comunicarse según el estilo, tipo y vertical configurados.
+   Las reglas de VERTICAL ya están incluidas al final del documento de instrucciones.
+
+   IMPORTANTE:
+   - Las instrucciones son aproximadamente ${compiledInstructions.metadata.totalRules} reglas organizadas
+   - INCLUYE reglas específicas de la vertical (${vertical}) al final
+   - Incluye el texto completo de estas instrucciones en el prompt generado
+   - El asistente DEBE seguir estas reglas en cada interacción
+
+   --- INICIO DE INSTRUCCIONES DE COMUNICACIÓN ---
+
+${compiledInstructions.fullInstructionText}
+
+   --- FIN DE INSTRUCCIONES DE COMUNICACIÓN ---
+
+   ${channel === 'voice' && context.useFillerPhrases === false ? `
+   **EXCEPCIÓN CONFIGURADA POR EL CLIENTE:**
+   - NO usar muletillas conversacionales (el cliente lo desactivó)
+   ` : ''}
+
+   ${channel === 'voice' && context.fillerPhrases && context.fillerPhrases.length > 0 ? `
+   **MULETILLAS PERSONALIZADAS POR EL CLIENTE:**
+   Usa estas frases específicas en lugar de las genéricas:
+   ${context.fillerPhrases.map(p => `- "${p}"`).join('\n   ')}
+   ` : ''}
+`;
+}
+
+/**
  * Construye el meta-prompt para que Gemini genere el prompt del agente
  */
 function buildMetaPrompt(
@@ -892,61 +1032,8 @@ Genera un prompt de sistema completo y profesional siguiendo estas directrices:
    ${context.escalationEnabled ? '- Agrega ## ESCALACIÓN con las condiciones para transferir a un humano' : ''}
    - Finaliza con ## ESTILO DE COMUNICACIÓN y ## FINALIZACIÓN
 
-2. **TONO Y ESTILO:**
-   ${isVoice ? `
-   ### IMPORTANTE: ESTE ES UN ASISTENTE DE VOZ (LLAMADAS TELEFÓNICAS)
-
-   **Personalidad configurada:** ${context.assistantPersonality}
-
-   ${context.assistantPersonality === 'formal' ? `
-   - TONO: Formal pero conversacional (es una llamada telefónica)
-   - MULETILLAS: Usa pausas profesionales como "Permítame verificar...", "Un momento por favor...", "Déjeme confirmar..."
-   - TRATAMIENTO: Usa "usted" de manera formal pero amigable
-   - ESTILO: Profesional, respetuoso, sin ser robótico
-   - IMPORTANTE: Las muletillas deben sonar naturales en una conversación formal
-   ` : context.assistantPersonality === 'casual' ? `
-   - TONO: Casual y cercano (es una llamada amigable)
-   - MULETILLAS: Usa expresiones casuales como "Mmm...", "Órale...", "Bueno...", "Pues...", "Déjame ver..."
-   - TRATAMIENTO: Usa "tú" de manera informal
-   - ESTILO: Relajado, amistoso, natural
-   - IMPORTANTE: Las muletillas deben sonar muy naturales y espontáneas
-   ` : `
-   - TONO: Profesional pero cálido (balance perfecto)
-   - MULETILLAS: Usa expresiones amigables como "Claro...", "Mmm...", "Déjame ver...", "Por supuesto...", "Entiendo..."
-   - TRATAMIENTO: Puede usar "tú" o "usted" según el contexto
-   - ESTILO: Profesional, amigable, accesible
-   - IMPORTANTE: Las muletillas deben sonar naturales y profesionales
-   `}
-
-   **REGLAS OBLIGATORIAS PARA VOZ:**
-   - Las respuestas DEBEN ser CONCISAS (no más de 2-3 oraciones por turno)
-   ${
-     context.useFillerPhrases
-       ? (context.fillerPhrases && context.fillerPhrases.length > 0
-           ? `- SIEMPRE incluir muletillas conversacionales en cada respuesta. Usa estas frases específicas: ${context.fillerPhrases.join(', ')}`
-           : `- SIEMPRE incluir muletillas conversacionales en cada respuesta (adaptadas a la personalidad)`)
-       : `- NO usar muletillas conversacionales (configuración del cliente)`
-   }
-   - Evitar listas largas o información muy detallada de una sola vez
-   - Mantener acento mexicano (expresiones locales cuando sea natural)
-   - NUNCA usar emojis (es una llamada de voz, no se ven)
-   ` : `
-   ### IMPORTANTE: ESTE ES UN ASISTENTE DE MENSAJERÍA (TEXTO ESCRITO)
-
-   **Personalidad configurada:** ${context.assistantPersonality}
-
-   - El tono debe ser ${context.assistantPersonality === 'casual' ? 'informal y cercano' : context.assistantPersonality === 'formal' ? 'muy formal y respetuoso' : 'profesional pero cálido'}
-   - Las respuestas pueden ser más detalladas que en voz (es texto, pueden releerlo)
-   - Puede usar formato con bullets o listas cuando sea útil para claridad
-   - Mantener lenguaje claro y directo, sin pausas verbales
-
-   **REGLAS OBLIGATORIAS PARA MENSAJERÍA:**
-   - NUNCA uses muletillas de voz como "Mmm...", "Bueno...", "Eh...", "Déjame ver..." (es TEXTO ESCRITO, no conversación hablada)
-   - Las respuestas son mensaje de texto, deben ser claras y directas
-   - Emojis: SOLO usa emojis funcionales si son útiles: ✅ ❌ 📍 📞 ⏰ 📅
-   - NUNCA uses emojis de caritas o informales: 😊 😂 🤣 😍 etc.
-   - Si el cliente usa emojis casuales, puedes responder con emojis funcionales
-   `}
+2. **TONO, ESTILO Y COMPORTAMIENTO:**
+   ${buildCompiledInstructionsSection(context, promptType)}
 
 3. **CONTENIDO OBLIGATORIO:**
    - Toda la información de servicios y precios debe estar incluida
@@ -1084,12 +1171,16 @@ export async function generateMessagingAgentPrompt(tenantId: string): Promise<Pr
 /**
  * Calcula un hash SHA256 del contexto del negocio para detectar cambios
  * Si el hash cambia, significa que los datos fueron modificados y el prompt debe regenerarse
+ *
+ * IMPORTANTE: Incluye template_key y vertical porque afectan las instrucciones compiladas
  */
 export function calculateBusinessContextHash(context: BusinessContext): string {
   // Crear un objeto normalizado con los datos relevantes para el hash
   const dataForHash = {
     tenantName: context.tenantName,
     vertical: context.vertical,
+    // CRÍTICO: template_key afecta el tipo de asistente y las instrucciones
+    template_key: context.template_key,
     assistantName: context.assistantName,
     assistantPersonality: context.assistantPersonality,
     customInstructions: context.customInstructions,
