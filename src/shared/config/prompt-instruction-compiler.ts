@@ -425,14 +425,21 @@ function getCacheKey(
 }
 
 /**
- * Pre-compila todas las 32 combinaciones (4 estilos × 4 tipos × 2 canales)
+ * Pre-compila todas las 48 combinaciones (4 estilos × 6 tipos × 2 canales)
  */
 export function precompileAllCombinations(): CompiledInstructionsCache {
   const cache: CompiledInstructionsCache = new Map();
 
   const styles: ResponseStyleKey[] = ['professional', 'professional_friendly', 'casual', 'formal'];
-  // NOTA: personal_brand omitido porque es alias deprecated de personal_full
-  const types: AssistantTypeKey[] = ['full', 'appointments_only', 'personal_full', 'personal_redirect'];
+  // Tipos de asistente: 2 de negocio + 4 de personal (incluyendo aliases)
+  const types: AssistantTypeKey[] = [
+    'full',               // Negocio: completo
+    'appointments_only',  // Negocio: solo citas
+    'personal_complete',  // Personal: completo (NEW)
+    'personal_brand',     // Personal: marca personal (NEW)
+    'personal_redirect',  // Personal: solo derivación
+    'personal_full',      // DEPRECATED: alias de personal_brand
+  ];
   const channels: ChannelContext[] = ['voice', 'messaging'];
 
   for (const style of styles) {

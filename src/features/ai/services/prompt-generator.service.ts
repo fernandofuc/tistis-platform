@@ -841,8 +841,12 @@ function buildCompiledInstructionsSection(
     ? 'Este asistente está configurado para SOLO AGENDAR CITAS. Redirige todas las demás consultas hacia la cita.'
     : assistantType === 'personal_redirect'
     ? 'Este asistente es para PERFIL PERSONAL - SOLO DERIVACIÓN. NO responde consultas, SOLO redirige al negocio oficial.'
-    : assistantType === 'personal_full' || assistantType === 'personal_brand'
-    ? 'Este asistente es para PERFIL PERSONAL. Responde preguntas educativas, comparte tips y redirige servicios/citas/precios al negocio oficial.'
+    : assistantType === 'personal_brand'
+    ? 'Este asistente es para PERFIL PERSONAL - MARCA PERSONAL. Responde preguntas educativas, comparte tips y redirige servicios/citas/precios al negocio oficial.'
+    : assistantType === 'personal_complete'
+    ? 'Este asistente es para PERFIL PERSONAL - COMPLETO. Tiene TODAS las capacidades: agendar citas, dar precios, capturar leads, responder FAQs, todo desde la cuenta personal del profesional.'
+    : assistantType === 'personal_full' // DEPRECATED alias
+    ? 'Este asistente es para PERFIL PERSONAL - MARCA PERSONAL. Responde preguntas educativas, comparte tips y redirige servicios/citas/precios al negocio oficial.'
     : 'Este asistente tiene CAPACIDADES COMPLETAS: puede agendar citas, dar precios, responder FAQs y más.';
 
   // Descripción de la vertical

@@ -62,7 +62,12 @@ const icons = {
     </svg>
   ),
   // Iconos para tipos de asistente personal
-  assistantFull: (
+  assistantComplete: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+    </svg>
+  ),
+  assistantBrand: (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
     </svg>
@@ -95,7 +100,7 @@ const PERSONAL_DELAY_OPTIONS = [
 ];
 
 // ======================
-// PERSONAL ASSISTANT TYPES
+// PERSONAL ASSISTANT TYPES (3 opciones)
 // ======================
 interface PersonalAssistantType {
   key: string;
@@ -103,29 +108,42 @@ interface PersonalAssistantType {
   description: string;
   capabilities: { text: string; enabled: boolean }[];
   recommended?: boolean;
-  icon: 'assistantFull' | 'redirectOnly';
+  icon: 'assistantComplete' | 'assistantBrand' | 'redirectOnly';
 }
 
 const PERSONAL_ASSISTANT_TYPES: PersonalAssistantType[] = [
   {
-    key: 'personal_full',
-    name: 'Asistente Personal',
-    description: 'Responde consultas educativas, comparte tips y deriva servicios al negocio',
+    key: 'personal_complete',
+    name: 'Asistente Completo',
+    description: 'Citas, precios, leads y FAQ directamente desde tu cuenta personal',
     capabilities: [
-      { text: 'Tips educativos', enabled: true },
+      { text: 'Citas', enabled: true },
+      { text: 'Precios', enabled: true },
+      { text: 'Leads', enabled: true },
+      { text: 'FAQ', enabled: true },
+    ],
+    recommended: true,
+    icon: 'assistantComplete',
+  },
+  {
+    key: 'personal_brand',
+    name: 'Marca Personal',
+    description: 'Contenido educativo y engagement, deriva servicios al negocio',
+    capabilities: [
+      { text: 'Educativo', enabled: true },
       { text: 'Engagement', enabled: true },
       { text: 'Citas', enabled: false },
       { text: 'Precios', enabled: false },
     ],
-    recommended: true,
-    icon: 'assistantFull',
+    recommended: false,
+    icon: 'assistantBrand',
   },
   {
     key: 'personal_redirect',
     name: 'Solo Derivación',
-    description: 'Solo redirige al negocio, no responde consultas educativas',
+    description: 'Solo redirige al negocio, no responde consultas',
     capabilities: [
-      { text: 'Tips educativos', enabled: false },
+      { text: 'Educativo', enabled: false },
       { text: 'Engagement', enabled: false },
       { text: 'Citas', enabled: false },
       { text: 'Precios', enabled: false },
@@ -166,21 +184,33 @@ export function PersonalProfileTab({
 }: PersonalProfileTabProps) {
   // Helper: Map template key to assistant type
   const getAssistantTypeFromTemplate = useCallback((template: string): string => {
+    if (template.includes('complete')) return 'personal_complete';
     if (template.includes('redirect')) return 'personal_redirect';
-    return 'personal_full';
+    if (template.includes('brand')) return 'personal_brand';
+    // Fallback para templates legacy (personal_full → personal_brand)
+    return 'personal_complete'; // Default to complete for new users
   }, []);
 
   // Helper: Get template key for vertical and type
   const getTemplateKeyForType = useCallback((type: string): string => {
     const prefix = vertical === 'dental' ? 'dental' : vertical === 'restaurant' ? 'resto' : 'general';
-    return type === 'personal_redirect' ? `${prefix}_personal_redirect` : `${prefix}_personal_full`;
+    switch (type) {
+      case 'personal_complete':
+        return `${prefix}_personal_complete`;
+      case 'personal_brand':
+        return `${prefix}_personal_brand`;
+      case 'personal_redirect':
+        return `${prefix}_personal_redirect`;
+      default:
+        return `${prefix}_personal_complete`;
+    }
   }, [vertical]);
 
   // Form state
   const [profileName, setProfileName] = useState(profile?.profile_name || '');
   const [selectedTemplate, setSelectedTemplate] = useState(profile?.agent_template || '');
   const [assistantType, setAssistantType] = useState<string>(
-    profile?.agent_template ? getAssistantTypeFromTemplate(profile.agent_template) : 'personal_full'
+    profile?.agent_template ? getAssistantTypeFromTemplate(profile.agent_template) : 'personal_complete'
   );
   const [responseStyle, setResponseStyle] = useState<ResponseStyle>(profile?.response_style || 'professional_friendly');
   const [responseDelay, setResponseDelay] = useState(profile?.response_delay_minutes || 8);
@@ -414,12 +444,29 @@ export function PersonalProfileTab({
         </div>
       </div>
 
-      {/* Assistant Type Selection */}
+      {/* Profile Name - FIRST (same order as Business Profile) */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Nombre del perfil
+        </label>
+        <input
+          type="text"
+          value={profileName}
+          onChange={(e) => { setProfileName(e.target.value); markChange(); }}
+          placeholder="Ej: Dr. García"
+          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+        />
+        <p className="mt-2 text-xs text-slate-500">
+          Este nombre representa tu marca personal
+        </p>
+      </div>
+
+      {/* Assistant Type Selection - SECOND (same order as Business Profile) */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
         <label className="block text-sm font-medium text-slate-700 mb-3">
           Tipo de asistente
         </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {PERSONAL_ASSISTANT_TYPES.map((type) => (
             <button
               key={type.key}
@@ -485,23 +532,6 @@ export function PersonalProfileTab({
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Profile Name */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Nombre del perfil
-        </label>
-        <input
-          type="text"
-          value={profileName}
-          onChange={(e) => { setProfileName(e.target.value); markChange(); }}
-          placeholder="Ej: Dr. García"
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
-        />
-        <p className="mt-2 text-xs text-slate-500">
-          Este nombre representa tu marca personal
-        </p>
       </div>
 
       {/* Response Style */}

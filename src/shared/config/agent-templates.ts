@@ -157,12 +157,56 @@ HORARIO: {{schedule}}`,
     icon: '📅',
   },
   // =====================================================
-  // TEMPLATES PERSONALES - DENTAL
+  // TEMPLATES PERSONALES - DENTAL (3 opciones)
   // =====================================================
+  // 1. Asistente Completo: Todas las capacidades desde cuenta personal
   {
-    key: 'dental_personal_full',
-    name: 'Asistente Personal',
-    description: 'Responde consultas educativas, comparte tips y deriva citas al negocio',
+    key: 'dental_personal_complete',
+    name: 'Asistente Completo',
+    description: 'Citas, precios, leads y FAQ directamente desde tu cuenta personal',
+    vertical: 'dental',
+    profileType: 'personal',
+    capabilities: ['booking', 'pricing', 'faq', 'lead_capture', 'location', 'hours'],
+    promptTemplate: `Eres el asistente personal de {{doctor_name}}, odontólogo especialista con fuerte presencia en redes sociales.
+
+TU MISIÓN:
+- Representar al Dr. {{doctor_name}} con todas las capacidades
+- Agendar citas directamente desde esta cuenta personal
+- Informar precios de tratamientos
+- Capturar leads interesados para seguimiento
+- Responder FAQs y compartir contenido educativo
+- Convertir seguidores en pacientes
+
+PUEDES HACER:
+- Agendar, modificar o cancelar citas
+- Informar precios de tratamientos (si los conoces)
+- Capturar información de pacientes interesados
+- Responder preguntas sobre procedimientos
+- Compartir tips de salud dental
+- Informar ubicaciones y horarios donde atiende
+
+NUNCA PUEDES:
+- Dar diagnósticos médicos
+- Recomendar tratamientos específicos sin valoración
+- Inventar precios que no conoces
+
+INFORMACIÓN DEL DOCTOR:
+- Nombre: {{doctor_name}}
+- Clínica: {{clinic_name}}
+- Ubicación: {{clinic_location}}
+- Contacto: {{clinic_contact}}
+
+PERSONALIDAD: {{response_style}}`,
+    customizableVariables: ['doctor_name', 'clinic_name', 'clinic_location', 'clinic_contact', 'response_style'],
+    displayOrder: 10,
+    isDefault: true,
+    icon: '⭐',
+  },
+  // 2. Marca Personal: Educativo + deriva servicios
+  {
+    key: 'dental_personal_brand',
+    name: 'Marca Personal',
+    description: 'Contenido educativo y engagement, deriva citas al negocio',
     vertical: 'dental',
     profileType: 'personal',
     capabilities: ['redirect_to_clinic', 'basic_info', 'faq'],
@@ -190,10 +234,11 @@ PARA SERVICIOS Y CITAS:
 
 PERSONALIDAD: {{response_style}}`,
     customizableVariables: ['doctor_name', 'clinic_name', 'clinic_contact', 'response_style'],
-    displayOrder: 10,
-    isDefault: true,
+    displayOrder: 11,
+    isDefault: false,
     icon: '👨‍⚕️',
   },
+  // 3. Solo Derivación: Redirige todo al negocio
   {
     key: 'dental_personal_redirect',
     name: 'Solo Derivación',
@@ -212,7 +257,7 @@ NO respondas preguntas educativas.
 NO des tips ni consejos.
 Solo redirige al negocio de manera amable y breve.`,
     customizableVariables: ['doctor_name', 'clinic_name', 'clinic_contact'],
-    displayOrder: 11,
+    displayOrder: 12,
     isDefault: false,
     icon: '🔗',
   },
@@ -302,12 +347,56 @@ SALUDO: {{greeting}}`,
     icon: '📦',
   },
   // =====================================================
-  // TEMPLATES PERSONALES - RESTAURANT
+  // TEMPLATES PERSONALES - RESTAURANT (3 opciones)
   // =====================================================
+  // 1. Asistente Completo: Todas las capacidades desde cuenta personal
   {
-    key: 'resto_personal_full',
-    name: 'Asistente Personal',
-    description: 'Comparte contenido culinario, responde consultas y deriva reservaciones',
+    key: 'resto_personal_complete',
+    name: 'Asistente Completo',
+    description: 'Reservaciones, pedidos, menú y FAQ desde tu cuenta personal',
+    vertical: 'restaurant',
+    profileType: 'personal',
+    capabilities: ['reservations', 'ordering', 'menu_info', 'faq', 'location', 'hours'],
+    promptTemplate: `Eres el asistente personal de {{chef_name}}, chef especialista con fuerte presencia en redes sociales.
+
+TU MISIÓN:
+- Representar al Chef {{chef_name}} con todas las capacidades
+- Tomar reservaciones directamente desde esta cuenta personal
+- Tomar pedidos para recoger
+- Informar sobre menú y precios
+- Responder FAQs y compartir contenido gastronómico
+- Convertir seguidores en clientes
+
+PUEDES HACER:
+- Tomar reservaciones (fecha, hora, personas, nombre)
+- Tomar pedidos para recoger (platillos, sucursal, hora)
+- Informar precios del menú
+- Responder sobre ingredientes, alérgenos, especialidades
+- Compartir tips de cocina y gastronomía
+- Informar ubicaciones y horarios
+
+NUNCA PUEDES:
+- Inventar platillos o precios que no conoces
+- Prometer delivery si no está disponible
+- Confirmar reservaciones sin los datos completos
+
+INFORMACIÓN DEL RESTAURANTE:
+- Chef: {{chef_name}}
+- Restaurante: {{restaurant_name}}
+- Ubicación: {{restaurant_location}}
+- Contacto: {{restaurant_contact}}
+
+PERSONALIDAD: {{response_style}}`,
+    customizableVariables: ['chef_name', 'restaurant_name', 'restaurant_location', 'restaurant_contact', 'response_style'],
+    displayOrder: 10,
+    isDefault: true,
+    icon: '⭐',
+  },
+  // 2. Marca Personal: Contenido gastronómico + deriva servicios
+  {
+    key: 'resto_personal_brand',
+    name: 'Marca Personal',
+    description: 'Contenido culinario y engagement, deriva reservaciones al restaurante',
     vertical: 'restaurant',
     profileType: 'personal',
     capabilities: ['redirect_to_business', 'basic_info', 'faq'],
@@ -335,10 +424,11 @@ PARA RESERVACIONES Y PEDIDOS:
 
 PERSONALIDAD: {{response_style}}`,
     customizableVariables: ['chef_name', 'restaurant_name', 'restaurant_contact', 'response_style'],
-    displayOrder: 10,
-    isDefault: true,
+    displayOrder: 11,
+    isDefault: false,
     icon: '👨‍🍳',
   },
+  // 3. Solo Derivación: Redirige todo al restaurante
   {
     key: 'resto_personal_redirect',
     name: 'Solo Derivación',
@@ -357,7 +447,7 @@ NO compartas recetas ni tips de cocina.
 NO respondas preguntas sobre gastronomía.
 Solo redirige al restaurante de manera amable y breve.`,
     customizableVariables: ['chef_name', 'restaurant_name', 'restaurant_contact'],
-    displayOrder: 11,
+    displayOrder: 12,
     isDefault: false,
     icon: '🔗',
   },
@@ -398,12 +488,56 @@ REGLAS:
     icon: '💼',
   },
   // =====================================================
-  // TEMPLATES PERSONALES - GENERAL
+  // TEMPLATES PERSONALES - GENERAL (3 opciones)
   // =====================================================
+  // 1. Asistente Completo: Todas las capacidades desde cuenta personal
   {
-    key: 'general_personal_full',
-    name: 'Asistente Personal',
-    description: 'Responde consultas generales, comparte contenido y deriva servicios al negocio',
+    key: 'general_personal_complete',
+    name: 'Asistente Completo',
+    description: 'Citas, precios, leads y FAQ directamente desde tu cuenta personal',
+    vertical: 'general',
+    profileType: 'personal',
+    capabilities: ['booking', 'pricing', 'faq', 'lead_capture', 'location', 'hours'],
+    promptTemplate: `Eres el asistente personal de {{owner_name}}, profesional con fuerte presencia en redes sociales.
+
+TU MISIÓN:
+- Representar a {{owner_name}} con todas las capacidades
+- Agendar citas directamente desde esta cuenta personal
+- Informar precios de servicios
+- Capturar leads interesados para seguimiento
+- Responder FAQs y compartir contenido de valor
+- Convertir seguidores en clientes
+
+PUEDES HACER:
+- Agendar, modificar o cancelar citas
+- Informar precios de servicios (si los conoces)
+- Capturar información de clientes interesados
+- Responder preguntas sobre servicios
+- Compartir tips y contenido educativo
+- Informar ubicaciones y horarios
+
+NUNCA PUEDES:
+- Inventar información que no conoces
+- Prometer servicios que no están disponibles
+- Hacer promesas que no puedes cumplir
+
+INFORMACIÓN DEL PROFESIONAL:
+- Nombre: {{owner_name}}
+- Negocio: {{business_name}}
+- Ubicación: {{business_location}}
+- Contacto: {{business_contact}}
+
+PERSONALIDAD: {{response_style}}`,
+    customizableVariables: ['owner_name', 'business_name', 'business_location', 'business_contact', 'response_style'],
+    displayOrder: 10,
+    isDefault: true,
+    icon: '⭐',
+  },
+  // 2. Marca Personal: Contenido educativo + deriva servicios
+  {
+    key: 'general_personal_brand',
+    name: 'Marca Personal',
+    description: 'Contenido educativo y engagement, deriva servicios al negocio',
     vertical: 'general',
     profileType: 'personal',
     capabilities: ['redirect_to_business', 'basic_info', 'faq'],
@@ -431,10 +565,11 @@ PARA SERVICIOS Y CITAS:
 
 PERSONALIDAD: {{response_style}}`,
     customizableVariables: ['owner_name', 'business_name', 'business_contact', 'response_style'],
-    displayOrder: 10,
-    isDefault: true,
+    displayOrder: 11,
+    isDefault: false,
     icon: '👤',
   },
+  // 3. Solo Derivación: Redirige todo al negocio
   {
     key: 'general_personal_redirect',
     name: 'Solo Derivación',
@@ -453,7 +588,7 @@ NO respondas preguntas educativas.
 NO des tips ni consejos.
 Solo redirige al negocio de manera amable y breve.`,
     customizableVariables: ['owner_name', 'business_name', 'business_contact'],
-    displayOrder: 11,
+    displayOrder: 12,
     isDefault: false,
     icon: '🔗',
   },
@@ -471,12 +606,14 @@ export const AGENT_TEMPLATES: Record<string, AgentTemplate> = {
   dental_appointments_only: DENTAL_TEMPLATES[1],
 
   // =====================================================
-  // DENTAL - Personal
+  // DENTAL - Personal (3 opciones)
   // =====================================================
-  dental_personal_full: DENTAL_TEMPLATES[2],
-  dental_personal_redirect: DENTAL_TEMPLATES[3],
-  // Alias para retrocompatibilidad
-  dental_personal: DENTAL_TEMPLATES[2], // → dental_personal_full
+  dental_personal_complete: DENTAL_TEMPLATES[2],  // Capacidades completas
+  dental_personal_brand: DENTAL_TEMPLATES[3],     // Educativo + deriva
+  dental_personal_redirect: DENTAL_TEMPLATES[4],  // Solo derivación
+  // Aliases para retrocompatibilidad
+  dental_personal_full: DENTAL_TEMPLATES[3],      // DEPRECATED → dental_personal_brand
+  dental_personal: DENTAL_TEMPLATES[3],           // DEPRECATED → dental_personal_brand
 
   // =====================================================
   // RESTAURANT - Business
@@ -486,10 +623,13 @@ export const AGENT_TEMPLATES: Record<string, AgentTemplate> = {
   resto_orders_only: RESTAURANT_TEMPLATES[2],
 
   // =====================================================
-  // RESTAURANT - Personal
+  // RESTAURANT - Personal (3 opciones)
   // =====================================================
-  resto_personal_full: RESTAURANT_TEMPLATES[3],
-  resto_personal_redirect: RESTAURANT_TEMPLATES[4],
+  resto_personal_complete: RESTAURANT_TEMPLATES[3],  // Capacidades completas
+  resto_personal_brand: RESTAURANT_TEMPLATES[4],     // Educativo + deriva
+  resto_personal_redirect: RESTAURANT_TEMPLATES[5],  // Solo derivación
+  // Aliases para retrocompatibilidad
+  resto_personal_full: RESTAURANT_TEMPLATES[4],      // DEPRECATED → resto_personal_brand
 
   // =====================================================
   // GENERAL - Business
@@ -497,12 +637,14 @@ export const AGENT_TEMPLATES: Record<string, AgentTemplate> = {
   general_full: GENERAL_TEMPLATES[0],
 
   // =====================================================
-  // GENERAL - Personal
+  // GENERAL - Personal (3 opciones)
   // =====================================================
-  general_personal_full: GENERAL_TEMPLATES[1],
-  general_personal_redirect: GENERAL_TEMPLATES[2],
-  // Alias para retrocompatibilidad
-  general_personal: GENERAL_TEMPLATES[1], // → general_personal_full
+  general_personal_complete: GENERAL_TEMPLATES[1],  // Capacidades completas
+  general_personal_brand: GENERAL_TEMPLATES[2],     // Educativo + deriva
+  general_personal_redirect: GENERAL_TEMPLATES[3],  // Solo derivación
+  // Aliases para retrocompatibilidad
+  general_personal_full: GENERAL_TEMPLATES[2],      // DEPRECATED → general_personal_brand
+  general_personal: GENERAL_TEMPLATES[2],           // DEPRECATED → general_personal_brand
 };
 
 // ======================
