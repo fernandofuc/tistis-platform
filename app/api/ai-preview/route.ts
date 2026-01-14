@@ -130,73 +130,120 @@ async function loadTenantContextDirect(
     }
 
     // 2. Load all related data in parallel for performance
+    // NOTE: Using individual try-catch per query to handle missing tables gracefully
+    type QueryResult = { data: Record<string, unknown>[] | null; error: { message?: string } | null };
+    const safeQuery = async (
+      queryFn: () => PromiseLike<QueryResult>,
+      tableName: string
+    ): Promise<Record<string, unknown>[]> => {
+      try {
+        const result = await queryFn();
+        if (result.error) {
+          console.warn(`[AI Preview] Query error for ${tableName}:`, result.error.message || result.error);
+          return [];
+        }
+        return result.data || [];
+      } catch (e) {
+        console.warn(`[AI Preview] Query exception for ${tableName}:`, e);
+        return [];
+      }
+    };
+
     const [
-      servicesResult,
-      branchesResult,
-      customInstructionsResult,
-      businessPoliciesResult,
-      knowledgeArticlesResult,
-      responseTemplatesResult,
-      competitorHandlingResult,
-      scoringRulesResult,
+      servicesData,
+      branchesData,
+      customInstructionsData,
+      businessPoliciesData,
+      knowledgeArticlesData,
+      responseTemplatesData,
+      competitorHandlingData,
+      scoringRulesData,
     ] = await Promise.all([
       // Services
-      supabase
-        .from('services')
-        .select('id, name, description, ai_description, price_min, price_max, price_note, duration_minutes, category, special_instructions, requires_consultation, promotion_active, promotion_text')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true)
-        .order('display_order', { ascending: true }),
+      safeQuery(
+        () => supabase
+          .from('services')
+          .select('id, name, description, ai_description, price_min, price_max, price_note, duration_minutes, category, special_instructions, requires_consultation, promotion_active, promotion_text')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true }),
+        'services'
+      ),
 
       // Branches
-      supabase
-        .from('branches')
-        .select('id, name, address, city, phone, whatsapp_number, email, operating_hours, google_maps_url, is_headquarters')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true),
+      safeQuery(
+        () => supabase
+          .from('branches')
+          .select('id, name, address, city, phone, whatsapp_number, email, operating_hours, google_maps_url, is_headquarters')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
+        'branches'
+      ),
 
       // Custom Instructions (Knowledge Base)
-      supabase
-        .from('ai_custom_instructions')
-        .select('type, title, instruction, examples, branch_id')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true)
-        .order('priority', { ascending: true }),
+      // Column names: instruction_type (not type), instruction, examples
+      safeQuery(
+        () => supabase
+          .from('ai_custom_instructions')
+          .select('instruction_type, title, instruction, examples, branch_id')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('priority', { ascending: false }),
+        'ai_custom_instructions'
+      ),
 
       // Business Policies (Knowledge Base)
-      supabase
-        .from('ai_business_policies')
-        .select('type, title, policy, short_version')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true),
+      // Column names: policy_type (not type), policy_text (not policy)
+      safeQuery(
+        () => supabase
+          .from('ai_business_policies')
+          .select('policy_type, title, policy_text, short_version')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
+        'ai_business_policies'
+      ),
 
       // Knowledge Articles (Knowledge Base)
-      supabase
-        .from('ai_knowledge_articles')
-        .select('category, title, content, summary, branch_id')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true),
+      safeQuery(
+        () => supabase
+          .from('ai_knowledge_articles')
+          .select('category, title, content, summary, branch_id')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
+        'ai_knowledge_articles'
+      ),
 
       // Response Templates (Knowledge Base)
-      supabase
-        .from('ai_response_templates')
-        .select('trigger, name, template, variables, branch_id')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true),
+      // Column names: trigger_type (not trigger), template_text (not template), variables_available (not variables)
+      safeQuery(
+        () => supabase
+          .from('ai_response_templates')
+          .select('trigger_type, name, template_text, variables_available, branch_id')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
+        'ai_response_templates'
+      ),
 
       // Competitor Handling (Knowledge Base)
-      supabase
-        .from('ai_competitor_handling')
-        .select('competitor, aliases, strategy, talking_points, avoid_saying')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true),
+      // Column names: competitor_name, competitor_aliases, response_strategy
+      safeQuery(
+        () => supabase
+          .from('ai_competitor_handling')
+          .select('competitor_name, competitor_aliases, response_strategy, talking_points, avoid_saying')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
+        'ai_competitor_handling'
+      ),
 
-      // Scoring Rules
-      supabase
-        .from('lead_scoring_rules')
-        .select('signal_name, points, keywords, category')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true),
+      // Scoring Rules - try ai_scoring_rules first, fallback to lead_scoring_rules
+      safeQuery(
+        () => supabase
+          .from('ai_scoring_rules')
+          .select('signal_name, points, detection_config, category')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
+        'ai_scoring_rules'
+      ),
     ]);
 
     // Build the context object
@@ -221,7 +268,7 @@ async function loadTenantContextDirect(
           days: [1, 2, 3, 4, 5],
         },
       },
-      services: (servicesResult.data || []).map(s => ({
+      services: servicesData.map((s: any) => ({
         id: s.id,
         name: s.name,
         description: s.description || '',
@@ -237,7 +284,7 @@ async function loadTenantContextDirect(
         promotion_text: s.promotion_text,
       })),
       faqs: [], // FAQs are typically loaded separately if needed
-      branches: (branchesResult.data || []).map(b => ({
+      branches: branchesData.map((b: any) => ({
         id: b.id,
         name: b.name,
         address: b.address || '',
@@ -251,18 +298,49 @@ async function loadTenantContextDirect(
         staff_ids: [],
       })),
       doctors: [], // Staff/Doctors loaded separately if needed
-      scoring_rules: (scoringRulesResult.data || []).map(r => ({
+      // Map scoring rules - handle both ai_scoring_rules format and legacy format
+      scoring_rules: scoringRulesData.map((r: any) => ({
         signal_name: r.signal_name,
         points: r.points,
-        keywords: r.keywords || [],
+        // ai_scoring_rules uses detection_config->keywords, legacy uses keywords directly
+        keywords: r.detection_config?.keywords || r.keywords || [],
         category: r.category || 'general',
       })),
-      // Knowledge Base data
-      custom_instructions: customInstructionsResult.data || [],
-      business_policies: businessPoliciesResult.data || [],
-      knowledge_articles: knowledgeArticlesResult.data || [],
-      response_templates: responseTemplatesResult.data || [],
-      competitor_handling: competitorHandlingResult.data || [],
+      // Knowledge Base data - map column names to expected interface
+      custom_instructions: customInstructionsData.map((ci: any) => ({
+        type: ci.instruction_type,
+        title: ci.title,
+        instruction: ci.instruction,
+        examples: ci.examples,
+        branch_id: ci.branch_id,
+      })),
+      business_policies: businessPoliciesData.map((bp: any) => ({
+        type: bp.policy_type,
+        title: bp.title,
+        policy: bp.policy_text,
+        short_version: bp.short_version,
+      })),
+      knowledge_articles: knowledgeArticlesData.map((ka: any) => ({
+        category: ka.category,
+        title: ka.title,
+        content: ka.content,
+        summary: ka.summary,
+        branch_id: ka.branch_id,
+      })),
+      response_templates: responseTemplatesData.map((rt: any) => ({
+        trigger: rt.trigger_type,
+        name: rt.name,
+        template: rt.template_text,
+        variables: rt.variables_available,
+        branch_id: rt.branch_id,
+      })),
+      competitor_handling: competitorHandlingData.map((ch: any) => ({
+        competitor: ch.competitor_name,
+        aliases: ch.competitor_aliases,
+        strategy: ch.response_strategy,
+        talking_points: ch.talking_points,
+        avoid_saying: ch.avoid_saying,
+      })),
     };
 
     console.log(`[AI Preview] Loaded context for tenant ${tenantId}: ${context.services.length} services, ${context.branches.length} branches, ${context.custom_instructions?.length || 0} instructions`);
