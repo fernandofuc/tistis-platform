@@ -8,12 +8,9 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import {
-  getTenantAIContext,
-  type TenantAIContext,
-} from '@/src/features/ai/services/ai.service';
+import { type TenantAIContext } from '@/src/features/ai/services/ai.service';
 import {
   getOptimizedPrompt,
   type CacheChannel,
@@ -109,6 +106,172 @@ async function getUserContext(supabase: ReturnType<typeof createAuthenticatedCli
   if (!userRole) return null;
 
   return { user, userRole };
+}
+
+// ======================
+// DIRECT TENANT CONTEXT LOADER
+// ======================
+// Load tenant context directly from tables (doesn't require RPC function)
+async function loadTenantContextDirect(
+  supabase: SupabaseClient,
+  tenantId: string
+): Promise<TenantAIContext | null> {
+  try {
+    // 1. Load tenant basic info
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('id, name, vertical, timezone, ai_config')
+      .eq('id', tenantId)
+      .single();
+
+    if (tenantError || !tenant) {
+      console.error('[AI Preview] Error loading tenant:', tenantError);
+      return null;
+    }
+
+    // 2. Load all related data in parallel for performance
+    const [
+      servicesResult,
+      branchesResult,
+      customInstructionsResult,
+      businessPoliciesResult,
+      knowledgeArticlesResult,
+      responseTemplatesResult,
+      competitorHandlingResult,
+      scoringRulesResult,
+    ] = await Promise.all([
+      // Services
+      supabase
+        .from('services')
+        .select('id, name, description, ai_description, price_min, price_max, price_note, duration_minutes, category, special_instructions, requires_consultation, promotion_active, promotion_text')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true }),
+
+      // Branches
+      supabase
+        .from('branches')
+        .select('id, name, address, city, phone, whatsapp_number, email, operating_hours, google_maps_url, is_headquarters')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true),
+
+      // Custom Instructions (Knowledge Base)
+      supabase
+        .from('ai_custom_instructions')
+        .select('type, title, instruction, examples, branch_id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('priority', { ascending: true }),
+
+      // Business Policies (Knowledge Base)
+      supabase
+        .from('ai_business_policies')
+        .select('type, title, policy, short_version')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true),
+
+      // Knowledge Articles (Knowledge Base)
+      supabase
+        .from('ai_knowledge_articles')
+        .select('category, title, content, summary, branch_id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true),
+
+      // Response Templates (Knowledge Base)
+      supabase
+        .from('ai_response_templates')
+        .select('trigger, name, template, variables, branch_id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true),
+
+      // Competitor Handling (Knowledge Base)
+      supabase
+        .from('ai_competitor_handling')
+        .select('competitor, aliases, strategy, talking_points, avoid_saying')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true),
+
+      // Scoring Rules
+      supabase
+        .from('lead_scoring_rules')
+        .select('signal_name, points, keywords, category')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true),
+    ]);
+
+    // Build the context object
+    const aiConfig = tenant.ai_config || {};
+
+    const context: TenantAIContext = {
+      tenant_id: tenant.id,
+      tenant_name: tenant.name,
+      vertical: tenant.vertical || 'general',
+      timezone: tenant.timezone || 'America/Mexico_City',
+      ai_config: {
+        system_prompt: aiConfig.system_prompt || '',
+        model: aiConfig.model || DEFAULT_MODELS.MESSAGING,
+        temperature: aiConfig.temperature ?? OPENAI_CONFIG.defaultTemperature,
+        response_style: aiConfig.response_style || 'professional_friendly',
+        max_response_length: aiConfig.max_response_length || 300,
+        enable_scoring: aiConfig.enable_scoring ?? true,
+        auto_escalate_keywords: aiConfig.auto_escalate_keywords || [],
+        business_hours: aiConfig.business_hours || {
+          start: '09:00',
+          end: '18:00',
+          days: [1, 2, 3, 4, 5],
+        },
+      },
+      services: (servicesResult.data || []).map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description || '',
+        ai_description: s.ai_description,
+        price_min: s.price_min || 0,
+        price_max: s.price_max || 0,
+        price_note: s.price_note,
+        duration_minutes: s.duration_minutes || 30,
+        category: s.category || 'general',
+        special_instructions: s.special_instructions,
+        requires_consultation: s.requires_consultation,
+        promotion_active: s.promotion_active,
+        promotion_text: s.promotion_text,
+      })),
+      faqs: [], // FAQs are typically loaded separately if needed
+      branches: (branchesResult.data || []).map(b => ({
+        id: b.id,
+        name: b.name,
+        address: b.address || '',
+        city: b.city || '',
+        phone: b.phone || '',
+        whatsapp_number: b.whatsapp_number || '',
+        email: b.email || '',
+        operating_hours: b.operating_hours || {},
+        google_maps_url: b.google_maps_url || '',
+        is_headquarters: b.is_headquarters || false,
+        staff_ids: [],
+      })),
+      doctors: [], // Staff/Doctors loaded separately if needed
+      scoring_rules: (scoringRulesResult.data || []).map(r => ({
+        signal_name: r.signal_name,
+        points: r.points,
+        keywords: r.keywords || [],
+        category: r.category || 'general',
+      })),
+      // Knowledge Base data
+      custom_instructions: customInstructionsResult.data || [],
+      business_policies: businessPoliciesResult.data || [],
+      knowledge_articles: knowledgeArticlesResult.data || [],
+      response_templates: responseTemplatesResult.data || [],
+      competitor_handling: competitorHandlingResult.data || [],
+    };
+
+    console.log(`[AI Preview] Loaded context for tenant ${tenantId}: ${context.services.length} services, ${context.branches.length} branches, ${context.custom_instructions?.length || 0} instructions`);
+
+    return context;
+  } catch (error) {
+    console.error('[AI Preview] Error loading tenant context:', error);
+    return null;
+  }
 }
 
 // Detect intent from message
@@ -282,12 +445,14 @@ export async function POST(request: NextRequest) {
 
     const tenantId = context.userRole.tenant_id;
 
-    // 3. Load tenant context (includes Knowledge Base data)
-    const tenantContext = await getTenantAIContext(tenantId);
+    // 3. Load tenant context directly (includes Knowledge Base data)
+    // Using direct queries instead of RPC for better compatibility
+    const tenantContext = await loadTenantContextDirect(supabase, tenantId);
 
     if (!tenantContext) {
+      console.error(`[AI Preview] Failed to load context for tenant ${tenantId}`);
       return NextResponse.json<PreviewResponse>(
-        { success: false, error: 'No se pudo cargar el contexto del negocio' },
+        { success: false, error: 'No se pudo cargar el contexto del negocio. Verifica que el tenant tenga datos configurados.' },
         { status: 500 }
       );
     }
