@@ -11,76 +11,8 @@ import { motion } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
 import type { AgentProfileWithChannels } from '@/src/shared/types/agent-profiles';
 
-// ======================
-// ICONS
-// ======================
-const icons = {
-  messages: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-    </svg>
-  ),
-  check: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  calendar: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  ),
-  clock: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  refresh: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  ),
-  whatsapp: (
-    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-    </svg>
-  ),
-  instagram: (
-    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-    </svg>
-  ),
-  messenger: (
-    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M12 0C5.373 0 0 4.975 0 11.111c0 3.497 1.745 6.616 4.472 8.652V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.975 18.627 0 12 0zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
-    </svg>
-  ),
-  edit: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-    </svg>
-  ),
-  user: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-    </svg>
-  ),
-  robot: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
-  ),
-};
-
-// ======================
-// CHANNEL ICONS MAP
-// ======================
-const channelIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-  whatsapp: { icon: icons.whatsapp, color: 'text-green-600', bg: 'bg-green-50' },
-  instagram: { icon: icons.instagram, color: 'text-pink-600', bg: 'bg-pink-50' },
-  messenger: { icon: icons.messenger, color: 'text-blue-600', bg: 'bg-blue-50' },
-  tiktok: { icon: icons.instagram, color: 'text-gray-800', bg: 'bg-gray-100' },
-};
+// Shared imports from centralized modules
+import { icons, channelIconsConfig, PREVIEW_SCENARIOS } from '../shared';
 
 // ======================
 // TYPES
@@ -94,16 +26,6 @@ interface ResumenTabProps {
   onEditBusiness: () => void;
   onEditPersonal: () => void;
 }
-
-// ======================
-// PREVIEW SCENARIOS
-// ======================
-const PREVIEW_SCENARIOS = [
-  { id: 'price', label: 'Consulta de precio', message: 'Hola, cuanto cuesta una limpieza dental?' },
-  { id: 'appointment', label: 'Agendar cita', message: 'Quiero agendar una cita para manana' },
-  { id: 'location', label: 'Ubicacion', message: 'Donde estan ubicados?' },
-  { id: 'hours', label: 'Horarios', message: 'A que hora abren?' },
-];
 
 // ======================
 // COMPONENT
@@ -187,9 +109,7 @@ export function ResumenTab({
                   ? 'bg-purple-100 text-purple-600'
                   : 'bg-slate-100 text-slate-400'
               )}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+                {icons.building}
               </div>
               <div>
                 <h3 className="font-semibold text-slate-900">Perfil de Negocio</h3>
@@ -218,7 +138,7 @@ export function ResumenTab({
             <div className="flex flex-wrap gap-2">
               {connectedChannels.length > 0 ? (
                 connectedChannels.map((channel, idx) => {
-                  const channelInfo = channelIcons[channel.channel_type] || channelIcons.whatsapp;
+                  const channelInfo = channelIconsConfig[channel.channel_type] || channelIconsConfig.whatsapp;
                   return (
                     <span
                       key={`${channel.channel_type}-${channel.account_number}-${idx}`}
@@ -229,7 +149,7 @@ export function ResumenTab({
                       )}
                     >
                       {channelInfo.icon}
-                      <span className="capitalize">{channel.channel_type}</span>
+                      <span className="capitalize">{channelInfo.name}</span>
                     </span>
                   );
                 })
@@ -242,7 +162,7 @@ export function ResumenTab({
           {/* Quick Info */}
           {businessProfile && (
             <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
-              <span>Estilo: <strong className="text-slate-700">{businessProfile.response_style === 'professional_friendly' ? 'Profesional Calido' : businessProfile.response_style}</strong></span>
+              <span>Estilo: <strong className="text-slate-700">{businessProfile.response_style === 'professional_friendly' ? 'Profesional Cálido' : businessProfile.response_style}</strong></span>
               <span>Delay: <strong className="text-slate-700">{businessProfile.response_delay_minutes === 0 ? 'Inmediato' : `${businessProfile.response_delay_minutes} min`}</strong></span>
             </div>
           )}
@@ -252,7 +172,7 @@ export function ResumenTab({
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors"
           >
             {icons.edit}
-            <span>Editar configuracion</span>
+            <span>Editar configuración</span>
           </button>
         </div>
 
@@ -270,9 +190,7 @@ export function ResumenTab({
                     ? 'bg-orange-100 text-orange-600'
                     : 'bg-slate-100 text-slate-400'
                 )}>
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+                  {icons.userSmall}
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-900">Perfil Personal</h3>
@@ -305,7 +223,7 @@ export function ResumenTab({
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors"
                 >
                   {icons.edit}
-                  <span>Editar configuracion</span>
+                  <span>Editar configuración</span>
                 </button>
               </>
             ) : (
@@ -335,18 +253,18 @@ export function ResumenTab({
           </div>
           <p className="text-2xl font-bold text-slate-900">--</p>
           <p className="text-xs text-slate-500">Mensajes procesados</p>
-          <p className="text-xs text-slate-400 mt-1">Ultimos 7 dias</p>
+          <p className="text-xs text-slate-400 mt-1">Últimos 7 días</p>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
-              {icons.check}
+              {icons.checkCircle}
             </div>
           </div>
           <p className="text-2xl font-bold text-slate-900">--</p>
           <p className="text-xs text-slate-500">Resueltos sin escalar</p>
-          <p className="text-xs text-slate-400 mt-1">Ultimos 7 dias</p>
+          <p className="text-xs text-slate-400 mt-1">Últimos 7 días</p>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -357,7 +275,7 @@ export function ResumenTab({
           </div>
           <p className="text-2xl font-bold text-slate-900">--</p>
           <p className="text-xs text-slate-500">Citas agendadas</p>
-          <p className="text-xs text-slate-400 mt-1">Ultimos 7 dias</p>
+          <p className="text-xs text-slate-400 mt-1">Últimos 7 días</p>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -377,7 +295,7 @@ export function ResumenTab({
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-slate-900">Preview en vivo</h3>
-            <p className="text-sm text-slate-500">Simula como responde tu asistente</p>
+            <p className="text-sm text-slate-500">Simula cómo responde tu asistente</p>
           </div>
           <select
             value={selectedScenario.id}
@@ -398,7 +316,7 @@ export function ResumenTab({
           {/* Customer Message */}
           <div className="flex items-start gap-3 mb-4">
             <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 flex-shrink-0">
-              {icons.user}
+              {icons.userSmall}
             </div>
             <div className="flex-1">
               <p className="text-xs font-medium text-slate-500 mb-1">Cliente</p>
@@ -430,10 +348,7 @@ export function ResumenTab({
                 >
                   {isGeneratingPreview ? (
                     <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
+                      {icons.spinner}
                       <span>Generando respuesta...</span>
                     </>
                   ) : (

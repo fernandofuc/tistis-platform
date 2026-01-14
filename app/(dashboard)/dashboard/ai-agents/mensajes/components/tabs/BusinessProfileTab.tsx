@@ -11,75 +11,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
 import type { AgentProfileWithChannels, AgentProfileInput } from '@/src/shared/types/agent-profiles';
 import type { VerticalType, ResponseStyle } from '@/src/shared/config/agent-templates';
+import { RESPONSE_STYLES, getTemplatesForVertical } from '@/src/shared/config/agent-templates';
+
+// Shared imports from centralized modules
 import {
-  RESPONSE_STYLES,
-  getTemplatesForVertical,
-} from '@/src/shared/config/agent-templates';
-
-// ======================
-// ICONS
-// ======================
-const icons = {
-  save: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  ),
-  chevronDown: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  ),
-  brain: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-    </svg>
-  ),
-  sparkles: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-    </svg>
-  ),
-  clock: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  info: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-};
-
-// ======================
-// CAPABILITY LABELS
-// ======================
-const capabilityLabels: Record<string, string> = {
-  booking: 'Citas',
-  pricing: 'Precios',
-  faq: 'FAQ',
-  lead_capture: 'Leads',
-  objections: 'Objeciones',
-  location: 'Ubicación',
-  hours: 'Horarios',
-  reservations: 'Reservas',
-  ordering: 'Pedidos',
-  menu_info: 'Menú',
-  redirect_to_clinic: 'Derivar',
-  redirect_to_business: 'Derivar',
-  basic_info: 'Info',
-};
-
-// ======================
-// DELAY OPTIONS
-// ======================
-const DELAY_OPTIONS = [
-  { value: 0, label: 'Inmediato', description: 'Responde al instante' },
-  { value: 1, label: '1 minuto', description: 'Delay corto' },
-  { value: 3, label: '3 minutos', description: 'Delay moderado' },
-  { value: 5, label: '5 minutos', description: 'Delay natural' },
-];
+  icons,
+  BUSINESS_DELAY_OPTIONS,
+  CAPABILITY_LABELS,
+  validateTemplateKey,
+} from '../shared';
 
 // ======================
 // TYPES
@@ -107,6 +47,7 @@ export function BusinessProfileTab({
   const [selectedTemplate, setSelectedTemplate] = useState(profile?.agent_template || '');
   const [responseStyle, setResponseStyle] = useState<ResponseStyle>(profile?.response_style || 'professional_friendly');
   const [responseDelay, setResponseDelay] = useState(profile?.response_delay_minutes || 0);
+  const [delayFirstOnly, setDelayFirstOnly] = useState(profile?.response_delay_first_only ?? false);
   const [aiLearningEnabled, setAiLearningEnabled] = useState(profile?.ai_learning_enabled ?? true);
   const [customInstructions, setCustomInstructions] = useState(profile?.custom_instructions_override || '');
 
@@ -130,6 +71,7 @@ export function BusinessProfileTab({
       setSelectedTemplate(profile.agent_template || '');
       setResponseStyle(profile.response_style || 'professional_friendly');
       setResponseDelay(profile.response_delay_minutes || 0);
+      setDelayFirstOnly(profile.response_delay_first_only ?? false);
       setAiLearningEnabled(profile.ai_learning_enabled ?? true);
       setCustomInstructions(profile.custom_instructions_override || '');
       setHasChanges(false);
@@ -150,8 +92,15 @@ export function BusinessProfileTab({
     setSaveError(null);
   }, []);
 
-  // Handle save
+  // Handle save with validation
   const handleSave = useCallback(async () => {
+    // Validate template before saving
+    const templateValidation = validateTemplateKey(selectedTemplate);
+    if (!templateValidation.isValid) {
+      setSaveError(templateValidation.error || 'Template inválido');
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -161,6 +110,7 @@ export function BusinessProfileTab({
       agent_template: selectedTemplate,
       response_style: responseStyle,
       response_delay_minutes: responseDelay,
+      response_delay_first_only: delayFirstOnly,
       ai_learning_enabled: aiLearningEnabled,
       custom_instructions_override: customInstructions || undefined,
       is_active: true,
@@ -180,7 +130,7 @@ export function BusinessProfileTab({
     } finally {
       setIsSaving(false);
     }
-  }, [profileName, tenantName, selectedTemplate, responseStyle, responseDelay, aiLearningEnabled, customInstructions, onSave]);
+  }, [profileName, tenantName, selectedTemplate, responseStyle, responseDelay, delayFirstOnly, aiLearningEnabled, customInstructions, onSave]);
 
   if (isLoading) {
     return (
@@ -203,9 +153,7 @@ export function BusinessProfileTab({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+              {icons.building}
             </div>
             <div>
               <h2 className="text-xl font-bold">Perfil de Negocio</h2>
@@ -279,7 +227,7 @@ export function BusinessProfileTab({
                         key={cap}
                         className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full"
                       >
-                        {capabilityLabels[cap] || cap}
+                        {CAPABILITY_LABELS[cap] || cap}
                       </span>
                     ))}
                     {template.capabilities.length > 4 && (
@@ -343,7 +291,7 @@ export function BusinessProfileTab({
           <label className="text-sm font-medium text-slate-700">Tiempo de respuesta</label>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {DELAY_OPTIONS.map((option) => (
+          {BUSINESS_DELAY_OPTIONS.map((option) => (
             <button
               key={option.value}
               onClick={() => { setResponseDelay(option.value); markChange(); }}
@@ -359,6 +307,25 @@ export function BusinessProfileTab({
             </button>
           ))}
         </div>
+
+        {/* First message only toggle - only show if delay > 0 */}
+        {responseDelay > 0 && (
+          <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={delayFirstOnly}
+                onChange={(e) => { setDelayFirstOnly(e.target.checked); markChange(); }}
+                className="w-4 h-4 rounded border-slate-300 text-purple-500 focus:ring-purple-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-slate-700">Solo aplicar delay en primer mensaje</span>
+                <p className="text-xs text-slate-500">Los siguientes mensajes en la conversación responden más rápido</p>
+              </div>
+            </label>
+          </div>
+        )}
+
         <p className="mt-3 text-xs text-slate-500 flex items-start gap-1.5">
           <span className="text-slate-400 mt-0.5">{icons.info}</span>
           <span>
@@ -455,9 +422,7 @@ export function BusinessProfileTab({
               animate={{ opacity: 1, x: 0 }}
               className="text-sm text-emerald-600 font-medium flex items-center gap-1.5"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              {icons.check}
               Cambios guardados
             </motion.span>
           )}
@@ -484,10 +449,7 @@ export function BusinessProfileTab({
         >
           {isSaving ? (
             <>
-              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              {icons.spinner}
               <span>Guardando...</span>
             </>
           ) : (
