@@ -250,12 +250,7 @@ function AccountCard({ connection, onEdit, onToggleAI, onOpenAISettings }: Accou
                 <h3 className="text-lg font-semibold text-gray-900">
                   {connection.account_name}
                 </h3>
-                {connection.is_personal_brand && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                    <UserIcon className="w-3 h-3 mr-1" />
-                    Personal
-                  </span>
-                )}
+                {/* Badge de "Personal" removido - ahora se gestiona en Agente Mensajes */}
               </div>
               <p className="text-sm text-gray-500 mt-0.5">
                 {getIdentifier() || metadata.name}
@@ -781,16 +776,11 @@ function ChannelSetupModal({
   const [copied, setCopied] = useState<string | null>(null);
 
   // Form data - unified for all channels
+  // NOTA: Configuración de AI (delay, personal brand) se gestiona en Agente Mensajes
   const [formData, setFormData] = useState({
-    // General
+    // General - Solo datos de conexión técnica
     accountName: existingConnection?.account_name || `${metadata.shortName} ${accountNumber === 1 ? 'Principal' : 'Secundario'}`,
     branchId: existingConnection?.branch_id || '',
-    isPersonalBrand: existingConnection?.is_personal_brand || accountNumber === 2,
-
-    // AI Settings
-    aiPersonality: existingConnection?.ai_personality_override || '',
-    firstMessageDelay: existingConnection?.first_message_delay_seconds || 0,
-    subsequentMessageDelay: existingConnection?.subsequent_message_delay_seconds || 0,
 
     // WhatsApp
     phoneNumberId: existingConnection?.whatsapp_phone_number_id || '',
@@ -865,18 +855,19 @@ function ChannelSetupModal({
     const verifyToken = getVerifyToken();
 
     // Build channel-specific data
+    // NOTA: is_personal_brand, delays y ai_personality se gestionan en Agente Mensajes
     const channelData: Record<string, unknown> = {
       tenant_id: tenantId,
       branch_id: formData.branchId || null,
       channel,
       account_number: accountNumber,
       account_name: formData.accountName,
-      is_personal_brand: formData.isPersonalBrand,
+      is_personal_brand: false, // Se asigna desde Agente Mensajes
       status: testResult?.success ? 'connected' : 'configuring',
       ai_enabled: true,
-      ai_personality_override: formData.aiPersonality || null,
-      first_message_delay_seconds: formData.firstMessageDelay,
-      subsequent_message_delay_seconds: formData.subsequentMessageDelay,
+      ai_personality_override: null, // Se hereda del perfil asignado
+      first_message_delay_seconds: 0, // Se hereda del perfil asignado
+      subsequent_message_delay_seconds: 0, // Se hereda del perfil asignado
     };
 
     // Add channel-specific fields
@@ -1151,120 +1142,9 @@ function ChannelSetupModal({
                   </div>
                 )}
 
-                {/* Personal Brand Toggle - Enhanced Card */}
-                <div className={cn(
-                  'relative p-5 rounded-2xl border-2 transition-all cursor-pointer overflow-hidden',
-                  formData.isPersonalBrand
-                    ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200'
-                    : 'bg-gray-50 border-gray-200 hover:border-gray-300'
-                )}
-                  onClick={() => setFormData({ ...formData, isPersonalBrand: !formData.isPersonalBrand })}
-                >
-                  {/* Decorative elements when active */}
-                  {formData.isPersonalBrand && (
-                    <>
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-purple-200/30 rounded-full -translate-y-12 translate-x-12" />
-                      <div className="absolute bottom-0 left-0 w-16 h-16 bg-pink-200/30 rounded-full translate-y-8 -translate-x-8" />
-                    </>
-                  )}
-                  <div className="relative flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-sm',
-                        formData.isPersonalBrand
-                          ? 'bg-gradient-to-br from-purple-500 to-pink-500 shadow-purple-500/20'
-                          : 'bg-gray-200'
-                      )}>
-                        <UserIcon className={cn(
-                          'w-6 h-6 transition-colors',
-                          formData.isPersonalBrand ? 'text-white' : 'text-gray-500'
-                        )} />
-                      </div>
-                      <div>
-                        <p className={cn(
-                          'font-semibold transition-colors',
-                          formData.isPersonalBrand ? 'text-purple-900' : 'text-gray-700'
-                        )}>
-                          Marca Personal
-                        </p>
-                        <p className={cn(
-                          'text-sm transition-colors',
-                          formData.isPersonalBrand ? 'text-purple-600' : 'text-gray-500'
-                        )}>
-                          Esta cuenta es para mi perfil personal
-                        </p>
-                      </div>
-                    </div>
-                    <div className={cn(
-                      'relative w-14 h-8 rounded-full transition-all duration-300',
-                      formData.isPersonalBrand ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-300'
-                    )}>
-                      <span
-                        className={cn(
-                          'absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300',
-                          formData.isPersonalBrand ? 'translate-x-6' : 'translate-x-0'
-                        )}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Response Delay Settings */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 pt-2">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-tis-coral to-orange-500 flex items-center justify-center shadow-md shadow-tis-coral/20">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">Delay de Respuesta</p>
-                      <p className="text-xs text-gray-500">Simula tiempo de escritura natural</p>
-                    </div>
-                  </div>
-
-                  {/* Delay Presets */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { value: 0, label: 'Inmediato', desc: 'Al instante', icon: '⚡' },
-                      { value: 480, label: 'Natural', desc: '8 min', icon: '💬', recommended: true },
-                      { value: 900, label: 'Ocupado', desc: '15 min', icon: '⏰' },
-                    ].map((preset) => {
-                      const isSelected = formData.firstMessageDelay === preset.value;
-                      return (
-                        <button
-                          key={preset.value}
-                          type="button"
-                          onClick={() => {
-                            setFormData({ ...formData, firstMessageDelay: preset.value, subsequentMessageDelay: 0 });
-                          }}
-                          className={cn(
-                            'relative p-3 rounded-xl border-2 text-center transition-all',
-                            isSelected
-                              ? 'border-tis-coral bg-gradient-to-br from-tis-coral/5 to-orange-50'
-                              : 'border-gray-200 hover:border-gray-300 bg-white'
-                          )}
-                        >
-                          {preset.recommended && (
-                            <span className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-tis-coral text-white text-[10px] font-bold rounded-full">
-                              Rec
-                            </span>
-                          )}
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-tis-coral flex items-center justify-center">
-                              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          )}
-                          <span className="text-lg block mb-1">{preset.icon}</span>
-                          <span className="font-medium text-gray-900 text-sm block">{preset.label}</span>
-                          <p className="text-xs text-gray-500">{preset.desc}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                {/* NOTA: Configuración de "Marca Personal" y "Delay de Respuesta" */}
+                {/* Se ha movido a Mis Agentes > Agente Mensajes > Configurar Perfil */}
+                {/* Los canales ahora solo gestionan la conexión técnica */}
               </div>
             </div>
           )}

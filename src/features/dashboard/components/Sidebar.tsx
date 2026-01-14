@@ -291,7 +291,7 @@ const navItemsConfig: NavItemWithFlag[] = [
         alwaysShow: true,
       },
       {
-        name: 'Configuración',
+        name: 'Base Conocimiento',
         href: '/dashboard/ai-agents/configuracion',
         icon: icons.agenteConfig,
         alwaysShow: true,

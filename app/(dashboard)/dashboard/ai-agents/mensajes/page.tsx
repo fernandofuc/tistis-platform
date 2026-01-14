@@ -8,7 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
+// Link import removed - no longer needed after removing Knowledge Base quick access
 import { PageWrapper } from '@/src/features/dashboard';
 import { ProfileCard, ProfileConfigModal } from '@/src/features/ai-agents';
 import { useAgentProfiles } from '@/src/hooks/useAgentProfiles';
@@ -24,24 +24,9 @@ import { getDefaultTemplate } from '@/src/shared/config/agent-templates';
 // ======================
 
 const icons = {
-  robot: (
-    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
-  ),
   info: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  book: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-    </svg>
-  ),
-  arrow: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
     </svg>
   ),
   sparkles: (
@@ -78,6 +63,8 @@ export default function AgenteMensajesPage() {
   const [creatingPersonal, setCreatingPersonal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingPersonal, setIsTogglingPersonal] = useState(false);
+  const [isSavingBusinessDelay, setIsSavingBusinessDelay] = useState(false);
+  const [isSavingPersonalDelay, setIsSavingPersonalDelay] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const isLoading = tenantLoading || profilesLoading;
@@ -177,6 +164,52 @@ export default function AgenteMensajesPage() {
     }
   }, [toggleProfile, refresh, showSuccess]);
 
+  // Handle delay change for business profile
+  const handleBusinessDelayChange = useCallback(async (delayMinutes: number) => {
+    if (!business) return;
+
+    setIsSavingBusinessDelay(true);
+    try {
+      const success = await updateProfile('business', {
+        profile_name: business.profile_name,
+        agent_template: business.agent_template,
+        response_style: business.response_style,
+        response_delay_minutes: delayMinutes,
+      });
+      if (success) {
+        await refresh();
+        showSuccess('Delay actualizado');
+      }
+    } catch (err) {
+      console.error('Error updating business delay:', err);
+    } finally {
+      setIsSavingBusinessDelay(false);
+    }
+  }, [business, updateProfile, refresh, showSuccess]);
+
+  // Handle delay change for personal profile
+  const handlePersonalDelayChange = useCallback(async (delayMinutes: number) => {
+    if (!personal) return;
+
+    setIsSavingPersonalDelay(true);
+    try {
+      const success = await updateProfile('personal', {
+        profile_name: personal.profile_name,
+        agent_template: personal.agent_template,
+        response_style: personal.response_style,
+        response_delay_minutes: delayMinutes,
+      });
+      if (success) {
+        await refresh();
+        showSuccess('Delay actualizado');
+      }
+    } catch (err) {
+      console.error('Error updating personal delay:', err);
+    } finally {
+      setIsSavingPersonalDelay(false);
+    }
+  }, [personal, updateProfile, refresh, showSuccess]);
+
   return (
     <PageWrapper
       title="Agente de Mensajes"
@@ -248,7 +281,9 @@ export default function AgenteMensajesPage() {
             vertical={vertical}
             tenantName={tenant?.name}
             isLoading={isLoading}
+            isSavingDelay={isSavingBusinessDelay}
             onConfigure={() => handleConfigure('business')}
+            onDelayChange={handleBusinessDelayChange}
           />
 
           {/* Personal Profile - Solo para vertical dental */}
@@ -261,35 +296,13 @@ export default function AgenteMensajesPage() {
               isLoading={isLoading}
               isActivating={creatingPersonal}
               isTogglingActive={isTogglingPersonal}
+              isSavingDelay={isSavingPersonalDelay}
               onConfigure={() => handleConfigure('personal')}
               onActivate={handleActivatePersonal}
               onToggleActive={personal ? handleTogglePersonal : undefined}
+              onDelayChange={handlePersonalDelayChange}
             />
           )}
-        </div>
-
-        {/* Knowledge Base Quick Access */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
-                {icons.book}
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Base de Conocimiento</h3>
-                <p className="text-sm text-gray-500">
-                  Configura instrucciones, políticas y plantillas que usan ambos perfiles
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/dashboard/ai-agents/configuracion"
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors"
-            >
-              <span>Configurar</span>
-              {icons.arrow}
-            </Link>
-          </div>
         </div>
 
         {/* Tips Section */}
@@ -320,8 +333,8 @@ export default function AgenteMensajesPage() {
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                   <span>
-                    <strong>Base de Conocimiento:</strong> Define servicios, precios, horarios y políticas.
-                    El asistente usará esta información para responder.
+                    <strong>Base de Conocimiento:</strong> Accede desde el menú lateral a &quot;Base Conocimiento&quot;
+                    para definir servicios, precios, horarios y políticas.
                   </span>
                 </li>
               </ul>

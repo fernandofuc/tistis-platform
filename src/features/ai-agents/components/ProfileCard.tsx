@@ -91,6 +91,17 @@ const channelColors: Record<string, string> = {
 };
 
 // ======================
+// DELAY PRESETS
+// ======================
+
+const DELAY_PRESETS = [
+  { value: 0, label: 'Inmediato', desc: '< 1 min', icon: '⚡' },
+  { value: 5, label: 'Natural', desc: '3-5 min', icon: '💬' },
+  { value: 8, label: 'Ocupado', desc: '8-10 min', icon: '⏱️' },
+  { value: 15, label: 'Muy ocupado', desc: '15+ min', icon: '🕐' },
+];
+
+// ======================
 // TYPES
 // ======================
 
@@ -102,9 +113,11 @@ interface ProfileCardProps {
   isLoading?: boolean;
   isActivating?: boolean;
   isTogglingActive?: boolean;
+  isSavingDelay?: boolean;
   onConfigure: () => void;
   onActivate?: () => void;
   onToggleActive?: (isActive: boolean) => void;
+  onDelayChange?: (delayMinutes: number) => void;
 }
 
 // ======================
@@ -119,9 +132,11 @@ export function ProfileCard({
   isLoading,
   isActivating,
   isTogglingActive,
+  isSavingDelay,
   onConfigure,
   onActivate,
   onToggleActive,
+  onDelayChange,
 }: ProfileCardProps) {
   const isBusiness = profileType === 'business';
   const isActive = profile?.is_active ?? false;
@@ -358,14 +373,47 @@ export function ProfileCard({
         </div>
       )}
 
-      {/* Response Delay (for personal profile) */}
-      {!isBusiness && profile && profile.response_delay_minutes > 0 && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
-          {icons.clock}
-          <span>
-            Delay de respuesta: <strong>{profile.response_delay_minutes} min</strong>
-            {profile.response_delay_first_only && ' (solo primera vez)'}
-          </span>
+      {/* Response Delay Selector - Interactive */}
+      {profile && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2">
+            {icons.clock}
+            <span>Delay de respuesta {profile.response_delay_first_only && '(solo primera vez)'}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {DELAY_PRESETS.map((preset) => {
+              // Para perfil de negocio, solo mostrar Inmediato y Natural
+              if (isBusiness && preset.value > 5) return null;
+
+              const isSelected = profile.response_delay_minutes === preset.value ||
+                (preset.value === 0 && profile.response_delay_minutes < 3) ||
+                (preset.value === 5 && profile.response_delay_minutes >= 3 && profile.response_delay_minutes < 8) ||
+                (preset.value === 8 && profile.response_delay_minutes >= 8 && profile.response_delay_minutes < 15) ||
+                (preset.value === 15 && profile.response_delay_minutes >= 15);
+
+              return (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => onDelayChange?.(preset.value)}
+                  disabled={isSavingDelay}
+                  className={cn(
+                    'relative p-2 rounded-lg border text-center transition-all text-xs',
+                    isSelected
+                      ? isBusiness
+                        ? 'border-purple-300 bg-purple-50 text-purple-700'
+                        : 'border-orange-300 bg-orange-50 text-orange-700'
+                      : 'border-gray-200 hover:border-gray-300 bg-white text-gray-600',
+                    isSavingDelay && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  <span className="block text-sm mb-0.5">{preset.icon}</span>
+                  <span className="font-medium block">{preset.label}</span>
+                  <span className="text-[10px] text-gray-400">{preset.desc}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

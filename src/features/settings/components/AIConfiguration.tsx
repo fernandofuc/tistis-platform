@@ -176,34 +176,6 @@ const icons = {
   ),
 };
 
-const responseStyles = [
-  {
-    value: 'professional',
-    label: 'Profesional',
-    desc: 'Formal y directo',
-    example: '"El servicio tiene un costo de $800. El tiempo estimado es de 45 minutos. ¿Desea agendar?"'
-  },
-  {
-    value: 'professional_friendly',
-    label: 'Profesional Cálido',
-    desc: 'Formal pero amigable',
-    example: '"Con gusto le informo que el servicio tiene un costo de $800 MXN e incluye atención completa. ¿Le gustaría agendar?"',
-    recommended: true
-  },
-  {
-    value: 'casual',
-    label: 'Casual',
-    desc: 'Informal y cercano',
-    example: '"Claro que sí, el servicio te sale en $800 y tardamos como 45 mins. ¿Quieres que te aparte un espacio?"'
-  },
-  {
-    value: 'formal',
-    label: 'Muy Formal',
-    desc: 'Extremadamente profesional',
-    example: '"Estimado/a cliente, le informo que el servicio solicitado tiene un costo de $800.00 MXN. Quedamos a sus órdenes."'
-  },
-];
-
 // Modelos gestionados por TIS TIS (no seleccionables por cliente)
 const TISTIS_AI_MODELS = {
   messaging: { name: 'GPT-5 Mini', description: 'Respuestas naturales y rápidas para chat', icon: '💬' },
@@ -223,7 +195,7 @@ export function AIConfiguration() {
   const { vertical, terminology } = useVerticalTerminology();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<'general' | 'clinic' | 'knowledge' | 'scoring' | 'catalog'>('general');
+  const [activeSection, setActiveSection] = useState<'clinic' | 'knowledge' | 'scoring' | 'catalog'>('clinic');
 
   // Terminology based on vertical
   const verticalTerms = {
@@ -449,9 +421,6 @@ export function AIConfiguration() {
   // Business Identity Edit State
   const [isEditingIdentity, setIsEditingIdentity] = useState(false);
   const [savingIdentity, setSavingIdentity] = useState(false);
-
-  // Prompt Generation State
-  const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [identityForm, setIdentityForm] = useState({
     name: '',
     legal_name: '',
@@ -886,10 +855,9 @@ export function AIConfiguration() {
           {/* Tab Navigation */}
           <div className="flex border-b border-gray-100 overflow-x-auto">
             {[
-              { key: 'general', label: 'General', icon: icons.ai },
               { key: 'clinic', label: terms.clinicSection, icon: icons.clinic },
               { key: 'catalog', label: terms.catalogSection, icon: icons.catalog },
-              { key: 'knowledge', label: 'Base de Conocimiento', icon: icons.brain },
+              { key: 'knowledge', label: 'Instrucciones', icon: icons.brain },
               { key: 'scoring', label: 'Clasificación', icon: icons.check },
             ].map((tab) => (
               <button
@@ -909,192 +877,6 @@ export function AIConfiguration() {
               </button>
             ))}
           </div>
-
-          {/* General Settings */}
-          {activeSection === 'general' && (
-            <div className="p-6 space-y-6">
-              {/* Información de Modelos AI (gestionados por TIS TIS) */}
-              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-green-900 mb-2">Modelos AI Optimizados por TIS TIS</h4>
-                    <p className="text-sm text-green-700 mb-3">
-                      Utilizamos los modelos más avanzados de OpenAI, seleccionados automáticamente para cada caso de uso:
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {Object.entries(TISTIS_AI_MODELS).map(([key, model]) => (
-                        <div key={key} className="bg-white/60 rounded-lg p-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{model.icon}</span>
-                            <p className="font-medium text-green-900 text-sm">{model.name}</p>
-                          </div>
-                          <p className="text-xs text-green-600 mt-1">{model.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Estilo de Respuesta del AI - Con Ejemplos */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Estilo de Respuesta del AI
-                  </label>
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                    Sin emojis en respuestas
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {responseStyles.map((style) => {
-                    const isSelected = config.ai_personality === style.value;
-                    return (
-                      <button
-                        key={style.value}
-                        onClick={() => setConfig({ ...config, ai_personality: style.value as typeof config.ai_personality })}
-                        className={cn(
-                          'p-4 rounded-xl border-2 text-left transition-all relative',
-                          isSelected
-                            ? 'border-purple-500 bg-purple-50 shadow-sm'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        )}
-                      >
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <p className={cn(
-                              'font-semibold',
-                              isSelected ? 'text-purple-900' : 'text-gray-900'
-                            )}>
-                              {style.label}
-                            </p>
-                            {'recommended' in style && style.recommended && (
-                              <span className="text-[10px] font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                                Recomendado
-                              </span>
-                            )}
-                          </div>
-                          {isSelected && (
-                            <div className="w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Description */}
-                        <p className={cn(
-                          'text-sm mb-3',
-                          isSelected ? 'text-purple-700' : 'text-gray-500'
-                        )}>
-                          {style.desc}
-                        </p>
-
-                        {/* Example */}
-                        <div className={cn(
-                          'p-3 rounded-lg text-xs leading-relaxed',
-                          isSelected
-                            ? 'bg-purple-100/50 text-purple-800 border border-purple-200'
-                            : 'bg-gray-100 text-gray-600 border border-gray-200'
-                        )}>
-                          <span className={cn(
-                            'font-medium block mb-1',
-                            isSelected ? 'text-purple-600' : 'text-gray-500'
-                          )}>
-                            Ejemplo de respuesta:
-                          </span>
-                          <span className="italic">{style.example}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Info Note */}
-                <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-xs text-gray-600">
-                    El AI mantiene un tono profesional y <strong>no utiliza emojis</strong> en sus respuestas para proyectar una imagen seria y confiable.
-                    Solo responderá con emojis si el cliente los utiliza primero en la conversación.
-                  </p>
-                </div>
-              </div>
-
-              {/* Optimize Internal AI Prompt Section */}
-              <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-purple-900 mb-1">Optimizar Prompt Interno del AI</h4>
-                    <p className="text-sm text-purple-700 mb-2">
-                      Analiza tu Base de Conocimiento (instrucciones, políticas, artículos) y optimiza automáticamente
-                      cómo el AI procesa y organiza esta información internamente.
-                    </p>
-                    <p className="text-xs text-purple-600 mb-3 flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      No crea contenido nuevo, solo mejora la organización interna del prompt.
-                    </p>
-                    <Button
-                      onClick={async () => {
-                        setGeneratingPrompt(true);
-                        try {
-                          const { data: { session } } = await supabase.auth.getSession();
-                          if (!session?.access_token) {
-                            alert('No autenticado. Por favor, vuelve a iniciar sesión.');
-                            return;
-                          }
-                          const response = await fetch('/api/ai-config/generate-prompt', {
-                            method: 'POST',
-                            headers: {
-                              'Authorization': `Bearer ${session.access_token}`,
-                              'Content-Type': 'application/json',
-                            },
-                          });
-                          const result = await response.json();
-                          if (result.success && result.prompt) {
-                            setConfig(prev => ({ ...prev, custom_instructions: result.prompt }));
-                            alert(`Prompt optimizado exitosamente en ${(result.processing_time_ms / 1000).toFixed(1)}s usando ${result.model}`);
-                          } else {
-                            alert('Error: ' + (result.error || 'No se pudo optimizar el prompt'));
-                          }
-                        } catch (error) {
-                          console.error('Error generating prompt:', error);
-                          alert('Error al optimizar prompt');
-                        } finally {
-                          setGeneratingPrompt(false);
-                        }
-                      }}
-                      isLoading={generatingPrompt}
-                      variant="secondary"
-                      className="bg-purple-600 hover:bg-purple-700 text-white border-0"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      Optimizar con Gemini
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
 
           {/* Business & Branches Settings */}
           {activeSection === 'clinic' && (
