@@ -9,7 +9,7 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/src/shared/lib/supabase';
 import type { AgentProfileWithChannels } from '@/src/shared/types/agent-profiles';
 
 // Shared imports from centralized modules
@@ -83,12 +83,8 @@ export function ResumenTab({
   // Get connected channels for business profile
   const connectedChannels = businessProfile?.channels?.filter(c => c.is_connected) || [];
 
-  // Get Supabase session for API calls
+  // Get Supabase session for API calls (uses singleton client)
   const getAccessToken = useCallback(async (): Promise<string | null> => {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token || null;
   }, []);
