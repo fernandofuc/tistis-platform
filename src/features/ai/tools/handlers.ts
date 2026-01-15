@@ -1184,9 +1184,11 @@ export async function handleGetLoyaltyBalance(
   }
 
   // 2. Obtener balance del lead
+  // FIX v5.5.1: Tabla correcta es 'loyalty_balances', no 'loyalty_token_balances'
+  // Campos correctos: current_balance, total_earned, total_spent (no total_redeemed)
   const { data: balance } = await supabase
-    .from('loyalty_token_balances')
-    .select('current_balance, total_earned, total_redeemed')
+    .from('loyalty_balances')
+    .select('current_balance, total_earned, total_spent')
     .eq('program_id', program.id)
     .eq('lead_id', lead_id)
     .maybeSingle();
@@ -1196,7 +1198,7 @@ export async function handleGetLoyaltyBalance(
     tokens_name: program.tokens_name || 'puntos',
     current_balance: balance?.current_balance || 0,
     total_earned: balance?.total_earned || 0,
-    total_redeemed: balance?.total_redeemed || 0,
+    total_redeemed: balance?.total_spent || 0, // Campo es total_spent en DB
     tokens_per_currency: program.tokens_per_currency || 1,
     currency_threshold: program.tokens_currency_threshold || 1,
   };
@@ -1228,10 +1230,11 @@ export async function handleGetAvailableRewards(
   }
 
   // 2. Obtener balance del lead (si existe)
+  // FIX v5.5.1: Tabla correcta es 'loyalty_balances'
   let currentBalance = 0;
   if (lead_id) {
     const { data: balance } = await supabase
-      .from('loyalty_token_balances')
+      .from('loyalty_balances')
       .select('current_balance')
       .eq('program_id', program.id)
       .eq('lead_id', lead_id)
@@ -1417,8 +1420,9 @@ export async function handleRedeemReward(
   }
 
   // 2. Verificar balance del lead
+  // FIX v5.5.1: Tabla correcta es 'loyalty_balances'
   const { data: balance } = await supabase
-    .from('loyalty_token_balances')
+    .from('loyalty_balances')
     .select('current_balance')
     .eq('program_id', program.id)
     .eq('lead_id', lead_id)
@@ -1438,14 +1442,16 @@ export async function handleRedeemReward(
   }
 
   // 3. Crear la redención usando RPC
+  // FIX v5.5.1: El RPC espera p_tenant_id (no p_program_id) y no acepta p_notes
+  // Ver migration 108_FIX_APPOINTMENT_LOYALTY_TRIGGER.sql línea 146
   const { data: redemptionResult, error: redemptionError } = await supabase.rpc('redeem_loyalty_reward', {
-    p_program_id: program.id,
+    p_tenant_id: tenant_id,
     p_lead_id: lead_id,
     p_reward_id: reward.id,
-    p_notes: params.notes || `Canjeo via AI - ${reward.name}`,
   });
 
-  if (redemptionError || !redemptionResult) {
+  if (redemptionError) {
+    console.error('[Loyalty] Redeem error:', redemptionError);
     return {
       success: false,
       reward_name: reward.name,
@@ -1456,15 +1462,30 @@ export async function handleRedeemReward(
     };
   }
 
+  // El RPC retorna un array de objetos con { success, redemption_id, redemption_code, error_message }
+  const rpcResult = Array.isArray(redemptionResult) ? redemptionResult[0] : redemptionResult;
+
+  if (!rpcResult?.success) {
+    return {
+      success: false,
+      reward_name: reward.name,
+      tokens_used: 0,
+      new_balance: currentBalance,
+      confirmation_message: '',
+      error: rpcResult?.error_message || 'Error al procesar el canje. Por favor intenta nuevamente.',
+    };
+  }
+
   const newBalance = currentBalance - reward.tokens_required;
 
   return {
     success: true,
-    redemption_id: redemptionResult.redemption_id,
+    redemption_id: rpcResult.redemption_id,
+    redemption_code: rpcResult.redemption_code,
     reward_name: reward.name,
     tokens_used: reward.tokens_required,
     new_balance: newBalance,
-    confirmation_message: `¡Listo! Has canjeado "${reward.name}" por ${reward.tokens_required} puntos. Tu nuevo balance es ${newBalance} puntos.`,
+    confirmation_message: `¡Listo! Has canjeado "${reward.name}" por ${reward.tokens_required} puntos. Tu nuevo balance es ${newBalance} puntos.${rpcResult.redemption_code ? ` Código: ${rpcResult.redemption_code}` : ''}`,
   };
 }
 

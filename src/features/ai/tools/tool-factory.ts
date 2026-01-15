@@ -36,6 +36,11 @@ import {
   CreateOrderSchema,
   CheckItemAvailabilitySchema,
   GetActivePromotionsSchema,
+  // Loyalty Schemas (v5.5.1)
+  GetLoyaltyBalanceSchema,
+  GetAvailableRewardsSchema,
+  GetMembershipInfoSchema,
+  RedeemRewardSchema,
 } from './definitions';
 
 import {
@@ -58,6 +63,11 @@ import {
   handleCreateOrder,
   handleCheckItemAvailability,
   handleGetActivePromotions,
+  // Loyalty handlers (v5.5.1)
+  handleGetLoyaltyBalance,
+  handleGetAvailableRewards,
+  handleGetMembershipInfo,
+  handleRedeemReward,
 } from './handlers';
 
 // ======================
@@ -264,6 +274,54 @@ function createToolWithContext(
         schema: GetActivePromotionsSchema,
         func: async (params) => {
           const result = await handleGetActivePromotions(params, context);
+          return JSON.stringify(result);
+        },
+      });
+
+    // ===========================
+    // LOYALTY-SPECIFIC TOOLS (v5.5.1)
+    // ===========================
+
+    case TOOL_NAMES.GET_LOYALTY_BALANCE:
+      return new DynamicStructuredTool({
+        name: TOOL_NAMES.GET_LOYALTY_BALANCE,
+        description: TOOL_DESCRIPTIONS[TOOL_NAMES.GET_LOYALTY_BALANCE],
+        schema: GetLoyaltyBalanceSchema,
+        func: async () => {
+          const result = await handleGetLoyaltyBalance({}, context);
+          return JSON.stringify(result);
+        },
+      });
+
+    case TOOL_NAMES.GET_AVAILABLE_REWARDS:
+      return new DynamicStructuredTool({
+        name: TOOL_NAMES.GET_AVAILABLE_REWARDS,
+        description: TOOL_DESCRIPTIONS[TOOL_NAMES.GET_AVAILABLE_REWARDS],
+        schema: GetAvailableRewardsSchema,
+        func: async (params) => {
+          const result = await handleGetAvailableRewards(params, context);
+          return JSON.stringify(result);
+        },
+      });
+
+    case TOOL_NAMES.GET_MEMBERSHIP_INFO:
+      return new DynamicStructuredTool({
+        name: TOOL_NAMES.GET_MEMBERSHIP_INFO,
+        description: TOOL_DESCRIPTIONS[TOOL_NAMES.GET_MEMBERSHIP_INFO],
+        schema: GetMembershipInfoSchema,
+        func: async (params) => {
+          const result = await handleGetMembershipInfo(params, context);
+          return JSON.stringify(result);
+        },
+      });
+
+    case TOOL_NAMES.REDEEM_REWARD:
+      return new DynamicStructuredTool({
+        name: TOOL_NAMES.REDEEM_REWARD,
+        description: TOOL_DESCRIPTIONS[TOOL_NAMES.REDEEM_REWARD],
+        schema: RedeemRewardSchema,
+        func: async (params) => {
+          const result = await handleRedeemReward(params, context);
           return JSON.stringify(result);
         },
       });

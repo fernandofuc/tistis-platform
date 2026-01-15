@@ -771,15 +771,16 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
         finalResult.tokens_name = program.tokens_name || 'Puntos';
 
         // Get current token balance for the lead
+        // FIX v5.5.1: Tabla correcta es 'loyalty_balances', campo 'current_balance'
         if (request.lead_id) {
           const { data: balance } = await supabase
-            .from('loyalty_lead_balances')
-            .select('token_balance')
+            .from('loyalty_balances')
+            .select('current_balance')
             .eq('program_id', program.id)
             .eq('lead_id', request.lead_id)
             .maybeSingle();
 
-          finalResult.current_token_balance = balance?.token_balance || 0;
+          finalResult.current_token_balance = balance?.current_balance || 0;
         }
       }
     } catch (loyaltyError) {

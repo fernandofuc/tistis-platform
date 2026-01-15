@@ -339,6 +339,10 @@ export async function getMetaUserProfile(
 /**
  * Busca o crea un lead basado en el PSID de Meta
  * PSID es Page-Scoped ID - único por usuario por página
+ *
+ * MEJORA v5.5.1: Usa find_or_create_lead_smart para detectar
+ * si el cliente ya existe por otro canal (ej: WhatsApp por teléfono)
+ * y vincular automáticamente las identidades.
  */
 export async function findOrCreateMetaLead(
   tenantId: string,
@@ -346,10 +350,60 @@ export async function findOrCreateMetaLead(
   platform: Platform,
   psid: string,
   accessToken: string
-): Promise<{ id: string; name: string; isNew: boolean }> {
+): Promise<{ id: string; name: string; isNew: boolean; wasLinked?: boolean }> {
   const supabase = createServerClient();
 
-  // Campo según plataforma
+  // Obtener perfil del usuario primero (necesitamos el nombre)
+  const profile = await getMetaUserProfile(psid, accessToken, platform);
+  const name = profile?.name || profile?.username || 'Desconocido';
+
+  // Intentar usar la función inteligente que busca por múltiples identidades
+  // Esto detectará si el cliente ya existe por teléfono o email
+  const { data: smartResult, error: smartError } = await supabase.rpc('find_or_create_lead_smart', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+    p_channel: platform,
+    p_identifier: psid,
+    p_contact_name: name,
+    p_email: null, // Meta no proporciona email directamente
+    p_phone: null, // Meta no proporciona teléfono directamente
+  });
+
+  // Si la función smart funciona, usarla
+  if (!smartError && smartResult) {
+    const result = Array.isArray(smartResult) ? smartResult[0] : smartResult;
+
+    if (result?.lead_id) {
+      const wasLinked = result.match_type === 'cross_channel_linked';
+
+      if (wasLinked) {
+        console.log(
+          `[Meta] Cross-channel match: ${platform} user ${psid} linked to existing lead ${result.lead_id} ` +
+          `(matched via ${result.matched_channel || 'unknown channel'})`
+        );
+      } else if (result.is_new) {
+        console.log(`[Meta] New ${platform} lead created: ${result.lead_id}`);
+      }
+
+      // ALWAYS update profile if we have profile data (new leads need it, existing leads may have updated data)
+      if (profile) {
+        await updateMetaLeadProfile(supabase, result.lead_id, platform, profile);
+      }
+
+      return {
+        id: result.lead_id,
+        name: result.lead_name || name,
+        isNew: result.is_new || false,
+        wasLinked,
+      };
+    }
+  }
+
+  // Fallback al método tradicional si la función smart no está disponible
+  if (smartError) {
+    console.warn('[Meta] find_or_create_lead_smart error, using legacy method:', smartError.message);
+  }
+
   const psidField = platform === 'instagram' ? 'instagram_psid' : 'facebook_psid';
 
   // Buscar lead existente por PSID
@@ -358,26 +412,30 @@ export async function findOrCreateMetaLead(
     .select('id, name')
     .eq('tenant_id', tenantId)
     .eq(psidField, psid)
+    .is('deleted_at', null)
     .single();
 
   if (existingLead) {
+    // Actualizar last_interaction_at
+    await supabase
+      .from('leads')
+      .update({ last_interaction_at: new Date().toISOString() })
+      .eq('id', existingLead.id);
     return { ...existingLead, isNew: false };
   }
-
-  // Obtener perfil del usuario
-  const profile = await getMetaUserProfile(psid, accessToken, platform);
-  const name = profile?.name || profile?.username || 'Desconocido';
 
   // Crear nuevo lead
   const leadData: Record<string, unknown> = {
     tenant_id: tenantId,
     branch_id: branchId,
     name,
+    full_name: name,
     source: platform,
     status: 'new',
     classification: 'warm',
     score: 50,
     first_contact_at: new Date().toISOString(),
+    last_interaction_at: new Date().toISOString(),
     [psidField]: psid,
   };
 
@@ -402,6 +460,34 @@ export async function findOrCreateMetaLead(
 
   console.log(`[Meta] New ${platform} lead created: ${newLead.id}`);
   return { ...newLead, isNew: true };
+}
+
+/**
+ * Helper: Actualiza el perfil del lead con datos de Meta
+ * v5.5.1: Función auxiliar para actualizar datos de perfil social
+ */
+async function updateMetaLeadProfile(
+  supabase: ReturnType<typeof createServerClient>,
+  leadId: string,
+  platform: Platform,
+  profile: MetaUserProfile
+): Promise<void> {
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (profile.profile_pic) {
+    updates.profile_image_url = profile.profile_pic;
+  }
+
+  if (platform === 'instagram' && profile.username) {
+    updates.instagram_username = profile.username;
+  }
+
+  await supabase
+    .from('leads')
+    .update(updates)
+    .eq('id', leadId);
 }
 
 // ======================

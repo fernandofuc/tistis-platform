@@ -135,11 +135,12 @@ async function loadLoyaltyContext(tenantId: string, leadId?: string): Promise<Lo
 
     if (leadId) {
       // Cargar balance y membresía del lead EN PARALELO
+      // FIX v5.5.1: Tabla correcta es 'loyalty_balances', campos: current_balance, total_earned, total_spent
       const [balanceResult, membershipResult, rewardsResult] = await Promise.all([
         // Balance de tokens
         supabase
-          .from('loyalty_token_balances')
-          .select('current_balance, total_earned, total_redeemed')
+          .from('loyalty_balances')
+          .select('current_balance, total_earned, total_spent')
           .eq('program_id', program.id)
           .eq('lead_id', leadId)
           .maybeSingle(),
@@ -176,10 +177,11 @@ async function loadLoyaltyContext(tenantId: string, leadId?: string): Promise<Lo
         plan: { name: string; tier_level: string } | null;
       } | null;
 
+      // FIX v5.5.1: Campo correcto es total_spent, no total_redeemed
       leadStatus = {
         token_balance: balance?.current_balance || 0,
         total_earned: balance?.total_earned || 0,
-        total_redeemed: balance?.total_redeemed || 0,
+        total_redeemed: balance?.total_spent || 0,
         tier: membership?.plan?.tier_level || null,
         membership_id: membership?.id || null,
         membership_plan: membership?.plan?.name || null,

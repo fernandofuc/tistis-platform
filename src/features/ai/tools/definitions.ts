@@ -439,6 +439,8 @@ export interface MembershipInfo {
 export interface RewardRedemptionResult {
   success: boolean;
   redemption_id?: string;
+  /** Código de canje generado por el RPC (v5.5.1) */
+  redemption_code?: string;
   reward_name: string;
   tokens_used: number;
   new_balance: number;
@@ -623,9 +625,11 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_ACTIVE_PROMOTIONS,
     TOOL_NAMES.GET_BRANCH_INFO,
     TOOL_NAMES.GET_OPERATING_HOURS,
-    // Loyalty tools (REVISIÓN 5.5) - Mostrar puntos ganados al ordenar
+    // Loyalty tools (REVISIÓN 5.5.1) - Canjeo y consulta de puntos durante pedidos
     TOOL_NAMES.GET_LOYALTY_BALANCE,
     TOOL_NAMES.GET_AVAILABLE_REWARDS,
+    TOOL_NAMES.REDEEM_REWARD, // FIX v5.5.1: Permitir canjear puntos durante pedido
+    TOOL_NAMES.GET_MEMBERSHIP_INFO,
   ],
 
   invoicing_restaurant: [

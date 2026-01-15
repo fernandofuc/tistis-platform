@@ -271,30 +271,85 @@ export async function getTikTokUserProfile(
 
 /**
  * Busca o crea un lead basado en el open_id de TikTok
+ * IMPROVED: Uses smart cross-channel identity detection
+ * - First tries to find existing lead by TikTok open_id
+ * - Then uses find_or_create_lead_smart RPC to detect cross-channel matches
+ * - Falls back to legacy method if RPC not available
  */
 export async function findOrCreateTikTokLead(
   tenantId: string,
   branchId: string | null,
   openId: string,
   accessToken: string
-): Promise<{ id: string; name: string; isNew: boolean }> {
+): Promise<{ id: string; name: string; isNew: boolean; wasLinked?: boolean }> {
   const supabase = createServerClient();
 
-  // Buscar lead existente por TikTok open_id
+  // Obtener perfil del usuario primero (lo necesitamos para ambos paths)
+  const profile = await getTikTokUserProfile(openId, accessToken);
+  const name = profile?.display_name || 'Usuario TikTok';
+
+  // Try smart cross-channel lead finding first
+  // This detects if same person already exists via different channel
+  const { data: smartResult, error: smartError } = await supabase.rpc('find_or_create_lead_smart', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+    p_channel: 'tiktok',
+    p_identifier: openId,
+    p_contact_name: name,
+    p_email: null,
+    p_phone: null,
+  });
+
+  if (!smartError && smartResult) {
+    const result = Array.isArray(smartResult) ? smartResult[0] : smartResult;
+
+    if (result?.lead_id) {
+      const wasLinked = result.match_type === 'cross_channel_linked';
+
+      if (wasLinked) {
+        console.log(
+          `[TikTok] Cross-channel match: TikTok user ${openId} linked to existing lead ${result.lead_id} ` +
+          `(matched via ${result.matched_channel || 'unknown channel'})`
+        );
+      } else if (result.is_new) {
+        console.log(`[TikTok] New lead created via smart RPC: ${result.lead_id}`);
+      }
+
+      // ALWAYS update profile if we have profile data (new leads need it too!)
+      if (profile) {
+        await updateTikTokLeadProfile(result.lead_id, profile);
+      }
+
+      return {
+        id: result.lead_id,
+        name: result.lead_name || name,
+        isNew: result.is_new || false,
+        wasLinked,
+      };
+    }
+  }
+
+  // Fallback: Smart RPC not available or failed, use legacy method
+  if (smartError) {
+    console.warn('[TikTok] find_or_create_lead_smart not available, using legacy method:', smartError.message);
+  }
+
+  // Legacy: Buscar lead existente por TikTok open_id
   const { data: existingLead } = await supabase
     .from('leads')
     .select('id, name')
     .eq('tenant_id', tenantId)
     .eq('tiktok_open_id', openId)
+    .is('deleted_at', null)
     .single();
 
   if (existingLead) {
+    // Update profile if we have new data
+    if (profile) {
+      await updateTikTokLeadProfile(existingLead.id, profile);
+    }
     return { ...existingLead, isNew: false };
   }
-
-  // Obtener perfil del usuario
-  const profile = await getTikTokUserProfile(openId, accessToken);
-  const name = profile?.display_name || 'Usuario TikTok';
 
   // Crear nuevo lead (use 'other' as 'tiktok' is not valid in leads.source constraint)
   const leadData: Record<string, unknown> = {
@@ -327,6 +382,42 @@ export async function findOrCreateTikTokLead(
 
   console.log(`[TikTok] New lead created: ${newLead.id}`);
   return { ...newLead, isNew: true };
+}
+
+/**
+ * Helper: Update TikTok lead profile with latest data
+ */
+async function updateTikTokLeadProfile(
+  leadId: string,
+  profile: TikTokUserProfile
+): Promise<void> {
+  const supabase = createServerClient();
+
+  const updates: Record<string, unknown> = {
+    last_interaction_at: new Date().toISOString(),
+  };
+
+  if (profile.avatar_url) {
+    updates.profile_image_url = profile.avatar_url;
+  }
+
+  if (profile.display_name) {
+    // Only update name if current is generic
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('name')
+      .eq('id', leadId)
+      .single();
+
+    if (lead?.name === 'Usuario TikTok' || lead?.name === 'Unknown') {
+      updates.name = profile.display_name;
+    }
+  }
+
+  await supabase
+    .from('leads')
+    .update(updates)
+    .eq('id', leadId);
 }
 
 // ======================

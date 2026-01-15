@@ -279,6 +279,7 @@ export async function getTenantContext(
  * Busca o crea un lead basado en el número de teléfono
  * FIXED: Uses atomic RPC function with advisory lock to prevent race conditions
  * FIXED: Properly excludes soft-deleted leads
+ * IMPROVED: Uses smart cross-channel identity detection when available
  */
 export async function findOrCreateLead(
   tenantId: string,
@@ -286,8 +287,49 @@ export async function findOrCreateLead(
   phoneNormalized: string,
   contactName?: string,
   source: string = 'whatsapp'
-): Promise<{ id: string; name: string; isNew: boolean }> {
+): Promise<{ id: string; name: string; isNew: boolean; wasLinked?: boolean }> {
   const supabase = createServerClient();
+
+  // First, try smart cross-channel lead finding
+  // This detects if same person already exists via different channel (Instagram, TikTok, etc.)
+  const { data: smartResult, error: smartError } = await supabase.rpc('find_or_create_lead_smart', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+    p_channel: 'whatsapp',
+    p_identifier: phoneNormalized,
+    p_contact_name: contactName || null,
+    p_email: null,
+    p_phone: phoneNormalized,
+  });
+
+  if (!smartError && smartResult) {
+    const result = Array.isArray(smartResult) ? smartResult[0] : smartResult;
+
+    if (result?.lead_id) {
+      const wasLinked = result.match_type === 'cross_channel_linked';
+
+      if (wasLinked) {
+        console.log(
+          `[WhatsApp] Cross-channel match: ${phoneNormalized} linked to existing lead ${result.lead_id} ` +
+          `(matched via ${result.matched_channel || 'unknown channel'})`
+        );
+      } else if (result.is_new) {
+        console.log(`[WhatsApp] New lead created via smart RPC: ${result.lead_id}`);
+      }
+
+      return {
+        id: result.lead_id,
+        name: result.lead_name || contactName || 'Unknown',
+        isNew: result.is_new || false,
+        wasLinked,
+      };
+    }
+  }
+
+  // Fallback: Smart RPC not available, use original atomic RPC
+  if (smartError) {
+    console.warn('[WhatsApp] find_or_create_lead_smart not available, using legacy RPC:', smartError.message);
+  }
 
   // Use atomic RPC function to prevent race conditions
   // This function uses advisory locks to ensure only one lead is created
