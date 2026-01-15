@@ -253,7 +253,7 @@ export function KBCompletenessIndicator({
             <AnimatePresence>
               {scoringResult.recommendations.slice(0, maxRecommendations).map((rec, index) => (
                 <motion.div
-                  key={rec.fieldKey}
+                  key={`rec-${rec.fieldKey}-${rec.priority}-${index}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}

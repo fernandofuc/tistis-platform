@@ -25,6 +25,7 @@ export interface PlaceholderDetectionResult {
  */
 const PLACEHOLDER_PATTERNS = {
   // CRÍTICOS - 100% placeholder
+  // Issue #2: Regex corregidas para evitar DOS y patrones incorrectos
   critical: [
     /^test$/i,
     /^prueba$/i,
@@ -36,28 +37,28 @@ const PLACEHOLDER_PATTERNS = {
     /^foo$/i,
     /^bar$/i,
     /^baz$/i,
-    /^asdf+$/i,
+    /^(?:asdf)+$/i,            // Corregido: busca "asdf" repetido, no "asdfff..."
     /^qwerty$/i,
-    /^1234+$/,
-    /^abcd+$/i,
-    /^xxx+$/i,
-    /^yyy+$/i,
-    /^zzz+$/i,
+    /^(?:1234)+$/,             // Corregido: busca "1234" repetido, no "12344..."
+    /^(?:abcd)+$/i,            // Corregido: busca "abcd" repetido
+    /^x{3,}$/i,                // Corregido: al menos 3 x's
+    /^y{3,}$/i,                // Corregido: al menos 3 y's
+    /^z{3,}$/i,                // Corregido: al menos 3 z's
     /lorem ipsum/i,
     /dolor sit amet/i,
     /consectetur adipiscing/i,
-    /\[.*aquí.*\]/i,           // [escribe aquí]
-    /\[.*completa.*\]/i,       // [completa esto]
-    /\{.*placeholder.*\}/i,
-    /\{\{.*\}\}/,              // {{placeholder}}
-    /TODO/,
-    /FIXME/,
-    /PENDING/i,
-    /TBD$/i,                   // To Be Determined
-    /N\/A$/i,                  // N/A solo
-    /^\.+$/,                   // Solo puntos
-    /^-+$/,                    // Solo guiones
-    /^_+$/,                    // Solo underscores
+    /\[.{0,50}?aquí.{0,50}?\]/i,      // Issue #14: Non-greedy con límite
+    /\[.{0,50}?completa.{0,50}?\]/i,  // Issue #14: Non-greedy con límite
+    /\{.{0,50}?placeholder.{0,50}?\}/i, // Issue #14: Non-greedy con límite
+    /\{\{.{0,100}?\}\}/,              // Issue #14: Non-greedy con límite
+    /\bTODO\b/,                // Word boundary para evitar falsos positivos
+    /\bFIXME\b/,               // Word boundary
+    /\bPENDING\b/i,            // Word boundary
+    /\bTBD\b$/i,               // To Be Determined
+    /^N\/A$/i,                 // N/A solo (exacto)
+    /^\.{2,}$/,                // Solo puntos (2+)
+    /^-{2,}$/,                 // Solo guiones (2+)
+    /^_{2,}$/,                 // Solo underscores (2+)
   ],
 
   // ALTA PROBABILIDAD - Muy probablemente placeholder
@@ -123,21 +124,23 @@ const GENERIC_PATTERNS = [
 /**
  * Frases que indican falta de información específica
  */
-const VAGUE_INDICATORS = [
-  'etc',
-  'y más',
-  'entre otros',
-  'diversos',
-  'varios',
-  'diferentes',
-  'múltiples',
-  'algunos',
-  'ciertos',
-  'consultar',
-  'preguntar',
-  'depende',
-  'varía',
-  'variable',
+// Issue #35: Usar regex con word boundaries para evitar falsos positivos
+// ('etc' matcheaba 'select', 'perfect', etc.)
+const VAGUE_INDICATORS: RegExp[] = [
+  /\betc\.?\b/i,           // etc o etc.
+  /\by\s+más\b/i,          // y más
+  /\bentre\s+otros\b/i,    // entre otros
+  /\bdiversos\b/i,
+  /\bvarios\b/i,
+  /\bdiferentes\b/i,
+  /\bmúltiples\b/i,
+  /\balgunos\b/i,
+  /\bciertos\b/i,
+  /\bconsultar\b/i,
+  /\bpreguntar\b/i,
+  /\bdepende\b/i,
+  /\bvaría\b/i,
+  /\bvariable\b/i,
 ];
 
 // ======================
@@ -169,6 +172,17 @@ export function detectPlaceholder(content: string | null | undefined): Placehold
       confidence: 100,
       matchedPatterns: ['EMPTY_AFTER_TRIM'],
       suggestions: ['Agrega contenido específico de tu negocio'],
+    };
+  }
+
+  // Issue #18: Contenido muy largo (>10000 chars) - asumir válido para evitar regex costosas
+  if (trimmedContent.length > 10000) {
+    return {
+      isPlaceholder: false,
+      isGeneric: false,
+      confidence: 0,
+      matchedPatterns: ['LONG_CONTENT_SKIPPED'],
+      suggestions: undefined,
     };
   }
 
@@ -258,9 +272,9 @@ export function detectGenericContent(content: string): boolean {
     }
   }
 
-  // Verificar exceso de indicadores vagos
+  // Verificar exceso de indicadores vagos (Issue #35: ahora son regex)
   const vagueCount = VAGUE_INDICATORS.filter(
-    indicator => trimmed.includes(indicator.toLowerCase())
+    pattern => pattern.test(trimmed)
   ).length;
 
   // Si hay más de 2 indicadores vagos en contenido corto, es genérico

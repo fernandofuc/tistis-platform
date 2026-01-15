@@ -135,6 +135,7 @@ export type CategoryStatus =
 
 /**
  * Pesos por categoría (deben sumar 100)
+ * Issue #9: Validación en runtime
  */
 export const CATEGORY_WEIGHTS: Record<ScoringCategory, number> = {
   core_data: 30,
@@ -143,6 +144,12 @@ export const CATEGORY_WEIGHTS: Record<ScoringCategory, number> = {
   knowledge: 15,
   advanced: 10,
 };
+
+// Issue #9: Validar que los pesos sumen 100 (error en desarrollo si no)
+const CATEGORY_WEIGHTS_SUM = Object.values(CATEGORY_WEIGHTS).reduce((a, b) => a + b, 0);
+if (CATEGORY_WEIGHTS_SUM !== 100) {
+  console.error(`[KB-SCORING] CATEGORY_WEIGHTS deben sumar 100, actualmente: ${CATEGORY_WEIGHTS_SUM}`);
+}
 
 /**
  * Labels de categorías para UI

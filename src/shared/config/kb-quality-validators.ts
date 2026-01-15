@@ -250,21 +250,27 @@ function calculateQualityScore(
 
   // Penalizar por longitud insuficiente
   const contentLength = content.length;
-  const { minLength, idealLength } = field;
+  // Guardias contra valores inválidos (Issue #1, #10: división por cero y score máximo)
+  const safeMinLength = Math.max(1, field.minLength || 1);
+  const safeIdealLength = Math.max(safeMinLength + 1, field.idealLength || safeMinLength + 1);
 
-  if (contentLength < minLength) {
-    const ratio = contentLength / minLength;
-    score = Math.round(ratio * 60);  // Máximo 60 si no alcanza mínimo
+  if (contentLength < safeMinLength) {
+    // Score 0-70 si no alcanza mínimo (permitir llegar a 100 si supera ideal)
+    const ratio = contentLength / safeMinLength;
+    score = Math.round(ratio * 70);
     issues.push({
       code: 'TOO_SHORT',
-      severity: contentLength < minLength / 2 ? 'critical' : 'warning',
-      message: `Contenido muy corto (${contentLength} caracteres, mínimo ${minLength})`,
-      suggestion: `Expande a al menos ${minLength} caracteres con más detalles`,
+      severity: contentLength < safeMinLength / 2 ? 'critical' : 'warning',
+      message: `Contenido muy corto (${contentLength} caracteres, mínimo ${safeMinLength})`,
+      suggestion: `Expande a al menos ${safeMinLength} caracteres con más detalles`,
     });
-  } else if (contentLength < idealLength) {
-    const ratio = (contentLength - minLength) / (idealLength - minLength);
-    score = Math.round(60 + ratio * 30);  // 60-90 entre mínimo e ideal
+  } else if (contentLength < safeIdealLength) {
+    // Score 70-100 entre mínimo e ideal (Issue #10: permitir 100%)
+    const range = safeIdealLength - safeMinLength;
+    const ratio = range > 0 ? (contentLength - safeMinLength) / range : 1;
+    score = Math.round(70 + ratio * 30);
   }
+  // else: contentLength >= safeIdealLength → score permanece 100
 
   // Verificar keywords esperados
   if (field.mustContainKeywords && field.mustContainKeywords.length > 0) {
@@ -364,19 +370,21 @@ export function validateField(
   data: KBDataForScoring
 ): FieldQualityResult {
   // Caso especial: business_hours
+  // CICLO 2: Aplicar guardias de seguridad a field.weight
   if (field.key === 'business_hours') {
     const hasHours = validateBranchHours(data);
     const status: FieldStatus = hasHours ? 'complete' : 'missing';
+    const safeWeight = Number.isFinite(field.weight) && field.weight > 0 ? field.weight : 1;
 
     return {
       fieldKey: field.key,
-      fieldLabel: field.label,
+      fieldLabel: field.label || field.key || 'Horarios',
       category: field.category,
       existenceScore: hasHours ? 100 : 0,
       qualityScore: hasHours ? 100 : 0,
       completenessScore: hasHours ? 100 : 0,
-      weightedScore: hasHours ? field.weight : 0,
-      maxPossibleScore: field.weight,
+      weightedScore: hasHours ? safeWeight : 0,
+      maxPossibleScore: safeWeight,
       status,
       issues: hasHours ? [] : [{
         code: 'NO_HOURS',
@@ -525,12 +533,13 @@ export function calculateCategoryScore(
     return sum + safeMax;
   }, 0);
 
+  // CICLO 2: Usar tolerancia de 0.69 (en vez de 0.7) para manejar redondeos
   const completedFields = categoryFields.filter(
     f => f.status === 'complete' &&
          Number.isFinite(f.weightedScore) &&
          Number.isFinite(f.maxPossibleScore) &&
          f.maxPossibleScore > 0 &&
-         f.weightedScore >= f.maxPossibleScore * 0.7
+         f.weightedScore >= f.maxPossibleScore * 0.69
   ).length;
 
   // Guardia contra división por cero y NaN
