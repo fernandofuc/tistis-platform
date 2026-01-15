@@ -21,6 +21,31 @@ import {
 import { KBCompletenessIndicator } from './KBCompletenessIndicator';
 import { PromptPreview } from './PromptPreview';
 
+// KB Scoring imports for unified score calculation
+import {
+  calculateKBScore,
+  convertKBDataForScoring,
+  getKBStatusSummary,
+} from '@/src/shared/config/kb-scoring-service';
+import { type VerticalType, VERTICALS } from '@/src/shared/config/verticals';
+
+// ======================
+// VERTICAL VALIDATION
+// ======================
+const VALID_VERTICALS = Object.keys(VERTICALS) as VerticalType[];
+const DEFAULT_VERTICAL: VerticalType = 'dental';
+
+/**
+ * Validates and returns a safe vertical type
+ * Falls back to 'dental' if the vertical is invalid or undefined
+ */
+function getValidVertical(vertical: string | undefined): VerticalType {
+  if (!vertical) return DEFAULT_VERTICAL;
+  return VALID_VERTICALS.includes(vertical as VerticalType)
+    ? (vertical as VerticalType)
+    : DEFAULT_VERTICAL;
+}
+
 // ======================
 // TYPES
 // ======================
@@ -290,6 +315,10 @@ export function KnowledgeBase() {
     competitors: [],
   });
 
+  // Additional data for KB Scoring (services, staff)
+  const [services, setServices] = useState<Array<{ id: string; name?: string; is_active: boolean }>>([]);
+  const [staffList, setStaffList] = useState<Array<{ id: string; first_name?: string; last_name?: string; role?: string; is_active: boolean }>>([]);
+
   // Modal States
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<ActiveTab>('instructions');
@@ -323,6 +352,31 @@ export function KnowledgeBase() {
       competitors: data.competitors, // Competidores son siempre globales
     };
   }, [data, selectedBranchId]);
+
+  // ======================
+  // UNIFIED KB SCORING
+  // ======================
+  // Get validated vertical from tenant (falls back to 'dental' if invalid/undefined)
+  const tenantVertical = useMemo(() => getValidVertical(tenant?.vertical), [tenant?.vertical]);
+
+  // Calculate KB Score using the unified scoring system (same as KBCompletenessIndicator)
+  const scoringResult = useMemo(() => {
+    const additionalData = {
+      services: services.map(s => ({ id: s.id, name: s.name, is_active: s.is_active })),
+      branches: branches?.map(b => ({
+        id: b.id,
+        name: b.name,
+        operating_hours: b.operating_hours as Record<string, unknown> | null,
+        is_active: b.is_active,
+      })) || [],
+      staff: staffList.map(s => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, role: s.role, is_active: s.is_active })),
+    };
+    const convertedData = convertKBDataForScoring(data, additionalData);
+    return calculateKBScore(convertedData, tenantVertical);
+  }, [data, services, staffList, branches, tenantVertical]);
+
+  // Get status summary for UI
+  const statusSummary = useMemo(() => getKBStatusSummary(scoringResult), [scoringResult]);
 
   // Helper para obtener nombre de sucursal por ID
   const getBranchName = useCallback((branchId: string | undefined | null) => {
@@ -387,17 +441,47 @@ export function KnowledgeBase() {
     try {
       setLoading(true);
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/knowledge-base', { headers });
-      if (response.ok) {
-        const result = await response.json();
-        setData(result.data);
+
+      // Fetch all data in parallel for better performance
+      const [kbResponse, servicesResponse, staffResponse] = await Promise.all([
+        fetch('/api/knowledge-base', { headers }),
+        fetch('/api/services', { headers }),
+        fetch('/api/staff', { headers }),
+      ]);
+
+      // Process KB data with fallback guard
+      if (kbResponse.ok) {
+        const result = await kbResponse.json();
+        setData(result.data ?? {
+          instructions: [],
+          policies: [],
+          articles: [],
+          templates: [],
+          competitors: [],
+        });
+      }
+
+      // Process services data
+      if (servicesResponse.ok) {
+        const servicesResult = await servicesResponse.json();
+        setServices(servicesResult.data || []);
+      }
+
+      // Process staff data
+      if (staffResponse.ok) {
+        const staffResult = await staffResponse.json();
+        setStaffList(staffResult.data || []);
       }
     } catch (error) {
       console.error('Error fetching knowledge base:', error);
+      showToast({
+        type: 'error',
+        message: 'Error al cargar la base de conocimiento. Por favor intenta de nuevo.',
+      });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
@@ -644,14 +728,9 @@ export function KnowledgeBase() {
     data.templates.filter(t => t.is_active).length +
     data.competitors.filter(c => c.is_active).length;
 
-  // Calculate completion percentage based on recommended minimums
-  const completionScore = Math.min(100, Math.round(
-    ((Math.min(data.instructions.length, 3) / 3) * 25) +  // 3 instructions recommended
-    ((Math.min(data.policies.length, 2) / 2) * 20) +       // 2 policies recommended
-    ((Math.min(data.articles.length, 2) / 2) * 20) +       // 2 articles recommended
-    ((Math.min(data.templates.length, 2) / 2) * 20) +      // 2 templates recommended
-    ((Math.min(data.competitors.length, 1) / 1) * 15)      // 1 competitor recommended
-  ));
+  // Use unified scoring result for completion percentage
+  // This ensures header and KBCompletenessIndicator show the same score
+  const completionScore = scoringResult.totalScore;
 
   // ======================
   // RENDER
@@ -709,8 +788,9 @@ export function KnowledgeBase() {
                       fill="none"
                       strokeDasharray={`${completionScore * 1.256} 125.6`}
                       className={cn(
-                        completionScore >= 80 ? 'text-green-500' :
-                        completionScore >= 50 ? 'text-amber-500' : 'text-purple-500'
+                        statusSummary.color === 'green' ? 'text-green-500' :
+                        statusSummary.color === 'blue' ? 'text-blue-500' :
+                        statusSummary.color === 'amber' ? 'text-amber-500' : 'text-red-500'
                       )}
                       strokeLinecap="round"
                     />
@@ -718,8 +798,9 @@ export function KnowledgeBase() {
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className={cn(
                       'text-xs font-bold',
-                      completionScore >= 80 ? 'text-green-600' :
-                      completionScore >= 50 ? 'text-amber-600' : 'text-purple-600'
+                      statusSummary.color === 'green' ? 'text-green-600' :
+                      statusSummary.color === 'blue' ? 'text-blue-600' :
+                      statusSummary.color === 'amber' ? 'text-amber-600' : 'text-red-600'
                     )}>
                       {completionScore}%
                     </span>
@@ -729,11 +810,11 @@ export function KnowledgeBase() {
                   <p className="text-xs text-gray-500 font-medium">Completado</p>
                   <p className={cn(
                     'text-sm font-semibold',
-                    completionScore >= 80 ? 'text-green-600' :
-                    completionScore >= 50 ? 'text-amber-600' : 'text-purple-600'
+                    statusSummary.color === 'green' ? 'text-green-600' :
+                    statusSummary.color === 'blue' ? 'text-blue-600' :
+                    statusSummary.color === 'amber' ? 'text-amber-600' : 'text-red-600'
                   )}>
-                    {completionScore >= 80 ? 'Excelente' :
-                     completionScore >= 50 ? 'Buen inicio' : 'En progreso'}
+                    {statusSummary.title}
                   </p>
                 </div>
               </div>
@@ -1198,8 +1279,21 @@ export function KnowledgeBase() {
 
       {/* Bottom Section - Completeness & Preview */}
       <div className="mt-8 pt-8 border-t border-gray-200 space-y-6">
-        {/* Completeness Indicator */}
-        <KBCompletenessIndicator data={data} />
+        {/* Completeness Indicator - Now with full data for accurate scoring */}
+        <KBCompletenessIndicator
+          data={data}
+          additionalData={{
+            services: services.map(s => ({ id: s.id, name: s.name, is_active: s.is_active })),
+            branches: branches?.map(b => ({
+              id: b.id,
+              name: b.name,
+              operating_hours: b.operating_hours as Record<string, unknown> | null,
+              is_active: b.is_active,
+            })) || [],
+            staff: staffList.map(s => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, role: s.role, is_active: s.is_active })),
+          }}
+          vertical={tenantVertical}
+        />
 
         {/* Prompt Preview */}
         <div className="pt-4">

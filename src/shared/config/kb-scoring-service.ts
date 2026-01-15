@@ -50,16 +50,20 @@ export function calculateKBScore(
     // CICLO 2: Fallback a 0 (no 1) para categorías sin definición
     const weight = CATEGORY_WEIGHTS[category] ?? 0;
 
-    // Guardias contra NaN
+    // Guardias contra NaN - fallback a 0 para weight (consistente con línea 51)
     const safeScore = Number.isFinite(categoryResult.score) ? categoryResult.score : 0;
-    const safeWeight = Number.isFinite(weight) ? weight : 1;
+    const safeWeight = Number.isFinite(weight) ? weight : 0;
+
+    // Calcular earnedPoints con guardia para no exceder possiblePoints
+    const rawEarnedPoints = Math.round((safeScore / 100) * safeWeight);
+    const earnedPoints = Math.min(rawEarnedPoints, safeWeight);
 
     categoryScores[category] = {
       category,
       label: CATEGORY_LABELS[category],
       score: safeScore,
       maxScore: safeWeight,
-      earnedPoints: Math.round((safeScore / 100) * safeWeight),
+      earnedPoints,
       possiblePoints: safeWeight,
       completedFields: categoryResult.completedFields,
       totalFields: categoryResult.totalFields,
@@ -156,8 +160,8 @@ function generateRecommendations(
         suggestion = 'Reemplaza con información real y específica de tu negocio';
         break;
       case 'partial':
-        // Guardia contra división por cero
-        const maxScore = result.maxPossibleScore || 1;
+        // Guardia contra división por cero - usar Math.max para evitar 0
+        const maxScore = Math.max(1, result.maxPossibleScore ?? 0);
         const percentage = Math.round((result.weightedScore / maxScore) * 100);
         message = `${result.fieldLabel} está incompleto (${percentage}%)`;
         suggestion = result.suggestions[0] || 'Completa con más detalles';
@@ -286,7 +290,7 @@ export function convertKBDataForScoring(data: {
   competitors?: Array<{ is_active: boolean; competitor_name?: string; response_strategy?: string; id?: string }>;
 }, additionalData?: {
   services?: Array<{ id: string; name?: string; is_active: boolean }>;
-  branches?: Array<{ id: string; name?: string; operating_hours?: Record<string, unknown>; is_active: boolean }>;
+  branches?: Array<{ id: string; name?: string; operating_hours?: Record<string, unknown> | null; is_active: boolean }>;
   staff?: Array<{ id: string; first_name?: string; last_name?: string; role?: string; is_active: boolean }>;
 }): KBDataForScoring {
   // Guardias contra arrays undefined
@@ -332,7 +336,12 @@ export function convertKBDataForScoring(data: {
       is_active: c.is_active ?? false,
     })),
     services: additionalData?.services ?? [],
-    branches: additionalData?.branches ?? [],
+    branches: (additionalData?.branches ?? []).map(b => ({
+      id: b.id,
+      name: b.name,
+      operating_hours: b.operating_hours ?? undefined,
+      is_active: b.is_active,
+    })),
     staff: additionalData?.staff ?? [],
   };
 }

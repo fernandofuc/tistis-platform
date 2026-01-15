@@ -81,6 +81,15 @@ function extractFieldContent(
       items = data.staff || [];
       contentField = 'first_name';
       break;
+    default:
+      // Unknown dataSource - return empty extraction safely
+      console.warn(`[KB-VALIDATORS] Unknown dataSource: ${dataSource}`);
+      return {
+        content: '',
+        exists: false,
+        isActive: false,
+        itemCount: 0,
+      };
   }
 
   // Filtrar por tipo si aplica
@@ -133,7 +142,8 @@ function validateBranchHours(data: KBDataForScoring): boolean {
 
   for (const branch of activeBranches) {
     const hours = branch.operating_hours;
-    if (hours && typeof hours === 'object' && Object.keys(hours).length > 0) {
+    // Guardia contra null: typeof null === 'object' en JS, pero Object.keys(null) lanza error
+    if (hours !== null && hours && typeof hours === 'object' && Object.keys(hours).length > 0) {
       return true;
     }
   }
@@ -156,7 +166,9 @@ function calculateExistenceScore(
   field: ScoreableField
 ): number {
   if (field.countBased) {
-    if (extraction.itemCount >= (field.minCount || 1)) {
+    // Guardia contra valores <= 0 (consistente con calculateQualityScore y calculateCompletenessScore)
+    const minCount = Math.max(1, field.minCount || 1);
+    if (extraction.itemCount >= minCount) {
       return 100;
     }
     if (extraction.itemCount > 0) {
@@ -343,7 +355,8 @@ function calculateCompletenessScore(
   if (content.length >= minLength) {
     // Guardia: idealLength siempre > minLength aquí
     const range = idealLength - minLength;
-    const ratio = range > 0 ? (content.length - minLength) / range : 1;
+    // Clamping ratio a máximo 1 para evitar score > 100
+    const ratio = Math.min(1, range > 0 ? (content.length - minLength) / range : 1);
     return { score: Math.round(70 + ratio * 30), issues };
   }
 

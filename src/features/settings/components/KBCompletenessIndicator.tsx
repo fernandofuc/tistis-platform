@@ -38,7 +38,7 @@ interface KBData {
 
 interface AdditionalData {
   services?: Array<{ id: string; name?: string; is_active: boolean }>;
-  branches?: Array<{ id: string; name?: string; operating_hours?: Record<string, unknown>; is_active: boolean }>;
+  branches?: Array<{ id: string; name?: string; operating_hours?: Record<string, unknown> | null; is_active: boolean }>;
   staff?: Array<{ id: string; first_name?: string; last_name?: string; role?: string; is_active: boolean }>;
 }
 

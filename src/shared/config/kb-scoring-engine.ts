@@ -527,7 +527,7 @@ export interface KBDataForScoring {
   branches?: Array<{
     id: string;
     name?: string;
-    operating_hours?: Record<string, unknown>;
+    operating_hours?: Record<string, unknown> | null;
     is_active: boolean;
   }>;
   staff?: Array<{
