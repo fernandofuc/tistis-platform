@@ -2,9 +2,16 @@
 // TIS TIS PLATFORM - FAQ Agent
 // Agente especializado en preguntas frecuentes
 // =====================================================
+//
+// ARQUITECTURA v6.0:
+// - Usa Tool Calling para obtener información on-demand
+// - NO carga todas las FAQs/servicios en el contexto inicial
+// - Reduce tokens significativamente
+// =====================================================
 
 import { BaseAgent, type AgentResult, formatFAQsForPrompt, formatServicesForPrompt } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
+import { createToolsForAgent } from '../../tools';
 
 // ======================
 // FAQ AGENT
@@ -18,8 +25,17 @@ import type { TISTISAgentStateType } from '../../state';
  * 2. Proporcionar información general del negocio
  * 3. Explicar procedimientos y servicios
  * 4. Guiar hacia información más específica o booking
+ *
+ * TOOLS DISPONIBLES:
+ * - get_faq_answer: Buscar respuestas en FAQs configuradas
+ * - search_knowledge_base: Buscar en la base de conocimiento (RAG)
+ * - get_service_info: Obtener info de servicios específicos
+ * - get_business_policy: Obtener políticas del negocio
  */
 class FAQAgentClass extends BaseAgent {
+  /** Flag para usar Tool Calling vs modo legacy */
+  private useToolCalling: boolean = true;
+
   constructor() {
     super({
       name: 'faq',
@@ -28,8 +44,10 @@ class FAQAgentClass extends BaseAgent {
 
 # TU ROL
 Tu trabajo es responder preguntas generales sobre el negocio, servicios y procedimientos.
-- Usa las FAQs configuradas como referencia principal
-- Si la pregunta no está en FAQs, usa el contexto del negocio
+- USA get_faq_answer para buscar respuestas en las preguntas frecuentes
+- USA search_knowledge_base para información adicional
+- Si preguntan por un servicio específico, USA get_service_info
+- Si preguntan por políticas, USA get_business_policy
 - Si no tienes la información, ofrece conectar con un asesor
 
 # ESTILO DE COMUNICACIÓN
@@ -45,16 +63,9 @@ Tu trabajo es responder preguntas generales sobre el negocio, servicios y proced
 - Siempre ofrece ayuda adicional o agendar cita si aplica
 - Si no sabes algo con certeza, sé honesto y ofrece escalación
 
-# EJEMPLO DE RESPUESTAS
-
-Cliente: "¿Cómo funciona el tratamiento?"
-Tú: "El tratamiento consiste en [explicación clara]. Generalmente toma [tiempo] y los resultados [descripción]. ¿Te gustaría más información o agendar una valoración?"
-
-Cliente: "¿Qué incluye la consulta?"
-Tú: "La consulta incluye [lista de lo incluido]. Al final te entregaremos [resultados]. ¿Te gustaría agendar?"
-
-Cliente: "¿Aceptan seguros?"
-Tú: "Sí, trabajamos con [seguros]. Para verificar tu cobertura específica, te recomendamos traer tu póliza a la consulta. ¿Te ayudo a agendar?"`,
+# IMPORTANTE
+- NO inventes información. Si no la tienes, usa las herramientas.
+- Si una FAQ no existe, busca en knowledge base o indica que no tienes esa información.`,
       temperature: 0.6,
       maxTokens: 350,
       canHandoffTo: ['pricing', 'booking', 'location', 'escalation'],
@@ -63,39 +74,69 @@ Tú: "Sí, trabajamos con [seguros]. Para verificar tu cobertura específica, te
   }
 
   async execute(state: TISTISAgentStateType): Promise<AgentResult> {
-    // Construir contexto de FAQs y servicios
-    const faqsContext = `# PREGUNTAS FRECUENTES
-${formatFAQsForPrompt(state.business_context)}`;
-
-    const servicesContext = `# SERVICIOS DISPONIBLES
-${formatServicesForPrompt(state.business_context)}`;
-
-    // Buscar si hay FAQ que coincida con la pregunta
-    const faqs = state.business_context?.faqs || [];
     const messageLower = state.current_message.toLowerCase();
 
-    let matchingFaq: { question: string; answer: string } | null = null;
-    for (const faq of faqs) {
-      const questionLower = faq.question.toLowerCase();
-      // Buscar coincidencia por palabras clave
-      const keywords = questionLower.split(' ').filter((w) => w.length > 3);
-      const matches = keywords.filter((kw) => messageLower.includes(kw));
-      if (matches.length >= 2 || messageLower.includes(questionLower)) {
-        matchingFaq = faq;
-        break;
+    // Contexto adicional basado en análisis del mensaje
+    let additionalContext = '';
+
+    let response: string;
+    let tokens: number;
+    let toolCalls: string[] = [];
+
+    if (this.useToolCalling) {
+      // =====================================================
+      // NUEVA ARQUITECTURA: Tool Calling
+      // El LLM decide qué información necesita y la obtiene on-demand
+      // =====================================================
+      const tools = createToolsForAgent(this.config.name, state);
+
+      console.log(`[faq] Using Tool Calling mode with ${tools.length} tools`);
+
+      const result = await this.callLLMWithTools(state, tools, additionalContext);
+      response = result.response;
+      tokens = result.tokens;
+      toolCalls = result.toolCalls;
+
+      console.log(`[faq] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
+    } else {
+      // =====================================================
+      // MODO LEGACY: Context Stuffing (para compatibilidad)
+      // =====================================================
+      console.log(`[faq] Using legacy mode (context stuffing)`);
+
+      const faqsContext = `# PREGUNTAS FRECUENTES
+${formatFAQsForPrompt(state.business_context)}`;
+
+      const servicesContext = `# SERVICIOS DISPONIBLES
+${formatServicesForPrompt(state.business_context)}`;
+
+      // Buscar si hay FAQ que coincida con la pregunta
+      const faqs = state.business_context?.faqs || [];
+
+      let matchingFaq: { question: string; answer: string } | null = null;
+      for (const faq of faqs) {
+        const questionLower = faq.question.toLowerCase();
+        const keywords = questionLower.split(' ').filter((w) => w.length > 3);
+        const matches = keywords.filter((kw) => messageLower.includes(kw));
+        if (matches.length >= 2 || messageLower.includes(questionLower)) {
+          matchingFaq = faq;
+          break;
+        }
       }
-    }
 
-    let additionalContext = `${faqsContext}\n\n${servicesContext}`;
+      let legacyContext = `${faqsContext}\n\n${servicesContext}`;
 
-    if (matchingFaq) {
-      additionalContext += `\n\nNOTA: Hay una FAQ que coincide con la pregunta:
+      if (matchingFaq) {
+        legacyContext += `\n\nNOTA: Hay una FAQ que coincide con la pregunta:
 Pregunta: ${matchingFaq.question}
 Respuesta: ${matchingFaq.answer}
 Usa esta respuesta como base pero personalízala al contexto de la conversación.`;
-    }
+      }
 
-    const { response, tokens } = await this.callLLM(state, additionalContext);
+      const result = await this.callLLM(state, legacyContext);
+      response = result.response;
+      tokens = result.tokens;
+    }
 
     // Detectar si el cliente quiere más información o agendar
     const bookingIndicators = ['agendar', 'cita', 'reservar', 'cuándo', 'cuando', 'disponible'];
@@ -123,6 +164,15 @@ Usa esta respuesta como base pero personalízala al contexto de la conversación
       response,
       tokens_used: tokens,
     };
+  }
+
+  /**
+   * Habilita o deshabilita Tool Calling
+   * Útil para testing o rollback gradual
+   */
+  setToolCallingMode(enabled: boolean): void {
+    this.useToolCalling = enabled;
+    console.log(`[faq] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

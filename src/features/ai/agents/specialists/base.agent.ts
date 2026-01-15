@@ -332,6 +332,222 @@ export abstract class BaseAgent {
   }
 
   /**
+   * Llama al LLM con herramientas (Tool Calling)
+   *
+   * NUEVA ARQUITECTURA v6.0:
+   * - El LLM puede invocar tools para obtener información on-demand
+   * - Reduce el contexto inicial significativamente
+   * - Soporta múltiples iteraciones de tool calls
+   *
+   * @param state Estado actual del grafo
+   * @param tools Array de DynamicStructuredTool de LangChain
+   * @param additionalContext Contexto adicional para el system prompt
+   * @param maxIterations Máximo de iteraciones de tool calling (default: 3)
+   */
+  protected async callLLMWithTools(
+    state: TISTISAgentStateType,
+    tools: import('@langchain/core/tools').DynamicStructuredTool[],
+    additionalContext?: string,
+    maxIterations: number = 3
+  ): Promise<{ response: string; tokens: number; toolCalls: string[] }> {
+    // P23 FIX: Check for incomplete configuration
+    const safetyAnalysis = state.safety_analysis;
+    if (safetyAnalysis?.config_missing_critical && safetyAnalysis.config_missing_critical.length > 0) {
+      const fallbackResponse = SafetyResilienceService.generateIncompleteConfigResponse(
+        safetyAnalysis.config_missing_critical,
+        state.vertical
+      );
+      console.warn(`[${this.config.name}] Using incomplete config fallback response`);
+      return { response: fallbackResponse, tokens: 50, toolCalls: [] };
+    }
+
+    let systemPrompt = this.buildSystemPromptForTools(state);
+
+    if (additionalContext) {
+      systemPrompt += `\n\n${additionalContext}`;
+    }
+
+    // P29 FIX: Add safety context if available
+    if (safetyAnalysis?.safety_disclaimer) {
+      systemPrompt += `\n\n# IMPORTANTE - AVISO DE SEGURIDAD\nDebes incluir el siguiente aviso en tu respuesta:\n"${safetyAnalysis.safety_disclaimer}"`;
+    }
+
+    // Bind tools to LLM
+    const llmWithTools = this.llm.bindTools(tools);
+
+    const messages: import('@langchain/core/messages').BaseMessage[] = [
+      new SystemMessage(systemPrompt),
+      ...this.buildMessageHistory(state),
+    ];
+
+    const toolCallsLog: string[] = [];
+    let totalTokens = 0;
+    let iterations = 0;
+
+    // Import messages types once, outside the loop for efficiency
+    const { AIMessage: AIMsg, ToolMessage: ToolMsg } = await import('@langchain/core/messages');
+
+    try {
+      // Agentic loop: ejecutar hasta que el LLM responda sin tool calls
+      while (iterations < maxIterations) {
+        iterations++;
+
+        const result = await llmWithTools.invoke(messages);
+
+        // Estimar tokens de esta iteración
+        const iterationTokens = Math.ceil(
+          (typeof result.content === 'string' ? result.content.length : 0) / 4
+        );
+        totalTokens += iterationTokens;
+
+        // Si no hay tool calls, tenemos la respuesta final
+        if (!result.tool_calls || result.tool_calls.length === 0) {
+          let response = typeof result.content === 'string'
+            ? result.content
+            : 'Lo siento, no pude procesar tu mensaje.';
+
+          response = this.appendSafetyDisclaimer(response, state);
+
+          console.log(`[${this.config.name}] Completed with ${toolCallsLog.length} tool calls`);
+
+          return { response, tokens: totalTokens, toolCalls: toolCallsLog };
+        }
+
+        // Procesar tool calls
+
+        // Agregar respuesta del LLM con tool calls
+        messages.push(new AIMsg({
+          content: result.content || '',
+          tool_calls: result.tool_calls,
+        }));
+
+        // Ejecutar cada tool y agregar resultado
+        for (const toolCall of result.tool_calls) {
+          const toolName = toolCall.name;
+          const toolArgs = toolCall.args;
+
+          console.log(`[${this.config.name}] Tool call: ${toolName}(${JSON.stringify(toolArgs)})`);
+          toolCallsLog.push(toolName);
+
+          // Encontrar y ejecutar la tool
+          const tool = tools.find((t) => t.name === toolName);
+          if (tool) {
+            try {
+              const toolResult = await tool.invoke(toolArgs);
+              messages.push(new ToolMsg({
+                content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+                tool_call_id: toolCall.id || toolName,
+              }));
+            } catch (toolError) {
+              console.error(`[${this.config.name}] Tool error (${toolName}):`, toolError);
+              messages.push(new ToolMsg({
+                content: JSON.stringify({ error: `Error ejecutando ${toolName}` }),
+                tool_call_id: toolCall.id || toolName,
+              }));
+            }
+          } else {
+            console.warn(`[${this.config.name}] Tool not found: ${toolName}`);
+            messages.push(new ToolMsg({
+              content: JSON.stringify({ error: `Tool ${toolName} no encontrada` }),
+              tool_call_id: toolCall.id || toolName,
+            }));
+          }
+        }
+      }
+
+      // Si llegamos aquí, alcanzamos max iterations
+      console.warn(`[${this.config.name}] Max tool iterations reached (${maxIterations})`);
+      return {
+        response: 'Estoy teniendo dificultades para procesar tu solicitud. ¿Podrías reformularla?',
+        tokens: totalTokens,
+        toolCalls: toolCallsLog,
+      };
+    } catch (error) {
+      console.error(`[${this.config.name}] LLM with tools error:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Construye un system prompt optimizado para Tool Calling
+   *
+   * Este prompt NO incluye toda la información del negocio,
+   * solo las instrucciones de comportamiento y las tools disponibles.
+   */
+  protected buildSystemPromptForTools(state: TISTISAgentStateType): string {
+    const tenant = state.tenant;
+
+    // Usar el prompt cacheado si existe, pero NO agregar business context completo
+    const cachedPrompt = tenant?.ai_config?.system_prompt;
+    const hasCachedPrompt = cachedPrompt && cachedPrompt.length > 500;
+
+    let prompt: string;
+
+    if (hasCachedPrompt) {
+      // El prompt cacheado ya tiene las instrucciones de personalidad
+      // Pero debemos indicar que use las tools para obtener información
+      prompt = cachedPrompt;
+
+      // Instrucciones de tools según vertical
+      const vertical = state.vertical || tenant?.vertical || 'dental';
+      if (vertical === 'restaurant') {
+        prompt += `\n\n# HERRAMIENTAS DISPONIBLES
+Tienes acceso a herramientas para obtener información. USA LAS HERRAMIENTAS cuando necesites:
+- Items del menú y precios (get_menu_items)
+- Categorías del menú (get_menu_categories)
+- Disponibilidad de platillos (check_item_availability)
+- Crear pedidos (create_order)
+- Promociones activas (get_active_promotions)
+- Información de sucursales/ubicaciones (get_branch_info)
+- Horarios de operación (get_operating_hours)
+- Preguntas frecuentes (get_faq_answer)
+- Políticas del negocio (get_business_policy)
+
+NO inventes información de precios o disponibilidad. Si no la tienes, usa la herramienta correspondiente.`;
+      } else {
+        prompt += `\n\n# HERRAMIENTAS DISPONIBLES
+Tienes acceso a herramientas para obtener información. USA LAS HERRAMIENTAS cuando necesites:
+- Información de servicios o precios (get_service_info, list_services)
+- Disponibilidad de horarios (get_available_slots)
+- Información de sucursales (get_branch_info)
+- Políticas del negocio (get_business_policy)
+- Preguntas frecuentes (get_faq_answer)
+- Información del equipo (get_staff_info)
+- Crear citas (create_appointment)
+
+NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
+      }
+    } else {
+      // Fallback: usar template básico
+      prompt = this.config.systemPromptTemplate;
+
+      if (tenant) {
+        prompt = prompt.replace('{{TENANT_NAME}}', tenant.tenant_name || '');
+        prompt = prompt.replace('{{VERTICAL}}', tenant.vertical || 'general');
+        prompt = prompt.replace('{{RESPONSE_STYLE}}', tenant.ai_config?.response_style || 'professional');
+        prompt = prompt.replace('{{MAX_LENGTH}}', String(tenant.ai_config?.max_response_length || 300));
+      }
+
+      prompt += `\n\n# HERRAMIENTAS
+Usa las herramientas disponibles para obtener información cuando sea necesario.`;
+    }
+
+    // Agregar contexto del agente específico
+    const agentRole = this.getAgentRoleInstructions(state);
+    if (agentRole) {
+      prompt += `\n\n# TU ROL\n${agentRole}`;
+    }
+
+    // Agregar contexto dinámico del lead
+    if (state.lead) {
+      prompt += `\n\n# CLIENTE ACTUAL\n`;
+      prompt += `- Nombre: ${state.lead.name || 'No proporcionado'}\n`;
+    }
+
+    return prompt;
+  }
+
+  /**
    * Crea una traza del agente para debugging
    */
   protected createTrace(

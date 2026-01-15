@@ -2,6 +2,16 @@
 // TIS TIS PLATFORM - Booking Agent
 // Agente especializado en agendar citas
 // =====================================================
+//
+// ARQUITECTURA v6.0 (HÍBRIDA):
+// - Mantiene lógica directa de booking por seguridad y control
+// - Usa Tool Calling SOLO para consultas de información auxiliar
+// - Tools disponibles: get_service_info, get_branch_info, get_staff_info
+// - CREATE_APPOINTMENT se ejecuta directamente, NO via tool calling
+//
+// NOTA: El booking requiere un flujo controlado. El LLM NO debe
+// decidir cuándo crear una cita - eso lo controla la lógica del agente.
+// =====================================================
 
 import { BaseAgent, type AgentResult, formatServicesForPrompt, formatBranchesForPrompt } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
@@ -12,6 +22,7 @@ import {
   getAvailableSlots,
   type BookingRequest,
 } from '../../services/appointment-booking.service';
+import { createToolsForAgent, TOOL_NAMES } from '../../tools';
 
 // ======================
 // BOOKING AGENT
@@ -25,8 +36,15 @@ import {
  * 2. Verificar disponibilidad
  * 3. Crear la cita en el sistema
  * 4. Confirmar los detalles al cliente
+ *
+ * ARQUITECTURA HÍBRIDA:
+ * - Tool Calling para: get_service_info, list_services, get_available_slots, get_branch_info, get_staff_info
+ * - Lógica directa para: createBooking (seguridad)
  */
 class BookingAgentClass extends BaseAgent {
+  /** Flag para usar Tool Calling para consultas */
+  protected useToolCalling: boolean = true;
+
   constructor() {
     super({
       name: 'booking',
@@ -69,7 +87,13 @@ Cliente: "Para mañana"
 Tú: "Perfecto. Para mañana tenemos disponible a las 10:00am, 2:00pm y 4:00pm. ¿Cuál horario te funciona mejor?"
 
 Cliente: "A las 10"
-Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucursal]. La dirección es [dirección]. ¿Es correcto?"`,
+Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucursal]. La dirección es [dirección]. ¿Es correcto?"
+
+# IMPORTANTE SOBRE HERRAMIENTAS
+- USA get_service_info o list_services para obtener información de servicios
+- USA get_available_slots para ver disponibilidad de horarios
+- USA get_branch_info para información de sucursales
+- La creación de citas la maneja el sistema automáticamente cuando tengas todos los datos`,
       temperature: 0.4, // Bajo para consistencia en datos
       maxTokens: 400,
       canHandoffTo: ['pricing', 'location', 'escalation'],
@@ -81,10 +105,6 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
     const tenant = state.tenant;
     const lead = state.lead;
     const extracted = state.extracted_data;
-
-    // Construir contexto
-    const servicesContext = formatServicesForPrompt(state.business_context);
-    const branchesContext = formatBranchesForPrompt(state.business_context);
 
     // 1. Extraer datos de booking del mensaje
     const bookingData = extractBookingData(state.current_message);
@@ -155,7 +175,7 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
         };
       } else {
         // No se pudo crear, ofrecer alternativas
-        let alternativeContext = `\n\nNOTA: No se pudo crear la cita. Razón: ${bookingResult.error}`;
+        let alternativeContext = `\nNOTA: No se pudo crear la cita. Razón: ${bookingResult.error}`;
 
         if (bookingResult.suggestion) {
           alternativeContext += `\nSugerencia: ${bookingResult.suggestion}`;
@@ -174,10 +194,26 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
           }
         }
 
-        const { response, tokens } = await this.callLLM(
-          state,
-          `${servicesContext}\n${branchesContext}${alternativeContext}\n\nOfrece alternativas de horario al cliente.`
-        );
+        alternativeContext += '\n\nOfrece alternativas de horario al cliente.';
+
+        let response: string;
+        let tokens: number;
+
+        if (this.useToolCalling) {
+          const allTools = createToolsForAgent(this.config.name, state);
+          const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+
+          const result = await this.callLLMWithTools(state, consultationTools, alternativeContext);
+          response = result.response;
+          tokens = result.tokens;
+        } else {
+          const servicesContext = formatServicesForPrompt(state.business_context);
+          const branchesContext = formatBranchesForPrompt(state.business_context);
+
+          const result = await this.callLLM(state, `${servicesContext}\n${branchesContext}${alternativeContext}`);
+          response = result.response;
+          tokens = result.tokens;
+        }
 
         return {
           response,
@@ -201,9 +237,13 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
         missingInfo.push('servicio deseado');
       }
 
-      let additionalContext = `${servicesContext}\n${branchesContext}`;
+      let additionalContext = '';
 
-      // Obtener disponibilidad para ofrecer opciones
+      if (missingInfo.length > 0) {
+        additionalContext += `\nNOTA: Falta información para agendar: ${missingInfo.join(', ')}. Pregunta de manera natural.`;
+      }
+
+      // Obtener disponibilidad para ofrecer opciones (se pasa como contexto adicional)
       if (tenant && branchId) {
         const slots = await getAvailableSlots(tenant.tenant_id, branchId, undefined, undefined, undefined, 5);
         if (slots.length > 0) {
@@ -216,17 +256,54 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
         }
       }
 
-      if (missingInfo.length > 0) {
-        additionalContext += `\n\nNOTA: Falta información para agendar: ${missingInfo.join(', ')}. Pregunta de manera natural.`;
-      }
+      let response: string;
+      let tokens: number;
 
-      const { response, tokens } = await this.callLLM(state, additionalContext);
+      if (this.useToolCalling) {
+        // =====================================================
+        // ARQUITECTURA HÍBRIDA: Tool Calling para consultas
+        // El LLM puede usar tools para obtener info de servicios/sucursales
+        // pero NO para crear citas (eso lo controla este agente)
+        // =====================================================
+        const allTools = createToolsForAgent(this.config.name, state);
+        // Filtrar CREATE_APPOINTMENT - eso lo controlamos nosotros
+        const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+
+        console.log(`[booking] Using Tool Calling mode with ${consultationTools.length} consultation tools`);
+
+        const result = await this.callLLMWithTools(state, consultationTools, additionalContext);
+        response = result.response;
+        tokens = result.tokens;
+
+        console.log(`[booking] Tool calls made: ${result.toolCalls.join(', ') || 'none'}`);
+      } else {
+        // =====================================================
+        // MODO LEGACY: Context Stuffing
+        // =====================================================
+        console.log(`[booking] Using legacy mode (context stuffing)`);
+
+        const servicesContext = formatServicesForPrompt(state.business_context);
+        const branchesContext = formatBranchesForPrompt(state.business_context);
+
+        const result = await this.callLLM(state, `${servicesContext}\n${branchesContext}${additionalContext}`);
+        response = result.response;
+        tokens = result.tokens;
+      }
 
       return {
         response,
         tokens_used: tokens,
       };
     }
+  }
+
+  /**
+   * Habilita o deshabilita Tool Calling para consultas
+   * La creación de citas siempre es controlada directamente
+   */
+  setToolCallingMode(enabled: boolean): void {
+    this.useToolCalling = enabled;
+    console.log(`[booking] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

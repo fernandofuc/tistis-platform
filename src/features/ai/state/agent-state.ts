@@ -326,6 +326,25 @@ export interface BusinessContext {
   };
 
   // =====================================================
+  // PROMOCIONES (Para todas las verticales)
+  // =====================================================
+
+  /** Promociones activas del negocio */
+  promotions?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    discount_type: 'percentage' | 'fixed' | 'bundle';
+    discount_value: number;
+    applicable_items?: string[];
+    valid_from?: string;
+    valid_until?: string;
+    conditions?: string;
+    active: boolean;
+    vertical?: 'dental' | 'restaurant' | 'all';
+  }>;
+
+  // =====================================================
   // DATOS EXTERNOS - De sistemas integrados (CRM, POS, etc.)
   // OPCIONAL: Solo presente si el tenant tiene integraciones activas
   // =====================================================

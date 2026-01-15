@@ -2,9 +2,16 @@
 // TIS TIS PLATFORM - Pricing Agent
 // Agente especializado en consultas de precios
 // =====================================================
+//
+// ARQUITECTURA v6.0:
+// - Usa Tool Calling para obtener información de servicios on-demand
+// - NO carga todo el catálogo en el contexto inicial
+// - Reduce tokens de ~20K a ~2K por mensaje
+// =====================================================
 
-import { BaseAgent, type AgentResult, formatServicesForPrompt } from './base.agent';
+import { BaseAgent, type AgentResult } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
+import { createToolsForAgent } from '../../tools';
 
 // ======================
 // PRICING AGENT
@@ -18,8 +25,17 @@ import type { TISTISAgentStateType } from '../../state';
  * 2. Explicar opciones de financiamiento si existen
  * 3. Mencionar promociones activas
  * 4. Guiar hacia booking si el cliente está interesado
+ *
+ * TOOLS DISPONIBLES:
+ * - get_service_info: Obtener precio de un servicio específico
+ * - list_services: Listar todos los servicios con precios
+ * - get_business_policy: Obtener políticas de pago
+ * - get_faq_answer: Buscar respuestas a preguntas frecuentes
  */
 class PricingAgentClass extends BaseAgent {
+  /** Flag para usar Tool Calling vs modo legacy */
+  private useToolCalling: boolean = true;
+
   constructor() {
     super({
       name: 'pricing',
@@ -40,22 +56,15 @@ Tu trabajo es proporcionar información clara y transparente sobre precios.
 - NO uses emojis a menos que el cliente los use primero
 
 # INSTRUCCIONES ESPECÍFICAS
-- Si preguntan por un servicio específico, da el precio exacto
-- Si preguntan en general, menciona rangos y los servicios más populares
+- Si preguntan por un servicio específico, USA get_service_info para obtener el precio exacto
+- Si preguntan en general, USA list_services para ver el catálogo
 - Si hay promoción activa, menciónala naturalmente
-- Si preguntan por formas de pago, explica opciones disponibles
+- Si preguntan por formas de pago, USA get_business_policy con tipo "payment"
 - Siempre termina ofreciendo agendar cita si el cliente parece interesado
 
-# EJEMPLO DE RESPUESTAS
-
-Cliente: "¿Cuánto cuesta una limpieza dental?"
-Tú: "La limpieza dental tiene un costo de $800. El procedimiento dura aproximadamente 45 minutos. ¿Te gustaría agendar una cita?"
-
-Cliente: "¿Cuánto cobran por consulta?"
-Tú: "La consulta de valoración tiene un costo de $500, y si decides realizar el tratamiento ese mismo día, se descuenta del total. ¿Hay algún servicio en particular que te interese?"
-
-Cliente: "¿Tienen alguna promoción?"
-Tú: "Sí, actualmente tenemos [promoción]. ¿Te interesa aprovecharla?"`,
+# IMPORTANTE
+- NO inventes precios. Si no tienes la información, usa las herramientas.
+- Si un servicio no existe en el catálogo, dilo honestamente.`,
       temperature: 0.5,
       maxTokens: 300,
       canHandoffTo: ['booking', 'faq', 'escalation'],
@@ -64,34 +73,49 @@ Tú: "Sí, actualmente tenemos [promoción]. ¿Te interesa aprovecharla?"`,
   }
 
   async execute(state: TISTISAgentStateType): Promise<AgentResult> {
-    // Construir contexto de servicios y precios
-    const servicesContext = `# CATÁLOGO DE SERVICIOS Y PRECIOS
-${formatServicesForPrompt(state.business_context)}`;
-
-    // Detectar si pregunta por servicio específico
-    const services = state.business_context?.services || [];
-    let serviceMatch: string | null = null;
-
     const messageLower = state.current_message.toLowerCase();
-    for (const service of services) {
-      if (messageLower.includes(service.name.toLowerCase())) {
-        serviceMatch = service.name;
-        break;
-      }
-    }
 
-    let additionalContext = servicesContext;
+    // Contexto adicional basado en análisis del mensaje
+    let additionalContext = '';
 
-    if (serviceMatch) {
-      additionalContext += `\n\nNOTA: El cliente pregunta específicamente por "${serviceMatch}". Da información detallada de este servicio.`;
-    }
-
-    // Si detectamos interés en servicio, actualizar extracted_data
     if (state.extracted_data.service_interest?.price_sensitive) {
-      additionalContext += `\n\nNOTA: El cliente parece sensible al precio. Menciona opciones de financiamiento o paquetes si existen.`;
+      additionalContext += '\nNOTA: El cliente parece sensible al precio. Si existen opciones de financiamiento o paquetes, menciónalos.';
     }
 
-    const { response, tokens } = await this.callLLM(state, additionalContext);
+    let response: string;
+    let tokens: number;
+    let toolCalls: string[] = [];
+
+    if (this.useToolCalling) {
+      // =====================================================
+      // NUEVA ARQUITECTURA: Tool Calling
+      // El LLM decide qué información necesita y la obtiene on-demand
+      // =====================================================
+      const tools = createToolsForAgent(this.config.name, state);
+
+      console.log(`[pricing] Using Tool Calling mode with ${tools.length} tools`);
+
+      const result = await this.callLLMWithTools(state, tools, additionalContext);
+      response = result.response;
+      tokens = result.tokens;
+      toolCalls = result.toolCalls;
+
+      console.log(`[pricing] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
+    } else {
+      // =====================================================
+      // MODO LEGACY: Context Stuffing (para compatibilidad)
+      // =====================================================
+      console.log(`[pricing] Using legacy mode (context stuffing)`);
+
+      // Importar función helper del modo legacy
+      const { formatServicesForPrompt } = await import('./base.agent');
+
+      const servicesContext = `# CATÁLOGO DE SERVICIOS Y PRECIOS\n${formatServicesForPrompt(state.business_context)}`;
+
+      const result = await this.callLLM(state, servicesContext + additionalContext);
+      response = result.response;
+      tokens = result.tokens;
+    }
 
     // Detectar si el cliente está listo para agendar
     const bookingIndicators = ['cuándo', 'cuando', 'cita', 'agendar', 'disponible', 'horario', 'quiero', 'me interesa'];
@@ -113,6 +137,15 @@ ${formatServicesForPrompt(state.business_context)}`;
       response,
       tokens_used: tokens,
     };
+  }
+
+  /**
+   * Habilita o deshabilita Tool Calling
+   * Útil para testing o rollback gradual
+   */
+  setToolCallingMode(enabled: boolean): void {
+    this.useToolCalling = enabled;
+    console.log(`[pricing] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

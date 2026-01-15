@@ -2,9 +2,15 @@
 // TIS TIS PLATFORM - Location Agent
 // Agente especializado en consultas de ubicación
 // =====================================================
+//
+// ARQUITECTURA v6.0:
+// - Usa Tool Calling para obtener información on-demand
+// - Consulta sucursales específicas sin cargar todas
+// =====================================================
 
 import { BaseAgent, type AgentResult, formatBranchesForPrompt } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
+import { createToolsForAgent } from '../../tools';
 
 // ======================
 // LOCATION AGENT
@@ -18,8 +24,15 @@ import type { TISTISAgentStateType } from '../../state';
  * 2. Compartir links de Google Maps
  * 3. Explicar cómo llegar
  * 4. Informar sobre estacionamiento
+ *
+ * TOOLS DISPONIBLES:
+ * - get_branch_info: Información de sucursales específicas
+ * - get_operating_hours: Horarios de atención
  */
 class LocationAgentClass extends BaseAgent {
+  /** Flag para usar Tool Calling vs modo legacy */
+  private useToolCalling: boolean = true;
+
   constructor() {
     super({
       name: 'location',
@@ -28,10 +41,10 @@ class LocationAgentClass extends BaseAgent {
 
 # TU ROL
 Tu trabajo es ayudar a los clientes a encontrar nuestras sucursales.
+- USA get_branch_info para obtener información de sucursales
+- USA get_operating_hours si preguntan por horarios también
 - Proporciona direcciones completas y claras
 - Siempre incluye el link de Google Maps si está disponible
-- Menciona referencias útiles para llegar
-- Informa sobre opciones de estacionamiento si aplica
 
 # ESTILO DE COMUNICACIÓN
 - Responde de manera {{STYLE_DESCRIPTION}}
@@ -46,16 +59,9 @@ Tu trabajo es ayudar a los clientes a encontrar nuestras sucursales.
 - Si preguntan por horarios también, respóndelos
 - Después de dar la ubicación, ofrece agendar cita
 
-# EJEMPLO DE RESPUESTAS
-
-Cliente: "¿Dónde están ubicados?"
-Tú: "Nuestra clínica está en [dirección completa]. Te comparto el link de Google Maps: [link]. ¿Te gustaría agendar una cita?"
-
-Cliente: "¿Cómo llego a su consultorio?"
-Tú: "Estamos ubicados en [dirección]. Como referencia, estamos [referencia]. Aquí tienes el mapa: [link]. ¿Hay algo más en lo que pueda ayudarte?"
-
-Cliente: "¿Tienen estacionamiento?"
-Tú: "Sí, contamos con estacionamiento para clientes. Nuestra dirección es [dirección]. ¿Quieres que te ayude a agendar una cita?"`,
+# IMPORTANTE
+- NO inventes direcciones. Usa get_branch_info para obtener la información correcta.
+- Si no encuentras la sucursal, indica que verificarás con el negocio.`,
       temperature: 0.5,
       maxTokens: 250,
       canHandoffTo: ['booking', 'hours'],
@@ -64,45 +70,79 @@ Tú: "Sí, contamos con estacionamiento para clientes. Nuestra dirección es [di
   }
 
   async execute(state: TISTISAgentStateType): Promise<AgentResult> {
-    // Construir contexto de sucursales
-    const branchesContext = `# SUCURSALES Y UBICACIONES
-${formatBranchesForPrompt(state.business_context)}`;
+    const messageLower = state.current_message.toLowerCase();
 
     // Detectar si pregunta por sucursal específica
     const branches = state.business_context?.branches || [];
-    let branchMatch: string | null = null;
+    let additionalContext = '';
 
-    const messageLower = state.current_message.toLowerCase();
+    // Detectar menciones de sucursales específicas
     for (const branch of branches) {
       if (messageLower.includes(branch.name.toLowerCase()) ||
-          messageLower.includes(branch.city.toLowerCase())) {
-        branchMatch = branch.name;
+          (branch.city && messageLower.includes(branch.city.toLowerCase()))) {
+        additionalContext = `\nNOTA: El cliente pregunta específicamente por "${branch.name}". Usa get_branch_info con branch_name="${branch.name}".`;
         break;
       }
     }
 
-    let additionalContext = branchesContext;
-
-    if (branchMatch) {
-      additionalContext += `\n\nNOTA: El cliente pregunta específicamente por "${branchMatch}". Da información detallada de esta sucursal.`;
-    } else if (branches.length > 1) {
-      additionalContext += `\n\nNOTA: Hay múltiples sucursales. Pregunta al cliente cuál le queda más cerca o menciona la principal.`;
-    }
-
-    // Si hay sucursal preferida del lead, mencionarla
+    // Si hay sucursal preferida del lead
     if (state.lead?.preferred_branch_id) {
       const preferredBranch = branches.find((b) => b.id === state.lead?.preferred_branch_id);
       if (preferredBranch) {
-        additionalContext += `\n\nNOTA: La sucursal preferida del cliente es "${preferredBranch.name}". Prioriza esta información.`;
+        additionalContext += `\nNOTA: La sucursal preferida del cliente es "${preferredBranch.name}". Prioriza esta información.`;
       }
     }
 
-    const { response, tokens } = await this.callLLM(state, additionalContext);
+    // Si hay múltiples sucursales y no especificó
+    if (!additionalContext && branches.length > 1) {
+      additionalContext = '\nNOTA: Hay múltiples sucursales. Pregunta al cliente cuál le queda más cerca o usa get_branch_info sin parámetros para obtener todas.';
+    }
+
+    let response: string;
+    let tokens: number;
+    let toolCalls: string[] = [];
+
+    if (this.useToolCalling) {
+      // =====================================================
+      // NUEVA ARQUITECTURA: Tool Calling
+      // =====================================================
+      const tools = createToolsForAgent(this.config.name, state);
+
+      console.log(`[location] Using Tool Calling mode with ${tools.length} tools`);
+
+      const result = await this.callLLMWithTools(state, tools, additionalContext);
+      response = result.response;
+      tokens = result.tokens;
+      toolCalls = result.toolCalls;
+
+      console.log(`[location] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
+    } else {
+      // =====================================================
+      // MODO LEGACY: Context Stuffing (para compatibilidad)
+      // =====================================================
+      console.log(`[location] Using legacy mode (context stuffing)`);
+
+      const branchesContext = `# SUCURSALES Y UBICACIONES
+${formatBranchesForPrompt(state.business_context)}`;
+
+      const result = await this.callLLM(state, branchesContext + additionalContext);
+      response = result.response;
+      tokens = result.tokens;
+    }
 
     return {
       response,
       tokens_used: tokens,
     };
+  }
+
+  /**
+   * Habilita o deshabilita Tool Calling
+   * Útil para testing o rollback gradual
+   */
+  setToolCallingMode(enabled: boolean): void {
+    this.useToolCalling = enabled;
+    console.log(`[location] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

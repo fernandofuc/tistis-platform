@@ -2,9 +2,16 @@
 // TIS TIS PLATFORM - General/Fallback Agent
 // Agente de propósito general para casos no específicos
 // =====================================================
+//
+// ARQUITECTURA v6.0:
+// - Usa Tool Calling para obtener información on-demand
+// - NO carga todo el contexto del negocio
+// - El LLM decide qué información necesita
+// =====================================================
 
 import { BaseAgent, type AgentResult, formatServicesForPrompt, formatBranchesForPrompt, formatFAQsForPrompt } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
+import { createToolsForAgent } from '../../tools';
 
 // ======================
 // GENERAL AGENT
@@ -19,8 +26,20 @@ import type { TISTISAgentStateType } from '../../state';
  * 2. Detectar si puede redirigir a un especialista
  * 3. Proporcionar información básica del negocio
  * 4. Escalar si es necesario
+ *
+ * TOOLS DISPONIBLES:
+ * - get_service_info: Información de servicios específicos
+ * - list_services: Catálogo completo de servicios
+ * - get_branch_info: Información de sucursales
+ * - get_operating_hours: Horarios de atención
+ * - get_faq_answer: Respuestas a preguntas frecuentes
+ * - search_knowledge_base: Buscar en base de conocimiento (RAG)
+ * - get_business_policy: Políticas del negocio
  */
 class GeneralAgentClass extends BaseAgent {
+  /** Flag para usar Tool Calling vs modo legacy */
+  private useToolCalling: boolean = true;
+
   constructor() {
     super({
       name: 'general',
@@ -32,6 +51,15 @@ Eres un asistente versátil que puede ayudar con cualquier consulta general.
 - Responde de manera útil a cualquier pregunta
 - Si detectas una necesidad específica, guía al cliente
 - Siempre busca ser útil y llevar hacia una acción concreta
+- USA LAS HERRAMIENTAS para obtener información que necesites
+
+# HERRAMIENTAS PARA USAR
+- get_service_info / list_services: Para preguntas sobre servicios
+- get_branch_info: Para ubicación y contacto
+- get_operating_hours: Para horarios
+- get_faq_answer: Para preguntas comunes
+- search_knowledge_base: Para información general del negocio
+- get_business_policy: Para políticas
 
 # ESTILO DE COMUNICACIÓN
 - Responde de manera {{STYLE_DESCRIPTION}}
@@ -45,23 +73,9 @@ Eres un asistente versátil que puede ayudar con cualquier consulta general.
 - Si pregunta algo muy técnico o específico, ofrece conectar con un especialista
 - Siempre termina ofreciendo ayuda adicional
 
-# LO QUE PUEDES HACER
-- Dar información general del negocio
-- Explicar servicios disponibles
-- Proporcionar ubicación y horarios
-- Ayudar a agendar citas
-- Responder preguntas frecuentes
-
-# EJEMPLO DE RESPUESTAS
-
-Cliente: "Buenas, tengo una duda"
-Tú: "¡Hola! Con gusto te ayudo. ¿Cuál es tu duda?"
-
-Cliente: [mensaje confuso]
-Tú: "Disculpa, quiero asegurarme de entenderte bien. ¿Podrías explicarme un poco más qué necesitas?"
-
-Cliente: "Gracias por la info"
-Tú: "¡De nada! ¿Hay algo más en lo que pueda ayudarte?"`,
+# IMPORTANTE
+- NO inventes información. Si no la tienes, usa las herramientas.
+- Si no encuentras la información, indica que no la tienes y ofrece alternativas.`,
       temperature: 0.7,
       maxTokens: 300,
       canHandoffTo: ['pricing', 'booking', 'location', 'faq', 'escalation'],
@@ -70,25 +84,11 @@ Tú: "¡De nada! ¿Hay algo más en lo que pueda ayudarte?"`,
   }
 
   async execute(state: TISTISAgentStateType): Promise<AgentResult> {
-    // Construir contexto completo
-    const servicesContext = formatServicesForPrompt(state.business_context);
-    const branchesContext = formatBranchesForPrompt(state.business_context);
-    const faqsContext = formatFAQsForPrompt(state.business_context);
-
-    const fullContext = `# INFORMACIÓN DEL NEGOCIO
-
-## SERVICIOS
-${servicesContext}
-
-## SUCURSALES
-${branchesContext}
-
-## PREGUNTAS FRECUENTES
-${faqsContext}`;
+    const messageLower = state.current_message.toLowerCase();
 
     // Detectar si hay una intención clara que debamos atender
     const intent = state.detected_intent;
-    let additionalNote = '';
+    let additionalContext = '';
 
     if (intent !== 'UNKNOWN') {
       const intentDescriptions: Record<string, string> = {
@@ -99,22 +99,73 @@ ${faqsContext}`;
         HOURS: 'El cliente pregunta por horarios.',
         FAQ: 'El cliente tiene una pregunta general.',
       };
-      additionalNote = `\n\nNOTA: ${intentDescriptions[intent] || 'Responde de manera general.'}`;
+      additionalContext = `\nNOTA: ${intentDescriptions[intent] || 'Responde de manera general.'}`;
     }
 
     // Si el mensaje parece de despedida
-    const messageLower = state.current_message.toLowerCase();
     const farewellIndicators = ['gracias', 'adios', 'adiós', 'bye', 'hasta luego', 'nos vemos'];
     if (farewellIndicators.some((fw) => messageLower.includes(fw))) {
-      additionalNote = '\n\nNOTA: El cliente está despidiéndose. Despídete amablemente y ofrece ayuda futura.';
+      additionalContext = '\nNOTA: El cliente está despidiéndose. Despídete amablemente y ofrece ayuda futura.';
     }
 
-    const { response, tokens } = await this.callLLM(state, fullContext + additionalNote);
+    let response: string;
+    let tokens: number;
+    let toolCalls: string[] = [];
+
+    if (this.useToolCalling) {
+      // =====================================================
+      // NUEVA ARQUITECTURA: Tool Calling
+      // El LLM decide qué información necesita y la obtiene on-demand
+      // =====================================================
+      const tools = createToolsForAgent(this.config.name, state);
+
+      console.log(`[general] Using Tool Calling mode with ${tools.length} tools`);
+
+      const result = await this.callLLMWithTools(state, tools, additionalContext);
+      response = result.response;
+      tokens = result.tokens;
+      toolCalls = result.toolCalls;
+
+      console.log(`[general] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
+    } else {
+      // =====================================================
+      // MODO LEGACY: Context Stuffing (para compatibilidad)
+      // =====================================================
+      console.log(`[general] Using legacy mode (context stuffing)`);
+
+      const servicesContext = formatServicesForPrompt(state.business_context);
+      const branchesContext = formatBranchesForPrompt(state.business_context);
+      const faqsContext = formatFAQsForPrompt(state.business_context);
+
+      const fullContext = `# INFORMACIÓN DEL NEGOCIO
+
+## SERVICIOS
+${servicesContext}
+
+## SUCURSALES
+${branchesContext}
+
+## PREGUNTAS FRECUENTES
+${faqsContext}`;
+
+      const result = await this.callLLM(state, fullContext + additionalContext);
+      response = result.response;
+      tokens = result.tokens;
+    }
 
     return {
       response,
       tokens_used: tokens,
     };
+  }
+
+  /**
+   * Habilita o deshabilita Tool Calling
+   * Útil para testing o rollback gradual
+   */
+  setToolCallingMode(enabled: boolean): void {
+    this.useToolCalling = enabled;
+    console.log(`[general] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

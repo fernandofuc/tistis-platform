@@ -44,6 +44,11 @@ import {
   type ResponseStyleKey,
   type AssistantTypeKey,
 } from '@/src/shared/config/prompt-instruction-compiler';
+import {
+  truncateKBToTokenBudget,
+  getTokenBudgetSummary,
+  type KBContent,
+} from '@/src/shared/config/token-budget.service';
 
 // ======================
 // TYPES
