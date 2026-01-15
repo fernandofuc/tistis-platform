@@ -112,13 +112,16 @@ export interface VoiceConfigSummary {
 }
 
 /**
- * Conexión de canal
+ * Conexión de canal vinculada a un perfil
  */
 export interface ChannelConnection {
-  channel_type: 'whatsapp' | 'instagram' | 'messenger' | 'webchat' | 'tiktok';
+  channel_id: string;
+  channel_type: 'whatsapp' | 'instagram' | 'messenger' | 'webchat' | 'tiktok' | 'facebook';
   channel_identifier?: string;
+  account_name?: string;
   is_connected: boolean;
   account_number: 1 | 2;
+  profile_id: string | null;
 }
 
 // ======================

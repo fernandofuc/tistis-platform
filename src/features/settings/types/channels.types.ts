@@ -29,6 +29,9 @@ export interface ChannelConnection {
   account_name: string;
   is_personal_brand: boolean;
 
+  // Profile connection (Migration 125)
+  profile_id: string | null;
+
   // AI override settings (new)
   ai_personality_override: AIPersonality | null;
   first_message_delay_seconds: number;
@@ -91,6 +94,7 @@ export interface EffectiveChannelAIConfig {
   account_number: AccountNumber;
   account_name: string;
   is_personal_brand: boolean;
+  profile_id: string | null;
   ai_enabled: boolean;
   ai_personality: AIPersonality;
   first_message_delay_seconds: number;

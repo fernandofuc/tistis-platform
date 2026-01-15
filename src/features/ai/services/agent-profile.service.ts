@@ -33,6 +33,16 @@ interface AIAgentRow {
   profile_id: string | null;
 }
 
+interface ChannelConnectionRow {
+  id: string;
+  channel: string;
+  account_name: string;
+  account_number: number;
+  status: string;
+  profile_id: string | null;
+  is_personal_brand: boolean;
+}
+
 // =====================================================
 // SUPABASE CLIENT
 // =====================================================
@@ -81,10 +91,14 @@ export async function getAgentProfiles(tenantId: string): Promise<{
   }
 
   // Cargar el resto en paralelo
-  const [aiAgentsResult, voiceConfigResult, voicePhoneResult, tenantResult] = await Promise.all([
+  const [aiAgentsResult, channelConnectionsResult, voiceConfigResult, voicePhoneResult, tenantResult] = await Promise.all([
     supabase
       .from('ai_agents')
       .select('id, channel_type, channel_identifier, is_active, account_number, profile_id')
+      .eq('tenant_id', tenantId),
+    supabase
+      .from('channel_connections')
+      .select('id, channel, account_name, account_number, status, profile_id, is_personal_brand')
       .eq('tenant_id', tenantId),
     supabase
       .from('voice_agent_config')
@@ -105,6 +119,7 @@ export async function getAgentProfiles(tenantId: string): Promise<{
   ]);
 
   const aiAgents: AIAgentRow[] = (aiAgentsResult.data || []) as AIAgentRow[];
+  const channelConnections: ChannelConnectionRow[] = (channelConnectionsResult.data || []) as ChannelConnectionRow[];
   const voiceConfig = voiceConfigResult.data;
   const voicePhone = voicePhoneResult.data;
   const tenant = tenantResult.data;
@@ -144,14 +159,50 @@ export async function getAgentProfiles(tenantId: string): Promise<{
   const mapProfileWithChannels = (profile: AgentProfile | null, type: ProfileType): AgentProfileWithChannels | null => {
     if (!profile) return null;
 
-    // Filtrar canales que pertenecen a este perfil
-    const profileChannels = (aiAgents || [])
-      .filter(a => a.profile_id === profile.id || (type === 'business' && !a.profile_id))
+    // Filtrar canales que pertenecen a este perfil desde channel_connections
+    // Prioridad: profile_id explícito > is_personal_brand boolean (legacy) > default to business
+    const profileChannels = (channelConnections || [])
+      .filter(c => {
+        // Si tiene profile_id, usarlo directamente
+        if (c.profile_id) {
+          return c.profile_id === profile.id;
+        }
+        // Fallback: usar is_personal_brand boolean (compatibilidad con datos existentes)
+        if (type === 'personal') {
+          return c.is_personal_brand === true;
+        }
+        // Por defecto, los canales sin profile_id van a business
+        return type === 'business' && !c.is_personal_brand;
+      })
+      .map(c => ({
+        channel_id: c.id,
+        channel_type: c.channel as ChannelConnection['channel_type'],
+        channel_identifier: c.account_name,
+        account_name: c.account_name,
+        is_connected: c.status === 'connected',
+        account_number: (c.account_number || 1) as 1 | 2,
+        profile_id: c.profile_id,
+      }));
+
+    // También incluir canales de ai_agents (legacy, para backwards compatibility)
+    const legacyChannels = (aiAgents || [])
+      .filter(a => {
+        // Solo agregar si no está ya en channelConnections
+        const alreadyExists = profileChannels.some(
+          pc => pc.channel_type === a.channel_type && pc.account_number === (a.account_number || 1)
+        );
+        if (alreadyExists) return false;
+
+        return a.profile_id === profile.id || (type === 'business' && !a.profile_id);
+      })
       .map(a => ({
+        channel_id: a.id,
         channel_type: a.channel_type as ChannelConnection['channel_type'],
         channel_identifier: a.channel_identifier,
+        account_name: a.channel_identifier,
         is_connected: a.is_active,
         account_number: (a.account_number || 1) as 1 | 2,
+        profile_id: a.profile_id,
       }));
 
     // Voice config solo para business
@@ -168,7 +219,7 @@ export async function getAgentProfiles(tenantId: string): Promise<{
 
     return {
       ...profile,
-      channels: profileChannels,
+      channels: [...profileChannels, ...legacyChannels],
       voice_config: voice,
     };
   };

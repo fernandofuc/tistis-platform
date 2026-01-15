@@ -200,12 +200,14 @@ function StatusBadge({ status }: { status: ConnectionStatus }) {
 
 interface AccountCardProps {
   connection: ChannelConnection;
+  profiles: AgentProfileOption[];
   onEdit: () => void;
   onToggleAI: (enabled: boolean) => void;
   onOpenAISettings: () => void;
+  onChangeProfile: (profileId: string | null) => void;
 }
 
-function AccountCard({ connection, onEdit, onToggleAI, onOpenAISettings }: AccountCardProps) {
+function AccountCard({ connection, profiles, onEdit, onToggleAI, onOpenAISettings, onChangeProfile }: AccountCardProps) {
   const metadata = CHANNEL_METADATA[connection.channel];
   const isConnected = connection.status === 'connected';
   const personality = connection.ai_personality_override
@@ -261,45 +263,61 @@ function AccountCard({ connection, onEdit, onToggleAI, onOpenAISettings }: Accou
           <StatusBadge status={connection.status} />
         </div>
 
-        {/* AI Settings Preview - SIEMPRE visible cuando está conectado */}
+        {/* Profile Assignment - SIEMPRE visible cuando está conectado */}
         {isConnected && (
           <div className="mt-4 p-3 bg-gradient-to-r from-tis-coral/5 to-gray-50/50 rounded-xl border border-gray-100">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               {/* Label */}
               <div className="flex items-center gap-2">
-                <SparklesIcon className="w-4 h-4 text-tis-coral" />
+                {connection.profile_id ? (
+                  profiles.find(p => p.id === connection.profile_id)?.profile_type === 'personal' ? (
+                    <UserIcon className="w-4 h-4 text-orange-500" />
+                  ) : (
+                    <BuildingIcon className="w-4 h-4 text-tis-coral" />
+                  )
+                ) : (
+                  <SparklesIcon className="w-4 h-4 text-gray-400" />
+                )}
                 <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-                  Configuración AI
+                  Perfil de Agente
                 </span>
               </div>
 
-              {/* Status */}
-              {personality ? (
-                // Personalizado
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-tis-coral text-white shadow-sm">
-                    Personalizado
-                  </span>
-                  <span className="text-sm font-medium text-gray-700">
-                    {personality.name}
-                  </span>
-                  {connection.first_message_delay_seconds > 0 && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-600">
-                      <ClockIcon className="w-3 h-3 mr-1" />
-                      {formatDelay(connection.first_message_delay_seconds)}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                // Config Global
-                <span
-                  className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-300 bg-white text-gray-600"
-                  title="Este canal usa la configuración global de AI. Puedes personalizarlo haciendo click en 'Configurar AI'"
-                >
-                  Usando config global
-                </span>
-              )}
+              {/* Profile Selector */}
+              <select
+                value={connection.profile_id || ''}
+                onChange={(e) => onChangeProfile(e.target.value || null)}
+                className={cn(
+                  'text-sm font-medium rounded-lg border px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-tis-coral/50 transition-colors',
+                  connection.profile_id
+                    ? profiles.find(p => p.id === connection.profile_id)?.profile_type === 'personal'
+                      ? 'bg-orange-50 border-orange-200 text-orange-700'
+                      : 'bg-tis-coral/10 border-tis-coral/30 text-tis-coral'
+                    : 'bg-gray-50 border-gray-200 text-gray-600'
+                )}
+              >
+                <option value="">Sin asignar</option>
+                {profiles.filter(p => p.is_active).map(profile => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.profile_type === 'business' ? '🏢 ' : '👤 '}
+                    {profile.profile_name}
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {/* AI Config Status */}
+            {personality && (
+              <div className="mt-2 flex items-center gap-2 flex-wrap text-xs text-gray-500">
+                <span>Personalidad: <strong className="text-gray-700">{personality.name}</strong></span>
+                {connection.first_message_delay_seconds > 0 && (
+                  <span className="inline-flex items-center">
+                    <ClockIcon className="w-3 h-3 mr-1" />
+                    {formatDelay(connection.first_message_delay_seconds)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -421,19 +439,23 @@ function AddAccountCard({ channel, accountNumber, onClick }: AddAccountCardProps
 interface ChannelGroupSectionProps {
   channel: ChannelType;
   accounts: ChannelConnection[];
+  profiles: AgentProfileOption[];
   onAddAccount: (accountNumber: AccountNumber) => void;
   onEditAccount: (connection: ChannelConnection) => void;
   onToggleAI: (connectionId: string, enabled: boolean) => void;
   onOpenAISettings: (connection: ChannelConnection) => void;
+  onChangeProfile: (connectionId: string, profileId: string | null) => void;
 }
 
 function ChannelGroupSection({
   channel,
   accounts,
+  profiles,
   onAddAccount,
   onEditAccount,
   onToggleAI,
   onOpenAISettings,
+  onChangeProfile,
 }: ChannelGroupSectionProps) {
   const metadata = CHANNEL_METADATA[channel];
   const account1 = accounts.find(a => a.account_number === 1);
@@ -464,9 +486,11 @@ function ChannelGroupSection({
         {account1 ? (
           <AccountCard
             connection={account1}
+            profiles={profiles}
             onEdit={() => onEditAccount(account1)}
             onToggleAI={(enabled) => onToggleAI(account1.id, enabled)}
             onOpenAISettings={() => onOpenAISettings(account1)}
+            onChangeProfile={(profileId) => onChangeProfile(account1.id, profileId)}
           />
         ) : (
           <AddAccountCard
@@ -480,9 +504,11 @@ function ChannelGroupSection({
         {account2 ? (
           <AccountCard
             connection={account2}
+            profiles={profiles}
             onEdit={() => onEditAccount(account2)}
             onToggleAI={(enabled) => onToggleAI(account2.id, enabled)}
             onOpenAISettings={() => onOpenAISettings(account2)}
+            onChangeProfile={(profileId) => onChangeProfile(account2.id, profileId)}
           />
         ) : (
           <AddAccountCard
@@ -500,10 +526,19 @@ function ChannelGroupSection({
 // MAIN COMPONENT
 // ======================
 
+// Agent Profile type for selector
+interface AgentProfileOption {
+  id: string;
+  profile_type: 'business' | 'personal';
+  profile_name: string;
+  is_active: boolean;
+}
+
 export function ChannelConnections() {
   const { tenant } = useAuthContext();
   const [connections, setConnections] = useState<ChannelConnection[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [agentProfiles, setAgentProfiles] = useState<AgentProfileOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
@@ -523,37 +558,46 @@ export function ChannelConnections() {
     const loadData = async () => {
       setLoading(true);
 
-      // Load connections
-      const { data: connData } = await supabase
-        .from('channel_connections')
-        .select('*')
-        .eq('tenant_id', tenant.id)
-        .order('channel')
-        .order('account_number');
+      // Load connections, branches, and agent profiles in parallel
+      const [connResult, branchResult, profilesResult] = await Promise.all([
+        supabase
+          .from('channel_connections')
+          .select('*')
+          .eq('tenant_id', tenant.id)
+          .order('channel')
+          .order('account_number'),
+        supabase
+          .from('branches')
+          .select('id, name, city, is_headquarters')
+          .eq('tenant_id', tenant.id)
+          .eq('is_active', true)
+          .order('is_headquarters', { ascending: false }),
+        supabase
+          .from('agent_profiles')
+          .select('id, profile_type, profile_name, is_active')
+          .eq('tenant_id', tenant.id),
+      ]);
 
-      if (connData) {
+      if (connResult.data) {
         // Add default values for new fields
-        const normalized = connData.map(c => ({
+        const normalized = connResult.data.map(c => ({
           ...c,
           account_number: c.account_number || 1,
           account_name: c.account_name || `${c.channel.charAt(0).toUpperCase() + c.channel.slice(1)} Principal`,
           is_personal_brand: c.is_personal_brand || false,
+          profile_id: c.profile_id || null,
           first_message_delay_seconds: c.first_message_delay_seconds || 0,
           subsequent_message_delay_seconds: c.subsequent_message_delay_seconds || 0,
         }));
         setConnections(normalized as ChannelConnection[]);
       }
 
-      // Load branches
-      const { data: branchData } = await supabase
-        .from('branches')
-        .select('id, name, city, is_headquarters')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .order('is_headquarters', { ascending: false });
+      if (branchResult.data) {
+        setBranches(branchResult.data);
+      }
 
-      if (branchData) {
-        setBranches(branchData);
+      if (profilesResult.data) {
+        setAgentProfiles(profilesResult.data as AgentProfileOption[]);
       }
 
       setLoading(false);
@@ -577,6 +621,31 @@ export function ChannelConnections() {
     if (!error) {
       setConnections(prev =>
         prev.map(c => c.id === connectionId ? { ...c, ai_enabled: enabled } : c)
+      );
+    }
+  };
+
+  // Change profile assignment for a channel
+  const handleChangeProfile = async (connectionId: string, profileId: string | null) => {
+    // Also update is_personal_brand based on the profile type for backwards compatibility
+    const profile = agentProfiles.find(p => p.id === profileId);
+    const isPersonalBrand = profile?.profile_type === 'personal';
+
+    const { error } = await supabase
+      .from('channel_connections')
+      .update({
+        profile_id: profileId,
+        is_personal_brand: isPersonalBrand,
+      })
+      .eq('id', connectionId);
+
+    if (!error) {
+      setConnections(prev =>
+        prev.map(c => c.id === connectionId ? {
+          ...c,
+          profile_id: profileId,
+          is_personal_brand: isPersonalBrand,
+        } : c)
       );
     }
   };
@@ -670,10 +739,12 @@ export function ChannelConnections() {
               key={channel}
               channel={channel}
               accounts={getAccountsByChannel(channel)}
+              profiles={agentProfiles}
               onAddAccount={(accountNumber) => handleAddAccount(channel, accountNumber)}
               onEditAccount={handleEditAccount}
               onToggleAI={handleToggleAI}
               onOpenAISettings={handleOpenAISettings}
+              onChangeProfile={handleChangeProfile}
             />
           ))}
         </div>

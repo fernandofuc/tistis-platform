@@ -232,7 +232,7 @@ export function ResumenTab({
 
           {/* Connected Channels */}
           <div className="mb-4">
-            <p className="text-xs font-medium text-slate-500 mb-2">Canales conectados</p>
+            <p className="text-xs font-medium text-slate-500 mb-2">Canales asignados a este perfil</p>
             <div className="flex flex-wrap gap-2">
               {connectedChannels.length > 0 ? (
                 connectedChannels.map((channel, idx) => {
@@ -245,14 +245,23 @@ export function ResumenTab({
                         channelInfo.bg,
                         channelInfo.color
                       )}
+                      title={channel.account_name || channelInfo.name}
                     >
                       {channelInfo.icon}
-                      <span className="capitalize">{channelInfo.name}</span>
+                      <span className="capitalize">
+                        {channel.account_name || channelInfo.name}
+                        {channel.account_number === 2 && ' (2)'}
+                      </span>
+                      {channel.is_connected && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      )}
                     </span>
                   );
                 })
               ) : (
-                <span className="text-xs text-slate-400">Sin canales conectados</span>
+                <span className="text-xs text-slate-400 italic">
+                  Sin canales asignados — Configura en Settings {'>'} Canales
+                </span>
               )}
             </div>
           </div>
@@ -313,9 +322,45 @@ export function ResumenTab({
 
             {personalProfile ? (
               <>
-                <p className="text-sm text-slate-500 mb-4">
-                  Responde en redes sociales personales con delay para parecer humano.
-                </p>
+                {/* Canales asignados al perfil personal */}
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-slate-500 mb-2">Canales asignados</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(personalProfile.channels?.filter(c => c.is_connected) || []).length > 0 ? (
+                      personalProfile.channels?.filter(c => c.is_connected).map((channel, idx) => {
+                        const channelInfo = channelIconsConfig[channel.channel_type] || channelIconsConfig.instagram;
+                        return (
+                          <span
+                            key={`personal-${channel.channel_type}-${channel.account_number}-${idx}`}
+                            className={cn(
+                              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium',
+                              channelInfo.bg,
+                              channelInfo.color
+                            )}
+                            title={channel.account_name || channelInfo.name}
+                          >
+                            {channelInfo.icon}
+                            <span className="capitalize">
+                              {channel.account_name || channelInfo.name}
+                            </span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">
+                        Sin canales asignados — Configura en Settings {'>'} Canales
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick Info Personal */}
+                <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
+                  <span>Estilo: <strong className="text-slate-700">{personalProfile.response_style === 'professional_friendly' ? 'Profesional Cálido' : personalProfile.response_style}</strong></span>
+                  <span>Delay: <strong className="text-slate-700">{personalProfile.response_delay_minutes === 0 ? 'Inmediato' : `${personalProfile.response_delay_minutes} min`}</strong></span>
+                </div>
+
                 <button
                   onClick={onEditPersonal}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors"
