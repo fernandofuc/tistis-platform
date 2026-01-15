@@ -2,8 +2,9 @@
 // TIS TIS PLATFORM - Shared Hooks Index
 // =====================================================
 
-export { useDebounce } from './useDebounce';
+export { useDebounce, useDebouncedCallback } from './useDebounce';
 export { useLocalStorage } from './useLocalStorage';
+export { useToast, ToastProvider, toast, type Toast, type ToastType } from './useToast';
 
 // Realtime Subscriptions
 export {

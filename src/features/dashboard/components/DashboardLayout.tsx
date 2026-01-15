@@ -8,6 +8,7 @@ import { useState, Suspense, useEffect } from 'react';
 import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
 import { NavigationProgress } from '@/shared/components/ui';
+import { ToastProvider } from '@/shared/hooks';
 import { AuthProvider, ProtectedRoute, useAuthContext } from '@/features/auth';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -72,45 +73,48 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <AuthProvider>
       <ProtectedRoute loadingSkeleton={<DashboardSkeleton />}>
-        {/* Sync branches from auth to global store */}
-        <BranchSyncProvider>
-          {/* Navigation Progress Indicator */}
-          <Suspense fallback={null}>
-            <NavigationProgress />
-          </Suspense>
+        {/* Toast Notifications Provider */}
+        <ToastProvider>
+          {/* Sync branches from auth to global store */}
+          <BranchSyncProvider>
+            {/* Navigation Progress Indicator */}
+            <Suspense fallback={null}>
+              <NavigationProgress />
+            </Suspense>
 
-          <div className="min-h-screen bg-gray-50">
-            {/* Desktop Sidebar */}
-            <div className="hidden lg:block">
-              <Sidebar />
+            <div className="min-h-screen bg-gray-50">
+              {/* Desktop Sidebar */}
+              <div className="hidden lg:block">
+                <Sidebar />
+              </div>
+
+              {/* Mobile Drawer */}
+              <MobileDrawer
+                isOpen={mobileDrawerOpen}
+                onClose={() => setMobileDrawerOpen(false)}
+              />
+
+              {/* Main Content */}
+              <div
+                className={cn(
+                  'min-h-screen transition-all duration-300',
+                  sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+                )}
+              >
+                {/* Header */}
+                <Header onMenuClick={() => setMobileDrawerOpen(true)} />
+
+                {/* Page Content */}
+                <main className="p-4 lg:p-6 pb-24 lg:pb-6">
+                  {children}
+                </main>
+              </div>
+
+              {/* Mobile Bottom Nav */}
+              <MobileBottomNav />
             </div>
-
-            {/* Mobile Drawer */}
-            <MobileDrawer
-              isOpen={mobileDrawerOpen}
-              onClose={() => setMobileDrawerOpen(false)}
-            />
-
-            {/* Main Content */}
-            <div
-              className={cn(
-                'min-h-screen transition-all duration-300',
-                sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
-              )}
-            >
-              {/* Header */}
-              <Header onMenuClick={() => setMobileDrawerOpen(true)} />
-
-              {/* Page Content */}
-              <main className="p-4 lg:p-6 pb-24 lg:pb-6">
-                {children}
-              </main>
-            </div>
-
-            {/* Mobile Bottom Nav */}
-            <MobileBottomNav />
-          </div>
-        </BranchSyncProvider>
+          </BranchSyncProvider>
+        </ToastProvider>
       </ProtectedRoute>
     </AuthProvider>
   );
