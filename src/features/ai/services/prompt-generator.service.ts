@@ -28,6 +28,9 @@ import crypto from 'crypto';
 import {
   validateGeneratedPrompt,
   formatValidationReport,
+  generateCorrectionInstructions,
+  isAutoCorrectible,
+  getMaxCorrectionAttempts,
   type ValidationResult,
 } from './prompt-validator.service';
 import {
@@ -161,6 +164,7 @@ export interface PromptGenerationResult {
   processingTimeMs: number;
   validation?: ValidationResult;  // Resultado de validación post-generación
   validationReport?: string;      // Reporte legible de validación
+  correctionAttempts?: number;    // FASE 4: Número de intentos de auto-corrección
 }
 
 // ======================
@@ -639,6 +643,289 @@ export async function collectBusinessContext(
 }
 
 // ======================
+// RETRY & RESILIENCE UTILITIES (FIX B.1)
+// ======================
+
+interface RetryConfig {
+  maxAttempts: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxAttempts: 3,
+  initialDelayMs: 1000,  // 1 segundo
+  maxDelayMs: 10000,     // 10 segundos máximo
+  backoffMultiplier: 2,  // Duplicar delay cada intento
+};
+
+/**
+ * Ejecuta una función con retry exponencial
+ */
+async function withExponentialRetry<T>(
+  operation: () => Promise<T>,
+  isSuccess: (result: T) => boolean,
+  operationName: string,
+  config: RetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<{ result: T; attempts: number; totalWaitMs: number }> {
+  // P1-C4 FIX: Inicialización explícita para evitar undefined behavior
+  let lastResult: T | undefined = undefined;
+  let lastError: Error | undefined = undefined;
+  let attempt = 0;
+  let totalWaitMs = 0;
+
+  while (attempt < config.maxAttempts) {
+    attempt++;
+
+    try {
+      lastResult = await operation();
+      lastError = undefined; // Limpiar error si operación exitosa
+
+      if (isSuccess(lastResult)) {
+        console.log(`[Retry] ${operationName} succeeded on attempt ${attempt}`);
+        return { result: lastResult, attempts: attempt, totalWaitMs };
+      }
+
+      console.warn(`[Retry] ${operationName} failed on attempt ${attempt}/${config.maxAttempts}`);
+    } catch (error) {
+      console.error(`[Retry] ${operationName} threw exception on attempt ${attempt}:`, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Si es el último intento, propagar la excepción
+      if (attempt >= config.maxAttempts) {
+        throw lastError;
+      }
+    }
+
+    // Si no es el último intento, esperar con backoff exponencial
+    if (attempt < config.maxAttempts) {
+      const delay = Math.min(
+        config.initialDelayMs * Math.pow(config.backoffMultiplier, attempt - 1),
+        config.maxDelayMs
+      );
+
+      console.log(`[Retry] Waiting ${delay}ms before retry ${attempt + 1}...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      totalWaitMs += delay;
+    }
+  }
+
+  // P1-C4 FIX: Manejo explícito si lastResult aún es undefined
+  if (lastResult === undefined) {
+    throw lastError || new Error(`${operationName} failed after ${attempt} attempts without result`);
+  }
+
+  // Retornar el último resultado (fallido pero existente)
+  return { result: lastResult, attempts: attempt, totalWaitMs };
+}
+
+// ======================
+// FASE 6: SENSITIVE DATA SANITIZATION
+// ======================
+
+/**
+ * Patrones de datos sensibles que deben sanitizarse antes de enviar a Gemini
+ */
+const SENSITIVE_PATTERNS = {
+  // Tarjetas de crédito/débito (16 dígitos con o sin espacios/guiones)
+  creditCard: /\b(?:\d{4}[-\s]?){3}\d{4}\b/g,
+  // CVV (3-4 dígitos después de palabra clave)
+  cvv: /\b(?:cvv|cvc|cv2|security code)[:\s]*\d{3,4}\b/gi,
+  // Contraseñas (después de palabras clave)
+  password: /\b(?:password|contraseña|clave|pwd)[:\s=]*['"]?[\w!@#$%^&*]{4,}['"]?\b/gi,
+  // Tokens/API Keys (formatos comunes)
+  apiKey: /\b(?:api[_-]?key|token|secret|bearer)[:\s=]*['"]?[a-zA-Z0-9_-]{20,}['"]?\b/gi,
+  // SSN americano (XXX-XX-XXXX con guiones obligatorios o palabra clave)
+  // P2 FIX: Más específico para evitar falsos positivos con fechas
+  ssn: /\b(?:ssn|social security|seguro social)[:\s]*\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/gi,
+  // CURP mexicana (18 caracteres con formato específico)
+  curp: /\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d\b/gi,
+  // RFC mexicano (12-13 caracteres con formato específico)
+  rfc: /\b[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}\b/gi,
+  // Correos electrónicos privados (solo sanitizar en contextos específicos)
+  privateEmail: /\b[a-zA-Z0-9._%+-]+@(?:gmail|hotmail|outlook|yahoo|icloud)\.[a-zA-Z]{2,}\b/gi,
+  // IPs privadas
+  privateIp: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/g,
+  // CLABE mexicana (18 dígitos con palabra clave para evitar falsos positivos)
+  // P3 FIX: Solo matchea si tiene contexto de cuenta bancaria
+  clabe: /\b(?:clabe|cuenta|transferencia)[:\s]*\d{18}\b/gi,
+};
+
+/**
+ * Reemplazos seguros para cada tipo de dato sensible
+ */
+const SANITIZATION_REPLACEMENTS: Record<keyof typeof SENSITIVE_PATTERNS, string> = {
+  creditCard: '[TARJETA_REDACTADA]',
+  cvv: '[CVV_REDACTADO]',
+  password: '[CONTRASEÑA_REDACTADA]',
+  apiKey: '[TOKEN_REDACTADO]',
+  ssn: '[SSN_REDACTADO]',
+  curp: '[CURP_REDACTADA]',
+  rfc: '[RFC_REDACTADO]',
+  privateEmail: '[EMAIL_PERSONAL_REDACTADO]',
+  privateIp: '[IP_PRIVADA_REDACTADA]',
+  clabe: '[CLABE_REDACTADA]',
+};
+
+/**
+ * Sanitiza datos sensibles de un texto antes de enviarlo a Gemini
+ * @param text - Texto a sanitizar
+ * @param options - Opciones de sanitización
+ * @returns Texto sanitizado y conteo de redacciones
+ */
+export function sanitizeSensitiveData(
+  text: string | null | undefined,
+  options: {
+    sanitizeEmails?: boolean;  // Por defecto false (emails de negocio son útiles)
+    logRedactions?: boolean;   // Por defecto true en desarrollo
+  } = {}
+): { sanitized: string; redactionCount: number; redactedTypes: string[] } {
+  // P4 FIX: Manejo de null/undefined
+  if (!text || typeof text !== 'string') {
+    return { sanitized: '', redactionCount: 0, redactedTypes: [] };
+  }
+
+  const {
+    sanitizeEmails = false,
+    logRedactions = process.env.NODE_ENV === 'development',
+  } = options;
+
+  let sanitized = text;
+  let redactionCount = 0;
+  const redactedTypes: string[] = [];
+
+  // Aplicar cada patrón de sanitización
+  for (const [patternName, pattern] of Object.entries(SENSITIVE_PATTERNS)) {
+    // Saltar emails si no se solicita
+    if (patternName === 'privateEmail' && !sanitizeEmails) continue;
+
+    const replacement = SANITIZATION_REPLACEMENTS[patternName as keyof typeof SENSITIVE_PATTERNS];
+    const matches = sanitized.match(pattern);
+
+    if (matches && matches.length > 0) {
+      sanitized = sanitized.replace(pattern, replacement);
+      redactionCount += matches.length;
+      redactedTypes.push(patternName);
+
+      if (logRedactions) {
+        console.log(`[Sanitizer] Redacted ${matches.length} ${patternName} instance(s)`);
+      }
+    }
+  }
+
+  return { sanitized, redactionCount, redactedTypes };
+}
+
+/**
+ * Sanitiza un objeto BusinessContext completo
+ * Aplica sanitización a todos los campos de texto
+ */
+export function sanitizeBusinessContext(
+  context: BusinessContext
+): { sanitizedContext: BusinessContext; totalRedactions: number } {
+  let totalRedactions = 0;
+
+  // Crear copia profunda para no mutar el original
+  const sanitizedContext: BusinessContext = JSON.parse(JSON.stringify(context));
+
+  // Sanitizar campos de texto principales
+  if (sanitizedContext.customInstructions) {
+    const { sanitized, redactionCount } = sanitizeSensitiveData(sanitizedContext.customInstructions);
+    sanitizedContext.customInstructions = sanitized;
+    totalRedactions += redactionCount;
+  }
+
+  if (sanitizedContext.goodbyeMessage) {
+    const { sanitized, redactionCount } = sanitizeSensitiveData(sanitizedContext.goodbyeMessage);
+    sanitizedContext.goodbyeMessage = sanitized;
+    totalRedactions += redactionCount;
+  }
+
+  // Sanitizar arrays de strings
+  if (sanitizedContext.fillerPhrases) {
+    sanitizedContext.fillerPhrases = sanitizedContext.fillerPhrases.map(phrase => {
+      const { sanitized, redactionCount } = sanitizeSensitiveData(phrase);
+      totalRedactions += redactionCount;
+      return sanitized;
+    });
+  }
+
+  // Sanitizar FAQs
+  if (sanitizedContext.faqs) {
+    sanitizedContext.faqs = sanitizedContext.faqs.map(faq => {
+      const { sanitized: sanitizedQ, redactionCount: countQ } = sanitizeSensitiveData(faq.question);
+      const { sanitized: sanitizedA, redactionCount: countA } = sanitizeSensitiveData(faq.answer);
+      totalRedactions += countQ + countA;
+      return { ...faq, question: sanitizedQ, answer: sanitizedA };
+    });
+  }
+
+  // Sanitizar specialInstructions por servicio
+  if (sanitizedContext.services) {
+    sanitizedContext.services = sanitizedContext.services.map(service => {
+      if (service.specialInstructions) {
+        const { sanitized, redactionCount } = sanitizeSensitiveData(service.specialInstructions);
+        totalRedactions += redactionCount;
+        return { ...service, specialInstructions: sanitized };
+      }
+      return service;
+    });
+  }
+
+  // Sanitizar responseTemplates (es un array de objetos)
+  if (sanitizedContext.responseTemplates) {
+    sanitizedContext.responseTemplates = sanitizedContext.responseTemplates.map(template => {
+      const { sanitized, redactionCount } = sanitizeSensitiveData(template.template);
+      totalRedactions += redactionCount;
+      return { ...template, template: sanitized };
+    });
+  }
+
+  // Sanitizar competitorHandling (es un array de objetos)
+  if (sanitizedContext.competitorHandling) {
+    sanitizedContext.competitorHandling = sanitizedContext.competitorHandling.map(comp => {
+      const { sanitized, redactionCount } = sanitizeSensitiveData(comp.responseStrategy);
+      totalRedactions += redactionCount;
+      return { ...comp, responseStrategy: sanitized };
+    });
+  }
+
+  // Sanitizar customInstructionsList
+  if (sanitizedContext.customInstructionsList) {
+    sanitizedContext.customInstructionsList = sanitizedContext.customInstructionsList.map(item => {
+      const { sanitized, redactionCount } = sanitizeSensitiveData(item.instruction);
+      totalRedactions += redactionCount;
+      return { ...item, instruction: sanitized };
+    });
+  }
+
+  // Sanitizar businessPolicies
+  if (sanitizedContext.businessPolicies) {
+    sanitizedContext.businessPolicies = sanitizedContext.businessPolicies.map(policy => {
+      const { sanitized, redactionCount } = sanitizeSensitiveData(policy.policy);
+      totalRedactions += redactionCount;
+      return { ...policy, policy: sanitized };
+    });
+  }
+
+  // Sanitizar knowledgeArticles
+  if (sanitizedContext.knowledgeArticles) {
+    sanitizedContext.knowledgeArticles = sanitizedContext.knowledgeArticles.map(article => {
+      const { sanitized, redactionCount } = sanitizeSensitiveData(article.content);
+      totalRedactions += redactionCount;
+      return { ...article, content: sanitized };
+    });
+  }
+
+  if (totalRedactions > 0) {
+    console.log(`[Sanitizer] Total redactions in context: ${totalRedactions}`);
+  }
+
+  return { sanitizedContext, totalRedactions };
+}
+
+// ======================
 // PROMPT GENERATION
 // ======================
 
@@ -686,42 +973,103 @@ export async function generatePromptWithAI(
     day: 'numeric',
   });
 
-  // Construir el meta-prompt para Gemini 3.0
-  const metaPrompt = buildMetaPrompt(context, promptType, verticalConfig, currentDate);
+  // FASE 6: Sanitizar datos sensibles antes de enviar a Gemini
+  const { sanitizedContext, totalRedactions } = sanitizeBusinessContext(context);
+  if (totalRedactions > 0) {
+    console.log(`[PromptGenerator] Sanitized ${totalRedactions} sensitive data items before Gemini call`);
+  }
 
-  // Generar con Gemini 3.0
-  let result;
+  // Construir el meta-prompt para Gemini 3.0 (usando contexto sanitizado)
+  const metaPrompt = buildMetaPrompt(sanitizedContext, promptType, verticalConfig, currentDate);
+
+  // Generar con Gemini 3.0 usando retry exponencial (FASE 3 - B.1)
+  const startTime = Date.now();
+  let result: Awaited<ReturnType<typeof generateWithGemini>>;
+  let retryAttempts = 0;
+  let totalRetryWaitMs = 0;
+
   try {
-    result = await generateWithGemini(metaPrompt, {
-      model: DEFAULT_GEMINI_MODELS.PROMPT_GENERATION,
-      temperature: 0.7,
-      maxOutputTokens: 8192,
-    });
+    // Envolver la llamada a Gemini con retry exponencial
+    const retryResult = await withExponentialRetry(
+      async () => {
+        try {
+          return await generateWithGemini(metaPrompt, {
+            model: DEFAULT_GEMINI_MODELS.PROMPT_GENERATION,
+            temperature: 0.7,
+            maxOutputTokens: 8192,
+          });
+        } catch (error) {
+          // Convertir excepciones en resultado de error para el retry
+          console.warn(`[PromptGenerator] Gemini API exception on attempt:`, error);
+          return {
+            success: false as const,
+            content: '',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            model: 'error',
+            processingTimeMs: 0,
+          };
+        }
+      },
+      // Criterio de éxito: result.success === true Y content no vacío
+      (res) => res.success && res.content.trim().length > 100,
+      'generatePromptWithAI',
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1500,
+        maxDelayMs: 8000,
+        backoffMultiplier: 2,
+      }
+    );
+
+    result = retryResult.result;
+    retryAttempts = retryResult.attempts;
+    totalRetryWaitMs = retryResult.totalWaitMs;
+
+    // Log de métricas de retry
+    if (retryAttempts > 1) {
+      console.log(`[PromptGenerator] Gemini succeeded after ${retryAttempts} attempts (total wait: ${totalRetryWaitMs}ms)`);
+    }
+
   } catch (error) {
     // P34 FIX: Record failure in circuit breaker
     SafetyResilienceService.recordCircuitFailure(CIRCUIT_NAME);
-    console.error(`[PromptGenerator] Gemini API exception (circuit breaker notified):`, error);
+    console.error(`[PromptGenerator] Gemini API exhausted all retries (circuit breaker notified):`, error);
     return {
       success: false,
       prompt: '',
-      error: `Error de conexión con Gemini: ${error instanceof Error ? error.message : 'Unknown'}`,
+      error: `Error de conexión con Gemini después de múltiples intentos: ${error instanceof Error ? error.message : 'Unknown'}`,
       generatedAt: new Date().toISOString(),
       model: 'error',
-      processingTimeMs: 0,
+      processingTimeMs: Date.now() - startTime,
     };
   }
 
+  // Verificar si después de los reintentos aún falló
   if (!result.success) {
     // P34 FIX: Record failure in circuit breaker
     SafetyResilienceService.recordCircuitFailure(CIRCUIT_NAME);
-    console.warn(`[PromptGenerator] Gemini API returned error (circuit breaker notified):`, result.error);
+    console.warn(`[PromptGenerator] Gemini API failed after ${retryAttempts} attempts:`, result.error);
     return {
       success: false,
       prompt: '',
-      error: result.error,
+      error: `${result.error} (después de ${retryAttempts} intentos)`,
       generatedAt: new Date().toISOString(),
       model: result.model,
-      processingTimeMs: result.processingTimeMs,
+      processingTimeMs: Date.now() - startTime,
+    };
+  }
+
+  // Verificar contenido mínimo
+  if (!result.content || result.content.trim().length < 100) {
+    SafetyResilienceService.recordCircuitFailure(CIRCUIT_NAME);
+    console.warn(`[PromptGenerator] Gemini returned empty/short content after ${retryAttempts} attempts`);
+    return {
+      success: false,
+      prompt: '',
+      error: `Gemini generó contenido insuficiente (${result.content?.length || 0} chars) después de ${retryAttempts} intentos`,
+      generatedAt: new Date().toISOString(),
+      model: result.model,
+      processingTimeMs: Date.now() - startTime,
     };
   }
 
@@ -735,20 +1083,19 @@ export async function generatePromptWithAI(
   cleanedPrompt = cleanedPrompt.trim();
 
   // 🔍 VALIDACIÓN POST-GENERACIÓN (CRÍTICO)
-  const validationResult = validateGeneratedPrompt(
+  // P9 FIX: Usar sanitizedContext para consistencia con el prompt generado
+  let validationResult = validateGeneratedPrompt(
     cleanedPrompt,
     promptType,
-    context.assistantPersonality || 'professional_friendly',
+    sanitizedContext.assistantPersonality || 'professional_friendly',
     {
-      tenantName: context.tenantName,
-      services: context.services.map(s => s.name),
-      branches: context.branches.map(b => b.name),
-      useFillerPhrases: context.useFillerPhrases,
-      customFillerPhrases: context.fillerPhrases,
+      tenantName: sanitizedContext.tenantName,
+      services: sanitizedContext.services.map(s => s.name),
+      branches: sanitizedContext.branches.map(b => b.name),
+      useFillerPhrases: sanitizedContext.useFillerPhrases,
+      customFillerPhrases: sanitizedContext.fillerPhrases,
     }
   );
-
-  const validationReport = formatValidationReport(validationResult);
 
   // Log validación para debugging
   console.log(`[PromptGenerator] Validation for ${promptType}:`, {
@@ -758,9 +1105,105 @@ export async function generatePromptWithAI(
     warnings: validationResult.warnings.length,
   });
 
-  // Si hay errores críticos, logear el reporte completo
+  // ========================================
+  // FASE 4: AUTO-CORRECCIÓN DE PROMPTS
+  // ========================================
+  // Si la validación falla pero es corregible, intentar corregir automáticamente
+  let correctionAttempts = 0;
+  const maxCorrectionAttempts = validationResult.valid ? 0 : getMaxCorrectionAttempts(validationResult);
+
+  while (
+    !validationResult.valid &&
+    isAutoCorrectible(validationResult) &&
+    correctionAttempts < maxCorrectionAttempts
+  ) {
+    correctionAttempts++;
+    console.log(`[PromptGenerator] Auto-correction attempt ${correctionAttempts}/${maxCorrectionAttempts}`);
+
+    // Generar instrucciones de corrección
+    const correctionInstructions = generateCorrectionInstructions(
+      validationResult,
+      promptType,
+      cleanedPrompt
+    );
+
+    // Construir prompt de corrección
+    const correctionMetaPrompt = `${metaPrompt}
+
+---
+
+## PROMPT GENERADO ANTERIORMENTE (CON ERRORES):
+
+${cleanedPrompt}
+
+---
+
+${correctionInstructions}
+
+---
+
+## INSTRUCCIÓN FINAL:
+Genera una versión CORREGIDA del prompt anterior, arreglando TODOS los errores mencionados.
+Devuelve SOLO el prompt corregido, sin explicaciones adicionales.`;
+
+    try {
+      const correctionResult = await generateWithGemini(correctionMetaPrompt, {
+        model: DEFAULT_GEMINI_MODELS.PROMPT_GENERATION,
+        temperature: 0.5, // Menor temperatura para correcciones más precisas
+        maxOutputTokens: 8192,
+      });
+
+      if (correctionResult.success && correctionResult.content) {
+        // Limpiar el prompt corregido
+        let correctedPrompt = correctionResult.content;
+        correctedPrompt = correctedPrompt.replace(/^```[\w]*\n?/gm, '');
+        correctedPrompt = correctedPrompt.replace(/\n?```$/gm, '');
+        correctedPrompt = correctedPrompt.trim();
+
+        // Re-validar (P6 FIX: usar sanitizedContext para consistencia)
+        const newValidation = validateGeneratedPrompt(
+          correctedPrompt,
+          promptType,
+          sanitizedContext.assistantPersonality || 'professional_friendly',
+          {
+            tenantName: sanitizedContext.tenantName,
+            services: sanitizedContext.services.map(s => s.name),
+            branches: sanitizedContext.branches.map(b => b.name),
+            useFillerPhrases: sanitizedContext.useFillerPhrases,
+            customFillerPhrases: sanitizedContext.fillerPhrases,
+          }
+        );
+
+        console.log(`[PromptGenerator] Correction attempt ${correctionAttempts} result:`, {
+          oldScore: validationResult.score,
+          newScore: newValidation.score,
+          improved: newValidation.score > validationResult.score,
+          nowValid: newValidation.valid,
+        });
+
+        // Solo aceptar si mejoró
+        if (newValidation.score > validationResult.score) {
+          cleanedPrompt = correctedPrompt;
+          validationResult = newValidation;
+        } else {
+          console.warn(`[PromptGenerator] Correction did not improve score, keeping original`);
+          break;
+        }
+      }
+    } catch (correctionError) {
+      console.error(`[PromptGenerator] Auto-correction failed:`, correctionError);
+      break;
+    }
+  }
+
+  // Generar reporte final
+  const validationReport = formatValidationReport(validationResult);
+
+  // Si después de correcciones aún hay errores críticos, logear
   if (!validationResult.valid) {
-    console.error(`[PromptGenerator] VALIDATION FAILED:\n${validationReport}`);
+    console.error(`[PromptGenerator] VALIDATION FAILED (after ${correctionAttempts} corrections):\n${validationReport}`);
+  } else if (correctionAttempts > 0) {
+    console.log(`[PromptGenerator] Prompt auto-corrected successfully after ${correctionAttempts} attempt(s)`);
   }
 
   return {
@@ -768,9 +1211,10 @@ export async function generatePromptWithAI(
     prompt: cleanedPrompt,
     generatedAt: new Date().toISOString(),
     model: result.model,
-    processingTimeMs: result.processingTimeMs,
+    processingTimeMs: Date.now() - startTime,
     validation: validationResult,
     validationReport,
+    correctionAttempts, // FASE 4: Incluir intentos de corrección en el resultado
   };
 }
 
@@ -1687,6 +2131,335 @@ export async function invalidatePromptCache(
 }
 
 // ======================
+// FALLBACK PROMPT SYSTEM (CRITICAL FIX F.1)
+// ======================
+
+/**
+ * Prompt de fallback ABSOLUTO - Usado cuando todo lo demás falla
+ * Este prompt garantiza que el agente NUNCA esté sin instrucciones
+ */
+const ABSOLUTE_FALLBACK_PROMPT = `# Asistente de Atención al Cliente
+
+Eres un asistente virtual profesional y amable.
+
+## Tu Rol
+- Ayudar a los clientes con sus consultas
+- Proporcionar información útil y precisa
+- Ofrecer agendar citas o consultas cuando sea apropiado
+
+## Reglas Importantes
+- SIEMPRE sé profesional y respetuoso
+- Si NO sabes algo, admítelo honestamente: "No tengo esa información disponible, pero puedo ayudarte a conectar con alguien que la tenga"
+- NUNCA inventes información que no tengas
+- Prioriza resolver las necesidades del cliente
+
+## Comportamiento
+- Saluda de manera cálida
+- Escucha y comprende la necesidad
+- Ofrece soluciones o alternativas
+- Cierra la conversación de manera profesional
+
+## Limitaciones
+Este es un prompt de emergencia. Si estás viendo esto, significa que hubo un problema técnico.
+Trata de ayudar al cliente lo mejor posible con información general.`;
+
+/**
+ * Construye un prompt de fallback basado en el contexto disponible
+ * Usado cuando Gemini falla pero tenemos datos del negocio
+ */
+function buildFallbackPrompt(
+  context: BusinessContext | null,
+  promptType: PromptType
+): string {
+  // Si no hay contexto, usar fallback absoluto
+  if (!context) {
+    console.warn('[PromptGenerator] No context available, using ABSOLUTE_FALLBACK_PROMPT');
+    return ABSOLUTE_FALLBACK_PROMPT;
+  }
+
+  const isVoice = promptType === 'voice';
+  const channelDesc = isVoice
+    ? 'asistente de voz para llamadas telefónicas'
+    : 'asistente virtual de mensajería';
+
+  // Construir servicios
+  const servicesSection = context.services.length > 0
+    ? context.services.map(s => {
+        let line = `- ${s.name}`;
+        if (s.priceMin) {
+          line += isVoice
+            ? ` (precio disponible al consultar)`
+            : ` ($${s.priceMin}${s.priceMax && s.priceMax !== s.priceMin ? ` - $${s.priceMax}` : ''})`;
+        }
+        return line;
+      }).join('\n')
+    : '(Servicios no configurados - ofrecer consulta general)';
+
+  // Construir sucursales
+  const branchesSection = context.branches.length > 0
+    ? context.branches.map(b => {
+        let line = `- ${b.name}`;
+        if (b.address) line += `: ${b.address}`;
+        if (b.phone) line += ` | Tel: ${b.phone}`;
+        return line;
+      }).join('\n')
+    : '(Sucursales no configuradas)';
+
+  // Construir staff
+  const staffSection = context.staff.length > 0
+    ? context.staff.map(s => `- ${s.name}${s.specialty ? ` (${s.specialty})` : ''}`).join('\n')
+    : '';
+
+  // Reglas específicas del canal
+  const channelRules = isVoice
+    ? `## Reglas de Voz
+- Mantén respuestas CONCISAS (2-3 oraciones máximo)
+- NUNCA uses emojis (es una llamada telefónica)
+- Los precios deben decirse como palabras cuando sea posible
+- Usa un tono conversacional natural
+- Confirma información importante repitiendo al cliente`
+    : `## Reglas de Mensajería
+- Puedes usar emojis funcionales: ✅ ❌ 📍 📞 ⏰ 📅
+- Respuestas pueden ser más detalladas (el cliente puede releerlas)
+- Usa formato estructurado cuando ayude a la claridad`;
+
+  return `# ${context.tenantName} - ${channelDesc}
+
+## Tu Identidad
+Eres ${context.assistantName || 'el asistente virtual'} de ${context.tenantName}.
+${context.assistantPersonality === 'casual' ? 'Usa un tono informal y cercano.' :
+  context.assistantPersonality === 'formal' ? 'Mantén un tono muy formal y respetuoso.' :
+  'Mantén un tono profesional pero cálido.'}
+
+## Servicios Disponibles
+${servicesSection}
+
+## Ubicaciones
+${branchesSection}
+
+${staffSection ? `## Equipo\n${staffSection}` : ''}
+
+${channelRules}
+
+## Comportamiento General
+- SIEMPRE sé profesional y respetuoso
+- Si NO sabes algo, admítelo: "Déjame verificar esa información"
+- NUNCA inventes información
+- Ofrece agendar citas cuando sea relevante
+- Prioriza ayudar al cliente
+
+## Nota Técnica
+Este es un prompt de respaldo generado automáticamente.
+Los datos pueden estar incompletos. Ofrece conectar con un agente humano si es necesario.`;
+}
+
+/**
+ * Valida si el contexto del negocio tiene suficiente información
+ * para generar un prompt útil (FIX A.1)
+ */
+export interface KBCompletenessResult {
+  isComplete: boolean;
+  isEmpty: boolean;
+  missingCritical: string[];
+  missingOptional: string[];
+  completenessScore: number; // 0-100
+  canGeneratePrompt: boolean;
+}
+
+export function validateBusinessContextCompleteness(
+  context: BusinessContext | null
+): KBCompletenessResult {
+  if (!context) {
+    return {
+      isComplete: false,
+      isEmpty: true,
+      missingCritical: ['tenantId', 'tenantName', 'services', 'branches'],
+      missingOptional: ['staff', 'faqs', 'customInstructions'],
+      completenessScore: 0,
+      canGeneratePrompt: false,
+    };
+  }
+
+  const missingCritical: string[] = [];
+  const missingOptional: string[] = [];
+
+  // Campos críticos
+  if (!context.tenantName || context.tenantName.trim() === '') {
+    missingCritical.push('Nombre del negocio');
+  }
+  if (!context.services || context.services.length === 0) {
+    missingCritical.push('Servicios');
+  }
+  if (!context.branches || context.branches.length === 0) {
+    missingCritical.push('Sucursales');
+  }
+
+  // Campos opcionales pero recomendados
+  if (!context.staff || context.staff.length === 0) {
+    missingOptional.push('Equipo/Personal');
+  }
+  if (!context.faqs || context.faqs.length === 0) {
+    missingOptional.push('Preguntas frecuentes');
+  }
+  if (!context.assistantName) {
+    missingOptional.push('Nombre del asistente');
+  }
+  if (!context.customInstructions && (!context.customInstructionsList || context.customInstructionsList.length === 0)) {
+    missingOptional.push('Instrucciones personalizadas');
+  }
+
+  // Calcular score
+  let score = 100;
+  score -= missingCritical.length * 25; // Críticos penalizan más
+  score -= missingOptional.length * 5;  // Opcionales penalizan menos
+  score = Math.max(0, Math.min(100, score));
+
+  // Determinar si está vacío
+  const isEmpty = missingCritical.length >= 3;
+
+  // Determinar si puede generar prompt
+  // Necesita al menos: nombre del negocio Y (servicios O sucursales)
+  const canGeneratePrompt: boolean = Boolean(
+    context.tenantName &&
+    context.tenantName.trim() !== '' &&
+    ((context.services && context.services.length > 0) ||
+     (context.branches && context.branches.length > 0))
+  );
+
+  return {
+    isComplete: missingCritical.length === 0,
+    isEmpty,
+    missingCritical,
+    missingOptional,
+    completenessScore: score,
+    canGeneratePrompt,
+  };
+}
+
+/**
+ * VERSIÓN SEGURA de getOptimizedPrompt
+ * GARANTIZA que NUNCA retornará un prompt vacío
+ *
+ * Esta es la función que los servicios LangGraph y Voice DEBEN usar
+ */
+export async function getOptimizedPromptSafe(
+  tenantId: string,
+  channel: CacheChannel
+): Promise<{
+  prompt: string;
+  fromCache: boolean;
+  version?: number;
+  fallbackUsed: boolean;
+  fallbackReason?: string;
+  warning?: string;
+}> {
+  const promptType: PromptType = channel === 'voice' ? 'voice' : 'messaging';
+  let context: BusinessContext | null = null;
+
+  try {
+    // 1. Intentar obtener del caché
+    const cached = await getCachedPrompt(tenantId, channel);
+
+    if (cached.found && cached.generated_prompt && cached.generated_prompt.trim() !== '') {
+      // P7 FIX: Verificar si necesita regeneración con try-catch
+      let needsRegen = false;
+      try {
+        needsRegen = await checkNeedsRegeneration(tenantId, channel);
+      } catch (regenCheckError) {
+        // Si falla la verificación, asumir que el caché es válido
+        console.warn(`[PromptCacheSafe] checkNeedsRegeneration failed, using cached:`, regenCheckError);
+        needsRegen = false;
+      }
+
+      if (!needsRegen) {
+        console.log(`[PromptCacheSafe] Using cached prompt v${cached.prompt_version} for ${channel}`);
+        return {
+          prompt: cached.generated_prompt,
+          fromCache: true,
+          version: cached.prompt_version,
+          fallbackUsed: false,
+        };
+      }
+
+      console.log(`[PromptCacheSafe] Cached prompt outdated, regenerating for ${channel}`);
+    }
+
+    // 2. No hay caché válido, intentar generar nuevo prompt
+    console.log(`[PromptCacheSafe] Generating fresh prompt for ${channel}`);
+
+    // Obtener contexto para posible fallback
+    context = await collectBusinessContext(tenantId, promptType);
+
+    // Validar completud del KB
+    const completeness = validateBusinessContextCompleteness(context);
+
+    if (!completeness.canGeneratePrompt) {
+      console.warn(`[PromptCacheSafe] KB incomplete for ${tenantId}:`, completeness.missingCritical);
+
+      // Si KB está muy vacío, usar fallback con advertencia
+      const fallbackPrompt = buildFallbackPrompt(context, promptType);
+      return {
+        prompt: fallbackPrompt,
+        fromCache: false,
+        fallbackUsed: true,
+        fallbackReason: 'Knowledge Base incompleto',
+        warning: `Configura tu Knowledge Base para mejores resultados. Falta: ${completeness.missingCritical.join(', ')}`,
+      };
+    }
+
+    // Intentar generar con Gemini
+    const result = await generateAndCachePrompt(tenantId, channel);
+
+    if (result.success && result.prompt && result.prompt.trim() !== '') {
+      return {
+        prompt: result.prompt,
+        fromCache: false,
+        fallbackUsed: false,
+      };
+    }
+
+    // 3. Si falló generación pero hay caché antiguo, usarlo
+    if (cached.found && cached.generated_prompt && cached.generated_prompt.trim() !== '') {
+      console.warn(`[PromptCacheSafe] Using stale cache as fallback for ${channel}`);
+      return {
+        prompt: cached.generated_prompt,
+        fromCache: true,
+        version: cached.prompt_version,
+        fallbackUsed: true,
+        fallbackReason: 'Generación falló, usando caché anterior',
+        warning: result.error || 'Error al regenerar prompt',
+      };
+    }
+
+    // 4. No hay caché, generación falló - usar fallback basado en contexto
+    console.warn(`[PromptCacheSafe] No cache, generation failed. Building fallback for ${channel}`);
+    const fallbackPrompt = buildFallbackPrompt(context, promptType);
+
+    return {
+      prompt: fallbackPrompt,
+      fromCache: false,
+      fallbackUsed: true,
+      fallbackReason: 'Error de generación, usando prompt de respaldo',
+      warning: result.error || 'No se pudo generar el prompt optimizado',
+    };
+
+  } catch (error) {
+    // 5. Error catastrófico - usar fallback absoluto
+    console.error('[PromptCacheSafe] Catastrophic error:', error);
+
+    const fallbackPrompt = buildFallbackPrompt(context, promptType);
+
+    return {
+      prompt: fallbackPrompt,
+      fromCache: false,
+      fallbackUsed: true,
+      fallbackReason: 'Error del sistema',
+      warning: `Error crítico: ${error instanceof Error ? error.message : 'Unknown error'}. Usando prompt de emergencia.`,
+    };
+  }
+}
+
+// ======================
 // EXPORTS
 // ======================
 
@@ -1704,6 +2477,15 @@ export const PromptGeneratorService = {
   generateAndCachePrompt,
   generateAndCacheAllPrompts,
   getOptimizedPrompt,
+  getOptimizedPromptSafe, // NUEVA: versión segura
   invalidatePromptCache,
   calculateBusinessContextHash,
+
+  // Funciones de validación y fallback (NUEVAS - FASE 1/2)
+  validateBusinessContextCompleteness,
+  buildFallbackPrompt,
+
+  // Funciones de sanitización (NUEVAS - FASE 6)
+  sanitizeSensitiveData,
+  sanitizeBusinessContext,
 };

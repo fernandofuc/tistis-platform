@@ -125,6 +125,21 @@ const PROMPT_LENGTH = {
 };
 
 // ======================
+// FASE 5: VALIDATION THRESHOLDS
+// ======================
+// Umbrales de calidad más estrictos para prompts
+const VALIDATION_THRESHOLDS = {
+  // Score mínimo para considerar un prompt válido
+  MIN_VALID_SCORE: 75,
+  // Score mínimo para pasar sin warnings
+  MIN_OPTIMAL_SCORE: 90,
+  // Máximo de errores high permitidos (además de 0 críticos)
+  MAX_HIGH_ERRORS: 2,
+  // Máximo de warnings permitidos para score óptimo
+  MAX_WARNINGS_OPTIMAL: 3,
+};
+
+// ======================
 // VOICE-SPECIFIC PATTERNS (FASE 6 IMPROVEMENTS)
 // ======================
 
@@ -221,8 +236,31 @@ export function validateGeneratedPrompt(
   // 5. Calcular score
   const score = calculateValidationScore(errors, warnings, prompt.length);
 
+  // FASE 5: Validación más estricta
+  // Un prompt es válido si:
+  // 1. No tiene errores críticos
+  // 2. Tiene score >= MIN_VALID_SCORE
+  // 3. No tiene más de MAX_HIGH_ERRORS errores high
+  const criticalErrors = errors.filter(e => e.severity === 'critical').length;
+  const highErrors = errors.filter(e => e.severity === 'high').length;
+
+  const isValid =
+    criticalErrors === 0 &&
+    highErrors <= VALIDATION_THRESHOLDS.MAX_HIGH_ERRORS &&
+    score >= VALIDATION_THRESHOLDS.MIN_VALID_SCORE;
+
+  // Agregar warning si el score está en zona marginal
+  if (score >= VALIDATION_THRESHOLDS.MIN_VALID_SCORE &&
+      score < VALIDATION_THRESHOLDS.MIN_OPTIMAL_SCORE) {
+    warnings.push({
+      code: 'SCORE_SUBOPTIMAL',
+      message: `Score ${score}/100 está en zona subóptima (mínimo óptimo: ${VALIDATION_THRESHOLDS.MIN_OPTIMAL_SCORE})`,
+      suggestion: 'Revisar errores high y warnings para mejorar la calidad del prompt',
+    });
+  }
+
   return {
-    valid: errors.filter(e => e.severity === 'critical').length === 0,
+    valid: isValid,
     errors,
     warnings,
     score,
@@ -803,9 +841,11 @@ export function formatValidationReport(result: ValidationResult): string {
   lines.push('='.repeat(60));
   lines.push('');
 
-  // Score
-  const scoreEmoji = result.score >= 90 ? '✅' : result.score >= 70 ? '⚠️' : '❌';
+  // Score con umbrales FASE 5
+  const scoreEmoji = result.score >= VALIDATION_THRESHOLDS.MIN_OPTIMAL_SCORE ? '✅' :
+                     result.score >= VALIDATION_THRESHOLDS.MIN_VALID_SCORE ? '⚠️' : '❌';
   lines.push(`Score: ${result.score}/100 ${scoreEmoji}`);
+  lines.push(`Umbral mínimo: ${VALIDATION_THRESHOLDS.MIN_VALID_SCORE} | Óptimo: ${VALIDATION_THRESHOLDS.MIN_OPTIMAL_SCORE}`);
   lines.push(`Estado: ${result.valid ? '✅ VÁLIDO' : '❌ INVÁLIDO'}`);
   lines.push('');
 
@@ -840,10 +880,169 @@ export function formatValidationReport(result: ValidationResult): string {
 }
 
 // ======================
+// FASE 4: AUTO-CORRECTION GENERATION
+// ======================
+
+/**
+ * Genera instrucciones de corrección basadas en errores de validación
+ * Estas instrucciones se envían a Gemini para que corrija el prompt
+ */
+export function generateCorrectionInstructions(
+  validationResult: ValidationResult,
+  promptType: 'voice' | 'messaging',
+  originalPrompt: string
+): string {
+  const corrections: string[] = [];
+
+  corrections.push('## CORRECCIONES REQUERIDAS\n');
+  corrections.push('El prompt anterior tiene los siguientes problemas que DEBES corregir:\n');
+
+  // Procesar errores críticos primero
+  const criticalErrors = validationResult.errors.filter(e => e.severity === 'critical');
+  const highErrors = validationResult.errors.filter(e => e.severity === 'high');
+
+  if (criticalErrors.length > 0) {
+    corrections.push('### ERRORES CRÍTICOS (OBLIGATORIO CORREGIR):\n');
+    criticalErrors.forEach((error, i) => {
+      corrections.push(`${i + 1}. **${error.code}**: ${error.message}`);
+      corrections.push(getCorrectionForError(error, promptType));
+    });
+    corrections.push('');
+  }
+
+  if (highErrors.length > 0) {
+    corrections.push('### ERRORES IMPORTANTES:\n');
+    highErrors.forEach((error, i) => {
+      corrections.push(`${i + 1}. **${error.code}**: ${error.message}`);
+      corrections.push(getCorrectionForError(error, promptType));
+    });
+    corrections.push('');
+  }
+
+  // Incluir warnings relevantes como sugerencias
+  const relevantWarnings = validationResult.warnings.filter(w =>
+    w.code.includes('MISSING') || w.code.includes('WEAK')
+  );
+
+  if (relevantWarnings.length > 0 && relevantWarnings.length <= 5) {
+    corrections.push('### MEJORAS SUGERIDAS:\n');
+    relevantWarnings.forEach((warning, i) => {
+      corrections.push(`${i + 1}. ${warning.message}`);
+      corrections.push(`   → ${warning.suggestion}`);
+    });
+    corrections.push('');
+  }
+
+  // Instrucciones finales
+  corrections.push('### INSTRUCCIONES DE CORRECCIÓN:\n');
+  corrections.push('1. Mantén TODO el contenido útil del prompt original');
+  corrections.push('2. Solo modifica las secciones que causan errores');
+  corrections.push('3. NO agregues contenido nuevo innecesario');
+  corrections.push('4. Asegúrate de que la longitud sea entre 1500-6000 caracteres');
+
+  if (promptType === 'voice') {
+    corrections.push('5. Recuerda: Este es un prompt para LLAMADAS TELEFÓNICAS');
+    corrections.push('   - Sin emojis, sin formato markdown');
+    corrections.push('   - Respuestas cortas de 2-3 oraciones');
+    corrections.push('   - Muletillas conversacionales según configuración');
+  } else {
+    corrections.push('5. Recuerda: Este es un prompt para MENSAJERÍA');
+    corrections.push('   - Solo emojis funcionales (✅ ❌ 📍 📞 ⏰ 📅)');
+    corrections.push('   - NO muletillas de voz (Mmm..., Bueno...)');
+    corrections.push('   - Puede usar bullets y formato');
+  }
+
+  return corrections.join('\n');
+}
+
+/**
+ * Genera instrucción específica de corrección para cada tipo de error
+ */
+function getCorrectionForError(
+  error: ValidationError,
+  promptType: 'voice' | 'messaging'
+): string {
+  const corrections: Record<string, string> = {
+    // Errores de longitud
+    'PROMPT_TOO_SHORT': '   → ACCIÓN: Expande el prompt agregando más detalles sobre servicios, políticas y ejemplos de respuesta.',
+    'PROMPT_TOO_LONG': '   → ACCIÓN: Reduce el prompt eliminando redundancias y ejemplos excesivos.',
+
+    // Errores de voz
+    'VOICE_MISSING_FILLERS': '   → ACCIÓN: Agrega sección de muletillas: "SIEMPRE incluye muletillas como: Claro..., Mmm..., Déjame ver..."',
+    'VOICE_FILLERS_DISABLED_BUT_INSTRUCTED': '   → ACCIÓN: ELIMINA todas las instrucciones sobre usar muletillas. El cliente las desactivó.',
+    'VOICE_HAS_EMOJI_FACES': '   → ACCIÓN: ELIMINA todos los emojis del prompt. Voice es una llamada telefónica.',
+    'VOICE_RAW_NUMBERS': '   → ACCIÓN: Convierte números a palabras: "$1,500" → "mil quinientos pesos".',
+    'VOICE_HAS_VISUAL_FORMATTING': '   → ACCIÓN: ELIMINA bullets, negritas y formato markdown. Usa oraciones naturales.',
+
+    // Errores de mensajería
+    'MESSAGING_HAS_VOICE_FILLERS': '   → ACCIÓN: ELIMINA muletillas de voz (Mmm..., Bueno..., Este...). Mensajería es texto directo.',
+
+    // Errores de emojis
+    'FORBIDDEN_EMOJIS': '   → ACCIÓN: ELIMINA emojis de caritas y expresivos. Solo permitidos: ✅ ❌ 📍 📞 ⏰ 📅',
+  };
+
+  return corrections[error.code] || `   → ACCIÓN: Corrige este error según las indicaciones.`;
+}
+
+/**
+ * Determina si un resultado de validación es corregible automáticamente
+ * Algunos errores son tan severos que es mejor rechazar y usar fallback
+ */
+export function isAutoCorrectible(validationResult: ValidationResult): boolean {
+  // Si el score es muy bajo, no intentar corregir
+  if (validationResult.score < 30) {
+    return false;
+  }
+
+  // Si hay demasiados errores críticos, no intentar corregir
+  const criticalCount = validationResult.errors.filter(e => e.severity === 'critical').length;
+  if (criticalCount > 3) {
+    return false;
+  }
+
+  // Si es solo un error de longitud extremo, no es corregible fácilmente
+  const hasExtremeLengthError = validationResult.errors.some(e =>
+    e.code === 'PROMPT_TOO_SHORT' && e.message.includes('chars). Mínimo')
+  );
+
+  // Extraer el número de caracteres del mensaje si es un error de longitud
+  if (hasExtremeLengthError) {
+    const lengthMatch = validationResult.errors
+      .find(e => e.code === 'PROMPT_TOO_SHORT')
+      ?.message.match(/\((\d+) chars\)/);
+    if (lengthMatch && parseInt(lengthMatch[1]) < 200) {
+      // Prompt casi vacío, no corregible
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Calcula cuántos intentos de corrección permitir basado en la severidad
+ */
+export function getMaxCorrectionAttempts(validationResult: ValidationResult): number {
+  const criticalCount = validationResult.errors.filter(e => e.severity === 'critical').length;
+  const highCount = validationResult.errors.filter(e => e.severity === 'high').length;
+
+  // Más errores = menos intentos (para no quemar recursos)
+  if (criticalCount >= 2) return 1;
+  if (criticalCount === 1 && highCount >= 2) return 1;
+  if (highCount >= 3) return 1;
+
+  // Errores menores pueden intentar 2 veces
+  return 2;
+}
+
+// ======================
 // EXPORTS
 // ======================
 
 export const PromptValidatorService = {
   validateGeneratedPrompt,
   formatValidationReport,
+  generateCorrectionInstructions,
+  isAutoCorrectible,
+  getMaxCorrectionAttempts,
 };
