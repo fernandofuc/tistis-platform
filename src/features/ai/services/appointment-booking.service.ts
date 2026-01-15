@@ -47,6 +47,10 @@ export interface BookingResult {
   table_name?: string;
   occasion_type?: string;
   vertical?: 'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary' | 'general';
+  // Loyalty integration (v5.5)
+  tokens_to_earn?: number;
+  tokens_name?: string;
+  current_token_balance?: number;
 }
 
 export interface AvailableSlot {
@@ -731,6 +735,58 @@ export async function createBooking(request: BookingRequest): Promise<BookingRes
       finalResult.occasion_type = request.occasion_type;
     }
 
+    // =================================================================
+    // V5.5: Add loyalty information to booking result
+    // Calculate tokens that will be awarded when appointment completes
+    // =================================================================
+    try {
+      // Get loyalty program info
+      const { data: program } = await supabase
+        .from('loyalty_programs')
+        .select('id, tokens_name, tokens_per_currency, tokens_enabled')
+        .eq('tenant_id', request.tenant_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (program?.tokens_enabled) {
+        // Get service price for token calculation
+        let servicePrice = 500; // Default for general consultation
+        if (request.service_id) {
+          const { data: service } = await supabase
+            .from('services')
+            .select('price_min')
+            .eq('id', request.service_id)
+            .single();
+          if (service?.price_min) {
+            servicePrice = service.price_min;
+          }
+        }
+
+        // Calculate tokens (same logic as trigger in migration 095)
+        const earningRatio = program.tokens_per_currency || 0.1;
+        let tokensToEarn = Math.floor(servicePrice * earningRatio);
+        tokensToEarn = Math.max(1, Math.min(100, tokensToEarn)); // Min 1, Max 100
+
+        finalResult.tokens_to_earn = tokensToEarn;
+        finalResult.tokens_name = program.tokens_name || 'Puntos';
+
+        // Get current token balance for the lead
+        if (request.lead_id) {
+          const { data: balance } = await supabase
+            .from('loyalty_lead_balances')
+            .select('token_balance')
+            .eq('program_id', program.id)
+            .eq('lead_id', request.lead_id)
+            .maybeSingle();
+
+          finalResult.current_token_balance = balance?.token_balance || 0;
+        }
+      }
+    } catch (loyaltyError) {
+      // Don't fail the booking if loyalty info fails
+      console.warn('[Booking Service] Failed to get loyalty info:', loyaltyError);
+    }
+
     console.log(`[Booking Service] Appointment created atomically: ${appointment.id}`);
     return finalResult;
 
@@ -818,6 +874,16 @@ export function generateBookingConfirmation(result: BookingResult): string {
       }
     }
 
+    // V5.5: Add loyalty tokens info if available (restaurant)
+    if (result.tokens_to_earn && result.tokens_to_earn > 0) {
+      const tokensName = result.tokens_name || 'Puntos';
+      message += `\n⭐ Al completar tu visita ganarás +${result.tokens_to_earn} ${tokensName}`;
+      if (result.current_token_balance !== undefined && result.current_token_balance > 0) {
+        message += ` (Balance actual: ${result.current_token_balance})`;
+      }
+      message += `\n`;
+    }
+
     message += `\n¡Te esperamos! Por favor llega a tiempo.`;
     message += `\n\nSi necesitas modificar o cancelar tu reservación, avísanos con al menos 2 horas de anticipación.`;
 
@@ -836,6 +902,16 @@ export function generateBookingConfirmation(result: BookingResult): string {
 
   if (result.staff_name && result.staff_name !== 'Por asignar') {
     message += `👨‍⚕️ ${result.staff_name}\n`;
+  }
+
+  // V5.5: Add loyalty tokens info if available
+  if (result.tokens_to_earn && result.tokens_to_earn > 0) {
+    const tokensName = result.tokens_name || 'Puntos';
+    message += `\n⭐ Al completar tu cita ganarás +${result.tokens_to_earn} ${tokensName}`;
+    if (result.current_token_balance !== undefined && result.current_token_balance > 0) {
+      message += ` (Balance actual: ${result.current_token_balance})`;
+    }
+    message += `\n`;
   }
 
   message += `\nTe esperamos. Recuerda llegar 10 minutos antes.`;

@@ -32,8 +32,190 @@ import { getProfileForAI } from './agent-profile.service';
 import type { ProfileType } from '@/src/shared/config/agent-templates';
 
 // ======================
+// LEARNING + LOYALTY CONTEXT TYPES
+// ======================
+
+interface LearningContextData {
+  topServiceRequests: Array<{ service: string; frequency: number }>;
+  commonObjections: Array<{ objection: string; frequency: number }>;
+  schedulingPreferences: Array<{ preference: string; frequency: number }>;
+  painPoints: Array<{ pain: string; frequency: number }>;
+  learnedVocabulary: Array<{ term: string; meaning: string; category: string }>;
+}
+
+interface LoyaltyContextData {
+  program: {
+    id: string;
+    name: string;
+    tokens_name: string;
+    tokens_enabled: boolean;
+    tokens_per_currency: number;
+    tokens_currency_threshold: number;
+    membership_enabled: boolean;
+  } | null;
+  lead_status: {
+    token_balance: number;
+    total_earned: number;
+    total_redeemed: number;
+    tier: string | null;
+    membership_id: string | null;
+    membership_plan: string | null;
+    membership_status: string | null;
+    membership_end_date: string | null;
+  } | null;
+  available_rewards: Array<{
+    id: string;
+    name: string;
+    tokens_required: number;
+    category: string;
+  }>;
+}
+
+// ======================
 // LEARNING INTEGRATION
 // ======================
+
+/**
+ * Carga el contexto de aprendizaje del tenant para enriquecer los prompts
+ * Incluye: patrones, vocabulario, objeciones, preferencias detectadas
+ *
+ * REVISIÓN 5.5: Integración AI Learning con Tool Calling + RAG
+ */
+async function loadLearningContext(tenantId: string): Promise<LearningContextData | null> {
+  try {
+    const learningContext = await MessageLearningService.getLearningContext(tenantId);
+
+    if (!learningContext) {
+      return null;
+    }
+
+    console.log(`[LangGraph AI] Learning context loaded: ${learningContext.topServiceRequests.length} service patterns, ${learningContext.learnedVocabulary.length} vocabulary terms`);
+
+    return learningContext;
+  } catch (err) {
+    console.log('[LangGraph AI] Learning context not available (optional):', err instanceof Error ? err.message : 'Unknown error');
+    return null;
+  }
+}
+
+/**
+ * Carga el contexto de lealtad del tenant y del lead
+ * Incluye: programa, balance de tokens, membresía, recompensas disponibles
+ *
+ * REVISIÓN 5.5: Integración Loyalty con AI para consultas conversacionales
+ */
+async function loadLoyaltyContext(tenantId: string, leadId?: string): Promise<LoyaltyContextData | null> {
+  const supabase = createServerClient();
+
+  try {
+    // 1. Cargar programa de lealtad del tenant
+    const { data: program } = await supabase
+      .from('loyalty_programs')
+      .select(`
+        id,
+        program_name,
+        is_active,
+        tokens_enabled,
+        tokens_name,
+        tokens_per_currency,
+        tokens_currency_threshold,
+        membership_enabled
+      `)
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .single();
+
+    if (!program || !program.is_active) {
+      return null;
+    }
+
+    // 2. Si tenemos leadId, cargar su estado de lealtad
+    let leadStatus: LoyaltyContextData['lead_status'] = null;
+    let availableRewards: LoyaltyContextData['available_rewards'] = [];
+
+    if (leadId) {
+      // Cargar balance y membresía del lead EN PARALELO
+      const [balanceResult, membershipResult, rewardsResult] = await Promise.all([
+        // Balance de tokens
+        supabase
+          .from('loyalty_token_balances')
+          .select('current_balance, total_earned, total_redeemed')
+          .eq('program_id', program.id)
+          .eq('lead_id', leadId)
+          .maybeSingle(),
+
+        // Membresía activa
+        supabase
+          .from('loyalty_memberships')
+          .select(`
+            id,
+            status,
+            end_date,
+            plan:loyalty_membership_plans(name, tier_level)
+          `)
+          .eq('program_id', program.id)
+          .eq('lead_id', leadId)
+          .eq('status', 'active')
+          .maybeSingle(),
+
+        // Recompensas disponibles (que el lead puede canjear)
+        supabase
+          .from('loyalty_rewards')
+          .select('id, name, tokens_required, category')
+          .eq('program_id', program.id)
+          .eq('is_active', true)
+          .order('tokens_required', { ascending: true })
+          .limit(10),
+      ]);
+
+      const balance = balanceResult.data;
+      const membership = membershipResult.data as {
+        id: string;
+        status: string;
+        end_date: string | null;
+        plan: { name: string; tier_level: string } | null;
+      } | null;
+
+      leadStatus = {
+        token_balance: balance?.current_balance || 0,
+        total_earned: balance?.total_earned || 0,
+        total_redeemed: balance?.total_redeemed || 0,
+        tier: membership?.plan?.tier_level || null,
+        membership_id: membership?.id || null,
+        membership_plan: membership?.plan?.name || null,
+        membership_status: membership?.status || null,
+        membership_end_date: membership?.end_date || null,
+      };
+
+      availableRewards = (rewardsResult.data || []).filter(
+        (r) => r.tokens_required <= (balance?.current_balance || 0)
+      );
+    }
+
+    console.log(
+      `[LangGraph AI] Loyalty context loaded: Program "${program.program_name}", ` +
+      `Lead balance: ${leadStatus?.token_balance || 0} ${program.tokens_name}, ` +
+      `Available rewards: ${availableRewards.length}`
+    );
+
+    return {
+      program: {
+        id: program.id,
+        name: program.program_name,
+        tokens_name: program.tokens_name || 'puntos',
+        tokens_enabled: program.tokens_enabled,
+        tokens_per_currency: program.tokens_per_currency || 1,
+        tokens_currency_threshold: program.tokens_currency_threshold || 1,
+        membership_enabled: program.membership_enabled,
+      },
+      lead_status: leadStatus,
+      available_rewards: availableRewards,
+    };
+  } catch (err) {
+    console.log('[LangGraph AI] Loyalty context not available (optional):', err instanceof Error ? err.message : 'Unknown error');
+    return null;
+  }
+}
 
 /**
  * Genera un UUID v4 usando crypto
@@ -572,6 +754,126 @@ async function loadBusinessContext(tenantId: string): Promise<BusinessContext | 
 }
 
 // ======================
+// ENRICHMENT BUILDERS
+// ======================
+
+/**
+ * Construye el texto de enriquecimiento a partir del contexto de aprendizaje
+ * Se inyecta en el system_prompt para mejorar las respuestas
+ *
+ * REVISIÓN 5.5: Feedback loop del AI Learning
+ */
+function buildLearningEnrichment(learningContext: LearningContextData): string {
+  const sections: string[] = [];
+
+  sections.push('## CONTEXTO APRENDIDO (de conversaciones previas)');
+
+  // Servicios más solicitados
+  if (learningContext.topServiceRequests.length > 0) {
+    const services = learningContext.topServiceRequests
+      .slice(0, 5)
+      .map(s => `- "${s.service}" (${s.frequency} solicitudes)`)
+      .join('\n');
+    sections.push(`\n### Servicios más solicitados:\n${services}`);
+  }
+
+  // Objeciones comunes
+  if (learningContext.commonObjections.length > 0) {
+    const objections = learningContext.commonObjections
+      .slice(0, 5)
+      .map(o => `- "${o.objection}"`)
+      .join('\n');
+    sections.push(`\n### Objeciones comunes a manejar:\n${objections}`);
+  }
+
+  // Preferencias de horarios
+  if (learningContext.schedulingPreferences.length > 0) {
+    const preferences = learningContext.schedulingPreferences
+      .slice(0, 5)
+      .map(p => `- ${p.preference}`)
+      .join('\n');
+    sections.push(`\n### Preferencias de horarios detectadas:\n${preferences}`);
+  }
+
+  // Pain points
+  if (learningContext.painPoints.length > 0) {
+    const pains = learningContext.painPoints
+      .slice(0, 5)
+      .map(p => `- "${p.pain}"`)
+      .join('\n');
+    sections.push(`\n### Problemas/dolencias frecuentes:\n${pains}`);
+  }
+
+  // Vocabulario aprendido
+  if (learningContext.learnedVocabulary.length > 0) {
+    const vocab = learningContext.learnedVocabulary
+      .slice(0, 10)
+      .map(v => `- "${v.term}" = ${v.meaning} (${v.category})`)
+      .join('\n');
+    sections.push(`\n### Vocabulario específico del cliente:\n${vocab}`);
+  }
+
+  return sections.join('\n');
+}
+
+/**
+ * Construye el texto de enriquecimiento a partir del contexto de lealtad
+ * Permite al AI responder preguntas sobre puntos, membresías y recompensas
+ *
+ * REVISIÓN 5.5: Integración Loyalty con AI conversacional
+ */
+function buildLoyaltyEnrichment(loyaltyContext: LoyaltyContextData): string {
+  if (!loyaltyContext.program) return '';
+
+  const sections: string[] = [];
+  const { program, lead_status, available_rewards } = loyaltyContext;
+
+  sections.push('## PROGRAMA DE LEALTAD');
+
+  // Info del programa
+  sections.push(`
+### Programa: ${program.name}
+- Moneda de puntos: "${program.tokens_name}"
+- Acumulación: ${program.tokens_per_currency} ${program.tokens_name} por cada $${program.tokens_currency_threshold} de compra
+- Membresías disponibles: ${program.membership_enabled ? 'Sí' : 'No'}`);
+
+  // Estado del lead (si está disponible)
+  if (lead_status) {
+    sections.push(`
+### Estado del cliente actual:
+- Balance de ${program.tokens_name}: **${lead_status.token_balance}**
+- Total acumulado: ${lead_status.total_earned}
+- Total canjeado: ${lead_status.total_redeemed}`);
+
+    if (lead_status.membership_plan) {
+      sections.push(`- Membresía activa: ${lead_status.membership_plan} (${lead_status.membership_status})${
+        lead_status.membership_end_date ? ` - Vence: ${new Date(lead_status.membership_end_date).toLocaleDateString('es-MX')}` : ''
+      }`);
+    }
+  }
+
+  // Recompensas disponibles para canjear
+  if (available_rewards.length > 0) {
+    const rewards = available_rewards
+      .slice(0, 5)
+      .map(r => `- ${r.name}: ${r.tokens_required} ${program.tokens_name}`)
+      .join('\n');
+    sections.push(`\n### Recompensas que puede canjear:\n${rewards}`);
+  } else if (lead_status && lead_status.token_balance > 0) {
+    sections.push('\n### El cliente tiene puntos pero no alcanza para ninguna recompensa aún.');
+  }
+
+  sections.push(`
+### Reglas para responder sobre lealtad:
+- Si preguntan por puntos/balance: Informar el balance actual (${lead_status?.token_balance || 0} ${program.tokens_name})
+- Si preguntan cómo ganar puntos: Explicar que ganan ${program.tokens_per_currency} ${program.tokens_name} por cada $${program.tokens_currency_threshold} de compra
+- Si quieren canjear: ${available_rewards.length > 0 ? 'Mencionar las opciones disponibles' : 'Indicar que necesitan más puntos'}
+- Si preguntan por membresías: ${program.membership_enabled ? 'Mencionar que hay planes disponibles' : 'Indicar que no hay programa de membresías activo'}`);
+
+  return sections.join('\n');
+}
+
+// ======================
 // MAIN SERVICE FUNCTION
 // ======================
 
@@ -613,18 +915,41 @@ export async function generateAIResponseWithGraph(
     const effectiveChannel = (channel || conversationContext?.channel || 'whatsapp') as CacheChannel;
 
     // 1. Cargar todos los contextos en paralelo
+    // REVISIÓN 5.5: Ahora incluye Learning y Loyalty context para mejorar respuestas
     // Nota: loadTenantContext ahora usa el prompt cacheado según el canal
-    const [tenantContext, leadContext, businessContext] = await Promise.all([
+    const [tenantContext, leadContext, businessContext, learningContext, loyaltyContext] = await Promise.all([
       loadTenantContext(tenantId, effectiveChannel),
       leadId ? loadLeadContext(leadId) : Promise.resolve(null),
       loadBusinessContext(tenantId),
+      loadLearningContext(tenantId),          // NUEVO: AI Learning patterns
+      loadLoyaltyContext(tenantId, leadId),   // NUEVO: Loyalty program + lead status
     ]);
 
     if (!tenantContext) {
       throw new Error('Could not load tenant context');
     }
 
-    // 2. Preparar input para el grafo (usando mensaje sanitizado)
+    // 2. Enriquecer el system_prompt con contexto de aprendizaje si está disponible
+    // REVISIÓN 5.5: Retroalimentación del AI Learning al prompt
+    if (learningContext && (
+      learningContext.topServiceRequests.length > 0 ||
+      learningContext.commonObjections.length > 0 ||
+      learningContext.learnedVocabulary.length > 0
+    )) {
+      const learningEnrichment = buildLearningEnrichment(learningContext);
+      tenantContext.ai_config.system_prompt = `${tenantContext.ai_config.system_prompt}\n\n${learningEnrichment}`;
+      console.log('[LangGraph AI] System prompt enriched with learning context');
+    }
+
+    // 3. Enriquecer con contexto de loyalty si está disponible
+    // REVISIÓN 5.5: El AI puede responder preguntas sobre puntos y membresías
+    if (loyaltyContext?.program) {
+      const loyaltyEnrichment = buildLoyaltyEnrichment(loyaltyContext);
+      tenantContext.ai_config.system_prompt = `${tenantContext.ai_config.system_prompt}\n\n${loyaltyEnrichment}`;
+      console.log('[LangGraph AI] System prompt enriched with loyalty context');
+    }
+
+    // 4. Preparar input para el grafo (usando mensaje sanitizado)
     const graphInput: GraphExecutionInput = {
       tenant_id: tenantId,
       conversation_id: conversationId,
@@ -637,10 +962,10 @@ export async function generateAIResponseWithGraph(
       business_context: businessContext,
     };
 
-    // 3. Ejecutar el grafo
+    // 5. Ejecutar el grafo
     const result = await executeGraph(graphInput);
 
-    // 4. Convertir resultado al formato AIProcessingResult
+    // 6. Convertir resultado al formato AIProcessingResult
     const processingTime = Date.now() - startTime;
 
     console.log(`[LangGraph AI] Completed in ${processingTime}ms. Agents: ${result.agents_used.join(' -> ')}`);

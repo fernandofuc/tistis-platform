@@ -1,8 +1,8 @@
 # Estado del Proyecto TIS TIS Platform
 
 **Ultima actualizacion:** 15 de Enero, 2026
-**Version:** 5.0.0
-**Fase actual:** Produccion - Sistema Completo con Tool Calling + RAG + LangGraph + AI Learning + Integration Hub + Multi-Vertical Terminology + Mobile Responsiveness Premium
+**Version:** 5.5.0
+**Fase actual:** Produccion - Sistema Completo con Tool Calling + RAG + LangGraph + AI Learning + Loyalty AI Integration + Integration Hub + Multi-Vertical Terminology + Mobile Responsiveness Premium
 
 ---
 
@@ -17,14 +17,15 @@
 | **Fase 5 - Integration Hub** | Completada (100%) |
 | **Fase 6 - Multi-Vertical Terminology** | Completada (100%) |
 | **Fase 7 - Mobile Responsiveness** | Completada (100%) |
-| **Fase 8 - Tool Calling + RAG** | Completada (100%) - NUEVO v5.0.0 |
+| **Fase 8 - Tool Calling + RAG** | Completada (100%) - v5.0.0 |
+| **Fase 9 - AI Learning + Loyalty Integration** | Completada (100%) - NUEVO v5.5.0 |
 | **Base de Datos** | 32+ tablas creadas |
 | **API Endpoints** | 30+ endpoints activos |
 | **Webhooks Multi-Canal** | 4 plataformas integradas |
 | **AI Multi-Agente** | LangGraph con 14 agentes + Tool Calling + RAG |
 | **AI Learning** | Sistema de aprendizaje automatico |
 | **AI por Canal** | Configuracion personalizada por canal |
-| **Tool Calling** | 16+ tools de consulta y accion - NUEVO |
+| **Tool Calling** | 20+ tools de consulta y accion (incluye 4 Loyalty tools) |
 | **RAG (pgvector)** | Busqueda semantica en Knowledge Base - NUEVO |
 | **Integration Hub** | CRM, POS, software dental, calendarios |
 | **Multi-Vertical Terminology** | 6 verticales con terminologia dinamica |
@@ -1290,6 +1291,62 @@ Discovery → Pricing → Checkout → Provisioning → useTenant → useVertica
 ```
 
 **Commit:** `8a31ae5` - "feat(verticals): Add dynamic terminology system for multi-vertical support"
+
+---
+
+## Notas de la Sesion (15 Ene 2026) - v5.5.0: AI LEARNING + LOYALTY INTEGRATION
+
+### RELEASE: AI Learning + Loyalty AI Integration
+
+**Concepto:**
+Integracion completa del sistema de AI Learning y Loyalty con la arquitectura Tool Calling + RAG. El AI ahora puede acceder a patrones aprendidos, vocabulario del negocio, y datos de lealtad del cliente en tiempo real.
+
+### Cambios Principales v5.5.0
+
+#### 1. AI Learning Integration
+- **getLearningContext** ahora se carga en paralelo con otros contextos en `langgraph-ai.service.ts`
+- El sistema alimenta al LLM con:
+  - Patrones de servicios mas solicitados
+  - Objeciones comunes y como manejarlas
+  - Preferencias de agendamiento detectadas
+  - Vocabulario aprendido del negocio
+
+#### 2. Loyalty Tools para AI (4 nuevos tools)
+| Tool | Descripcion |
+|------|-------------|
+| `get_loyalty_balance` | Consulta balance de tokens del cliente |
+| `get_available_rewards` | Lista recompensas canjeables |
+| `get_membership_info` | Info de membresia (tier, beneficios, multiplicador) |
+| `redeem_reward` | Canjea una recompensa atomicamente |
+
+#### 3. Agent State Extension
+- Nueva interfaz `LoyaltyInfo` en `agent-state.ts`
+- Campo `loyalty` disponible en todo el flujo de LangGraph
+
+#### 4. Booking + Loyalty Integration
+- `createBooking` ahora calcula tokens a ganar
+- `generateBookingConfirmation` muestra info de loyalty
+- Mensaje incluye: tokens a ganar + balance actual
+
+### Archivos Modificados
+
+| Archivo | Cambios |
+|---------|---------|
+| `langgraph-ai.service.ts` | +loadLearningContext, +loadLoyaltyContext, +enrichments |
+| `tools/definitions.ts` | +4 schemas, +4 TOOL_NAMES, +TOOL_DESCRIPTIONS |
+| `tools/handlers.ts` | +4 handlers completos con queries Supabase |
+| `state/agent-state.ts` | +LoyaltyInfo interface, +loyalty field |
+| `appointment-booking.service.ts` | +tokens_to_earn, +confirmation messages |
+
+### Resultado
+
+El AI ahora puede:
+- Responder preguntas sobre balance de puntos del cliente
+- Mostrar recompensas disponibles y cuales puede canjear
+- Informar sobre beneficios de membresia
+- Canjear recompensas directamente en la conversacion
+- Informar cuantos tokens ganara al completar una cita
+- Usar patrones aprendidos para mejorar respuestas
 
 ---
 

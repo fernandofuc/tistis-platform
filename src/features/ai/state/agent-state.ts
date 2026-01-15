@@ -74,6 +74,51 @@ export interface LeadInfo {
 }
 
 /**
+ * Información de lealtad del cliente (v5.5)
+ * Contexto de tokens, membresías y recompensas disponibles
+ */
+export interface LoyaltyInfo {
+  /** Si el programa de lealtad está activo para este tenant */
+  program_enabled: boolean;
+
+  /** Nombre del programa (ej: "Programa de Puntos") */
+  program_name?: string;
+
+  /** Nombre personalizado de los tokens (ej: "Puntos Dentales") */
+  tokens_name?: string;
+
+  /** Balance actual de tokens del cliente */
+  token_balance: number;
+
+  /** Total de tokens ganados históricamente */
+  total_earned: number;
+
+  /** Total de tokens canjeados históricamente */
+  total_redeemed: number;
+
+  /** Membresía activa del cliente */
+  membership?: {
+    plan_name: string;
+    tier_level: 'basic' | 'silver' | 'gold' | 'platinum' | 'vip';
+    status: 'active' | 'pending' | 'expired' | 'cancelled';
+    end_date?: string;
+    tokens_multiplier: number;
+    benefits?: string[];
+  };
+
+  /** Resumen de recompensas disponibles para el cliente */
+  available_rewards_summary: {
+    total_available: number;
+    can_redeem_now: number;
+    cheapest_reward_tokens?: number;
+    cheapest_reward_name?: string;
+  };
+
+  /** Tokens pendientes por otorgar (ej: de una cita que no se ha confirmado) */
+  pending_tokens?: number;
+}
+
+/**
  * Información de la conversación actual
  */
 export interface ConversationInfo {
@@ -477,6 +522,12 @@ export const TISTISAgentState = Annotation.Root({
     default: () => null,
   }),
 
+  /** Información de lealtad del cliente (v5.5) */
+  loyalty: Annotation<LoyaltyInfo | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
+
   // =====================================================
   // MENSAJE ACTUAL Y ANÁLISIS
   // =====================================================
@@ -702,6 +753,7 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
     lead: null,
     conversation: null,
     business_context: null,
+    loyalty: null,
     current_message: '',
     channel: 'whatsapp',
     detected_intent: 'UNKNOWN',

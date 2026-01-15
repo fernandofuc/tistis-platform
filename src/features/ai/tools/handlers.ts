@@ -35,7 +35,13 @@ import type {
   OrderItem,
   ItemAvailability,
   Promotion,
+  // Loyalty types (REVISIÓN 5.5)
+  LoyaltyBalance,
+  LoyaltyReward,
+  MembershipInfo,
+  RewardRedemptionResult,
 } from './definitions';
+import { createServerClient } from '@/src/shared/lib/supabase';
 
 // ======================
 // CONTEXT TYPE
@@ -1145,6 +1151,324 @@ export async function handleGetActivePromotions(
 }
 
 // ======================
+// LOYALTY-SPECIFIC HANDLERS
+// REVISIÓN 5.5: Integración Loyalty con AI
+// ======================
+
+/**
+ * Handler: get_loyalty_balance
+ * Obtiene el balance de puntos/tokens del cliente
+ */
+export async function handleGetLoyaltyBalance(
+  _params: Record<string, never>,
+  context: ToolContext
+): Promise<LoyaltyBalance | { error: string }> {
+  const { tenant_id, lead_id } = context;
+
+  if (!lead_id) {
+    return { error: 'No se ha identificado al cliente. Solicita su información primero.' };
+  }
+
+  const supabase = createServerClient();
+
+  // 1. Obtener programa de lealtad del tenant
+  const { data: program, error: programError } = await supabase
+    .from('loyalty_programs')
+    .select('id, program_name, tokens_name, tokens_per_currency, tokens_currency_threshold, is_active')
+    .eq('tenant_id', tenant_id)
+    .eq('is_active', true)
+    .single();
+
+  if (programError || !program) {
+    return { error: 'Este negocio no tiene un programa de lealtad activo.' };
+  }
+
+  // 2. Obtener balance del lead
+  const { data: balance } = await supabase
+    .from('loyalty_token_balances')
+    .select('current_balance, total_earned, total_redeemed')
+    .eq('program_id', program.id)
+    .eq('lead_id', lead_id)
+    .maybeSingle();
+
+  return {
+    program_name: program.program_name,
+    tokens_name: program.tokens_name || 'puntos',
+    current_balance: balance?.current_balance || 0,
+    total_earned: balance?.total_earned || 0,
+    total_redeemed: balance?.total_redeemed || 0,
+    tokens_per_currency: program.tokens_per_currency || 1,
+    currency_threshold: program.tokens_currency_threshold || 1,
+  };
+}
+
+/**
+ * Handler: get_available_rewards
+ * Obtiene las recompensas disponibles para canjear
+ */
+export async function handleGetAvailableRewards(
+  params: { category?: string; max_results?: number },
+  context: ToolContext
+): Promise<LoyaltyReward[] | { error: string }> {
+  const { tenant_id, lead_id } = context;
+  const maxResults = params.max_results || 10;
+
+  const supabase = createServerClient();
+
+  // 1. Obtener programa y balance
+  const { data: program } = await supabase
+    .from('loyalty_programs')
+    .select('id')
+    .eq('tenant_id', tenant_id)
+    .eq('is_active', true)
+    .single();
+
+  if (!program) {
+    return { error: 'Este negocio no tiene un programa de lealtad activo.' };
+  }
+
+  // 2. Obtener balance del lead (si existe)
+  let currentBalance = 0;
+  if (lead_id) {
+    const { data: balance } = await supabase
+      .from('loyalty_token_balances')
+      .select('current_balance')
+      .eq('program_id', program.id)
+      .eq('lead_id', lead_id)
+      .maybeSingle();
+
+    currentBalance = balance?.current_balance || 0;
+  }
+
+  // 3. Obtener recompensas activas
+  let query = supabase
+    .from('loyalty_rewards')
+    .select('id, name, description, category, tokens_required, valid_until')
+    .eq('program_id', program.id)
+    .eq('is_active', true)
+    .order('tokens_required', { ascending: true })
+    .limit(maxResults);
+
+  if (params.category) {
+    query = query.eq('category', params.category);
+  }
+
+  const { data: rewards, error } = await query;
+
+  if (error || !rewards || rewards.length === 0) {
+    return { error: 'No hay recompensas disponibles en este momento.' };
+  }
+
+  return rewards.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description || '',
+    category: r.category || 'general',
+    tokens_required: r.tokens_required,
+    can_redeem: currentBalance >= r.tokens_required,
+    valid_until: r.valid_until,
+  }));
+}
+
+/**
+ * Handler: get_membership_info
+ * Obtiene información de la membresía del cliente
+ */
+export async function handleGetMembershipInfo(
+  params: { include_benefits?: boolean },
+  context: ToolContext
+): Promise<MembershipInfo | { error: string }> {
+  const { tenant_id, lead_id } = context;
+  const includeBenefits = params.include_benefits ?? true;
+
+  if (!lead_id) {
+    return { error: 'No se ha identificado al cliente. Solicita su información primero.' };
+  }
+
+  const supabase = createServerClient();
+
+  // 1. Obtener programa
+  const { data: program } = await supabase
+    .from('loyalty_programs')
+    .select('id, membership_enabled')
+    .eq('tenant_id', tenant_id)
+    .eq('is_active', true)
+    .single();
+
+  if (!program || !program.membership_enabled) {
+    return {
+      has_membership: false,
+      plan_name: null,
+      tier_level: null,
+      status: null,
+      start_date: null,
+      end_date: null,
+      benefits: [],
+      tokens_multiplier: 1,
+    };
+  }
+
+  // 2. Obtener membresía del lead
+  const { data: membership } = await supabase
+    .from('loyalty_memberships')
+    .select(`
+      id,
+      status,
+      start_date,
+      end_date,
+      plan:loyalty_membership_plans(
+        name,
+        tier_level,
+        tokens_multiplier,
+        benefits
+      )
+    `)
+    .eq('program_id', program.id)
+    .eq('lead_id', lead_id)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  // Supabase nested joins return arrays, get first element
+  const planData = Array.isArray(membership?.plan) ? membership.plan[0] : membership?.plan;
+
+  if (!membership || !planData) {
+    return {
+      has_membership: false,
+      plan_name: null,
+      tier_level: null,
+      status: null,
+      start_date: null,
+      end_date: null,
+      benefits: [],
+      tokens_multiplier: 1,
+    };
+  }
+
+  const plan = planData as {
+    name: string;
+    tier_level: string;
+    tokens_multiplier: number;
+    benefits: string[] | null;
+  };
+
+  return {
+    has_membership: true,
+    plan_name: plan.name,
+    tier_level: plan.tier_level,
+    status: membership.status,
+    start_date: membership.start_date,
+    end_date: membership.end_date,
+    benefits: includeBenefits && plan.benefits ? plan.benefits : [],
+    tokens_multiplier: plan.tokens_multiplier || 1,
+  };
+}
+
+/**
+ * Handler: redeem_reward
+ * Canjea una recompensa usando puntos del cliente
+ */
+export async function handleRedeemReward(
+  params: { reward_id: string; notes?: string },
+  context: ToolContext
+): Promise<RewardRedemptionResult | { error: string }> {
+  const { tenant_id, lead_id } = context;
+
+  if (!lead_id) {
+    return { error: 'No se ha identificado al cliente. Solicita su información primero.' };
+  }
+
+  const supabase = createServerClient();
+
+  // 1. Obtener programa y recompensa
+  const { data: program } = await supabase
+    .from('loyalty_programs')
+    .select('id')
+    .eq('tenant_id', tenant_id)
+    .eq('is_active', true)
+    .single();
+
+  if (!program) {
+    return {
+      success: false,
+      reward_name: '',
+      tokens_used: 0,
+      new_balance: 0,
+      confirmation_message: '',
+      error: 'Este negocio no tiene un programa de lealtad activo.',
+    };
+  }
+
+  const { data: reward } = await supabase
+    .from('loyalty_rewards')
+    .select('id, name, tokens_required, is_active')
+    .eq('id', params.reward_id)
+    .eq('program_id', program.id)
+    .single();
+
+  if (!reward || !reward.is_active) {
+    return {
+      success: false,
+      reward_name: '',
+      tokens_used: 0,
+      new_balance: 0,
+      confirmation_message: '',
+      error: 'La recompensa seleccionada no está disponible.',
+    };
+  }
+
+  // 2. Verificar balance del lead
+  const { data: balance } = await supabase
+    .from('loyalty_token_balances')
+    .select('current_balance')
+    .eq('program_id', program.id)
+    .eq('lead_id', lead_id)
+    .maybeSingle();
+
+  const currentBalance = balance?.current_balance || 0;
+
+  if (currentBalance < reward.tokens_required) {
+    return {
+      success: false,
+      reward_name: reward.name,
+      tokens_used: 0,
+      new_balance: currentBalance,
+      confirmation_message: '',
+      error: `No tienes suficientes puntos. Necesitas ${reward.tokens_required} pero solo tienes ${currentBalance}.`,
+    };
+  }
+
+  // 3. Crear la redención usando RPC
+  const { data: redemptionResult, error: redemptionError } = await supabase.rpc('redeem_loyalty_reward', {
+    p_program_id: program.id,
+    p_lead_id: lead_id,
+    p_reward_id: reward.id,
+    p_notes: params.notes || `Canjeo via AI - ${reward.name}`,
+  });
+
+  if (redemptionError || !redemptionResult) {
+    return {
+      success: false,
+      reward_name: reward.name,
+      tokens_used: 0,
+      new_balance: currentBalance,
+      confirmation_message: '',
+      error: 'Error al procesar el canje. Por favor intenta nuevamente.',
+    };
+  }
+
+  const newBalance = currentBalance - reward.tokens_required;
+
+  return {
+    success: true,
+    redemption_id: redemptionResult.redemption_id,
+    reward_name: reward.name,
+    tokens_used: reward.tokens_required,
+    new_balance: newBalance,
+    confirmation_message: `¡Listo! Has canjeado "${reward.name}" por ${reward.tokens_required} puntos. Tu nuevo balance es ${newBalance} puntos.`,
+  };
+}
+
+// ======================
 // EXPORTS
 // ======================
 
@@ -1167,6 +1491,11 @@ export const toolHandlers = {
   create_order: handleCreateOrder,
   check_item_availability: handleCheckItemAvailability,
   get_active_promotions: handleGetActivePromotions,
+  // Loyalty-specific tools (REVISIÓN 5.5)
+  get_loyalty_balance: handleGetLoyaltyBalance,
+  get_available_rewards: handleGetAvailableRewards,
+  get_membership_info: handleGetMembershipInfo,
+  redeem_reward: handleRedeemReward,
 };
 
 export default toolHandlers;

@@ -177,6 +177,45 @@ export const GetActivePromotionsSchema = z.object({
 });
 
 // ======================
+// LOYALTY-SPECIFIC SCHEMAS
+// REVISIÓN 5.5: Integración Loyalty con AI
+// ======================
+
+/**
+ * Schema para get_loyalty_balance
+ * Obtiene el balance de puntos/tokens del cliente
+ */
+export const GetLoyaltyBalanceSchema = z.object({
+  // No requiere parámetros - usa el lead_id del contexto
+});
+
+/**
+ * Schema para get_available_rewards
+ * Obtiene las recompensas que el cliente puede canjear
+ */
+export const GetAvailableRewardsSchema = z.object({
+  category: z.string().optional().describe('Categoría de recompensas para filtrar (opcional)'),
+  max_results: z.number().optional().default(10).describe('Número máximo de resultados (default: 10)'),
+});
+
+/**
+ * Schema para get_membership_info
+ * Obtiene información de la membresía del cliente
+ */
+export const GetMembershipInfoSchema = z.object({
+  include_benefits: z.boolean().optional().default(true).describe('Incluir lista de beneficios (default: true)'),
+});
+
+/**
+ * Schema para redeem_reward
+ * Canjea una recompensa con puntos del cliente
+ */
+export const RedeemRewardSchema = z.object({
+  reward_id: z.string().describe('ID de la recompensa a canjear'),
+  notes: z.string().optional().describe('Notas adicionales del canje'),
+});
+
+// ======================
 // TOOL RESPONSE TYPES
 // ======================
 
@@ -362,6 +401,52 @@ export interface Promotion {
 }
 
 // ======================
+// LOYALTY-SPECIFIC RESPONSE TYPES
+// REVISIÓN 5.5: Integración Loyalty con AI
+// ======================
+
+export interface LoyaltyBalance {
+  program_name: string;
+  tokens_name: string;
+  current_balance: number;
+  total_earned: number;
+  total_redeemed: number;
+  tokens_per_currency: number;
+  currency_threshold: number;
+}
+
+export interface LoyaltyReward {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tokens_required: number;
+  can_redeem: boolean;  // Si el cliente tiene suficientes tokens
+  valid_until: string | null;
+}
+
+export interface MembershipInfo {
+  has_membership: boolean;
+  plan_name: string | null;
+  tier_level: string | null;
+  status: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  benefits: string[];
+  tokens_multiplier: number;
+}
+
+export interface RewardRedemptionResult {
+  success: boolean;
+  redemption_id?: string;
+  reward_name: string;
+  tokens_used: number;
+  new_balance: number;
+  confirmation_message: string;
+  error?: string;
+}
+
+// ======================
 // TOOL NAMES (Constants)
 // ======================
 
@@ -384,6 +469,11 @@ export const TOOL_NAMES = {
   CREATE_ORDER: 'create_order',
   CHECK_ITEM_AVAILABILITY: 'check_item_availability',
   GET_ACTIVE_PROMOTIONS: 'get_active_promotions',
+  // Loyalty-specific tools (REVISIÓN 5.5)
+  GET_LOYALTY_BALANCE: 'get_loyalty_balance',
+  GET_AVAILABLE_REWARDS: 'get_available_rewards',
+  GET_MEMBERSHIP_INFO: 'get_membership_info',
+  REDEEM_REWARD: 'redeem_reward',
 } as const;
 
 export type ToolName = typeof TOOL_NAMES[keyof typeof TOOL_NAMES];
@@ -411,6 +501,11 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   [TOOL_NAMES.CREATE_ORDER]: 'Crea un pedido para el cliente (pickup, delivery o para comer aquí). Usa esta tool cuando el cliente confirme su pedido completo.',
   [TOOL_NAMES.CHECK_ITEM_AVAILABILITY]: 'Verifica si un platillo específico está disponible. Usa esta tool antes de confirmar un pedido o cuando el cliente pregunte si hay algo.',
   [TOOL_NAMES.GET_ACTIVE_PROMOTIONS]: 'Obtiene las promociones activas del negocio. Usa esta tool cuando el cliente pregunte por ofertas, descuentos o promociones.',
+  // Loyalty-specific tools (REVISIÓN 5.5)
+  [TOOL_NAMES.GET_LOYALTY_BALANCE]: 'Obtiene el balance de puntos/tokens del cliente en el programa de lealtad. Usa esta tool cuando el cliente pregunte cuántos puntos tiene o su balance.',
+  [TOOL_NAMES.GET_AVAILABLE_REWARDS]: 'Obtiene las recompensas disponibles para canjear con puntos. Usa esta tool cuando el cliente pregunte qué puede canjear o qué premios hay.',
+  [TOOL_NAMES.GET_MEMBERSHIP_INFO]: 'Obtiene información de la membresía del cliente (plan, beneficios, fecha de vencimiento). Usa esta tool cuando pregunten por su membresía.',
+  [TOOL_NAMES.REDEEM_REWARD]: 'Canjea una recompensa usando los puntos del cliente. Usa esta tool cuando el cliente confirme que quiere canjear una recompensa específica.',
 };
 
 // ======================
@@ -483,6 +578,10 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_SERVICE_INFO,
     TOOL_NAMES.GET_BUSINESS_POLICY,
     TOOL_NAMES.GET_STAFF_INFO, // Para dental: FAQs sobre doctores
+    // Loyalty tools (REVISIÓN 5.5)
+    TOOL_NAMES.GET_LOYALTY_BALANCE,
+    TOOL_NAMES.GET_AVAILABLE_REWARDS,
+    TOOL_NAMES.GET_MEMBERSHIP_INFO,
   ],
 
   general: [
@@ -494,11 +593,18 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.SEARCH_KNOWLEDGE_BASE,
     TOOL_NAMES.GET_BUSINESS_POLICY,
     TOOL_NAMES.GET_STAFF_INFO, // Para dental: consultas sobre doctores/especialistas
+    // Loyalty tools (REVISIÓN 5.5)
+    TOOL_NAMES.GET_LOYALTY_BALANCE,
+    TOOL_NAMES.GET_AVAILABLE_REWARDS,
+    TOOL_NAMES.GET_MEMBERSHIP_INFO,
+    TOOL_NAMES.REDEEM_REWARD,
   ],
 
   greeting: [
     TOOL_NAMES.GET_OPERATING_HOURS,
     TOOL_NAMES.GET_BRANCH_INFO,
+    // Loyalty tools (REVISIÓN 5.5) - Mencionar puntos en saludo
+    TOOL_NAMES.GET_LOYALTY_BALANCE,
   ],
 
   escalation: [], // No tools, solo escala
@@ -517,6 +623,9 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_ACTIVE_PROMOTIONS,
     TOOL_NAMES.GET_BRANCH_INFO,
     TOOL_NAMES.GET_OPERATING_HOURS,
+    // Loyalty tools (REVISIÓN 5.5) - Mostrar puntos ganados al ordenar
+    TOOL_NAMES.GET_LOYALTY_BALANCE,
+    TOOL_NAMES.GET_AVAILABLE_REWARDS,
   ],
 
   invoicing_restaurant: [
