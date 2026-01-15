@@ -986,8 +986,67 @@ function buildMetaPrompt(
     ? verticalConfig.specialConsiderations.map(c => `- ${c}`).join('\n')
     : '';
 
+  // ========================================
+  // ADVERTENCIAS CRÍTICAS POR CANAL (FASE 6)
+  // ========================================
+  const voiceCriticalRules = `
+⚠️ ⚠️ ⚠️ ADVERTENCIAS CRÍTICAS PARA PROMPT DE VOZ ⚠️ ⚠️ ⚠️
+
+Este prompt es para un ASISTENTE DE VOZ (llamadas telefónicas). El cliente NO PUEDE VER texto, solo ESCUCHA.
+Las siguientes reglas son OBLIGATORIAS y NO NEGOCIABLES:
+
+1. **NUNCA USES EMOJIS** - Es una llamada telefónica, los emojis no se pueden escuchar.
+   El prompt generado NO DEBE contener ningún emoji.
+
+2. **NUNCA USES FORMATO MARKDOWN** - No bullets (- *), no negritas (**), no listas.
+   En voz todo debe ser oraciones naturales habladas.
+   ❌ MAL: "Nuestros servicios son: - Limpieza - Blanqueamiento - Ortodoncia"
+   ✅ BIEN: "Ofrecemos limpieza dental, blanqueamiento y ortodoncia, entre otros servicios."
+
+3. **NÚMEROS COMO PALABRAS** - Los precios y cantidades deben escribirse como se hablan.
+   ❌ MAL: "$1,500" o "1500 pesos"
+   ✅ BIEN: "mil quinientos pesos" o "alrededor de mil quinientos pesos"
+
+4. **RESPUESTAS CORTAS** - Máximo 2-3 oraciones por turno. Voz es más lenta que texto.
+
+5. **DELETREO DE EMAILS** - Si mencionas emails, indica que deben deletrearse letra por letra.
+
+6. **PAUSAS EN DATOS** - Teléfonos y direcciones deben decirse lentamente con pausas.
+
+7. **MULETILLAS CONVERSACIONALES** - ${context.useFillerPhrases !== false
+    ? `INCLUYE muletillas como "${(context.fillerPhrases && context.fillerPhrases.length > 0)
+        ? context.fillerPhrases.slice(0, 3).join('", "')
+        : 'Claro...', 'Mmm, déjame ver...', 'Entiendo...'}" para sonar natural.`
+    : 'El cliente DESACTIVÓ las muletillas. NO las incluyas en el prompt.'}
+
+8. **CONFIRMACIONES FRECUENTES** - Repite datos importantes y pide confirmación.
+
+⚠️ Si no cumples estas reglas, el prompt será RECHAZADO por el validador.
+`;
+
+  const messagingCriticalRules = `
+📱 REGLAS PARA PROMPT DE MENSAJERÍA 📱
+
+Este prompt es para un ASISTENTE DE MENSAJERÍA (WhatsApp, Instagram, etc.). El cliente PUEDE VER y LEER el texto.
+
+1. **EMOJIS FUNCIONALES PERMITIDOS** - Solo estos: ✅ ❌ 📍 📞 ⏰ 📅
+   NO uses emojis de caritas (😊 😂 etc.) ni gestos (👍 🙏 etc.)
+
+2. **FORMATO MARKDOWN PERMITIDO** - Puedes usar bullets, negritas, listas cuando ayuden a organizar.
+
+3. **NO USES MULETILLAS DE VOZ** - Nada de "Mmm...", "Bueno...", "Pues...". Es texto escrito, no conversación hablada.
+
+4. **RESPUESTAS MÁS DETALLADAS** - Puedes dar información más completa, el cliente puede releerla.
+
+5. **NÚMEROS EN FORMATO ESTÁNDAR** - Puedes usar "$1,500" o "1500 pesos" normalmente.
+`;
+
+  const channelCriticalRules = isVoice ? voiceCriticalRules : messagingCriticalRules;
+
   // Construir el meta-prompt
   return `Eres un experto en diseño de prompts para asistentes de IA conversacionales. Tu tarea es crear un prompt de sistema PROFESIONAL y COMPLETO para un ${isVoice ? 'asistente de voz (llamadas telefónicas)' : 'asistente de mensajería (WhatsApp, Instagram, etc.)'}.
+
+${channelCriticalRules}
 
 === INFORMACIÓN DEL NEGOCIO ===
 

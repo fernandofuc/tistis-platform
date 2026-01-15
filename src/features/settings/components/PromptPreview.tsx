@@ -22,10 +22,13 @@ interface PromptData {
   tokens_estimated: number;
   generated_at: string | null;
   profile_name: string;
+  needs_regeneration?: boolean; // FASE 6: Indicador de caché obsoleto
 }
 
 interface Props {
   className?: string;
+  cacheInvalidated?: boolean; // FASE 6: Prop para indicar que el KB cambió
+  onRegenerate?: () => void; // FASE 6: Callback cuando se regenera
 }
 
 // ======================
@@ -73,12 +76,16 @@ const profiles: { key: ProfileType; label: string; description: string }[] = [
 // ======================
 // COMPONENT
 // ======================
-export function PromptPreview({ className }: Props) {
+export function PromptPreview({ className, cacheInvalidated, onRegenerate }: Props) {
   const [selectedProfile, setSelectedProfile] = useState<ProfileType | null>(null);
   const [loading, setLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false); // FASE 6: Estado para regeneración
   const [promptData, setPromptData] = useState<PromptData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
+
+  // FASE 6: Detectar si el prompt está obsoleto
+  const isPromptStale = cacheInvalidated || promptData?.needs_regeneration;
 
   const fetchPrompt = async (profileType: ProfileType) => {
     setLoading(true);
@@ -125,6 +132,75 @@ export function PromptPreview({ className }: Props) {
       showToast({ type: 'success', message: 'Prompt copiado al portapapeles' });
     } catch {
       showToast({ type: 'error', message: 'Error al copiar' });
+    }
+  };
+
+  // FASE 6: Función para regenerar el prompt
+  const regeneratePrompt = async () => {
+    if (!selectedProfile) return;
+
+    setRegenerating(true);
+    setError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No autenticado');
+      }
+
+      // Mapear profile type a channel
+      const channelMap: Record<ProfileType, string> = {
+        business: 'whatsapp',
+        personal: 'instagram',
+        voice: 'voice',
+      };
+      const channel = channelMap[selectedProfile];
+
+      // FASE 6 FIX: El endpoint es fijo, el canal va en el body
+      const response = await fetch('/api/ai-config/generate-prompt', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          force_regenerate: true,
+          channel: channel,
+        }),
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Error al regenerar el prompt';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // Si no es JSON válido, usar mensaje genérico
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast({
+          type: 'success',
+          message: `Prompt regenerado (Score: ${data.validation_score || 'N/A'}/100)`
+        });
+
+        // Refrescar el preview
+        await fetchPrompt(selectedProfile);
+
+        // Notificar al componente padre
+        onRegenerate?.();
+      } else {
+        throw new Error(data.error || 'Error al regenerar');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+      showToast({ type: 'error', message: 'Error al regenerar el prompt' });
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -229,6 +305,42 @@ export function PromptPreview({ className }: Props) {
             exit={{ opacity: 0, y: -10 }}
             className="bg-gray-900 rounded-xl overflow-hidden"
           >
+            {/* FASE 6: Alerta de prompt obsoleto */}
+            {isPromptStale && (
+              <div className="px-4 py-2 bg-amber-500/20 border-b border-amber-500/30 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-amber-300">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span className="text-sm font-medium">
+                    Prompt desactualizado - La Base de Conocimiento ha cambiado
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={regeneratePrompt}
+                  disabled={regenerating}
+                  className="text-amber-300 hover:text-amber-100 hover:bg-amber-500/20"
+                  aria-label="Regenerar prompt con cambios recientes"
+                >
+                  {regenerating ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-amber-300/30 border-t-amber-300 rounded-full animate-spin mr-1" aria-hidden="true" />
+                      Regenerando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Regenerar
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
             {/* Preview Header */}
             <div className="px-4 py-3 bg-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -241,18 +353,43 @@ export function PromptPreview({ className }: Props) {
                   {promptData.profile_name}
                 </span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={copyToClipboard}
-                className="text-gray-400 hover:text-white hover:bg-gray-700"
-                aria-label="Copiar prompt al portapapeles"
-              >
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                Copiar
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* FASE 6: Botón regenerar siempre visible */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={regeneratePrompt}
+                  disabled={regenerating}
+                  className="text-gray-400 hover:text-white hover:bg-gray-700"
+                  aria-label="Regenerar prompt"
+                >
+                  {regenerating ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin mr-1" aria-hidden="true" />
+                      Regenerando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Regenerar
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={copyToClipboard}
+                  className="text-gray-400 hover:text-white hover:bg-gray-700"
+                  aria-label="Copiar prompt al portapapeles"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copiar
+                </Button>
+              </div>
             </div>
 
             {/* Preview Content */}

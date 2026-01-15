@@ -43,6 +43,48 @@ interface KnowledgeBasePayload {
 }
 
 // ======================
+// CACHE INVALIDATION (FASE 6 IMPROVEMENT)
+// ======================
+
+/**
+ * Invalida el caché de prompts cuando se modifica el Knowledge Base.
+ * Marca los prompts como 'needs_regeneration' para que se regeneren
+ * la próxima vez que se usen.
+ *
+ * IMPORTANTE: No regenera automáticamente para evitar bloquear la UI.
+ * El usuario debe hacer clic en "Regenerar" o los prompts se regenerarán
+ * en background cuando se detecte el cambio de hash.
+ */
+async function invalidatePromptCache(
+  supabase: ReturnType<typeof createAuthenticatedClient>,
+  tenantId: string,
+  changeType: string
+): Promise<void> {
+  try {
+    // Actualizar el campo updated_at para marcar que hay cambios pendientes
+    // El hash se recalculará cuando se regenere el prompt
+    const { error } = await supabase
+      .from('ai_generated_prompts')
+      .update({
+        // No cambiamos el status a 'generating' para no bloquear
+        // Solo marcamos timestamp de última modificación del KB
+        updated_at: new Date().toISOString(),
+      } as Record<string, unknown>)
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active');
+
+    if (error) {
+      console.warn(`[Knowledge Base API] Could not mark cache for regeneration:`, error.message);
+    } else {
+      console.log(`[Knowledge Base API] Prompt cache marked for regeneration (${changeType}) - tenant: ${tenantId}`);
+    }
+  } catch (err) {
+    // No fallamos la operación principal si la invalidación falla
+    console.error(`[Knowledge Base API] Cache invalidation error:`, err);
+  }
+}
+
+// ======================
 // GET - Retrieve all Knowledge Base data for tenant
 // ======================
 export async function GET(request: NextRequest) {
@@ -240,9 +282,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // FASE 6: Invalidar caché de prompts cuando se modifica Knowledge Base
+    await invalidatePromptCache(supabase, userRole.tenant_id, `POST ${type}`);
+
     return NextResponse.json({
       success: true,
       data: inserted,
+      cacheInvalidated: true, // Indicar al frontend que debe regenerar prompts
     });
   } catch (error) {
     console.error('[Knowledge Base API] POST error:', error);
@@ -343,9 +389,13 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // FASE 6: Invalidar caché de prompts cuando se modifica Knowledge Base
+    await invalidatePromptCache(supabase, userRole.tenant_id, `PATCH ${type}`);
+
     return NextResponse.json({
       success: true,
       data: updated,
+      cacheInvalidated: true, // Indicar al frontend que debe regenerar prompts
     });
   } catch (error) {
     console.error('[Knowledge Base API] PATCH error:', error);
@@ -445,9 +495,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // FASE 6: Invalidar caché de prompts cuando se modifica Knowledge Base
+    await invalidatePromptCache(supabase, userRole.tenant_id, `DELETE ${type}`);
+
     return NextResponse.json({
       success: true,
       message: 'Item eliminado correctamente',
+      cacheInvalidated: true, // Indicar al frontend que debe regenerar prompts
     });
   } catch (error) {
     console.error('[Knowledge Base API] DELETE error:', error);

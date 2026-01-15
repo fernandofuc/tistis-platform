@@ -125,6 +125,53 @@ const PROMPT_LENGTH = {
 };
 
 // ======================
+// VOICE-SPECIFIC PATTERNS (FASE 6 IMPROVEMENTS)
+// ======================
+
+// Patrones de números escritos incorrectamente para voz
+// Voz debe usar "dos mil quinientos" no "$2,500" ni "2500"
+const VOICE_RAW_NUMBER_PATTERNS = [
+  /\$\d{1,3}(,\d{3})+/g,           // $1,500 o $12,500
+  /\$\d{4,}/g,                      // $1500 (sin coma, 4+ dígitos)
+  /\d{1,3}(,\d{3})+\s*(pesos|mxn|usd|dólares)/gi, // 1,500 pesos
+];
+
+// Patrones de formato markdown prohibido para voz
+// Voz NO puede usar bullets, negritas, listas - es audio, no texto
+const VOICE_FORBIDDEN_FORMATTING_PATTERNS = [
+  /^[\s]*[-*•]\s+/gm,              // - item o * item o • item
+  /\*\*[^*]+\*\*/g,                // **negrita**
+  /\*[^*]+\*/g,                    // *cursiva*
+  /^#+\s+/gm,                      // # headers
+  /`[^`]+`/g,                      // `código`
+  /\[[^\]]+\]\([^)]+\)/g,          // [link](url)
+];
+
+// Indicadores de buenas prácticas de voz
+const VOICE_BEST_PRACTICES = {
+  // Debe mencionar deletreo de emails
+  emailSpelling: [
+    'deletrea', 'letra por letra', 'deletrear', 'spelling',
+    'letra a letra', 'cada letra',
+  ],
+  // Debe mencionar pausas en datos importantes
+  dataPauses: [
+    'pausa', 'despacio', 'lentamente', 'claramente',
+    'repite', 'repetir', 'confirma', 'confirmar',
+  ],
+  // Debe mencionar respuestas cortas
+  shortResponses: [
+    'concis', 'breve', '2-3 oraciones', 'dos o tres oraciones',
+    'corta', 'máximo 3', 'máximo tres',
+  ],
+  // Debe prohibir emojis explícitamente
+  noEmojis: [
+    'no.*emoji', 'sin emoji', 'nunca.*emoji', 'evita.*emoji',
+    'no usar emoji',
+  ],
+};
+
+// ======================
 // VALIDATION FUNCTIONS
 // ======================
 
@@ -358,6 +405,198 @@ function validateVoicePrompt(
       message: 'Voice NO debe incluir emojis de caritas o informales',
       severity: 'critical',
       category: 'voice',
+    });
+  }
+
+  // ========================================
+  // VALIDACIONES ADICIONALES FASE 6
+  // ========================================
+
+  // 1. Validar números crudos (deben estar escritos como palabras para TTS)
+  validateVoiceNumbers(prompt, errors, warnings);
+
+  // 2. Validar formato prohibido (no markdown en voz)
+  validateVoiceFormatting(prompt, errors, warnings);
+
+  // 3. Validar buenas prácticas de voz
+  validateVoiceBestPractices(prompt, warnings);
+}
+
+/**
+ * Valida que los números en prompts de voz estén escritos correctamente
+ * Voz debe usar "dos mil quinientos" no "$2,500"
+ */
+function validateVoiceNumbers(
+  prompt: string,
+  errors: ValidationError[],
+  warnings: ValidationWarning[]
+): void {
+  // Buscar números con formato monetario crudo
+  const rawNumbersFound: string[] = [];
+
+  for (const pattern of VOICE_RAW_NUMBER_PATTERNS) {
+    const matches = prompt.match(pattern);
+    if (matches) {
+      rawNumbersFound.push(...matches);
+    }
+  }
+
+  if (rawNumbersFound.length > 0) {
+    // Verificar si el prompt INSTRUYE sobre cómo manejar números
+    const promptLower = prompt.toLowerCase();
+    const instructsAboutNumbers =
+      promptLower.includes('número') && (
+        promptLower.includes('palabra') ||
+        promptLower.includes('escrib') ||
+        promptLower.includes('pronunci') ||
+        promptLower.includes('dic')
+      );
+
+    if (!instructsAboutNumbers) {
+      errors.push({
+        code: 'VOICE_RAW_NUMBERS',
+        message: `Números crudos detectados en prompt de voz: ${rawNumbersFound.slice(0, 3).join(', ')}. Voice debe usar números como palabras ("dos mil quinientos" no "$2,500")`,
+        severity: 'high',
+        category: 'voice',
+      });
+    } else {
+      // Si instruye pero tiene ejemplos crudos, es warning
+      warnings.push({
+        code: 'VOICE_RAW_NUMBERS_WITH_INSTRUCTION',
+        message: `Prompt tiene números crudos pero instruye sobre su manejo. Revisar ejemplos.`,
+        suggestion: 'Verificar que los ejemplos de precios también usen formato hablado',
+      });
+    }
+  }
+
+  // Verificar que el prompt mencione cómo manejar precios en voz
+  const promptLower = prompt.toLowerCase();
+  const mentionsPriceHandling =
+    (promptLower.includes('precio') || promptLower.includes('costo')) &&
+    (promptLower.includes('palabra') || promptLower.includes('letra') ||
+     promptLower.includes('deletrea') || promptLower.includes('pronunci'));
+
+  if (!mentionsPriceHandling) {
+    warnings.push({
+      code: 'VOICE_MISSING_PRICE_INSTRUCTION',
+      message: 'Prompt de voz no menciona cómo comunicar precios verbalmente',
+      suggestion: 'Agregar: "Los precios deben decirse como palabras: \'mil quinientos pesos\' no \'$1,500\'"',
+    });
+  }
+}
+
+/**
+ * Valida que el prompt de voz no use formato markdown
+ * Voz es audio, no puede "ver" bullets o negritas
+ */
+function validateVoiceFormatting(
+  prompt: string,
+  errors: ValidationError[],
+  warnings: ValidationWarning[]
+): void {
+  const formattingIssues: string[] = [];
+
+  for (const pattern of VOICE_FORBIDDEN_FORMATTING_PATTERNS) {
+    if (pattern.test(prompt)) {
+      // Identificar qué tipo de formato se encontró
+      if (pattern.source.includes('[-*•]')) {
+        formattingIssues.push('bullets/listas');
+      } else if (pattern.source.includes('\\*\\*')) {
+        formattingIssues.push('negritas');
+      } else if (pattern.source.includes('^#+')) {
+        formattingIssues.push('encabezados');
+      } else if (pattern.source.includes('`')) {
+        formattingIssues.push('código');
+      } else if (pattern.source.includes('\\[')) {
+        formattingIssues.push('enlaces');
+      }
+    }
+  }
+
+  // Eliminar duplicados
+  const uniqueIssues = [...new Set(formattingIssues)];
+
+  if (uniqueIssues.length > 0) {
+    errors.push({
+      code: 'VOICE_HAS_VISUAL_FORMATTING',
+      message: `Prompt de voz contiene formato visual: ${uniqueIssues.join(', ')}. Voice es audio, no puede mostrar formato.`,
+      severity: 'high',
+      category: 'voice',
+    });
+
+    warnings.push({
+      code: 'VOICE_FORMATTING_SUGGESTION',
+      message: 'El formato visual no se transmite en llamadas telefónicas',
+      suggestion: 'Convertir listas a oraciones naturales: "Primero X, luego Y, y finalmente Z"',
+    });
+  }
+}
+
+/**
+ * Valida buenas prácticas específicas de voz
+ */
+function validateVoiceBestPractices(
+  prompt: string,
+  warnings: ValidationWarning[]
+): void {
+  const promptLower = prompt.toLowerCase();
+
+  // 1. Verificar mención de deletreo de emails
+  const hasEmailSpelling = VOICE_BEST_PRACTICES.emailSpelling.some(
+    term => promptLower.includes(term.toLowerCase())
+  );
+
+  // Solo advertir si el prompt menciona emails pero no cómo deletrearlos
+  if (promptLower.includes('email') || promptLower.includes('correo')) {
+    if (!hasEmailSpelling) {
+      warnings.push({
+        code: 'VOICE_MISSING_EMAIL_SPELLING',
+        message: 'Prompt menciona emails pero no instruye sobre deletreo',
+        suggestion: 'Agregar: "Los emails deben deletrearse letra por letra para evitar errores"',
+      });
+    }
+  }
+
+  // 2. Verificar mención de pausas en datos importantes
+  const hasDataPauses = VOICE_BEST_PRACTICES.dataPauses.some(
+    term => promptLower.includes(term.toLowerCase())
+  );
+
+  // Solo advertir si menciona teléfonos o direcciones
+  if (promptLower.includes('teléfono') || promptLower.includes('dirección') ||
+      promptLower.includes('telefono') || promptLower.includes('direccion')) {
+    if (!hasDataPauses) {
+      warnings.push({
+        code: 'VOICE_MISSING_DATA_PAUSES',
+        message: 'Prompt menciona teléfonos/direcciones pero no instruye sobre pausas',
+        suggestion: 'Agregar: "Los teléfonos y direcciones deben decirse lentamente, repitiendo si es necesario"',
+      });
+    }
+  }
+
+  // 3. Verificar prohibición explícita de emojis
+  const hasNoEmojisInstruction = VOICE_BEST_PRACTICES.noEmojis.some(
+    pattern => new RegExp(pattern, 'i').test(prompt)
+  );
+
+  if (!hasNoEmojisInstruction) {
+    warnings.push({
+      code: 'VOICE_MISSING_NO_EMOJI_RULE',
+      message: 'Prompt de voz no prohíbe explícitamente el uso de emojis',
+      suggestion: 'Agregar: "NUNCA uses emojis en respuestas de voz - es una llamada telefónica"',
+    });
+  }
+
+  // 4. Verificar mención de respuestas cortas
+  const hasShortResponseRule = VOICE_BEST_PRACTICES.shortResponses.some(
+    term => promptLower.includes(term.toLowerCase())
+  );
+
+  if (!hasShortResponseRule) {
+    warnings.push({
+      code: 'VOICE_MISSING_SHORT_RESPONSE_RULE',
+      message: 'Prompt de voz no enfatiza respuestas cortas',
+      suggestion: 'Agregar: "Respuestas de máximo 2-3 oraciones. Voz es más lenta que texto."',
     });
   }
 }
