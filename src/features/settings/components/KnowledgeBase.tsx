@@ -9,29 +9,32 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, Button, Input } from '@/src/shared/components/ui';
+// UI components - currently using inline premium styling
 import { useAuthContext } from '@/src/features/auth';
 import { useToast } from '@/src/shared/hooks';
 import { cn } from '@/src/shared/utils';
 import { supabase } from '@/src/shared/lib/supabase';
-import {
-  KnowledgeBasePageSkeleton,
-  KnowledgeBaseListSkeleton,
-} from '@/src/shared/components/skeletons';
+import { KnowledgeBasePageSkeleton } from '@/src/shared/components/skeletons';
 import { KBCompletenessIndicator } from './KBCompletenessIndicator';
 import { PromptPreview } from './PromptPreview';
+import {
+  KBScoreCardPremium,
+  KBBranchSelector,
+  KBCategoryNavigation,
+  KBItemCard,
+  KBEmptyState,
+  type KBCategory
+} from './kb';
 
 // KB Scoring imports for unified score calculation
 import {
   calculateKBScore,
   convertKBDataForScoring,
-  getKBStatusSummary,
 } from '@/src/shared/config/kb-scoring-service';
 import { type VerticalType, VERTICALS } from '@/src/shared/config/verticals';
 import {
   type KnowledgeBaseLimits,
   type KBItemType,
-  KB_ITEM_LABELS,
   getKBUsageStatus,
   type KBUsageStatus,
 } from '@/src/shared/config/plans';
@@ -122,7 +125,8 @@ interface KnowledgeBaseData {
   competitors: CompetitorHandling[];
 }
 
-type ActiveTab = 'instructions' | 'policies' | 'articles' | 'templates' | 'competitors';
+// Use KBCategory from kb components (same type, but centralized)
+type ActiveTab = KBCategory;
 
 // Plan info from API response
 interface PlanInfo {
@@ -353,9 +357,6 @@ export function KnowledgeBase() {
     const convertedData = convertKBDataForScoring(data, additionalData);
     return calculateKBScore(convertedData, tenantVertical);
   }, [data, services, staffList, branches, tenantVertical]);
-
-  // Get status summary for UI
-  const statusSummary = useMemo(() => getKBStatusSummary(scoringResult), [scoringResult]);
 
   // Get usage status for each KB item type (for plan limits UI)
   const getItemUsageStatus = useCallback((itemType: KBItemType): KBUsageStatus | null => {
@@ -726,20 +727,26 @@ export function KnowledgeBase() {
     },
   ];
 
-  // ======================
-  // QUICK STATS CALCULATION
-  // ======================
-  const totalItems = data.instructions.length + data.policies.length + data.articles.length + data.templates.length + data.competitors.length;
-  const activeItems =
-    data.instructions.filter(i => i.is_active).length +
-    data.policies.filter(p => p.is_active).length +
-    data.articles.filter(a => a.is_active).length +
-    data.templates.filter(t => t.is_active).length +
-    data.competitors.filter(c => c.is_active).length;
+  // Handler for next step click - navigates to the appropriate tab
+  // NOTE: Must be declared before conditional return to follow React Hooks rules
+  const handleNextStepClick = useCallback((step: { category: string; fieldKey: string }) => {
+    // Map field categories to tabs
+    const categoryToTab: Record<string, ActiveTab> = {
+      instructions: 'instructions',
+      policies: 'policies',
+      articles: 'articles',
+      templates: 'templates',
+      competitors: 'competitors',
+      // Additional mappings for specific field keys
+      core: 'instructions',
+      personality: 'instructions',
+      knowledge: 'articles',
+      advanced: 'competitors',
+    };
 
-  // Use unified scoring result for completion percentage
-  // This ensures header and KBCompletenessIndicator show the same score
-  const completionScore = scoringResult.totalScore;
+    const targetTab = categoryToTab[step.category] || categoryToTab[step.fieldKey.split('_')[0]] || 'instructions';
+    setActiveTab(targetTab);
+  }, []);
 
   // ======================
   // RENDER
@@ -750,269 +757,48 @@ export function KnowledgeBase() {
 
   return (
     <div className="space-y-6">
-      {/* Header with gradient and QuickStats */}
-      <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 rounded-2xl p-6 border border-purple-100">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-            {icons.brain}
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              Base de Conocimiento
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                {icons.sparkles}
-                Pro
-              </span>
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Personaliza completamente cómo tu asistente de AI conoce y representa tu negocio.
-              Esta información se inyecta automáticamente en cada conversación.
-            </p>
-          </div>
-        </div>
+      {/* Premium Score Card - FASE 1.1 */}
+      <KBScoreCardPremium
+        data={data}
+        additionalData={{
+          services: services.map(s => ({ id: s.id, name: s.name, is_active: s.is_active })),
+          branches: branches?.map(b => ({
+            id: b.id,
+            name: b.name,
+            operating_hours: b.operating_hours as Record<string, unknown> | null,
+            is_active: b.is_active,
+          })) || [],
+          staff: staffList.map(s => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, role: s.role, is_active: s.is_active })),
+        }}
+        vertical={tenantVertical}
+        onNextStepClick={handleNextStepClick}
+      />
 
-        {/* Quick Stats - Premium Design */}
-        <div className="mt-5 pt-5 border-t border-purple-200/50">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {/* Completion Score */}
-            <div className="bg-white/70 backdrop-blur rounded-xl p-4 border border-white/50">
-              <div className="flex items-center gap-3">
-                <div className="relative w-12 h-12">
-                  <svg className="w-12 h-12 transform -rotate-90">
-                    <circle
-                      cx="24"
-                      cy="24"
-                      r="20"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                      className="text-purple-100"
-                    />
-                    <circle
-                      cx="24"
-                      cy="24"
-                      r="20"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                      strokeDasharray={`${completionScore * 1.256} 125.6`}
-                      className={cn(
-                        statusSummary.color === 'green' ? 'text-green-500' :
-                        statusSummary.color === 'blue' ? 'text-blue-500' :
-                        statusSummary.color === 'amber' ? 'text-amber-500' : 'text-red-500'
-                      )}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className={cn(
-                      'text-xs font-bold',
-                      statusSummary.color === 'green' ? 'text-green-600' :
-                      statusSummary.color === 'blue' ? 'text-blue-600' :
-                      statusSummary.color === 'amber' ? 'text-amber-600' : 'text-red-600'
-                    )}>
-                      {completionScore}%
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">Completado</p>
-                  <p className={cn(
-                    'text-sm font-semibold',
-                    statusSummary.color === 'green' ? 'text-green-600' :
-                    statusSummary.color === 'blue' ? 'text-blue-600' :
-                    statusSummary.color === 'amber' ? 'text-amber-600' : 'text-red-600'
-                  )}>
-                    {statusSummary.title}
-                  </p>
-                </div>
-              </div>
-            </div>
+      {/* Premium Branch Selector - FASE 1.3 */}
+      <KBBranchSelector
+        branches={branches?.map(b => ({
+          id: b.id,
+          name: b.name,
+          is_headquarters: b.is_headquarters,
+          is_active: b.is_active,
+        })) || []}
+        selectedBranchId={selectedBranchId}
+        onBranchSelect={setSelectedBranchId}
+      />
 
-            {/* Total Items */}
-            <div className="bg-white/70 backdrop-blur rounded-xl p-4 border border-white/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white">
-                  {icons.chart}
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">Total</p>
-                  <p className="text-xl font-bold text-gray-900">{totalItems}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Items */}
-            <div className="bg-white/70 backdrop-blur rounded-xl p-4 border border-white/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center text-white">
-                  {icons.checkCircle}
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">Activos</p>
-                  <p className="text-xl font-bold text-green-600">{activeItems}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Categories */}
-            <div className="bg-white/70 backdrop-blur rounded-xl p-4 border border-white/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white">
-                  {icons.articles}
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">Categorías</p>
-                  <p className="text-xl font-bold text-gray-900">5</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Progress hint */}
-          {completionScore < 100 && (
-            <div className="mt-4 flex items-center gap-2 text-xs text-purple-700 bg-purple-100/50 rounded-lg px-3 py-2">
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>
-                {completionScore < 50
-                  ? 'Agrega más instrucciones y políticas para que tu asistente sea más efectivo'
-                  : completionScore < 80
-                    ? 'Estás en buen camino. Considera agregar plantillas de respuesta'
-                    : 'Casi completo. Agrega información sobre la competencia para maximizar tu base'}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Branch Filter - Only show if multiple branches */}
-      {branches && branches.length > 1 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Filtrar por sucursal:
-            </div>
-
-            {/* All branches button */}
-            <button
-              onClick={() => setSelectedBranchId(null)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-                selectedBranchId === null
-                  ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-200'
-                  : 'bg-gray-50 border border-gray-200 text-gray-600 hover:border-purple-200 hover:bg-purple-50'
-              )}
-            >
-              Todas
-            </button>
-
-            {/* Individual branch buttons */}
-            {branches.map((branch) => (
-              <button
-                key={branch.id}
-                onClick={() => setSelectedBranchId(branch.id)}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-                  selectedBranchId === branch.id
-                    ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-200'
-                    : 'bg-gray-50 border border-gray-200 text-gray-600 hover:border-purple-200 hover:bg-purple-50'
-                )}
-              >
-                {branch.name}
-                {branch.is_headquarters && (
-                  <span className="ml-1 text-xs text-purple-400">(Matriz)</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Info hint */}
-          <p className="text-xs text-gray-500 mt-3 flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Los items sin sucursal asignada aplican a todo el negocio
-          </p>
-        </div>
-      )}
-
-      {/* Premium Tab Navigation */}
-      <div className="relative">
-        {/* Tab Container with subtle shadow */}
-        <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm p-1.5">
-          <div className="flex gap-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'relative flex-1 flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl transition-all duration-200',
-                  activeTab === tab.id
-                    ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/25'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                )}
-              >
-                {/* Icon */}
-                <div className={cn(
-                  'transition-transform duration-200',
-                  activeTab === tab.id && 'scale-110'
-                )}>
-                  {tab.icon}
-                </div>
-
-                {/* Label */}
-                <span className={cn(
-                  'font-medium text-sm hidden sm:block',
-                  activeTab === tab.id ? 'text-white' : ''
-                )}>
-                  {tab.label}
-                </span>
-
-                {/* Count Badge */}
-                {tab.count > 0 && (
-                  <span className={cn(
-                    'text-xs font-semibold min-w-[20px] h-5 flex items-center justify-center rounded-full',
-                    activeTab === tab.id
-                      ? 'bg-white/25 text-white'
-                      : 'bg-gray-100 text-gray-600'
-                  )}>
-                    {tab.count}
-                  </span>
-                )}
-
-                {/* Active indicator glow effect */}
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="activeTabGlow"
-                    className="absolute inset-0 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl -z-10"
-                    transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tab Description */}
-        <AnimatePresence mode="wait">
-          <motion.p
-            key={activeTab}
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.2 }}
-            className="text-sm text-gray-500 text-center mt-3"
-          >
-            {tabs.find(t => t.id === activeTab)?.description}
-          </motion.p>
-        </AnimatePresence>
-      </div>
+      {/* Premium Category Navigation - FASE 2 */}
+      <KBCategoryNavigation
+        activeCategory={activeTab}
+        onCategoryChange={setActiveTab}
+        counts={{
+          instructions: filteredData.instructions.length,
+          policies: filteredData.policies.length,
+          articles: filteredData.articles.length,
+          templates: filteredData.templates.length,
+          competitors: filteredData.competitors.length,
+        }}
+        variant="tabs"
+      />
 
       {/* Content Area - Premium Design */}
       <AnimatePresence mode="wait">
@@ -1062,23 +848,23 @@ export function KnowledgeBase() {
                 </div>
 
                 {filteredData.instructions.length === 0 ? (
-                  <EmptyState
-                    icon={icons.instructions}
-                    title="Sin instrucciones aún"
-                    description="Agrega instrucciones personalizadas para que tu asistente sepa exactamente cómo comportarse"
-                    action={() => openAddModal('instructions')}
-                    actionLabel="Agregar Instrucción"
+                  <KBEmptyState
+                    category="instructions"
+                    onAction={() => openAddModal('instructions')}
                   />
                 ) : (
                   <div className="space-y-3">
                     {filteredData.instructions.map((item) => (
-                      <ItemCard
+                      <KBItemCard
                         key={item.id}
+                        id={item.id}
+                        category="instructions"
                         type={instructionTypes.find(t => t.value === item.instruction_type)?.label || item.instruction_type}
                         title={item.title}
                         content={item.instruction}
                         isActive={item.is_active}
                         branchName={getBranchName(item.branch_id)}
+                        priority={item.priority}
                         onEdit={() => openEditModal('instructions', item)}
                         onDelete={() => handleDelete('instructions', item.id)}
                       />
@@ -1124,18 +910,17 @@ export function KnowledgeBase() {
                 </div>
 
                 {filteredData.policies.length === 0 ? (
-                  <EmptyState
-                    icon={icons.policies}
-                    title="Sin políticas aún"
-                    description="Define tus políticas de cancelación, pagos, garantías, etc."
-                    action={() => openAddModal('policies')}
-                    actionLabel="Agregar Política"
+                  <KBEmptyState
+                    category="policies"
+                    onAction={() => openAddModal('policies')}
                   />
                 ) : (
                   <div className="space-y-3">
                     {filteredData.policies.map((item) => (
-                      <ItemCard
+                      <KBItemCard
                         key={item.id}
+                        id={item.id}
+                        category="policies"
                         type={policyTypes.find(t => t.value === item.policy_type)?.label || item.policy_type}
                         title={item.title}
                         content={item.policy_text}
@@ -1186,18 +971,17 @@ export function KnowledgeBase() {
                 </div>
 
                 {filteredData.articles.length === 0 ? (
-                  <EmptyState
-                    icon={icons.articles}
-                    title="Sin información adicional"
-                    description="Agrega información sobre tu negocio: diferenciadores, tecnología, certificaciones..."
-                    action={() => openAddModal('articles')}
-                    actionLabel="Agregar Información"
+                  <KBEmptyState
+                    category="articles"
+                    onAction={() => openAddModal('articles')}
                   />
                 ) : (
                   <div className="space-y-3">
                     {filteredData.articles.map((item) => (
-                      <ItemCard
+                      <KBItemCard
                         key={item.id}
+                        id={item.id}
+                        category="articles"
                         type={articleCategories.find(t => t.value === item.category)?.label || item.category}
                         title={item.title}
                         content={item.content}
@@ -1248,23 +1032,23 @@ export function KnowledgeBase() {
                 </div>
 
                 {filteredData.templates.length === 0 ? (
-                  <EmptyState
-                    icon={icons.templates}
-                    title="Sin plantillas aún"
-                    description="Crea plantillas para saludos, despedidas, confirmaciones, etc."
-                    action={() => openAddModal('templates')}
-                    actionLabel="Agregar Plantilla"
+                  <KBEmptyState
+                    category="templates"
+                    onAction={() => openAddModal('templates')}
                   />
                 ) : (
                   <div className="space-y-3">
                     {filteredData.templates.map((item) => (
-                      <ItemCard
+                      <KBItemCard
                         key={item.id}
+                        id={item.id}
+                        category="templates"
                         type={templateTriggers.find(t => t.value === item.trigger_type)?.label || item.trigger_type}
                         title={item.name}
                         content={item.template_text}
                         isActive={item.is_active}
                         branchName={getBranchName(item.branch_id)}
+                        variables={item.variables_available}
                         onEdit={() => openEditModal('templates', item)}
                         onDelete={() => handleDelete('templates', item.id)}
                       />
@@ -1328,22 +1112,23 @@ export function KnowledgeBase() {
                 </div>
 
                 {filteredData.competitors.length === 0 ? (
-                  <EmptyState
-                    icon={icons.competitors}
-                    title="Sin competidores configurados"
-                    description="Agrega competidores y define cómo quieres que el AI responda cuando los mencionen"
-                    action={() => openAddModal('competitors')}
-                    actionLabel="Agregar Competidor"
+                  <KBEmptyState
+                    category="competitors"
+                    onAction={() => openAddModal('competitors')}
                   />
                 ) : (
                   <div className="space-y-3">
                     {filteredData.competitors.map((item) => (
-                      <CompetitorCard
+                      <KBItemCard
                         key={item.id}
-                        name={item.competitor_name}
+                        id={item.id}
+                        category="competitors"
+                        type={competitorStrategies.find(s => s.value === item.response_strategy)?.label || item.response_strategy}
+                        title={item.competitor_name}
+                        content={item.talking_points?.join(', ') || 'Sin puntos clave definidos'}
+                        isActive={item.is_active}
                         strategy={competitorStrategies.find(s => s.value === item.response_strategy)?.label || item.response_strategy}
                         talkingPoints={item.talking_points || []}
-                        isActive={item.is_active}
                         onEdit={() => openEditModal('competitors', item)}
                         onDelete={() => handleDelete('competitors', item.id)}
                       />
@@ -2286,287 +2071,5 @@ function LimitBadge({
   );
 }
 
-/**
- * EmptyState - Premium empty state with illustration
- */
-function EmptyState({
-  icon,
-  title,
-  description,
-  action,
-  actionLabel,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  action: () => void;
-  actionLabel: string;
-}) {
-  return (
-    <div className="relative overflow-hidden text-center py-16 px-6 bg-gradient-to-br from-gray-50 via-white to-purple-50/30 rounded-2xl border border-gray-100">
-      {/* Decorative background */}
-      <div className="absolute inset-0 opacity-[0.03]">
-        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <defs>
-            <pattern id="emptyGrid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <circle cx="1" cy="1" r="1" fill="currentColor" />
-            </pattern>
-          </defs>
-          <rect width="100" height="100" fill="url(#emptyGrid)" />
-        </svg>
-      </div>
-
-      <div className="relative">
-        {/* Icon container with gradient */}
-        <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-5 text-purple-500 shadow-lg shadow-purple-500/10">
-          {icon}
-        </div>
-
-        <h4 className="text-lg font-semibold text-gray-900 mb-2">{title}</h4>
-        <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto leading-relaxed">{description}</p>
-
-        <button
-          onClick={action}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all hover:-translate-y-0.5"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          {actionLabel}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * ItemCard - Premium card for knowledge base items
- */
-function ItemCard({
-  type,
-  title,
-  content,
-  isActive,
-  branchName,
-  onEdit,
-  onDelete,
-}: {
-  type: string;
-  title: string;
-  content: string;
-  isActive: boolean;
-  branchName?: string | null;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        'group relative p-5 rounded-2xl border-2 transition-all duration-200',
-        isActive
-          ? 'bg-white border-gray-100 hover:border-purple-200 hover:shadow-lg hover:shadow-purple-500/5'
-          : 'bg-gray-50/50 border-gray-100 opacity-50'
-      )}
-    >
-      {/* Active indicator dot */}
-      <div className={cn(
-        'absolute top-4 right-4 w-2.5 h-2.5 rounded-full transition-colors',
-        isActive ? 'bg-green-400' : 'bg-gray-300'
-      )} />
-
-      <div className="flex items-start gap-4">
-        {/* Left side: Content */}
-        <div className="flex-1 min-w-0">
-          {/* Type and Branch badges */}
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className={cn(
-              'inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg',
-              isActive
-                ? 'bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700'
-                : 'bg-gray-100 text-gray-500'
-            )}>
-              {type}
-            </span>
-            {/* Branch Badge - Only show if item has a specific branch */}
-            {branchName && (
-              <span className={cn(
-                'inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg',
-                isActive
-                  ? 'bg-blue-50 text-blue-600 border border-blue-100'
-                  : 'bg-gray-100 text-gray-500'
-              )}>
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                </svg>
-                {branchName}
-              </span>
-            )}
-            {!isActive && (
-              <span className="text-xs text-gray-400 italic">Pausado</span>
-            )}
-          </div>
-
-          {/* Title */}
-          <h5 className={cn(
-            'font-semibold text-base mb-1.5',
-            isActive ? 'text-gray-900' : 'text-gray-500'
-          )}>
-            {title}
-          </h5>
-
-          {/* Preview content */}
-          <p className={cn(
-            'text-sm leading-relaxed line-clamp-2',
-            isActive ? 'text-gray-600' : 'text-gray-400'
-          )}>
-            {content}
-          </p>
-        </div>
-
-        {/* Right side: Actions */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={onEdit}
-            className="p-2.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all"
-            title="Editar"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-            title="Eliminar"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-/**
- * CompetitorCard - Premium card for competitor handling configuration
- */
-function CompetitorCard({
-  name,
-  strategy,
-  talkingPoints,
-  isActive,
-  onEdit,
-  onDelete,
-}: {
-  name: string;
-  strategy: string;
-  talkingPoints: string[];
-  isActive: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        'group relative p-5 rounded-2xl border-2 transition-all duration-200',
-        isActive
-          ? 'bg-white border-gray-100 hover:border-amber-200 hover:shadow-lg hover:shadow-amber-500/5'
-          : 'bg-gray-50/50 border-gray-100 opacity-50'
-      )}
-    >
-      {/* Active indicator dot */}
-      <div className={cn(
-        'absolute top-4 right-4 w-2.5 h-2.5 rounded-full transition-colors',
-        isActive ? 'bg-green-400' : 'bg-gray-300'
-      )} />
-
-      <div className="flex items-start gap-4">
-        {/* Left side: Icon */}
-        <div className={cn(
-          'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
-          isActive
-            ? 'bg-gradient-to-br from-amber-100 to-orange-100 text-amber-600'
-            : 'bg-gray-100 text-gray-400'
-        )}>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-        </div>
-
-        {/* Middle: Content */}
-        <div className="flex-1 min-w-0">
-          {/* Strategy badge */}
-          <div className="flex items-center gap-2 mb-2">
-            <span className={cn(
-              'inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg',
-              isActive
-                ? 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700'
-                : 'bg-gray-100 text-gray-500'
-            )}>
-              {strategy}
-            </span>
-            {!isActive && (
-              <span className="text-xs text-gray-400 italic">Pausado</span>
-            )}
-          </div>
-
-          {/* Name */}
-          <h5 className={cn(
-            'font-semibold text-base mb-1.5',
-            isActive ? 'text-gray-900' : 'text-gray-500'
-          )}>
-            {name}
-          </h5>
-
-          {/* Talking points preview */}
-          {talkingPoints.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {talkingPoints.slice(0, 3).map((point, index) => (
-                <span
-                  key={index}
-                  className={cn(
-                    'text-xs px-2 py-0.5 rounded-md',
-                    isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                  )}
-                >
-                  {point.length > 30 ? point.substring(0, 30) + '...' : point}
-                </span>
-              ))}
-              {talkingPoints.length > 3 && (
-                <span className="text-xs text-gray-400">+{talkingPoints.length - 3} más</span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right side: Actions */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={onEdit}
-            className="p-2.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
-            title="Editar"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-            title="Eliminar"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+// NOTE: EmptyState, ItemCard, and CompetitorCard components have been
+// replaced by the premium KBEmptyState and KBItemCard components from './kb'
