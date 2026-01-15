@@ -277,6 +277,12 @@ export const channelIconsConfig: Record<string, {
     bg: 'bg-pink-50',
     name: 'Instagram'
   },
+  facebook: {
+    icon: <MessengerIcon />,
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
+    name: 'Facebook'
+  },
   messenger: {
     icon: <MessengerIcon />,
     color: 'text-blue-600',

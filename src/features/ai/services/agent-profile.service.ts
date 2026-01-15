@@ -159,10 +159,22 @@ export async function getAgentProfiles(tenantId: string): Promise<{
   const mapProfileWithChannels = (profile: AgentProfile | null, type: ProfileType): AgentProfileWithChannels | null => {
     if (!profile) return null;
 
+    // Determinar si es un perfil virtual (no existe en BD)
+    const isVirtualProfile = profile.id.startsWith('virtual-');
+
     // Filtrar canales que pertenecen a este perfil desde channel_connections
     // Prioridad: profile_id explícito > is_personal_brand boolean (legacy) > default to business
     const profileChannels = (channelConnections || [])
       .filter(c => {
+        // Para perfiles virtuales, usar solo el fallback de is_personal_brand
+        if (isVirtualProfile) {
+          if (type === 'personal') {
+            return c.is_personal_brand === true;
+          }
+          // Default: canales sin marca personal van a business virtual
+          return !c.is_personal_brand;
+        }
+
         // Si tiene profile_id, usarlo directamente
         if (c.profile_id) {
           return c.profile_id === profile.id;
@@ -192,6 +204,11 @@ export async function getAgentProfiles(tenantId: string): Promise<{
           pc => pc.channel_type === a.channel_type && pc.account_number === (a.account_number || 1)
         );
         if (alreadyExists) return false;
+
+        // Para perfiles virtuales, asignar todos los legacy channels sin profile_id a business
+        if (isVirtualProfile) {
+          return type === 'business' && !a.profile_id;
+        }
 
         return a.profile_id === profile.id || (type === 'business' && !a.profile_id);
       })

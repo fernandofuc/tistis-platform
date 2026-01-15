@@ -297,6 +297,9 @@ function AccountCard({ connection, profiles, onEdit, onToggleAI, onOpenAISetting
                 )}
               >
                 <option value="">Sin asignar</option>
+                {profiles.filter(p => p.is_active).length === 0 && (
+                  <option value="" disabled>— No hay perfiles activos —</option>
+                )}
                 {profiles.filter(p => p.is_active).map(profile => (
                   <option key={profile.id} value={profile.id}>
                     {profile.profile_type === 'business' ? '🏢 ' : '👤 '}
@@ -628,8 +631,9 @@ export function ChannelConnections() {
   // Change profile assignment for a channel
   const handleChangeProfile = async (connectionId: string, profileId: string | null) => {
     // Also update is_personal_brand based on the profile type for backwards compatibility
-    const profile = agentProfiles.find(p => p.id === profileId);
-    const isPersonalBrand = profile?.profile_type === 'personal';
+    const profile = profileId ? agentProfiles.find(p => p.id === profileId) : null;
+    // Default to false when no profile is assigned (not undefined)
+    const isPersonalBrand = profile?.profile_type === 'personal' ? true : false;
 
     const { error } = await supabase
       .from('channel_connections')
@@ -639,15 +643,19 @@ export function ChannelConnections() {
       })
       .eq('id', connectionId);
 
-    if (!error) {
-      setConnections(prev =>
-        prev.map(c => c.id === connectionId ? {
-          ...c,
-          profile_id: profileId,
-          is_personal_brand: isPersonalBrand,
-        } : c)
-      );
+    if (error) {
+      console.error('[ChannelConnections] Error updating profile:', error);
+      // TODO: Show toast notification to user
+      return;
     }
+
+    setConnections(prev =>
+      prev.map(c => c.id === connectionId ? {
+        ...c,
+        profile_id: profileId,
+        is_personal_brand: isPersonalBrand,
+      } : c)
+    );
   };
 
   // Open setup modal
