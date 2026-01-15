@@ -28,6 +28,18 @@ import {
   getKBStatusSummary,
 } from '@/src/shared/config/kb-scoring-service';
 import { type VerticalType, VERTICALS } from '@/src/shared/config/verticals';
+import {
+  type KnowledgeBaseLimits,
+  type KBItemType,
+  KB_ITEM_LABELS,
+  getKBUsageStatus,
+  type KBUsageStatus,
+} from '@/src/shared/config/plans';
+import {
+  AVAILABLE_VARIABLES,
+  VARIABLES_BY_CATEGORY,
+  type TemplateVariable,
+} from '@/src/features/ai/services/template-resolution.service';
 
 // ======================
 // VERTICAL VALIDATION
@@ -111,6 +123,13 @@ interface KnowledgeBaseData {
 }
 
 type ActiveTab = 'instructions' | 'policies' | 'articles' | 'templates' | 'competitors';
+
+// Plan info from API response
+interface PlanInfo {
+  plan: string;
+  limits: KnowledgeBaseLimits | null;
+  usage: Record<KBItemType, number>;
+}
 
 // ======================
 // ICONS
@@ -251,51 +270,8 @@ const competitorStrategies = [
 // ======================
 // TEMPLATE VARIABLES
 // ======================
-// Variables disponibles para usar en plantillas de respuesta
-const AVAILABLE_VARIABLES = [
-  // Variables de cliente
-  { key: '{nombre}', description: 'Nombre del cliente', category: 'Cliente' },
-  { key: '{telefono}', description: 'Teléfono del cliente', category: 'Cliente' },
-
-  // Variables de cita
-  { key: '{fecha}', description: 'Fecha de la cita', category: 'Cita' },
-  { key: '{hora}', description: 'Hora de la cita', category: 'Cita' },
-  { key: '{servicio}', description: 'Nombre del servicio', category: 'Cita' },
-  { key: '{precio}', description: 'Precio del servicio', category: 'Cita' },
-  { key: '{duracion}', description: 'Duración estimada', category: 'Cita' },
-
-  // Variables de negocio
-  { key: '{negocio}', description: 'Nombre del negocio', category: 'Negocio' },
-  { key: '{sucursal}', description: 'Nombre de la sucursal', category: 'Negocio' },
-  { key: '{direccion}', description: 'Dirección de la sucursal', category: 'Negocio' },
-  { key: '{telefono_negocio}', description: 'Teléfono del negocio', category: 'Negocio' },
-  { key: '{whatsapp}', description: 'WhatsApp del negocio', category: 'Negocio' },
-
-  // Variables de staff
-  { key: '{especialista}', description: 'Nombre del especialista', category: 'Staff' },
-  { key: '{especialidad}', description: 'Especialidad del profesional', category: 'Staff' },
-
-  // Variables de tiempo
-  { key: '{hora_actual}', description: 'Hora actual', category: 'Tiempo' },
-  { key: '{dia_semana}', description: 'Día de la semana', category: 'Tiempo' },
-  { key: '{saludo_tiempo}', description: 'Buenos días/tardes/noches', category: 'Tiempo' },
-];
-
-// Tipo para una variable individual
-type TemplateVariable = {
-  key: string;
-  description: string;
-  category: string;
-};
-
-// Agrupar variables por categoría
-const VARIABLES_BY_CATEGORY = AVAILABLE_VARIABLES.reduce((acc, variable) => {
-  if (!acc[variable.category]) {
-    acc[variable.category] = [];
-  }
-  acc[variable.category].push(variable);
-  return acc;
-}, {} as Record<string, TemplateVariable[]>);
+// Variables imported from template-resolution.service.ts
+// AVAILABLE_VARIABLES and VARIABLES_BY_CATEGORY are now centralized
 
 // ======================
 // MAIN COMPONENT
@@ -318,6 +294,9 @@ export function KnowledgeBase() {
   // Additional data for KB Scoring (services, staff)
   const [services, setServices] = useState<Array<{ id: string; name?: string; is_active: boolean }>>([]);
   const [staffList, setStaffList] = useState<Array<{ id: string; first_name?: string; last_name?: string; role?: string; is_active: boolean }>>([]);
+
+  // Plan limits info
+  const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
 
   // Modal States
   const [showModal, setShowModal] = useState(false);
@@ -377,6 +356,21 @@ export function KnowledgeBase() {
 
   // Get status summary for UI
   const statusSummary = useMemo(() => getKBStatusSummary(scoringResult), [scoringResult]);
+
+  // Get usage status for each KB item type (for plan limits UI)
+  const getItemUsageStatus = useCallback((itemType: KBItemType): KBUsageStatus | null => {
+    if (!planInfo?.plan || !planInfo.limits) return null;
+    const currentCount = data[itemType]?.length ?? 0;
+    return getKBUsageStatus(planInfo.plan, itemType, currentCount);
+  }, [planInfo, data]);
+
+  // Check if can add more items of a specific type
+  const canAddItem = useCallback((itemType: KBItemType): boolean => {
+    if (!planInfo?.limits) return true; // No limits = can add
+    const currentCount = data[itemType]?.length ?? 0;
+    const limit = planInfo.limits[itemType];
+    return currentCount < limit;
+  }, [planInfo, data]);
 
   // Helper para obtener nombre de sucursal por ID
   const getBranchName = useCallback((branchId: string | undefined | null) => {
@@ -459,6 +453,10 @@ export function KnowledgeBase() {
           templates: [],
           competitors: [],
         });
+        // Save plan info for limit validation
+        if (result.planInfo) {
+          setPlanInfo(result.planInfo);
+        }
       }
 
       // Process services data
@@ -586,10 +584,21 @@ export function KnowledgeBase() {
           message: isEditing ? 'Actualizado correctamente' : 'Creado correctamente',
         });
       } else {
-        showToast({
-          type: 'error',
-          message: result.error || 'Error al guardar',
-        });
+        // Handle specific error types
+        if (result.error === 'plan_limit_reached') {
+          showToast({
+            type: 'warning',
+            message: result.message || `Has alcanzado el límite de tu plan actual`,
+            duration: 6000,
+          });
+          // Refresh plan info to ensure UI is in sync
+          await fetchData();
+        } else {
+          showToast({
+            type: 'error',
+            message: result.error || 'Error al guardar',
+          });
+        }
         console.error('Save error:', result);
       }
     } catch (error) {
@@ -1026,10 +1035,24 @@ export function KnowledgeBase() {
                     <p className="text-sm text-gray-500 mt-0.5">
                       Define reglas específicas para tu asistente de AI
                     </p>
+                    {/* Plan limit indicator */}
+                    {planInfo?.limits && (
+                      <LimitBadge
+                        current={data.instructions.length}
+                        limit={planInfo.limits.instructions}
+                        className="mt-2"
+                      />
+                    )}
                   </div>
                   <button
                     onClick={() => openAddModal('instructions')}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all hover:-translate-y-0.5"
+                    disabled={!canAddItem('instructions')}
+                    className={cn(
+                      'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all',
+                      canAddItem('instructions')
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    )}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1074,10 +1097,24 @@ export function KnowledgeBase() {
                     <p className="text-sm text-gray-500 mt-0.5">
                       El AI comunicará estas políticas cuando sea relevante
                     </p>
+                    {/* Plan limit indicator */}
+                    {planInfo?.limits && (
+                      <LimitBadge
+                        current={data.policies.length}
+                        limit={planInfo.limits.policies}
+                        className="mt-2"
+                      />
+                    )}
                   </div>
                   <button
                     onClick={() => openAddModal('policies')}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all hover:-translate-y-0.5"
+                    disabled={!canAddItem('policies')}
+                    className={cn(
+                      'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all',
+                      canAddItem('policies')
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    )}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1122,10 +1159,24 @@ export function KnowledgeBase() {
                     <p className="text-sm text-gray-500 mt-0.5">
                       Conocimiento adicional que el AI debe tener sobre tu negocio
                     </p>
+                    {/* Plan limit indicator */}
+                    {planInfo?.limits && (
+                      <LimitBadge
+                        current={data.articles.length}
+                        limit={planInfo.limits.articles}
+                        className="mt-2"
+                      />
+                    )}
                   </div>
                   <button
                     onClick={() => openAddModal('articles')}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all hover:-translate-y-0.5"
+                    disabled={!canAddItem('articles')}
+                    className={cn(
+                      'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all',
+                      canAddItem('articles')
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    )}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1170,10 +1221,24 @@ export function KnowledgeBase() {
                     <p className="text-sm text-gray-500 mt-0.5">
                       Respuestas sugeridas para situaciones comunes
                     </p>
+                    {/* Plan limit indicator */}
+                    {planInfo?.limits && (
+                      <LimitBadge
+                        current={data.templates.length}
+                        limit={planInfo.limits.templates}
+                        className="mt-2"
+                      />
+                    )}
                   </div>
                   <button
                     onClick={() => openAddModal('templates')}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all hover:-translate-y-0.5"
+                    disabled={!canAddItem('templates')}
+                    className={cn(
+                      'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all',
+                      canAddItem('templates')
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    )}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1218,10 +1283,24 @@ export function KnowledgeBase() {
                     <p className="text-sm text-gray-500 mt-0.5">
                       Define cómo responder cuando mencionan a tus competidores
                     </p>
+                    {/* Plan limit indicator */}
+                    {planInfo?.limits && (
+                      <LimitBadge
+                        current={data.competitors.length}
+                        limit={planInfo.limits.competitors}
+                        className="mt-2"
+                      />
+                    )}
                   </div>
                   <button
                     onClick={() => openAddModal('competitors')}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all hover:-translate-y-0.5"
+                    disabled={!canAddItem('competitors')}
+                    className={cn(
+                      'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all',
+                      canAddItem('competitors')
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    )}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -2151,6 +2230,58 @@ function FormSection({
           {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * LimitBadge - Shows plan limit status for KB items
+ */
+function LimitBadge({
+  current,
+  limit,
+  className,
+}: {
+  current: number;
+  limit: number;
+  className?: string;
+}) {
+  const percentage = Math.min((current / limit) * 100, 100);
+  const isAtLimit = current >= limit;
+  const isNearLimit = percentage >= 80 && !isAtLimit;
+
+  return (
+    <div className={cn('flex items-center gap-2', className)}>
+      {/* Progress pill */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100/80">
+        <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all duration-300',
+              isAtLimit ? 'bg-red-500' :
+              isNearLimit ? 'bg-amber-500' : 'bg-purple-500'
+            )}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+        <span className={cn(
+          'text-xs font-medium tabular-nums',
+          isAtLimit ? 'text-red-600' :
+          isNearLimit ? 'text-amber-600' : 'text-gray-600'
+        )}>
+          {current}/{limit}
+        </span>
+      </div>
+
+      {/* Warning icon if at limit */}
+      {isAtLimit && (
+        <div className="flex items-center gap-1 text-red-600">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span className="text-xs font-medium">Límite alcanzado</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,18 @@
 // =====================================================
 // TIS TIS PLATFORM - Knowledge Base API
 // CRUD operations for AI Knowledge Base
+// With plan-based limits validation
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import {
+  type KBItemType,
+  canAddKBItem,
+  getKBUsageStatus,
+  getPlanKBLimits,
+  KB_ITEM_LABELS,
+} from '@/src/shared/config/plans';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -40,6 +48,80 @@ function getAccessToken(request: NextRequest): string | null {
 interface KnowledgeBasePayload {
   type: 'instructions' | 'policies' | 'articles' | 'templates' | 'competitors';
   data: Record<string, unknown>;
+}
+
+// ======================
+// PLAN LIMITS VALIDATION
+// ======================
+
+/**
+ * Obtiene el plan del tenant y los conteos actuales de KB items
+ * Usado para validar límites antes de crear nuevos items
+ */
+async function getTenantPlanAndCounts(
+  supabase: ReturnType<typeof createAuthenticatedClient>,
+  tenantId: string
+): Promise<{
+  plan: string;
+  counts: Record<KBItemType, number>;
+} | null> {
+  try {
+    // Obtener plan del tenant
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('plan')
+      .eq('id', tenantId)
+      .single();
+
+    if (tenantError || !tenant) {
+      console.warn('[Knowledge Base API] Could not get tenant plan:', tenantError?.message);
+      return null;
+    }
+
+    // Obtener conteos actuales de cada tipo de KB item
+    const [
+      instructionsCount,
+      policiesCount,
+      articlesCount,
+      templatesCount,
+      competitorsCount,
+    ] = await Promise.all([
+      supabase
+        .from('ai_custom_instructions')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId),
+      supabase
+        .from('ai_business_policies')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId),
+      supabase
+        .from('ai_knowledge_articles')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId),
+      supabase
+        .from('ai_response_templates')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId),
+      supabase
+        .from('ai_competitor_handling')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId),
+    ]);
+
+    return {
+      plan: tenant.plan || 'starter',
+      counts: {
+        instructions: instructionsCount.count || 0,
+        policies: policiesCount.count || 0,
+        articles: articlesCount.count || 0,
+        templates: templatesCount.count || 0,
+        competitors: competitorsCount.count || 0,
+      },
+    };
+  } catch (err) {
+    console.error('[Knowledge Base API] Error getting plan and counts:', err);
+    return null;
+  }
 }
 
 // ======================
@@ -160,6 +242,10 @@ export async function GET(request: NextRequest) {
         .order('competitor_name'),
     ]);
 
+    // Obtener información del plan para mostrar límites en UI
+    const planData = await getTenantPlanAndCounts(supabase, tenantId);
+    const planLimits = planData ? getPlanKBLimits(planData.plan) : null;
+
     return NextResponse.json({
       success: true,
       data: {
@@ -169,6 +255,18 @@ export async function GET(request: NextRequest) {
         templates: templatesRes.data || [],
         competitors: competitorsRes.data || [],
       },
+      // Incluir información de plan para UI de límites
+      planInfo: planData ? {
+        plan: planData.plan,
+        limits: planLimits,
+        usage: {
+          instructions: (instructionsRes.data || []).length,
+          policies: (policiesRes.data || []).length,
+          articles: (articlesRes.data || []).length,
+          templates: (templatesRes.data || []).length,
+          competitors: (competitorsRes.data || []).length,
+        },
+      } : null,
     });
   } catch (error) {
     console.error('[Knowledge Base API] GET error:', error);
@@ -251,6 +349,41 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // ======================
+    // PLAN LIMITS VALIDATION
+    // ======================
+    const planData = await getTenantPlanAndCounts(supabase, userRole.tenant_id);
+
+    if (planData) {
+      const itemType = type as KBItemType;
+      const currentCount = planData.counts[itemType];
+
+      // Verificar si puede agregar más items de este tipo
+      if (!canAddKBItem(planData.plan, itemType, currentCount)) {
+        const usageStatus = getKBUsageStatus(planData.plan, itemType, currentCount);
+        const limits = getPlanKBLimits(planData.plan);
+
+        console.log(`[Knowledge Base API] Plan limit reached: ${planData.plan} - ${type} (${currentCount}/${usageStatus.limit})`);
+
+        return NextResponse.json(
+          {
+            error: 'plan_limit_reached',
+            message: `Has alcanzado el límite de ${KB_ITEM_LABELS[itemType]} para tu plan (${usageStatus.current}/${usageStatus.limit})`,
+            details: {
+              plan: planData.plan,
+              itemType,
+              current: usageStatus.current,
+              limit: usageStatus.limit,
+              allLimits: limits,
+            },
+          },
+          { status: 403 }
+        );
+      }
+    }
+    // Si no pudimos obtener planData, permitimos la operación por ahora
+    // para no bloquear a usuarios por un error de consulta
 
     // Build insert data - only ai_custom_instructions has created_by column
     // DB Schema per table:
