@@ -328,15 +328,15 @@ export const SCOREABLE_FIELDS: ScoreableField[] = [
     filterType: 'farewell',
   },
   {
-    key: 'communication_style',
-    label: 'Estilo de comunicación',
+    key: 'tone_examples',
+    label: 'Ejemplos de tono',
     category: 'personality',
     weight: 5,
     priority: 'recommended',
     minLength: QUALITY_THRESHOLDS.MIN_LENGTHS.instruction,
     idealLength: QUALITY_THRESHOLDS.IDEAL_LENGTHS.instruction,
     dataSource: 'instructions',
-    filterType: 'communication_style',
+    filterType: 'tone_examples',  // Tipo válido en DB
   },
 
   // =====================
@@ -451,7 +451,7 @@ export const SCOREABLE_FIELDS: ScoreableField[] = [
     minCount: 1,
   },
   {
-    key: 'upselling_instructions',
+    key: 'upsell_instructions',
     label: 'Instrucciones de upselling',
     category: 'advanced',
     weight: 3,
@@ -459,7 +459,7 @@ export const SCOREABLE_FIELDS: ScoreableField[] = [
     minLength: QUALITY_THRESHOLDS.MIN_LENGTHS.instruction,
     idealLength: QUALITY_THRESHOLDS.IDEAL_LENGTHS.instruction,
     dataSource: 'instructions',
-    filterType: 'upselling',
+    filterType: 'upsell',  // Tipo válido en DB (no 'upselling')
   },
   {
     key: 'response_templates',
