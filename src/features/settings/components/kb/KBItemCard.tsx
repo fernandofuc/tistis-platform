@@ -49,15 +49,8 @@ const CATEGORY_COLORS: Record<KBCategory, {
   border: string;
   iconBg: string;
   activeDot: string;
+// ARQUITECTURA V7: Solo 3 categorías (instructions y templates se movieron a Agente Mensajes)
 }> = {
-  instructions: {
-    gradient: 'from-violet-500 to-purple-600',
-    bg: 'bg-violet-50',
-    text: 'text-violet-700',
-    border: 'border-violet-200',
-    iconBg: 'bg-violet-100',
-    activeDot: 'bg-violet-500',
-  },
   policies: {
     gradient: 'from-emerald-500 to-teal-600',
     bg: 'bg-emerald-50',
@@ -73,14 +66,6 @@ const CATEGORY_COLORS: Record<KBCategory, {
     border: 'border-blue-200',
     iconBg: 'bg-blue-100',
     activeDot: 'bg-blue-500',
-  },
-  templates: {
-    gradient: 'from-amber-500 to-orange-600',
-    bg: 'bg-amber-50',
-    text: 'text-amber-700',
-    border: 'border-amber-200',
-    iconBg: 'bg-amber-100',
-    activeDot: 'bg-amber-500',
   },
   competitors: {
     gradient: 'from-rose-500 to-pink-600',
@@ -122,15 +107,6 @@ const ExpandIcon = () => (
 const VariableIcon = () => (
   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-  </svg>
-);
-
-// ======================
-// PROMPT ICON
-// ======================
-const PromptIcon = () => (
-  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
   </svg>
 );
 
@@ -209,18 +185,6 @@ export function KBItemCard({
                     : 'bg-gray-100 text-gray-500'
                 )}>
                   Prioridad: {priority}
-                </span>
-              )}
-
-              {/* ARQUITECTURA V6: Include in Prompt badge (solo para instrucciones) */}
-              {category === 'instructions' && includeInPrompt && (
-                <span className={cn(
-                  'inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg',
-                  'bg-gradient-to-r from-indigo-500 to-purple-600 text-white',
-                  'shadow-sm'
-                )}>
-                  <PromptIcon />
-                  En Prompt
                 </span>
               )}
 
@@ -359,38 +323,6 @@ export function KBItemCard({
             'flex items-center gap-1 transition-opacity',
             'opacity-0 group-hover:opacity-100'
           )}>
-            {/* ARQUITECTURA V6: Toggle Include in Prompt (solo para instrucciones) */}
-            {category === 'instructions' && onToggleIncludeInPrompt && (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  // Si ya está incluido, siempre permitir desactivar
-                  // Si no está incluido, solo permitir si canEnableIncludeInPrompt
-                  if (includeInPrompt || canEnableIncludeInPrompt) {
-                    onToggleIncludeInPrompt(id, !includeInPrompt);
-                  }
-                }}
-                disabled={!includeInPrompt && !canEnableIncludeInPrompt}
-                className={cn(
-                  'p-2.5 rounded-xl transition-all',
-                  includeInPrompt
-                    ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
-                    : canEnableIncludeInPrompt
-                      ? 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
-                      : 'text-gray-300 cursor-not-allowed opacity-50'
-                )}
-                title={
-                  includeInPrompt
-                    ? 'Quitar del Prompt Inicial'
-                    : canEnableIncludeInPrompt
-                      ? 'Incluir en Prompt Inicial'
-                      : 'Límite alcanzado (máx 5)'
-                }
-              >
-                <PromptIcon />
-              </motion.button>
-            )}
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}

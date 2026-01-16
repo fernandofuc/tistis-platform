@@ -45,41 +45,8 @@ interface CategoryExplanation {
   };
 }
 
+// ARQUITECTURA V7: Solo 3 categorías (instructions y templates se movieron a Agente Mensajes)
 const EXPLANATIONS: Record<KBCategory, CategoryExplanation> = {
-  instructions: {
-    title: 'Mente del Asistente',
-    subtitle: 'Instrucciones Personalizadas',
-    description: 'Las instrucciones definen la personalidad, comportamiento y reglas de respuesta de tu asistente de AI. Son como el "ADN" de cómo piensa y actúa.',
-    howItWorks: {
-      title: 'Cómo funciona',
-      steps: [
-        'El sistema inyecta las instrucciones activas en cada conversación',
-        'El AI las considera como reglas prioritarias a seguir',
-        'Se combinan con el contexto del cliente para personalizar respuestas',
-        'Las instrucciones con mayor prioridad tienen más peso',
-      ],
-    },
-    examples: {
-      title: 'Ejemplos de uso',
-      items: [
-        { label: 'Tono de voz', description: '"Siempre usa un tono cálido y profesional, como un amigo experto"' },
-        { label: 'Manejo de objeciones', description: '"Cuando el cliente mencione el precio, destaca el valor y la calidad"' },
-        { label: 'Promociones', description: '"Ofrece el 10% de descuento solo después de la tercera interacción"' },
-      ],
-    },
-    tips: [
-      'Sé específico en las instrucciones',
-      'Usa ejemplos concretos de respuestas ideales',
-      'Asigna prioridad a las más importantes',
-    ],
-    ragExplanation: 'Las instrucciones se incluyen directamente en el prompt del AI y tienen prioridad sobre el conocimiento general.',
-    color: {
-      gradient: 'from-violet-500 to-purple-600',
-      bg: 'bg-violet-50',
-      text: 'text-violet-600',
-      border: 'border-violet-200',
-    },
-  },
   policies: {
     title: 'Reglas del Negocio',
     subtitle: 'Políticas Comerciales',
@@ -146,40 +113,6 @@ const EXPLANATIONS: Record<KBCategory, CategoryExplanation> = {
       bg: 'bg-blue-50',
       text: 'text-blue-600',
       border: 'border-blue-200',
-    },
-  },
-  templates: {
-    title: 'Palabras del Negocio',
-    subtitle: 'Plantillas de Respuesta',
-    description: 'Las plantillas son respuestas predefinidas con tu voz de marca. Aseguran consistencia y permiten personalización con variables.',
-    howItWorks: {
-      title: 'Cómo funciona',
-      steps: [
-        'El AI detecta situaciones que coinciden con plantillas',
-        'Usa la plantilla como base, adaptando el contexto',
-        'Las variables se reemplazan con datos del cliente',
-        'Puede combinar plantillas si es apropiado',
-      ],
-    },
-    examples: {
-      title: 'Plantillas comunes',
-      items: [
-        { label: 'Saludo inicial', description: '"¡Hola {nombre}! Soy Ana de Dental Smile 😊"' },
-        { label: 'Confirmación', description: '"Tu cita con {doctor} el {fecha} a las {hora} está confirmada"' },
-        { label: 'Seguimiento', description: '"Hola {nombre}, ¿cómo te fue en tu visita del {fecha}?"' },
-      ],
-    },
-    tips: [
-      'Usa variables para personalización automática',
-      'Mantén el tono consistente con tu marca',
-      'Crea plantillas para situaciones frecuentes',
-    ],
-    ragExplanation: 'Las plantillas se seleccionan por tipo de trigger y se personalizan con datos del CRM.',
-    color: {
-      gradient: 'from-amber-500 to-orange-600',
-      bg: 'bg-amber-50',
-      text: 'text-amber-600',
-      border: 'border-amber-200',
     },
   },
   competitors: {

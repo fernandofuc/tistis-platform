@@ -51,12 +51,8 @@ const CATEGORY_COLORS: Record<KBCategory, {
   gradient: string;
   bg: string;
   text: string;
+// ARQUITECTURA V7: Solo 3 categorías (instructions y templates se movieron a Agente Mensajes)
 }> = {
-  instructions: {
-    gradient: 'from-violet-500 to-purple-600',
-    bg: 'bg-violet-50',
-    text: 'text-violet-600',
-  },
   policies: {
     gradient: 'from-emerald-500 to-teal-600',
     bg: 'bg-emerald-50',
@@ -66,11 +62,6 @@ const CATEGORY_COLORS: Record<KBCategory, {
     gradient: 'from-blue-500 to-indigo-600',
     bg: 'bg-blue-50',
     text: 'text-blue-600',
-  },
-  templates: {
-    gradient: 'from-amber-500 to-orange-600',
-    bg: 'bg-amber-50',
-    text: 'text-amber-600',
   },
   competitors: {
     gradient: 'from-rose-500 to-pink-600',
@@ -379,10 +370,11 @@ export function KBSmartSuggestions({
                 insight={insight}
                 onApply={() => {
                   // Convert insight to suggestion format
+                  // ARQUITECTURA V7: AI Learning ahora sugiere artículos en lugar de instrucciones
                   const suggestion: Suggestion = {
                     id: insight.id,
                     type: 'ai_learning',
-                    category: 'instructions',
+                    category: 'articles',
                     title: `Agregar "${insight.pattern_value}"`,
                     description: `Patrón detectado ${insight.frequency} veces con ${Math.round(insight.confidence * 100)}% de confianza`,
                     impact: insight.confidence > 0.8 ? 'high' : insight.confidence > 0.5 ? 'medium' : 'low',

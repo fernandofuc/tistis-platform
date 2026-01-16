@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Knowledge Base Component
-// Manage AI knowledge: instructions, policies, articles
+// Manage AI knowledge: policies, articles, competitors
+// ARQUITECTURA V7: instructions y templates se gestionan en Agente Mensajes
 // Premium UI with professional design
 // =====================================================
 
@@ -16,7 +17,6 @@ import { cn } from '@/src/shared/utils';
 import { supabase } from '@/src/shared/lib/supabase';
 import { KnowledgeBasePageSkeleton } from '@/src/shared/components/skeletons';
 import { KBCompletenessIndicator } from './KBCompletenessIndicator';
-import { PromptPreview } from './PromptPreview';
 import {
   KBScoreCardPremium,
   KBBranchSelector,
@@ -38,11 +38,8 @@ import {
   getKBUsageStatus,
   type KBUsageStatus,
 } from '@/src/shared/config/plans';
-import {
-  AVAILABLE_VARIABLES,
-  VARIABLES_BY_CATEGORY,
-  type TemplateVariable,
-} from '@/src/features/ai/services/template-resolution.service';
+// ARQUITECTURA V7: Templates se gestionan en Agente Mensajes
+// Los imports de AVAILABLE_VARIABLES, VARIABLES_BY_CATEGORY ya no son necesarios aquí
 
 // ======================
 // VERTICAL VALIDATION
@@ -127,8 +124,12 @@ interface KnowledgeBaseData {
   competitors: CompetitorHandling[];
 }
 
-// Use KBCategory from kb components (same type, but centralized)
+// ARQUITECTURA V7: ActiveTab ahora solo incluye las 3 categorías visibles en KB
+// (instructions y templates se gestionan en Agente Mensajes)
 type ActiveTab = KBCategory;
+
+// Tipo interno para mapeo de datos - incluye todas las categorías para la API
+type InternalDataType = 'instructions' | 'policies' | 'articles' | 'templates' | 'competitors';
 
 // Plan info from API response
 interface PlanInfo {
@@ -140,12 +141,8 @@ interface PlanInfo {
 // ======================
 // ICONS
 // ======================
+// ARQUITECTURA V7: Iconos de instructions y templates eliminados - ahora en Agente Mensajes
 const icons = {
-  instructions: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  ),
   policies: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -154,11 +151,6 @@ const icons = {
   articles: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-    </svg>
-  ),
-  templates: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
     </svg>
   ),
   plus: (
@@ -211,19 +203,7 @@ const icons = {
 // ======================
 // INSTRUCTION TYPE OPTIONS
 // ======================
-const instructionTypes = [
-  { value: 'identity', label: 'Identidad del Negocio', description: 'Cómo presentarte, tu propuesta de valor' },
-  { value: 'greeting', label: 'Saludo', description: 'Cómo saludar a los clientes' },
-  { value: 'farewell', label: 'Despedida', description: 'Cómo despedirte' },
-  { value: 'pricing_policy', label: 'Política de Precios', description: 'Cómo manejar preguntas de precio' },
-  { value: 'special_cases', label: 'Casos Especiales', description: 'Situaciones específicas de tu negocio' },
-  { value: 'objections', label: 'Manejo de Objeciones', description: 'Respuestas a objeciones comunes' },
-  { value: 'upsell', label: 'Ventas Adicionales', description: 'Oportunidades de upsell/cross-sell' },
-  { value: 'tone_examples', label: 'Ejemplos de Tono', description: 'Ejemplos de cómo quieres que suene' },
-  { value: 'forbidden', label: 'Nunca Decir', description: 'Lo que NUNCA debe mencionar' },
-  { value: 'always_mention', label: 'Siempre Mencionar', description: 'Lo que SIEMPRE debe incluir' },
-  { value: 'custom', label: 'Personalizado', description: 'Instrucción libre' },
-];
+// ARQUITECTURA V7: instructionTypes eliminado - Instrucciones se gestionan en Agente Mensajes
 
 const policyTypes = [
   { value: 'cancellation', label: 'Cancelación', description: 'Política de cancelación de citas' },
@@ -251,18 +231,7 @@ const articleCategories = [
   { value: 'custom', label: 'Otro' },
 ];
 
-const templateTriggers = [
-  { value: 'greeting', label: 'Saludo Inicial' },
-  { value: 'after_hours', label: 'Fuera de Horario' },
-  { value: 'appointment_confirm', label: 'Confirmación de Cita' },
-  { value: 'price_inquiry', label: 'Consulta de Precio' },
-  { value: 'location_inquiry', label: 'Consulta de Ubicación' },
-  { value: 'emergency', label: 'Emergencia' },
-  { value: 'farewell', label: 'Despedida' },
-  { value: 'thank_you', label: 'Agradecimiento' },
-  { value: 'follow_up', label: 'Seguimiento' },
-  { value: 'custom', label: 'Personalizado' },
-];
+// ARQUITECTURA V7: templateTriggers eliminado - Templates se gestionan en Agente Mensajes
 
 // Competitor response strategies - how to handle mentions
 const competitorStrategies = [
@@ -274,12 +243,6 @@ const competitorStrategies = [
 ];
 
 // ======================
-// TEMPLATE VARIABLES
-// ======================
-// Variables imported from template-resolution.service.ts
-// AVAILABLE_VARIABLES and VARIABLES_BY_CATEGORY are now centralized
-
-// ======================
 // MAIN COMPONENT
 // ======================
 export function KnowledgeBase() {
@@ -287,7 +250,8 @@ export function KnowledgeBase() {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('instructions');
+  // ARQUITECTURA V7: Default a 'policies' ya que instructions/templates se movieron a Agente Mensajes
+  const [activeTab, setActiveTab] = useState<ActiveTab>('policies');
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [data, setData] = useState<KnowledgeBaseData>({
     instructions: [],
@@ -306,7 +270,8 @@ export function KnowledgeBase() {
 
   // Modal States
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<ActiveTab>('instructions');
+  // ARQUITECTURA V7: Modal solo para las 3 categorías visibles
+  const [modalType, setModalType] = useState<ActiveTab>('policies');
   const [editingItem, setEditingItem] = useState<KnowledgeBaseItem | null>(null);
 
   // Form States
@@ -315,24 +280,23 @@ export function KnowledgeBase() {
   // ======================
   // BRANCH FILTERING
   // ======================
-  // Filtrar datos por sucursal seleccionada
+  // ARQUITECTURA V7: Solo filtrar las 3 categorías visibles en KB
+  // (instructions y templates se mantienen en data para cálculo de score pero no se muestran)
   const filteredData = useMemo(() => {
     if (!selectedBranchId) {
-      return data; // Mostrar todos si no hay filtro
+      return {
+        policies: data.policies,
+        articles: data.articles,
+        competitors: data.competitors,
+      };
     }
 
     return {
-      instructions: data.instructions.filter(
-        i => !i.branch_id || i.branch_id === selectedBranchId
-      ),
       policies: data.policies.filter(
         p => !p.branch_id || p.branch_id === selectedBranchId
       ),
       articles: data.articles.filter(
         a => !a.branch_id || a.branch_id === selectedBranchId
-      ),
-      templates: data.templates.filter(
-        t => !t.branch_id || t.branch_id === selectedBranchId
       ),
       competitors: data.competitors, // Competidores son siempre globales
     };
@@ -492,12 +456,10 @@ export function KnowledgeBase() {
   // CRUD OPERATIONS
   // ======================
   const handleSave = async () => {
-    // Validación del formulario según el tipo
+    // ARQUITECTURA V7: Solo validación para las 3 categorías visibles
     const requiredFields: Record<ActiveTab, string[]> = {
-      instructions: ['instruction_type', 'title', 'instruction'],
       policies: ['policy_type', 'title', 'policy_text'],
       articles: ['category', 'title', 'content'],
-      templates: ['trigger_type', 'name', 'template_text'],
       competitors: ['competitor_name', 'response_strategy'],
     };
 
@@ -518,25 +480,15 @@ export function KnowledgeBase() {
     try {
       const endpoint = '/api/knowledge-base';
       const method = isEditing ? 'PATCH' : 'POST';
+      // ARQUITECTURA V7: Mapeo solo para las 3 categorías visibles
       const typeMap: Record<ActiveTab, string> = {
-        instructions: 'instructions',
         policies: 'policies',
         articles: 'articles',
-        templates: 'templates',
         competitors: 'competitors',
       };
 
       // Preparar datos a guardar
-      let dataToSave = { ...formData };
-
-      // Si es plantilla, auto-detectar variables usadas
-      if (modalType === 'templates' && formData.template_text) {
-        const detectedVariables = AVAILABLE_VARIABLES
-          .filter(v => (formData.template_text as string).includes(v.key))
-          .map(v => v.key);
-
-        dataToSave.variables_available = detectedVariables;
-      }
+      const dataToSave = { ...formData };
 
       const body = isEditing
         ? { type: typeMap[modalType], id: editingItem.id, data: dataToSave }
@@ -747,10 +699,8 @@ export function KnowledgeBase() {
     const initialData: Record<string, unknown> = {
       is_active: true,
     };
-    // Only add type-specific fields
-    if (type === 'instructions') {
-      initialData.priority = 0;
-    } else if (type === 'articles') {
+    // ARQUITECTURA V7: Solo campos para las 3 categorías visibles
+    if (type === 'articles') {
       initialData.display_order = 0;
     }
     setFormData(initialData);
@@ -767,15 +717,8 @@ export function KnowledgeBase() {
   // ======================
   // TAB CONFIGURATION
   // ======================
-  // Usar filteredData para los contadores para reflejar el filtro de sucursal
+  // ARQUITECTURA V7: Solo 3 categorías visibles (instructions y templates se movieron a Agente Mensajes)
   const tabs = [
-    {
-      id: 'instructions' as ActiveTab,
-      label: 'Instrucciones',
-      icon: icons.instructions,
-      count: filteredData.instructions.length,
-      description: 'Define cómo debe comportarse tu asistente',
-    },
     {
       id: 'policies' as ActiveTab,
       label: 'Políticas',
@@ -791,13 +734,6 @@ export function KnowledgeBase() {
       description: 'Conocimiento adicional sobre tu negocio',
     },
     {
-      id: 'templates' as ActiveTab,
-      label: 'Plantillas',
-      icon: icons.templates,
-      count: filteredData.templates.length,
-      description: 'Respuestas predefinidas para situaciones comunes',
-    },
-    {
       id: 'competitors' as ActiveTab,
       label: 'Competencia',
       icon: icons.competitors,
@@ -808,22 +744,19 @@ export function KnowledgeBase() {
 
   // Handler for next step click - navigates to the appropriate tab
   // NOTE: Must be declared before conditional return to follow React Hooks rules
+  // ARQUITECTURA V7: Solo mapea a las 3 categorías visibles
   const handleNextStepClick = useCallback((step: { category: string; fieldKey: string }) => {
-    // Map field categories to tabs
+    // Map field categories to tabs (solo las 3 categorías visibles)
     const categoryToTab: Record<string, ActiveTab> = {
-      instructions: 'instructions',
       policies: 'policies',
       articles: 'articles',
-      templates: 'templates',
       competitors: 'competitors',
       // Additional mappings for specific field keys
-      core: 'instructions',
-      personality: 'instructions',
       knowledge: 'articles',
       advanced: 'competitors',
     };
 
-    const targetTab = categoryToTab[step.category] || categoryToTab[step.fieldKey.split('_')[0]] || 'instructions';
+    const targetTab = categoryToTab[step.category] || categoryToTab[step.fieldKey.split('_')[0]] || 'policies';
     setActiveTab(targetTab);
   }, []);
 
@@ -870,10 +803,9 @@ export function KnowledgeBase() {
         activeCategory={activeTab}
         onCategoryChange={setActiveTab}
         counts={{
-          instructions: filteredData.instructions.length,
+          // ARQUITECTURA V7: Solo 3 categorías (instructions y templates se movieron a Agente Mensajes)
           policies: filteredData.policies.length,
           articles: filteredData.articles.length,
-          templates: filteredData.templates.length,
           competitors: filteredData.competitors.length,
         }}
         variant="tabs"
@@ -890,93 +822,8 @@ export function KnowledgeBase() {
           className="bg-white rounded-2xl border border-gray-100 shadow-sm"
         >
           <div className="p-6">
-            {/* Instructions Tab */}
-            {activeTab === 'instructions' && (
-              <div className="space-y-6">
-                {/* Info Banner - Redirect to Agent Config */}
-                <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-purple-900">Nueva ubicación para instrucciones del prompt</h4>
-                      <p className="text-sm text-purple-700 mt-1">
-                        Las instrucciones del <strong>Prompt Inicial</strong> (Saludo, Tono, Objeciones, etc.) ahora se configuran directamente en
-                        <a href="/dashboard/ai-agents/mensajes" className="font-semibold underline ml-1 hover:text-purple-900">
-                          Mis Agentes → Agente Mensajes
-                        </a>.
-                        Las instrucciones aquí son para información adicional que el agente puede consultar (RAG).
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Header with action button */}
-                <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900">Instrucciones Adicionales (RAG)</h4>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      Información extra que el asistente puede consultar dinámicamente
-                    </p>
-                    {/* Plan limit indicator */}
-                    {planInfo?.limits && (
-                      <LimitBadge
-                        current={data.instructions.length}
-                        limit={planInfo.limits.instructions}
-                        className="mt-2"
-                      />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => openAddModal('instructions')}
-                    disabled={!canAddItem('instructions')}
-                    className={cn(
-                      'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all',
-                      canAddItem('instructions')
-                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    )}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Nueva Instrucción
-                  </button>
-                </div>
-
-                {filteredData.instructions.length === 0 ? (
-                  <KBEmptyState
-                    category="instructions"
-                    onAction={() => openAddModal('instructions')}
-                  />
-                ) : (
-                  <div className="space-y-3">
-                    {filteredData.instructions.map((item) => (
-                      <KBItemCard
-                        key={item.id}
-                        id={item.id}
-                        category="instructions"
-                        type={instructionTypes.find(t => t.value === item.instruction_type)?.label || item.instruction_type}
-                        title={item.title}
-                        content={item.instruction}
-                        isActive={item.is_active}
-                        branchName={getBranchName(item.branch_id)}
-                        priority={item.priority}
-                        onEdit={() => openEditModal('instructions', item)}
-                        onDelete={() => handleDelete('instructions', item.id)}
-                        // ARQUITECTURA V6: Props para include_in_prompt
-                        includeInPrompt={item.include_in_prompt}
-                        onToggleIncludeInPrompt={handleToggleIncludeInPrompt}
-                        canEnableIncludeInPrompt={canEnableIncludeInPrompt}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* ARQUITECTURA V7: Instructions y Templates se eliminaron de KB */}
+            {/* Ahora se gestionan en Mis Agentes → Agente Mensajes */}
 
             {/* Policies Tab */}
             {activeTab === 'policies' && (
@@ -1118,89 +965,6 @@ export function KnowledgeBase() {
               </div>
             )}
 
-            {/* Templates Tab */}
-            {activeTab === 'templates' && (
-              <div className="space-y-6">
-                {/* Info Banner - Redirect to Agent Config */}
-                <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-amber-900">Nueva ubicaci&oacute;n para plantillas</h4>
-                      <p className="text-sm text-amber-700 mt-1">
-                        Las <strong>Plantillas de Respuesta</strong> (Saludos, Confirmaciones, Despedidas, etc.) ahora se configuran directamente en
-                        <a href="/dashboard/ai-agents/mensajes" className="font-semibold underline ml-1 hover:text-amber-900">
-                          Mis Agentes → Agente Mensajes
-                        </a>.
-                        Las plantillas aqu&iacute; son para casos adicionales o respuestas RAG.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900">Plantillas Adicionales (RAG)</h4>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      Respuestas adicionales que el asistente puede consultar din&aacute;micamente
-                    </p>
-                    {/* Plan limit indicator */}
-                    {planInfo?.limits && (
-                      <LimitBadge
-                        current={data.templates.length}
-                        limit={planInfo.limits.templates}
-                        className="mt-2"
-                      />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => openAddModal('templates')}
-                    disabled={!canAddItem('templates')}
-                    className={cn(
-                      'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all',
-                      canAddItem('templates')
-                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    )}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Nueva Plantilla
-                  </button>
-                </div>
-
-                {filteredData.templates.length === 0 ? (
-                  <KBEmptyState
-                    category="templates"
-                    onAction={() => openAddModal('templates')}
-                  />
-                ) : (
-                  <div className="space-y-3">
-                    {filteredData.templates.map((item) => (
-                      <KBItemCard
-                        key={item.id}
-                        id={item.id}
-                        category="templates"
-                        type={templateTriggers.find(t => t.value === item.trigger_type)?.label || item.trigger_type}
-                        title={item.name}
-                        content={item.template_text}
-                        isActive={item.is_active}
-                        branchName={getBranchName(item.branch_id)}
-                        variables={item.variables_available}
-                        onEdit={() => openEditModal('templates', item)}
-                        onDelete={() => handleDelete('templates', item.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Competitors Tab */}
             {activeTab === 'competitors' && (
               <div className="space-y-6">
@@ -1302,17 +1066,6 @@ export function KnowledgeBase() {
           vertical={tenantVertical}
         />
 
-        {/* Prompt Preview */}
-        <div className="pt-4">
-          <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-            Vista Previa de Prompts
-          </h4>
-          <PromptPreview />
-        </div>
       </div>
 
       {/* Premium Modal - Rendered via Portal to be above everything */}
@@ -1359,21 +1112,17 @@ export function KnowledgeBase() {
                 <div className="relative px-6 py-5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
-                      {/* Dynamic Icon based on type */}
+                      {/* Dynamic Icon based on type - ARQUITECTURA V7: Solo 3 categorías */}
                       <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center text-white">
-                        {modalType === 'instructions' && icons.instructions}
                         {modalType === 'policies' && icons.policies}
                         {modalType === 'articles' && icons.articles}
-                        {modalType === 'templates' && icons.templates}
                         {modalType === 'competitors' && icons.competitors}
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-white">
                           {editingItem ? 'Editar' : (modalType === 'competitors' ? 'Nuevo' : 'Nueva')} {
-                            modalType === 'instructions' ? 'Instrucción' :
                             modalType === 'policies' ? 'Política' :
-                            modalType === 'articles' ? 'Información' :
-                            modalType === 'templates' ? 'Plantilla' : 'Competidor'
+                            modalType === 'articles' ? 'Información' : 'Competidor'
                           }
                         </h3>
                         <p className="text-sm text-purple-100 mt-0.5">
@@ -1394,123 +1143,7 @@ export function KnowledgeBase() {
               {/* Modal Content - Área scrollable */}
               <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
                 <div className="p-6 space-y-5">
-                {/* Instructions Form - Premium Design */}
-                {modalType === 'instructions' && (
-                  <>
-                    {/* Step 1: Type Selection */}
-                    <FormSection
-                      step={1}
-                      title="¿Qué tipo de instrucción?"
-                      description="Selecciona la categoría que mejor describe esta instrucción"
-                    >
-                      <div className="grid grid-cols-2 gap-2">
-                        {instructionTypes.slice(0, 6).map((type) => (
-                          <button
-                            key={type.value}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, instruction_type: type.value })}
-                            className={cn(
-                              'p-3 rounded-xl border-2 text-left transition-all',
-                              formData.instruction_type === type.value
-                                ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
-                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                            )}
-                          >
-                            <p className={cn(
-                              'text-sm font-medium',
-                              formData.instruction_type === type.value ? 'text-purple-700' : 'text-gray-700'
-                            )}>
-                              {type.label}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* More options dropdown */}
-                      <details className="mt-3">
-                        <summary className="text-sm text-purple-600 cursor-pointer hover:text-purple-700">
-                          Ver más opciones...
-                        </summary>
-                        <div className="grid grid-cols-2 gap-2 mt-2">
-                          {instructionTypes.slice(6).map((type) => (
-                            <button
-                              key={type.value}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, instruction_type: type.value })}
-                              className={cn(
-                                'p-3 rounded-xl border-2 text-left transition-all',
-                                formData.instruction_type === type.value
-                                  ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
-                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                              )}
-                            >
-                              <p className={cn(
-                                'text-sm font-medium',
-                                formData.instruction_type === type.value ? 'text-purple-700' : 'text-gray-700'
-                              )}>
-                                {type.label}
-                              </p>
-                            </button>
-                          ))}
-                        </div>
-                      </details>
-                    </FormSection>
-
-                    {/* Step 2: Title */}
-                    <FormSection
-                      step={2}
-                      title="Nombre de la instrucción"
-                      description="Un título corto para identificarla fácilmente"
-                    >
-                      <input
-                        type="text"
-                        value={formData.title as string || ''}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        placeholder="Ej: Servicio Premium Dr. Estrella"
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-colors"
-                      />
-                    </FormSection>
-
-                    {/* Step 3: Instruction */}
-                    <FormSection
-                      step={3}
-                      title="La instrucción"
-                      description="Describe exactamente cómo debe comportarse tu asistente"
-                    >
-                      <textarea
-                        value={formData.instruction as string || ''}
-                        onChange={(e) => setFormData({ ...formData, instruction: e.target.value })}
-                        placeholder="Cuando el cliente pregunte por..."
-                        rows={5}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-colors resize-none"
-                      />
-                      <div className="flex items-start gap-2 mt-2 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-xs text-amber-700">
-                          <strong>Tip:</strong> Sé específico. En lugar de &quot;habla bien del servicio&quot;, di &quot;menciona que tiene 15 años de experiencia y certificación internacional&quot;.
-                        </p>
-                      </div>
-                    </FormSection>
-
-                    {/* Step 4: Examples (Optional) */}
-                    <FormSection
-                      step={4}
-                      title="Ejemplos de respuesta"
-                      description="Opcional: Muestra cómo debería responder idealmente"
-                      optional
-                    >
-                      <textarea
-                        value={formData.examples as string || ''}
-                        onChange={(e) => setFormData({ ...formData, examples: e.target.value })}
-                        placeholder="Ejemplo de respuesta ideal:&#10;&#10;&quot;El Dr. Estrella es nuestro especialista premium en ortodoncia...&quot;"
-                        rows={4}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-colors resize-none"
-                      />
-                    </FormSection>
-                  </>
-                )}
+                {/* ARQUITECTURA V7: Instructions Form eliminado - ahora en Agente Mensajes */}
 
                 {/* Policies Form - Premium Design */}
                 {modalType === 'policies' && (
@@ -1694,180 +1327,7 @@ export function KnowledgeBase() {
                   </>
                 )}
 
-                {/* Templates Form - Premium Design */}
-                {modalType === 'templates' && (
-                  <>
-                    <FormSection
-                      step={1}
-                      title="¿Cuándo usar esta plantilla?"
-                      description="Selecciona la situación donde el AI debería usar esta respuesta"
-                    >
-                      <div className="grid grid-cols-2 gap-2">
-                        {templateTriggers.map((trigger) => (
-                          <button
-                            key={trigger.value}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, trigger_type: trigger.value })}
-                            className={cn(
-                              'p-3 rounded-xl border-2 text-left transition-all',
-                              formData.trigger_type === trigger.value
-                                ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
-                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                            )}
-                          >
-                            <p className={cn(
-                              'text-sm font-medium',
-                              formData.trigger_type === trigger.value ? 'text-purple-700' : 'text-gray-700'
-                            )}>
-                              {trigger.label}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    </FormSection>
-
-                    <FormSection
-                      step={2}
-                      title="Nombre de la plantilla"
-                      description="Un nombre para identificarla"
-                    >
-                      <input
-                        type="text"
-                        value={formData.name as string || ''}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="Ej: Bienvenida Amigable"
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-colors"
-                      />
-                    </FormSection>
-
-                    <FormSection
-                      step={3}
-                      title="Texto de la plantilla"
-                      description="El mensaje que usará el AI como referencia"
-                    >
-                      <textarea
-                        id="template-textarea"
-                        value={formData.template_text as string || ''}
-                        onChange={(e) => setFormData({ ...formData, template_text: e.target.value })}
-                        placeholder="¡Hola {nombre}! Gracias por contactarnos. Tu cita para {servicio} está programada el {fecha} a las {hora}..."
-                        rows={5}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-colors resize-none font-mono text-sm"
-                      />
-
-                      {/* Variables Section - Premium Design */}
-                      <div className="mt-3 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs font-medium text-purple-700">Variables dinámicas disponibles</p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Toggle variable panel
-                              const panel = document.getElementById('variables-panel');
-                              if (panel) panel.classList.toggle('hidden');
-                            }}
-                            className="text-xs text-purple-600 hover:text-purple-800 font-medium"
-                          >
-                            Ver todas
-                          </button>
-                        </div>
-
-                        {/* Quick variables - most used */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {['{nombre}', '{servicio}', '{fecha}', '{hora}', '{sucursal}', '{saludo_tiempo}'].map((v) => {
-                            const isUsed = (formData.template_text as string || '').includes(v);
-                            return (
-                              <button
-                                key={v}
-                                type="button"
-                                onClick={() => {
-                                  const textarea = document.getElementById('template-textarea') as HTMLTextAreaElement;
-                                  const start = textarea?.selectionStart || (formData.template_text as string || '').length;
-                                  const before = (formData.template_text as string || '').substring(0, start);
-                                  const after = (formData.template_text as string || '').substring(start);
-                                  setFormData({ ...formData, template_text: before + v + after });
-                                }}
-                                className={cn(
-                                  'text-xs px-2 py-1 rounded-md transition-colors font-mono',
-                                  isUsed
-                                    ? 'bg-green-100 text-green-700 cursor-default'
-                                    : 'bg-white text-purple-700 hover:bg-purple-100 border border-purple-200'
-                                )}
-                              >
-                                {v}
-                                {isUsed && ' ✓'}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* Expandable full variables panel */}
-                        <div id="variables-panel" className="hidden mt-3 pt-3 border-t border-purple-200/50">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {(Object.entries(VARIABLES_BY_CATEGORY) as [string, TemplateVariable[]][]).map(([category, variables]) => (
-                              <div key={category}>
-                                <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-1.5">
-                                  {category}
-                                </p>
-                                <div className="space-y-1">
-                                  {variables.map((variable) => {
-                                    const isUsed = (formData.template_text as string || '').includes(variable.key);
-                                    return (
-                                      <button
-                                        key={variable.key}
-                                        type="button"
-                                        onClick={() => {
-                                          const textarea = document.getElementById('template-textarea') as HTMLTextAreaElement;
-                                          const start = textarea?.selectionStart || (formData.template_text as string || '').length;
-                                          const before = (formData.template_text as string || '').substring(0, start);
-                                          const after = (formData.template_text as string || '').substring(start);
-                                          setFormData({ ...formData, template_text: before + variable.key + after });
-                                        }}
-                                        className={cn(
-                                          'w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left text-xs transition-colors',
-                                          isUsed
-                                            ? 'bg-green-50 text-green-700'
-                                            : 'bg-white hover:bg-purple-50 text-gray-700'
-                                        )}
-                                      >
-                                        <span>
-                                          <code className={cn('font-mono', isUsed ? 'text-green-600' : 'text-purple-600')}>
-                                            {variable.key}
-                                          </code>
-                                          <span className="text-gray-500 ml-1">- {variable.description}</span>
-                                        </span>
-                                        {isUsed && <span className="text-green-500 text-xs">✓</span>}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Preview of used variables */}
-                      {typeof formData.template_text === 'string' && formData.template_text && AVAILABLE_VARIABLES.some(v => (formData.template_text as string).includes(v.key)) && (
-                        <div className="mt-2">
-                          <p className="text-xs text-gray-500 mb-1">Variables en uso:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {AVAILABLE_VARIABLES
-                              .filter(v => (formData.template_text as string).includes(v.key))
-                              .map(v => (
-                                <span
-                                  key={v.key}
-                                  className="px-2 py-0.5 bg-green-50 text-green-700 text-xs rounded-full font-mono"
-                                >
-                                  {v.key}
-                                </span>
-                              ))
-                            }
-                          </div>
-                        </div>
-                      )}
-                    </FormSection>
-                  </>
-                )}
+                {/* ARQUITECTURA V7: Templates Form eliminado - ahora en Agente Mensajes */}
 
                 {/* Competitors Form - Premium Design */}
                 {modalType === 'competitors' && (

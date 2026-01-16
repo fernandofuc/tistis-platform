@@ -13,9 +13,10 @@ import { cn } from '@/src/shared/utils';
 // ======================
 // TYPES
 // ======================
+// ARQUITECTURA V7: Solo 3 categorías visibles en KB (instructions y templates se gestionan en Agente Mensajes)
 interface SearchResult {
   id: string;
-  category: 'instructions' | 'policies' | 'articles' | 'templates' | 'competitors';
+  category: 'policies' | 'articles' | 'competitors';
   title: string;
   content: string;
   similarity: number;
@@ -30,6 +31,7 @@ interface Props {
 // ======================
 // MOCK DATA FOR DEMO
 // ======================
+// ARQUITECTURA V7: Demo results actualizados para las 3 categorías de KB
 const DEMO_RESULTS: SearchResult[] = [
   {
     id: '1',
@@ -49,9 +51,9 @@ const DEMO_RESULTS: SearchResult[] = [
   },
   {
     id: '3',
-    category: 'instructions',
-    title: 'Manejo de Reagendamiento',
-    content: 'Cuando un cliente quiera reagendar, ofrece las 3 próximas fechas disponibles y confirma su preferencia de horario.',
+    category: 'competitors',
+    title: 'Manejo de Competencia',
+    content: 'Cuando mencionen a la competencia, destaca nuestros diferenciadores como garantía extendida y tecnología de punta.',
     similarity: 0.78,
   },
 ];
@@ -59,11 +61,10 @@ const DEMO_RESULTS: SearchResult[] = [
 // ======================
 // CATEGORY CONFIG
 // ======================
+// ARQUITECTURA V7: Solo 3 categorías visibles en KB
 const CATEGORY_CONFIG = {
-  instructions: { label: 'Instrucción', color: 'violet', icon: '🧠' },
   policies: { label: 'Política', color: 'emerald', icon: '📋' },
   articles: { label: 'Artículo', color: 'blue', icon: '📖' },
-  templates: { label: 'Plantilla', color: 'amber', icon: '💬' },
   competitors: { label: 'Competencia', color: 'rose', icon: '🎯' },
 };
 
