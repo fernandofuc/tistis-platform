@@ -27,8 +27,8 @@ import {
 // Import prompt viewer component
 import { PromptViewerSection } from '../PromptViewerSection';
 
-// Import prompt config section
-import { PromptConfigSection } from '../prompt-config';
+// Import prompt config components
+import { PromptConfigSection, TemplateConfigSection } from '../prompt-config';
 
 // ======================
 // TYPES
@@ -552,6 +552,14 @@ export function PersonalProfileTab({
 
       {/* Prompt Config Section - Instructions */}
       <PromptConfigSection
+        profileType="personal"
+        profileName={profileName}
+        isProfileActive={isActive}
+        colorScheme="orange"
+      />
+
+      {/* Template Config Section - Response Templates */}
+      <TemplateConfigSection
         profileType="personal"
         profileName={profileName}
         isProfileActive={isActive}

@@ -24,8 +24,8 @@ import {
 // Import prompt viewer component
 import { PromptViewerSection } from '../PromptViewerSection';
 
-// Import prompt config section
-import { PromptConfigSection } from '../prompt-config';
+// Import prompt config components
+import { PromptConfigSection, TemplateConfigSection } from '../prompt-config';
 
 // ======================
 // TYPES
@@ -428,6 +428,14 @@ export function BusinessProfileTab({
 
       {/* Prompt Config Section - Instructions */}
       <PromptConfigSection
+        profileType="business"
+        profileName={profileName}
+        isProfileActive={profile?.is_active ?? false}
+        colorScheme="purple"
+      />
+
+      {/* Template Config Section - Response Templates */}
+      <TemplateConfigSection
         profileType="business"
         profileName={profileName}
         isProfileActive={profile?.is_active ?? false}

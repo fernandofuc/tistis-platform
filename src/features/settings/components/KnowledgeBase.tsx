@@ -1121,11 +1121,32 @@ export function KnowledgeBase() {
             {/* Templates Tab */}
             {activeTab === 'templates' && (
               <div className="space-y-6">
+                {/* Info Banner - Redirect to Agent Config */}
+                <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-amber-900">Nueva ubicaci&oacute;n para plantillas</h4>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Las <strong>Plantillas de Respuesta</strong> (Saludos, Confirmaciones, Despedidas, etc.) ahora se configuran directamente en
+                        <a href="/dashboard/ai-agents/mensajes" className="font-semibold underline ml-1 hover:text-amber-900">
+                          Mis Agentes → Agente Mensajes
+                        </a>.
+                        Las plantillas aqu&iacute; son para casos adicionales o respuestas RAG.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                   <div>
-                    <h4 className="text-lg font-semibold text-gray-900">Plantillas de Respuesta</h4>
+                    <h4 className="text-lg font-semibold text-gray-900">Plantillas Adicionales (RAG)</h4>
                     <p className="text-sm text-gray-500 mt-0.5">
-                      Respuestas sugeridas para situaciones comunes
+                      Respuestas adicionales que el asistente puede consultar din&aacute;micamente
                     </p>
                     {/* Plan limit indicator */}
                     {planInfo?.limits && (

@@ -163,6 +163,227 @@ export const INSTRUCTION_CATEGORY_LABELS: Record<string, string> = {
 };
 
 // ======================
+// RESPONSE TEMPLATE TYPES
+// ======================
+
+/**
+ * Types of response templates for the agent
+ * These define pre-formatted responses for specific situations
+ */
+export interface ResponseTemplateTriggerType {
+  key: string;
+  label: string;
+  description: string;
+  icon: string;
+  placeholder: string;
+  category: 'communication' | 'appointments' | 'inquiries' | 'situations';
+  maxLength: number;
+  recommended?: boolean;
+}
+
+export const RESPONSE_TEMPLATE_TYPES: ResponseTemplateTriggerType[] = [
+  // Communication
+  {
+    key: 'greeting',
+    label: 'Saludo Inicial',
+    description: 'Mensaje de bienvenida cuando un cliente contacta',
+    icon: 'messageSquare',
+    placeholder: '¡Hola {nombre}! Bienvenido a {negocio}. ¿En qué puedo ayudarte hoy?',
+    category: 'communication',
+    maxLength: 500,
+    recommended: true,
+  },
+  {
+    key: 'farewell',
+    label: 'Despedida',
+    description: 'Mensaje de cierre de conversación',
+    icon: 'hand',
+    placeholder: 'Gracias por contactarnos, {nombre}. ¡Que tengas un excelente día!',
+    category: 'communication',
+    maxLength: 400,
+    recommended: true,
+  },
+  {
+    key: 'thank_you',
+    label: 'Agradecimiento',
+    description: 'Respuesta cuando el cliente agradece',
+    icon: 'heart',
+    placeholder: '¡Con mucho gusto, {nombre}! Estamos para servirte.',
+    category: 'communication',
+    maxLength: 300,
+  },
+  {
+    key: 'follow_up',
+    label: 'Seguimiento',
+    description: 'Mensaje de seguimiento después de una interacción',
+    icon: 'refresh',
+    placeholder: 'Hola {nombre}, ¿pudiste revisar la información que te envié?',
+    category: 'communication',
+    maxLength: 400,
+  },
+  // Appointments
+  {
+    key: 'appointment_confirm',
+    label: 'Confirmación de Cita',
+    description: 'Mensaje para confirmar una cita agendada',
+    icon: 'calendarCheck',
+    placeholder: '¡Perfecto {nombre}! Tu cita está confirmada para el {fecha} a las {hora}.',
+    category: 'appointments',
+    maxLength: 500,
+    recommended: true,
+  },
+  {
+    key: 'appointment_reminder',
+    label: 'Recordatorio de Cita',
+    description: 'Mensaje para recordar una cita próxima',
+    icon: 'bell',
+    placeholder: 'Hola {nombre}, te recordamos tu cita mañana {fecha} a las {hora}.',
+    category: 'appointments',
+    maxLength: 400,
+  },
+  {
+    key: 'after_hours',
+    label: 'Fuera de Horario',
+    description: 'Respuesta automática fuera del horario de atención',
+    icon: 'clock',
+    placeholder: 'Gracias por escribirnos. Nuestro horario de atención es de {horario}. Te responderemos pronto.',
+    category: 'appointments',
+    maxLength: 400,
+  },
+  // Inquiries
+  {
+    key: 'price_inquiry',
+    label: 'Consulta de Precios',
+    description: 'Respuesta estándar para preguntas sobre precios',
+    icon: 'currency',
+    placeholder: 'El costo de {servicio} es aproximadamente {precio}. El precio final puede variar según tu caso.',
+    category: 'inquiries',
+    maxLength: 500,
+    recommended: true,
+  },
+  {
+    key: 'location_inquiry',
+    label: 'Ubicación',
+    description: 'Respuesta con información de ubicación',
+    icon: 'mapPin',
+    placeholder: 'Estamos ubicados en {direccion}. Contamos con estacionamiento gratuito.',
+    category: 'inquiries',
+    maxLength: 400,
+  },
+  {
+    key: 'doctor_inquiry',
+    label: 'Información del Especialista',
+    description: 'Respuesta sobre doctores o especialistas',
+    icon: 'user',
+    placeholder: '{especialista} es especialista en {especialidad} con más de {años} años de experiencia.',
+    category: 'inquiries',
+    maxLength: 500,
+  },
+  // Situations
+  {
+    key: 'emergency',
+    label: 'Emergencia',
+    description: 'Respuesta para situaciones de emergencia',
+    icon: 'alertTriangle',
+    placeholder: 'Si tienes una emergencia, por favor llama directamente al {telefono_emergencia}.',
+    category: 'situations',
+    maxLength: 400,
+    recommended: true,
+  },
+  {
+    key: 'complaint',
+    label: 'Queja o Reclamo',
+    description: 'Respuesta para manejar quejas de clientes',
+    icon: 'alert',
+    placeholder: 'Lamentamos mucho la situación, {nombre}. Tu comentario es muy importante para nosotros.',
+    category: 'situations',
+    maxLength: 500,
+  },
+  {
+    key: 'promotion',
+    label: 'Promoción Activa',
+    description: 'Mensaje sobre promociones vigentes',
+    icon: 'tag',
+    placeholder: '¡Tenemos una promoción especial! {descripcion_promo} válida hasta {fecha_fin}.',
+    category: 'situations',
+    maxLength: 500,
+  },
+  {
+    key: 'custom',
+    label: 'Personalizada',
+    description: 'Plantilla personalizada para cualquier situación',
+    icon: 'sparkles',
+    placeholder: 'Escribe tu plantilla personalizada aquí...',
+    category: 'situations',
+    maxLength: 600,
+  },
+];
+
+/**
+ * Get template trigger type by key
+ */
+export function getTemplateTriggerType(key: string): ResponseTemplateTriggerType | undefined {
+  return RESPONSE_TEMPLATE_TYPES.find(type => type.key === key);
+}
+
+/**
+ * Get templates grouped by category
+ */
+export function getTemplatesByCategory(): Record<string, ResponseTemplateTriggerType[]> {
+  return RESPONSE_TEMPLATE_TYPES.reduce((acc, type) => {
+    if (!acc[type.category]) {
+      acc[type.category] = [];
+    }
+    acc[type.category].push(type);
+    return acc;
+  }, {} as Record<string, ResponseTemplateTriggerType[]>);
+}
+
+/**
+ * Category labels for template UI display
+ */
+export const TEMPLATE_CATEGORY_LABELS: Record<string, string> = {
+  communication: 'Comunicación',
+  appointments: 'Citas',
+  inquiries: 'Consultas',
+  situations: 'Situaciones',
+};
+
+/**
+ * Available template variables for auto-detection
+ */
+export const TEMPLATE_VARIABLES = [
+  // Cliente
+  { key: '{nombre}', description: 'Nombre del cliente', category: 'Cliente' },
+  { key: '{telefono}', description: 'Teléfono del cliente', category: 'Cliente' },
+  // Cita
+  { key: '{fecha}', description: 'Fecha de la cita', category: 'Cita' },
+  { key: '{hora}', description: 'Hora de la cita', category: 'Cita' },
+  { key: '{servicio}', description: 'Nombre del servicio', category: 'Cita' },
+  { key: '{precio}', description: 'Precio del servicio', category: 'Cita' },
+  // Negocio
+  { key: '{negocio}', description: 'Nombre del negocio', category: 'Negocio' },
+  { key: '{sucursal}', description: 'Nombre de la sucursal', category: 'Negocio' },
+  { key: '{direccion}', description: 'Dirección', category: 'Negocio' },
+  { key: '{telefono_negocio}', description: 'Teléfono del negocio', category: 'Negocio' },
+  { key: '{horario}', description: 'Horario de atención', category: 'Negocio' },
+  // Staff
+  { key: '{especialista}', description: 'Nombre del especialista', category: 'Staff' },
+  { key: '{especialidad}', description: 'Especialidad', category: 'Staff' },
+  // Tiempo
+  { key: '{saludo_tiempo}', description: 'Buenos días/tardes/noches', category: 'Tiempo' },
+];
+
+/**
+ * Detect variables used in a template text
+ */
+export function detectTemplateVariables(text: string): string[] {
+  return TEMPLATE_VARIABLES
+    .filter(v => text.includes(v.key))
+    .map(v => v.key);
+}
+
+// ======================
 // DELAY OPTIONS
 // ======================
 
