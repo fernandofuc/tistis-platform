@@ -69,14 +69,12 @@ export function InstructionCard({
         border: 'border-purple-200',
         iconBg: 'bg-purple-50',
         iconColor: 'text-purple-600',
-        toggle: 'peer-checked:bg-purple-600',
       }
     : {
         badge: 'bg-orange-100 text-orange-700',
         border: 'border-orange-200',
         iconBg: 'bg-orange-50',
         iconColor: 'text-orange-600',
-        toggle: 'peer-checked:bg-orange-600',
       };
 
   return (

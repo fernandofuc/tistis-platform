@@ -426,19 +426,22 @@ export function InstructionModal({
                         Esta instrucción se incluirá directamente en el prompt del agente
                       </p>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={includeInPrompt}
-                      onChange={(e) => setIncludeInPrompt(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className={cn(
-                      'w-11 h-6 bg-slate-200 rounded-full peer transition-colors relative',
-                      'peer-checked:bg-emerald-500',
-                      'after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px]',
-                      'after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all',
-                      'peer-checked:after:translate-x-5'
-                    )} />
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={includeInPrompt}
+                        onChange={(e) => setIncludeInPrompt(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className={cn(
+                        'w-11 h-6 rounded-full transition-colors',
+                        includeInPrompt ? 'bg-emerald-500' : 'bg-slate-200'
+                      )} />
+                      <div className={cn(
+                        'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                        includeInPrompt && 'translate-x-5'
+                      )} />
+                    </div>
                   </label>
                 </div>
 

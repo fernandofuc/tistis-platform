@@ -389,7 +389,14 @@ export function BusinessProfileTab({
                         onChange={(e) => { setAiLearningEnabled(e.target.checked); markChange(); }}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className={cn(
+                        'w-11 h-6 rounded-full transition-colors',
+                        aiLearningEnabled ? 'bg-blue-600' : 'bg-slate-200'
+                      )} />
+                      <div className={cn(
+                        'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                        aiLearningEnabled && 'translate-x-5'
+                      )} />
                     </label>
                   </div>
                 </div>
