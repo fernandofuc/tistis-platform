@@ -44,6 +44,7 @@ export function TemplateConfigSection({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ResponseTemplate | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hasFetched, setHasFetched] = useState(false); // Track if initial fetch was done
 
   // Colors
   const colors = colorScheme === 'purple'
@@ -66,7 +67,7 @@ export function TemplateConfigSection({
         badge: 'bg-amber-100 text-amber-700',
       };
 
-  // Fetch templates
+  // Fetch templates - stable reference, doesn't depend on onTemplatesChange
   const fetchTemplates = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -75,6 +76,7 @@ export function TemplateConfigSection({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setError('Sesión no válida');
+        setHasFetched(true); // Mark as fetched even on error to prevent loops
         return;
       }
 
@@ -91,7 +93,6 @@ export function TemplateConfigSection({
       const data = await response.json();
       if (data.success) {
         setTemplates(data.templates || []);
-        onTemplatesChange?.(data.templates?.length || 0);
       } else {
         setError(data.error || 'Error desconocido');
       }
@@ -100,8 +101,9 @@ export function TemplateConfigSection({
       console.error('[TemplateConfig] Fetch error:', err);
     } finally {
       setIsLoading(false);
+      setHasFetched(true); // Mark as fetched to prevent re-fetch loops
     }
-  }, [onTemplatesChange]);
+  }, []); // No dependencies - stable reference
 
   // Save template
   const handleSaveTemplate = useCallback(async (data: TemplateFormData): Promise<boolean> => {
@@ -229,12 +231,17 @@ export function TemplateConfigSection({
     setIsModalOpen(true);
   }, []);
 
-  // Fetch on expand
+  // Fetch on expand - only once when first expanded
   useEffect(() => {
-    if (isExpanded && templates.length === 0 && !isLoading) {
+    if (isExpanded && !hasFetched && !isLoading) {
       fetchTemplates();
     }
-  }, [isExpanded, templates.length, isLoading, fetchTemplates]);
+  }, [isExpanded, hasFetched, isLoading, fetchTemplates]);
+
+  // Notify parent of template count changes
+  useEffect(() => {
+    onTemplatesChange?.(templates.length);
+  }, [templates.length, onTemplatesChange]);
 
   // Calculate stats
   const activeTemplates = templates.filter(t => t.is_active);
