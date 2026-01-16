@@ -167,42 +167,49 @@ export function InstructionCard({
       {/* Footer with toggles */}
       <div className="mt-3 pt-3 border-t border-slate-100 pl-12 flex items-center justify-between">
         {/* Include in Prompt Toggle */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={instruction.include_in_prompt}
-            onChange={(e) => onToggleIncludeInPrompt(instruction.id, e.target.checked)}
-            className="sr-only peer"
-          />
-          <div className={cn(
-            'w-8 h-4 bg-slate-200 rounded-full peer transition-colors',
-            'peer-focus:ring-2 peer-focus:ring-offset-1',
-            colors.toggle,
-            'after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px]',
-            'after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all',
-            'peer-checked:after:translate-x-4 relative'
-          )} />
+        <label className="flex items-center gap-2 cursor-pointer group">
+          <div className="relative">
+            <input
+              type="checkbox"
+              checked={instruction.include_in_prompt}
+              onChange={(e) => onToggleIncludeInPrompt(instruction.id, e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className={cn(
+              'w-9 h-5 rounded-full transition-colors',
+              instruction.include_in_prompt
+                ? colorScheme === 'purple' ? 'bg-purple-600' : 'bg-orange-600'
+                : 'bg-slate-200'
+            )} />
+            <div className={cn(
+              'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+              instruction.include_in_prompt && 'translate-x-4'
+            )} />
+          </div>
           <span className="text-xs text-slate-500">Incluir en prompt</span>
         </label>
 
         {/* Active Toggle */}
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex items-center gap-2 cursor-pointer group">
           <span className="text-xs text-slate-500">
             {instruction.is_active ? 'Activo' : 'Inactivo'}
           </span>
-          <input
-            type="checkbox"
-            checked={instruction.is_active}
-            onChange={(e) => onToggleActive(instruction.id, e.target.checked)}
-            className="sr-only peer"
-          />
-          <div className={cn(
-            'w-8 h-4 bg-slate-200 rounded-full peer transition-colors',
-            'peer-checked:bg-emerald-500',
-            'after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px]',
-            'after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all',
-            'peer-checked:after:translate-x-4 relative'
-          )} />
+          <div className="relative">
+            <input
+              type="checkbox"
+              checked={instruction.is_active}
+              onChange={(e) => onToggleActive(instruction.id, e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className={cn(
+              'w-9 h-5 rounded-full transition-colors',
+              instruction.is_active ? 'bg-emerald-500' : 'bg-slate-200'
+            )} />
+            <div className={cn(
+              'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+              instruction.is_active && 'translate-x-4'
+            )} />
+          </div>
         </label>
       </div>
     </motion.div>
