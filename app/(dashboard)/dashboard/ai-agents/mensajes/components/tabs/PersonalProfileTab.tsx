@@ -27,6 +27,9 @@ import {
 // Import prompt viewer component
 import { PromptViewerSection } from '../PromptViewerSection';
 
+// Import prompt config section
+import { PromptConfigSection } from '../prompt-config';
+
 // ======================
 // TYPES
 // ======================
@@ -539,6 +542,14 @@ export function PersonalProfileTab({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Prompt Config Section - Instructions */}
+      <PromptConfigSection
+        profileType="personal"
+        profileName={profileName}
+        isProfileActive={isActive}
+        colorScheme="orange"
+      />
 
       {/* Prompt Viewer Section */}
       <PromptViewerSection

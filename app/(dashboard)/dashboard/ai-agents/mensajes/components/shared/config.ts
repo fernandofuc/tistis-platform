@@ -5,6 +5,164 @@
 // =====================================================
 
 // ======================
+// PROMPT INSTRUCTION TYPES
+// ======================
+
+/**
+ * Types of instructions that go in the PROMPT INICIAL
+ * These define the agent's core behavior and personality
+ */
+export interface PromptInstructionType {
+  key: string;
+  label: string;
+  description: string;
+  icon: string;
+  placeholder: string;
+  category: 'identity' | 'communication' | 'behavior' | 'restrictions';
+  maxLength: number;
+  recommended?: boolean;
+}
+
+export const PROMPT_INSTRUCTION_TYPES: PromptInstructionType[] = [
+  // Identity & Core
+  {
+    key: 'identity',
+    label: 'Identidad del Negocio',
+    description: 'Define quién es tu asistente y qué representa',
+    icon: 'building',
+    placeholder: 'Somos una clínica dental premium con más de 15 años de experiencia...',
+    category: 'identity',
+    maxLength: 500,
+    recommended: true,
+  },
+  {
+    key: 'greeting',
+    label: 'Saludo',
+    description: 'Cómo debe saludar el asistente',
+    icon: 'sparkles',
+    placeholder: '¡Hola! Gracias por contactarnos. Soy el asistente virtual de [nombre]...',
+    category: 'communication',
+    maxLength: 300,
+    recommended: true,
+  },
+  {
+    key: 'farewell',
+    label: 'Despedida',
+    description: 'Cómo debe despedirse el asistente',
+    icon: 'sparkles',
+    placeholder: 'Gracias por contactarnos. Si tienes más preguntas, aquí estamos para ayudarte.',
+    category: 'communication',
+    maxLength: 300,
+  },
+  // Behavior
+  {
+    key: 'pricing_policy',
+    label: 'Política de Precios',
+    description: 'Cómo manejar consultas sobre precios',
+    icon: 'currency',
+    placeholder: 'Siempre ofrece un rango de precios y menciona que el precio final depende de la valoración...',
+    category: 'behavior',
+    maxLength: 400,
+    recommended: true,
+  },
+  {
+    key: 'objections',
+    label: 'Manejo de Objeciones',
+    description: 'Cómo responder a objeciones comunes',
+    icon: 'shield',
+    placeholder: 'Cuando el cliente mencione que es muy caro, destaca el valor y la calidad...',
+    category: 'behavior',
+    maxLength: 500,
+  },
+  {
+    key: 'special_cases',
+    label: 'Casos Especiales',
+    description: 'Situaciones específicas que requieren manejo especial',
+    icon: 'alert',
+    placeholder: 'Si preguntan por emergencias, indicar que llamen al número de urgencias...',
+    category: 'behavior',
+    maxLength: 400,
+  },
+  {
+    key: 'tone_examples',
+    label: 'Ejemplos de Tono',
+    description: 'Ejemplos de cómo debe comunicarse',
+    icon: 'text',
+    placeholder: 'Usa un tono cálido pero profesional. Ejemplo: "Con gusto te ayudo con eso..."',
+    category: 'communication',
+    maxLength: 500,
+  },
+  {
+    key: 'upsell',
+    label: 'Ventas Adicionales',
+    description: 'Oportunidades de venta cruzada o adicional',
+    icon: 'trending',
+    placeholder: 'Cuando pregunten por limpieza dental, menciona también el blanqueamiento...',
+    category: 'behavior',
+    maxLength: 400,
+  },
+  // Restrictions
+  {
+    key: 'forbidden',
+    label: 'Nunca Decir',
+    description: 'Cosas que el asistente NUNCA debe decir',
+    icon: 'x',
+    placeholder: 'NUNCA mencionar competidores, NUNCA dar diagnósticos médicos...',
+    category: 'restrictions',
+    maxLength: 400,
+    recommended: true,
+  },
+  {
+    key: 'always_mention',
+    label: 'Siempre Mencionar',
+    description: 'Cosas que SIEMPRE debe mencionar',
+    icon: 'check',
+    placeholder: 'SIEMPRE mencionar que tenemos estacionamiento gratuito...',
+    category: 'restrictions',
+    maxLength: 400,
+  },
+  {
+    key: 'custom',
+    label: 'Personalizado',
+    description: 'Instrucción personalizada',
+    icon: 'sparkles',
+    placeholder: 'Escribe tu instrucción personalizada aquí...',
+    category: 'behavior',
+    maxLength: 500,
+  },
+];
+
+/**
+ * Get instruction type by key
+ */
+export function getInstructionType(key: string): PromptInstructionType | undefined {
+  return PROMPT_INSTRUCTION_TYPES.find(type => type.key === key);
+}
+
+/**
+ * Get instructions grouped by category
+ */
+export function getInstructionsByCategory(): Record<string, PromptInstructionType[]> {
+  return PROMPT_INSTRUCTION_TYPES.reduce((acc, type) => {
+    if (!acc[type.category]) {
+      acc[type.category] = [];
+    }
+    acc[type.category].push(type);
+    return acc;
+  }, {} as Record<string, PromptInstructionType[]>);
+}
+
+/**
+ * Category labels for UI display
+ */
+export const INSTRUCTION_CATEGORY_LABELS: Record<string, string> = {
+  identity: 'Identidad',
+  communication: 'Comunicación',
+  behavior: 'Comportamiento',
+  restrictions: 'Restricciones',
+};
+
+// ======================
 // DELAY OPTIONS
 // ======================
 

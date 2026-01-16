@@ -24,6 +24,9 @@ import {
 // Import prompt viewer component
 import { PromptViewerSection } from '../PromptViewerSection';
 
+// Import prompt config section
+import { PromptConfigSection } from '../prompt-config';
+
 // ======================
 // TYPES
 // ======================
@@ -415,6 +418,14 @@ export function BusinessProfileTab({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Prompt Config Section - Instructions */}
+      <PromptConfigSection
+        profileType="business"
+        profileName={profileName}
+        isProfileActive={profile?.is_active ?? false}
+        colorScheme="purple"
+      />
 
       {/* Prompt Viewer Section */}
       <PromptViewerSection

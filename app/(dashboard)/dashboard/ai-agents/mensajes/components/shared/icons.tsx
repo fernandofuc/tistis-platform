@@ -262,6 +262,12 @@ export const icons = {
   documentText: <DocumentTextIcon />,
   eye: <EyeIcon />,
   clipboardCopy: <ClipboardCopyIcon />,
+  // Prompt config icons
+  currency: <InfoIcon />,
+  shield: <CheckCircleIcon />,
+  trending: <SparklesIcon />,
+  trash: <XIcon />,
+  plus: <SparklesIcon />,
   // Assistant types
   assistantComplete: <StarIcon />,
   assistantBrand: <ChatBubbleIcon />,
