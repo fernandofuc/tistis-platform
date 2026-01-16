@@ -31,6 +31,7 @@ interface TemplateCardProps {
   onEdit: (template: ResponseTemplate) => void;
   onDelete: (id: string) => void;
   onToggleActive: (id: string, isActive: boolean) => void;
+  onDuplicate?: (template: ResponseTemplate) => void;
   isDeleting?: boolean;
 }
 
@@ -61,6 +62,7 @@ export function TemplateCard({
   onEdit,
   onDelete,
   onToggleActive,
+  onDuplicate,
   isDeleting,
 }: TemplateCardProps) {
   const triggerType = getTemplateTriggerType(template.trigger_type);
@@ -103,11 +105,19 @@ export function TemplateCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       className={cn(
-        'bg-white rounded-xl border p-4 shadow-sm transition-all hover:shadow-md',
-        template.is_active ? 'border-slate-200' : 'border-slate-100 opacity-60',
+        'bg-white rounded-xl border p-4 shadow-sm transition-all hover:shadow-md relative overflow-hidden',
+        template.is_active ? 'border-slate-200' : 'border-slate-100 opacity-70',
         isDeleting && 'opacity-50 pointer-events-none'
       )}
     >
+      {/* Status Indicator Line - Visual feedback at top of card */}
+      <div className={cn(
+        'absolute top-0 left-0 right-0 h-1 transition-colors',
+        template.is_active
+          ? colorScheme === 'purple' ? 'bg-purple-500' : 'bg-orange-500'
+          : 'bg-slate-200'
+      )} />
+
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -132,6 +142,11 @@ export function TemplateCard({
               )}>
                 {triggerType?.label || template.trigger_type}
               </span>
+              {!template.is_active && (
+                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-500">
+                  Inactiva
+                </span>
+              )}
             </div>
 
             {/* Category subtitle */}
@@ -143,7 +158,7 @@ export function TemplateCard({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
           {/* Edit Button */}
           <button
             onClick={() => onEdit(template)}
@@ -152,6 +167,19 @@ export function TemplateCard({
           >
             {icons.edit || icons.settings}
           </button>
+
+          {/* Duplicate Button */}
+          {onDuplicate && (
+            <button
+              onClick={() => onDuplicate(template)}
+              className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+              title="Duplicar"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+              </svg>
+            </button>
+          )}
 
           {/* Delete Button */}
           <button
@@ -194,7 +222,10 @@ export function TemplateCard({
       <div className="mt-3 pt-3 border-t border-slate-100 pl-12 flex items-center justify-end">
         {/* Active Toggle */}
         <label className="flex items-center gap-2 cursor-pointer group">
-          <span className="text-xs text-slate-500">
+          <span className={cn(
+            'text-xs transition-colors',
+            template.is_active ? 'text-emerald-600 font-medium' : 'text-slate-500'
+          )}>
             {template.is_active ? 'Activa' : 'Inactiva'}
           </span>
           <div className="relative">
@@ -205,13 +236,14 @@ export function TemplateCard({
               className="sr-only peer"
             />
             <div className={cn(
-              'w-9 h-5 rounded-full transition-colors',
+              'w-9 h-5 rounded-full transition-all duration-200 group-hover:shadow-md',
               template.is_active ? 'bg-emerald-500' : 'bg-slate-200'
             )} />
-            <div className={cn(
-              'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-              template.is_active && 'translate-x-4'
-            )} />
+            <motion.div
+              animate={{ x: template.is_active ? 16 : 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow"
+            />
           </div>
         </label>
       </div>

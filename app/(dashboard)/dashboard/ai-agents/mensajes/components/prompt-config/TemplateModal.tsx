@@ -9,7 +9,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
-import { icons } from '../shared';
+import { icons, CharacterCountBar } from '../shared';
 import {
   RESPONSE_TEMPLATE_TYPES,
   getTemplatesByCategory,
@@ -65,6 +65,10 @@ export function TemplateModal({
   // Get selected type info
   const selectedTypeInfo = RESPONSE_TEMPLATE_TYPES.find(t => t.key === selectedType);
   const templatesByCategory = getTemplatesByCategory();
+
+  // Determine if this is an edit (has valid ID) or new/duplicate (no ID)
+  const isEditing = Boolean(template?.id && template.id.trim() !== '');
+  const isDuplicating = Boolean(template && (!template.id || template.id.trim() === ''));
 
   // Detected variables in current text
   const detectedVariables = detectTemplateVariables(templateText);
@@ -152,8 +156,11 @@ export function TemplateModal({
     setError(null);
 
     try {
+      // Only include ID if it's a valid (non-empty) string - supports duplication
+      const templateId = template?.id && template.id.trim() !== '' ? template.id : undefined;
+
       const data: TemplateFormData = {
-        id: template?.id,
+        id: templateId,
         trigger_type: selectedType,
         name: name.trim(),
         template_text: templateText.trim(),
@@ -195,18 +202,24 @@ export function TemplateModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-black/50 backdrop-blur-sm"
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden"
+          initial={{ opacity: 0, y: 100 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 100 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-lg max-h-[95vh] md:max-h-[90vh] overflow-hidden flex flex-col"
         >
+          {/* Mobile drag indicator */}
+          <div className="md:hidden flex justify-center pt-2 pb-1">
+            <div className="w-10 h-1 bg-slate-300 rounded-full" />
+          </div>
+
           {/* Header */}
           <div className={cn(
-            'px-6 py-4 bg-gradient-to-r text-white',
+            'px-4 md:px-6 py-3 md:py-4 bg-gradient-to-r text-white',
             colors.gradient
           )}>
             <div className="flex items-center justify-between">
@@ -216,10 +229,12 @@ export function TemplateModal({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold">
-                    {template ? 'Editar Plantilla' : 'Nueva Plantilla'}
+                    {isEditing ? 'Editar Plantilla' : isDuplicating ? 'Duplicar Plantilla' : 'Nueva Plantilla'}
                   </h2>
                   <p className="text-sm text-white/80">
-                    Respuestas predefinidas para situaciones comunes
+                    {isDuplicating
+                      ? 'Crea una copia de la plantilla existente'
+                      : 'Respuestas predefinidas para situaciones comunes'}
                   </p>
                 </div>
               </div>
@@ -233,7 +248,7 @@ export function TemplateModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+          <div className="flex-1 p-4 md:p-6 overflow-y-auto">
             {/* Step 1: Select Type */}
             {step === 1 && (
               <div className="space-y-4">
@@ -362,43 +377,62 @@ export function TemplateModal({
 
                 {/* Template Content */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-slate-700">
-                      Contenido de la Plantilla
-                    </label>
-                    <span className="text-xs text-slate-400">
-                      {templateText.length}/{selectedTypeInfo?.maxLength || 600}
-                    </span>
-                  </div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Contenido de la Plantilla
+                  </label>
                   <textarea
                     value={templateText}
                     onChange={(e) => setTemplateText(e.target.value)}
                     placeholder={selectedTypeInfo?.placeholder || 'Escribe tu plantilla...'}
                     rows={5}
                     className={cn(
-                      'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl',
+                      'w-full px-4 py-3 bg-slate-50 border rounded-xl',
                       'text-slate-900 placeholder:text-slate-400 resize-none',
                       'focus:ring-2 focus:border-transparent transition-all',
-                      colors.ring
+                      colors.ring,
+                      templateText.length > (selectedTypeInfo?.maxLength || 600) * 0.9
+                        ? 'border-red-300 focus:ring-red-500'
+                        : templateText.length > (selectedTypeInfo?.maxLength || 600) * 0.7
+                          ? 'border-amber-300 focus:ring-amber-500'
+                          : 'border-slate-200'
                     )}
                     maxLength={selectedTypeInfo?.maxLength || 600}
                   />
 
+                  {/* Character Count Bar */}
+                  <div className="mt-2">
+                    <CharacterCountBar
+                      current={templateText.length}
+                      max={selectedTypeInfo?.maxLength || 600}
+                      showWarningAt={70}
+                      showDangerAt={90}
+                    />
+                  </div>
+
                   {/* Detected Variables */}
                   {detectedVariables.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      <span className="text-xs text-slate-400 mr-1">Variables detectadas:</span>
-                      {detectedVariables.map((variable) => (
-                        <span
-                          key={variable}
-                          className={cn(
-                            'px-1.5 py-0.5 text-xs font-mono rounded',
-                            colors.variable
-                          )}
-                        >
-                          {variable}
+                    <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-xs font-medium text-emerald-700">
+                          Variables detectadas ({detectedVariables.length})
                         </span>
-                      ))}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {detectedVariables.map((variable) => (
+                          <span
+                            key={variable}
+                            className="px-2 py-1 text-xs font-mono bg-white border border-emerald-200 rounded text-emerald-700"
+                          >
+                            {variable}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-emerald-600 mt-2">
+                        Estas variables se reemplazarán automáticamente con datos reales
+                      </p>
                     </div>
                   )}
                 </div>
@@ -471,30 +505,38 @@ export function TemplateModal({
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
-            {step === 2 && !template && (
+          <div className="px-4 md:px-6 py-4 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
+            {step === 2 && !template ? (
               <button
                 onClick={() => setStep(1)}
-                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                className="px-3 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors min-h-[44px]"
               >
                 ← Cambiar tipo
               </button>
-            )}
-            {(step === 1 || template) && <div />}
-
-            <div className="flex items-center gap-3">
+            ) : (
               <button
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
+                className="flex-1 md:flex-none px-4 py-2.5 min-h-[44px] rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
               >
                 Cancelar
               </button>
+            )}
+
+            <div className="flex items-center gap-3 flex-1 md:flex-none justify-end">
+              {step === 2 && (isEditing || isDuplicating) && (
+                <button
+                  onClick={onClose}
+                  className="hidden md:flex px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
+                >
+                  Cancelar
+                </button>
+              )}
               {step === 2 && (
                 <button
                   onClick={handleSave}
                   disabled={isSaving || !name.trim() || !templateText.trim()}
                   className={cn(
-                    'px-5 py-2.5 rounded-xl font-medium text-white flex items-center gap-2 transition-all',
+                    'flex-1 md:flex-none px-5 py-2.5 min-h-[44px] rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all',
                     isSaving || !name.trim() || !templateText.trim()
                       ? 'bg-slate-300 cursor-not-allowed'
                       : colors.button
@@ -508,7 +550,7 @@ export function TemplateModal({
                   ) : (
                     <>
                       {icons.check}
-                      <span>{template ? 'Guardar' : 'Crear'}</span>
+                      <span>{isEditing ? 'Guardar' : isDuplicating ? 'Duplicar' : 'Crear'}</span>
                     </>
                   )}
                 </button>

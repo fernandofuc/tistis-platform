@@ -12,3 +12,6 @@ export * from './config';
 
 // Hooks
 export * from './hooks';
+
+// UI Components
+export { CharacterCountBar } from './CharacterCountBar';

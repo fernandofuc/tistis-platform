@@ -3,6 +3,9 @@
 // Exports all prompt configuration components
 // =====================================================
 
+// Onboarding
+export { GettingStartedCard } from './GettingStartedCard';
+
 // Instructions
 export { InstructionCard } from './InstructionCard';
 export type { Instruction } from './InstructionCard';

@@ -196,6 +196,33 @@ export function TemplateConfigSection({
     setIsModalOpen(true);
   }, []);
 
+  // Duplicate template
+  const handleDuplicate = useCallback((template: ResponseTemplate) => {
+    // Generate unique copy name, avoiding "(Copia) (Copia)" pattern
+    let baseName = template.name;
+    // Remove existing " (Copia)" or " (Copia X)" suffix
+    baseName = baseName.replace(/\s*\(Copia(?:\s+\d+)?\)$/, '');
+
+    // Find existing copies with this base name to determine next number
+    const existingCopies = templates.filter(t =>
+      t.name === `${baseName} (Copia)` || t.name.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(Copia \\d+\\)$`))
+    );
+
+    const newName = existingCopies.length === 0
+      ? `${baseName} (Copia)`
+      : `${baseName} (Copia ${existingCopies.length + 1})`;
+
+    // Create a copy without ID so it creates a new record
+    const duplicatedTemplate: ResponseTemplate = {
+      ...template,
+      id: '', // Empty ID triggers POST instead of PUT
+      name: newName,
+      is_active: false, // Start as inactive to review before activating
+    };
+    setEditingTemplate(duplicatedTemplate);
+    setIsModalOpen(true);
+  }, [templates]);
+
   // Open new template modal
   const handleAddNew = useCallback(() => {
     setEditingTemplate(null);
@@ -315,6 +342,7 @@ export function TemplateConfigSection({
                               onEdit={handleEdit}
                               onDelete={handleDelete}
                               onToggleActive={handleToggleActive}
+                              onDuplicate={handleDuplicate}
                               isDeleting={deletingId === template.id}
                             />
                           ))}

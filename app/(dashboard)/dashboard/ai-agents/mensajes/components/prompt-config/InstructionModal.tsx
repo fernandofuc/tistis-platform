@@ -9,7 +9,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
-import { icons } from '../shared';
+import { icons, CharacterCountBar } from '../shared';
 import {
   PROMPT_INSTRUCTION_TYPES,
   getInstructionsByCategory,
@@ -184,18 +184,24 @@ export function InstructionModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-black/50 backdrop-blur-sm"
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden"
+          initial={{ opacity: 0, y: 100 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 100 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-lg max-h-[95vh] md:max-h-[90vh] overflow-hidden flex flex-col"
         >
+          {/* Mobile drag indicator */}
+          <div className="md:hidden flex justify-center pt-2 pb-1">
+            <div className="w-10 h-1 bg-slate-300 rounded-full" />
+          </div>
+
           {/* Header */}
           <div className={cn(
-            'px-6 py-4 bg-gradient-to-r text-white',
+            'px-4 md:px-6 py-3 md:py-4 bg-gradient-to-r text-white',
             colors.gradient
           )}>
             <div className="flex items-center justify-between">
@@ -222,7 +228,7 @@ export function InstructionModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+          <div className="flex-1 p-4 md:p-6 overflow-y-auto">
             {/* Step 1: Select Type */}
             {step === 1 && (
               <div className="space-y-4">
@@ -351,27 +357,35 @@ export function InstructionModal({
 
                 {/* Instruction Content */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-slate-700">
-                      Instrucción
-                    </label>
-                    <span className="text-xs text-slate-400">
-                      {content.length}/{selectedTypeInfo?.maxLength || 500}
-                    </span>
-                  </div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Instrucción
+                  </label>
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder={selectedTypeInfo?.placeholder || 'Escribe la instrucción...'}
                     rows={4}
                     className={cn(
-                      'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl',
+                      'w-full px-4 py-3 bg-slate-50 border rounded-xl',
                       'text-slate-900 placeholder:text-slate-400 resize-none',
                       'focus:ring-2 focus:border-transparent transition-all',
-                      colors.ring
+                      colors.ring,
+                      content.length > (selectedTypeInfo?.maxLength || 500) * 0.9
+                        ? 'border-red-300 focus:ring-red-500'
+                        : content.length > (selectedTypeInfo?.maxLength || 500) * 0.7
+                          ? 'border-amber-300 focus:ring-amber-500'
+                          : 'border-slate-200'
                     )}
                     maxLength={selectedTypeInfo?.maxLength || 500}
                   />
+                  <div className="mt-2">
+                    <CharacterCountBar
+                      current={content.length}
+                      max={selectedTypeInfo?.maxLength || 500}
+                      showWarningAt={70}
+                      showDangerAt={90}
+                    />
+                  </div>
                 </div>
 
                 {/* Examples (Optional) */}
@@ -456,30 +470,38 @@ export function InstructionModal({
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
-            {step === 2 && !instruction && (
+          <div className="px-4 md:px-6 py-4 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
+            {step === 2 && !instruction ? (
               <button
                 onClick={() => setStep(1)}
-                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                className="px-3 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors min-h-[44px]"
               >
                 ← Cambiar tipo
               </button>
-            )}
-            {(step === 1 || instruction) && <div />}
-
-            <div className="flex items-center gap-3">
+            ) : (
               <button
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
+                className="flex-1 md:flex-none px-4 py-2.5 min-h-[44px] rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
               >
                 Cancelar
               </button>
+            )}
+
+            <div className="flex items-center gap-3 flex-1 md:flex-none justify-end">
+              {step === 2 && instruction && (
+                <button
+                  onClick={onClose}
+                  className="hidden md:flex px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
+                >
+                  Cancelar
+                </button>
+              )}
               {step === 2 && (
                 <button
                   onClick={handleSave}
                   disabled={isSaving || !title.trim() || !content.trim()}
                   className={cn(
-                    'px-5 py-2.5 rounded-xl font-medium text-white flex items-center gap-2 transition-all',
+                    'flex-1 md:flex-none px-5 py-2.5 min-h-[44px] rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all',
                     isSaving || !title.trim() || !content.trim()
                       ? 'bg-slate-300 cursor-not-allowed'
                       : colors.button

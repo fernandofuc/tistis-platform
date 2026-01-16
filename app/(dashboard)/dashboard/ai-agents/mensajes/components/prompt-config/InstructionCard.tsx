@@ -83,11 +83,21 @@ export function InstructionCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       className={cn(
-        'bg-white rounded-xl border p-4 shadow-sm transition-all hover:shadow-md',
-        instruction.is_active ? 'border-slate-200' : 'border-slate-100 opacity-60',
+        'bg-white rounded-xl border p-4 shadow-sm transition-all hover:shadow-md relative overflow-hidden',
+        instruction.is_active ? 'border-slate-200' : 'border-slate-100 opacity-70',
         isDeleting && 'opacity-50 pointer-events-none'
       )}
     >
+      {/* Status Indicator Line - Visual feedback at top of card */}
+      <div className={cn(
+        'absolute top-0 left-0 right-0 h-1 transition-colors',
+        instruction.is_active
+          ? instruction.include_in_prompt
+            ? colorScheme === 'purple' ? 'bg-purple-500' : 'bg-orange-500'
+            : 'bg-emerald-500'
+          : 'bg-slate-200'
+      )} />
+
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -113,8 +123,16 @@ export function InstructionCard({
                 {instructionType?.label || instruction.instruction_type}
               </span>
               {instruction.include_in_prompt && (
-                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
+                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
                   En Prompt
+                </span>
+              )}
+              {!instruction.is_active && (
+                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-500">
+                  Inactiva
                 </span>
               )}
             </div>
@@ -163,34 +181,50 @@ export function InstructionCard({
       </div>
 
       {/* Footer with toggles */}
-      <div className="mt-3 pt-3 border-t border-slate-100 pl-12 flex items-center justify-between">
+      <div className="mt-3 pt-3 border-t border-slate-100 pl-12 flex items-center justify-between gap-4">
         {/* Include in Prompt Toggle */}
-        <label className="flex items-center gap-2 cursor-pointer group">
+        <label className={cn(
+          'flex items-center gap-2 cursor-pointer group transition-opacity',
+          !instruction.is_active && 'opacity-50 cursor-not-allowed'
+        )}>
           <div className="relative">
             <input
               type="checkbox"
               checked={instruction.include_in_prompt}
-              onChange={(e) => onToggleIncludeInPrompt(instruction.id, e.target.checked)}
+              onChange={(e) => instruction.is_active && onToggleIncludeInPrompt(instruction.id, e.target.checked)}
+              disabled={!instruction.is_active}
               className="sr-only peer"
             />
             <div className={cn(
-              'w-9 h-5 rounded-full transition-colors',
+              'w-9 h-5 rounded-full transition-all duration-200',
               instruction.include_in_prompt
                 ? colorScheme === 'purple' ? 'bg-purple-600' : 'bg-orange-600'
-                : 'bg-slate-200'
+                : 'bg-slate-200',
+              instruction.is_active && 'group-hover:shadow-md'
             )} />
-            <div className={cn(
-              'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-              instruction.include_in_prompt && 'translate-x-4'
-            )} />
+            <motion.div
+              animate={{ x: instruction.include_in_prompt ? 16 : 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow"
+            />
           </div>
-          <span className="text-xs text-slate-500">Incluir en prompt</span>
+          <span className={cn(
+            'text-xs transition-colors',
+            instruction.include_in_prompt
+              ? colorScheme === 'purple' ? 'text-purple-600 font-medium' : 'text-orange-600 font-medium'
+              : 'text-slate-500'
+          )}>
+            Incluir en prompt
+          </span>
         </label>
 
         {/* Active Toggle */}
         <label className="flex items-center gap-2 cursor-pointer group">
-          <span className="text-xs text-slate-500">
-            {instruction.is_active ? 'Activo' : 'Inactivo'}
+          <span className={cn(
+            'text-xs transition-colors',
+            instruction.is_active ? 'text-emerald-600 font-medium' : 'text-slate-500'
+          )}>
+            {instruction.is_active ? 'Activa' : 'Inactiva'}
           </span>
           <div className="relative">
             <input
@@ -200,13 +234,14 @@ export function InstructionCard({
               className="sr-only peer"
             />
             <div className={cn(
-              'w-9 h-5 rounded-full transition-colors',
+              'w-9 h-5 rounded-full transition-all duration-200 group-hover:shadow-md',
               instruction.is_active ? 'bg-emerald-500' : 'bg-slate-200'
             )} />
-            <div className={cn(
-              'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-              instruction.is_active && 'translate-x-4'
-            )} />
+            <motion.div
+              animate={{ x: instruction.is_active ? 16 : 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow"
+            />
           </div>
         </label>
       </div>

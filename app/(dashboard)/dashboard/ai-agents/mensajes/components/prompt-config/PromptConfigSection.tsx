@@ -45,6 +45,10 @@ export function PromptConfigSection({
   const [editingInstruction, setEditingInstruction] = useState<Instruction | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Search and filter state (only shown with 4+ instructions)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'in_prompt'>('all');
+
   // Colors
   const colors = colorScheme === 'purple'
     ? {
@@ -246,6 +250,26 @@ export function PromptConfigSection({
   const inPromptCount = instructions.filter(i => i.include_in_prompt).length;
   const existingTypes = instructions.map(i => i.instruction_type);
 
+  // Filter and search instructions
+  const filteredInstructions = instructions.filter(instruction => {
+    // Search filter
+    const matchesSearch = !searchQuery ||
+      instruction.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      instruction.instruction.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      instruction.instruction_type.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Status filter
+    const matchesStatus = filterStatus === 'all' ||
+      (filterStatus === 'active' && instruction.is_active) ||
+      (filterStatus === 'inactive' && !instruction.is_active) ||
+      (filterStatus === 'in_prompt' && instruction.include_in_prompt);
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Show search/filter UI only when there are 4+ instructions
+  const showSearchAndFilter = instructions.length >= 4;
+
   return (
     <>
       <div className={cn(
@@ -333,26 +357,130 @@ export function PromptConfigSection({
                       </p>
                     </div>
 
+                    {/* Search and Filters - Only shown with 4+ instructions */}
+                    {showSearchAndFilter && (
+                      <div className="pt-3 space-y-3">
+                        {/* Search Input */}
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                            {icons.search || (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            )}
+                          </span>
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Buscar instrucciones..."
+                            className={cn(
+                              'w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl',
+                              'text-sm text-slate-900 placeholder:text-slate-400',
+                              'focus:ring-2 focus:border-transparent transition-all',
+                              colorScheme === 'purple' ? 'focus:ring-purple-500' : 'focus:ring-orange-500'
+                            )}
+                          />
+                          {searchQuery && (
+                            <button
+                              onClick={() => setSearchQuery('')}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                              {icons.x}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Filter Pills */}
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { key: 'all', label: 'Todas', count: instructions.length },
+                            { key: 'active', label: 'Activas', count: activeInstructions.length },
+                            { key: 'inactive', label: 'Inactivas', count: instructions.length - activeInstructions.length },
+                            { key: 'in_prompt', label: 'En Prompt', count: inPromptCount },
+                          ].map(({ key, label, count }) => (
+                            <button
+                              key={key}
+                              onClick={() => setFilterStatus(key as typeof filterStatus)}
+                              className={cn(
+                                'px-3 py-1.5 text-xs font-medium rounded-full transition-all',
+                                filterStatus === key
+                                  ? colorScheme === 'purple'
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-orange-600 text-white'
+                                  : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                              )}
+                            >
+                              {label} ({count})
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Active filters summary */}
+                        {(searchQuery || filterStatus !== 'all') && (
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span>
+                              Mostrando {filteredInstructions.length} de {instructions.length} instrucciones
+                            </span>
+                            {(searchQuery || filterStatus !== 'all') && (
+                              <button
+                                onClick={() => {
+                                  setSearchQuery('');
+                                  setFilterStatus('all');
+                                }}
+                                className={cn(
+                                  'text-xs font-medium hover:underline',
+                                  colorScheme === 'purple' ? 'text-purple-600' : 'text-orange-600'
+                                )}
+                              >
+                                Limpiar filtros
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Instructions Grid */}
                     {instructions.length > 0 ? (
-                      <div className="pt-2 space-y-3">
-                        <AnimatePresence mode="popLayout">
-                          {instructions
-                            .sort((a, b) => b.priority - a.priority)
-                            .map((instruction) => (
-                              <InstructionCard
-                                key={instruction.id}
-                                instruction={instruction}
-                                colorScheme={colorScheme}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                onToggleActive={handleToggleActive}
-                                onToggleIncludeInPrompt={handleToggleIncludeInPrompt}
-                                isDeleting={deletingId === instruction.id}
-                              />
-                            ))}
-                        </AnimatePresence>
-                      </div>
+                      filteredInstructions.length > 0 ? (
+                        <div className="pt-2 space-y-3">
+                          <AnimatePresence mode="popLayout">
+                            {filteredInstructions
+                              .sort((a, b) => b.priority - a.priority)
+                              .map((instruction) => (
+                                <InstructionCard
+                                  key={instruction.id}
+                                  instruction={instruction}
+                                  colorScheme={colorScheme}
+                                  onEdit={handleEdit}
+                                  onDelete={handleDelete}
+                                  onToggleActive={handleToggleActive}
+                                  onToggleIncludeInPrompt={handleToggleIncludeInPrompt}
+                                  isDeleting={deletingId === instruction.id}
+                                />
+                              ))}
+                          </AnimatePresence>
+                        </div>
+                      ) : (
+                        <div className="pt-4 text-center py-6">
+                          <p className="text-slate-500 text-sm">
+                            No se encontraron instrucciones con los filtros actuales
+                          </p>
+                          <button
+                            onClick={() => {
+                              setSearchQuery('');
+                              setFilterStatus('all');
+                            }}
+                            className={cn(
+                              'mt-2 text-sm font-medium hover:underline',
+                              colorScheme === 'purple' ? 'text-purple-600' : 'text-orange-600'
+                            )}
+                          >
+                            Limpiar filtros
+                          </button>
+                        </div>
+                      )
                     ) : (
                       <div className="pt-4 text-center py-8">
                         <div className={cn(
