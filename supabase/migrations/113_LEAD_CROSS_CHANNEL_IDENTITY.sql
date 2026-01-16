@@ -14,6 +14,92 @@
 -- =====================================================
 
 -- =====================================================
+-- 0. PREREQUISITOS: Asegurar columnas en leads
+-- =====================================================
+-- Estas columnas pueden no existir si migraciones anteriores no se ejecutaron
+
+-- Instagram PSID
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'instagram_psid') THEN
+        ALTER TABLE public.leads ADD COLUMN instagram_psid VARCHAR(255);
+    END IF;
+END $$;
+
+-- Instagram username
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'instagram_username') THEN
+        ALTER TABLE public.leads ADD COLUMN instagram_username VARCHAR(255);
+    END IF;
+END $$;
+
+-- Facebook PSID
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'facebook_psid') THEN
+        ALTER TABLE public.leads ADD COLUMN facebook_psid VARCHAR(255);
+    END IF;
+END $$;
+
+-- TikTok open_id
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'tiktok_open_id') THEN
+        ALTER TABLE public.leads ADD COLUMN tiktok_open_id VARCHAR(255);
+    END IF;
+END $$;
+
+-- Profile image URL
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'profile_image_url') THEN
+        ALTER TABLE public.leads ADD COLUMN profile_image_url TEXT;
+    END IF;
+END $$;
+
+-- last_interaction_at
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'last_interaction_at') THEN
+        ALTER TABLE public.leads ADD COLUMN last_interaction_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
+-- first_contact_at
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'first_contact_at') THEN
+        ALTER TABLE public.leads ADD COLUMN first_contact_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
+
+-- name (alias for display)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'name') THEN
+        ALTER TABLE public.leads ADD COLUMN name VARCHAR(255);
+    END IF;
+END $$;
+
+-- deleted_at (for soft deletes)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'deleted_at') THEN
+        ALTER TABLE public.leads ADD COLUMN deleted_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
+-- =====================================================
 -- 1. FUNCIÓN: link_lead_channel_identity
 -- Vincula una nueva identidad de canal a un lead existente
 -- =====================================================
@@ -365,8 +451,9 @@ BEGIN
     WHERE id = p_secondary_lead_id;
 
     -- 7. Log the merge (only if audit_logs table exists)
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_logs') THEN
-        INSERT INTO audit_logs (tenant_id, action, entity_type, entity_id, details, created_by)
+    -- NOTE: audit_logs table uses 'metadata' column, not 'details'
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_logs' AND table_schema = 'public') THEN
+        INSERT INTO public.audit_logs (tenant_id, action, entity_type, entity_id, metadata, user_id, created_at)
         VALUES (
             v_primary_tenant,
             'lead_merged',
@@ -379,7 +466,8 @@ BEGIN
                 'messages_moved', v_messages_moved,
                 'loyalty_merged', v_loyalty_merged
             ),
-            p_merged_by
+            p_merged_by,
+            NOW()
         );
     END IF;
 
@@ -558,22 +646,76 @@ GRANT EXECUTE ON FUNCTION find_or_create_lead_smart TO authenticated;
 GRANT EXECUTE ON FUNCTION find_or_create_lead_smart TO service_role;
 
 -- =====================================================
--- 5. CREAR TABLA DE AUDIT LOGS SI NO EXISTE
+-- 5. ASEGURAR COLUMNAS EN audit_logs
 -- =====================================================
+-- La tabla audit_logs puede haber sido creada en 001_initial_schema.sql sin tenant_id
+-- Agregar columnas faltantes si no existen
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
-    action TEXT NOT NULL,
-    entity_type TEXT NOT NULL,
-    entity_id UUID,
-    details JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    created_by UUID
-);
+-- Agregar tenant_id si no existe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'audit_logs'
+          AND column_name = 'tenant_id'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN tenant_id UUID;
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_id ON public.audit_logs(tenant_id);
+    END IF;
+END $$;
 
-CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant ON audit_logs(tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
+-- Agregar staff_id si no existe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'audit_logs'
+          AND column_name = 'staff_id'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN staff_id UUID;
+    END IF;
+END $$;
+
+-- Agregar status si no existe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'audit_logs'
+          AND column_name = 'status'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN status VARCHAR(20) DEFAULT 'success';
+    END IF;
+END $$;
+
+-- Agregar request_id si no existe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'audit_logs'
+          AND column_name = 'request_id'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN request_id VARCHAR(100);
+    END IF;
+END $$;
+
+-- Agregar error_message si no existe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'audit_logs'
+          AND column_name = 'error_message'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN error_message TEXT;
+    END IF;
+END $$;
 
 -- =====================================================
 -- 6. ÍNDICES PARA BÚSQUEDAS CROSS-CHANNEL
