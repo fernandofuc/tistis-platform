@@ -1420,15 +1420,34 @@ function buildMetaPrompt(
       }).join('\n\n')
     : '';
 
-  // Formatear manejo de competidores (NUEVO)
-  const competitorHandlingText = context.competitorHandling && context.competitorHandling.length > 0
-    ? context.competitorHandling.map(c => {
+  // Formatear manejo de competidores (NUEVO con comportamiento DEFAULT)
+  const hasConfiguredCompetitors = context.competitorHandling && context.competitorHandling.length > 0;
+
+  const competitorHandlingText = hasConfiguredCompetitors
+    ? `**COMPETIDORES CONFIGURADOS:**
+${context.competitorHandling!.map(c => {
         const diffStr = c.keyDifferentiators && c.keyDifferentiators.length > 0
-          ? `\n  Diferenciadores: ${c.keyDifferentiators.join(', ')}`
+          ? `\n  Diferenciadores clave: ${c.keyDifferentiators.join(', ')}`
           : '';
         return `- ${c.competitorName}: ${c.responseStrategy}${diffStr}`;
-      }).join('\n')
-    : '';
+      }).join('\n')}
+
+**COMPORTAMIENTO DEFAULT (para otros competidores no listados):**
+- NUNCA hables mal de la competencia
+- Respuesta neutral: "No conozco los detalles específicos de sus servicios"
+- Redirige a fortalezas propias: "Pero aquí en ${context.tenantName} ofrecemos [menciona diferenciadores]"
+- Si comparan precios: "Cada negocio tiene su propuesta de valor"
+- Mantén profesionalismo: "Respetamos a todos los profesionales del sector"`
+    : `**COMPORTAMIENTO DEFAULT PARA COMPETIDORES:**
+Cuando el cliente mencione CUALQUIER competidor o haga comparaciones:
+- NUNCA hables mal de la competencia bajo ninguna circunstancia
+- Respuesta neutral: "No conozco los detalles específicos de sus servicios"
+- Redirige a fortalezas propias: "Pero aquí en ${context.tenantName} ofrecemos [diferenciadores del negocio]"
+- Si comparan precios: "Cada negocio tiene su propuesta de valor. Aquí ofrecemos [valor único]"
+- Si están decidiendo: "¿Te gustaría conocer más sobre nuestros servicios?"
+- Mantén profesionalismo: "Respetamos a todos los profesionales del sector"
+- NUNCA hagas comparaciones directas negativas
+- Si el cliente tuvo mala experiencia con otro: "Lamento que hayas tenido esa experiencia. Aquí nos enfocamos en [valor positivo]"`;
 
   // Consideraciones especiales de la vertical
   const specialConsiderations = verticalConfig.specialConsiderations.length > 0
@@ -1524,7 +1543,8 @@ ${knowledgeArticlesText ? `**BASE DE CONOCIMIENTO (ARTÍCULOS):**\n${knowledgeAr
 
 ${responseTemplatesText ? `**TEMPLATES DE RESPUESTA PREDEFINIDOS:**\n${responseTemplatesText}` : ''}
 
-${competitorHandlingText ? `**MANEJO DE COMPETIDORES:**\nCuando el cliente mencione estos competidores, responde así:\n${competitorHandlingText}` : ''}
+**MANEJO DE COMPETIDORES:**
+${competitorHandlingText}
 
 ${context.customInstructions ? `**INSTRUCCIONES ADICIONALES:**\n${context.customInstructions}` : ''}
 

@@ -1036,6 +1036,175 @@ export function getMaxCorrectionAttempts(validationResult: ValidationResult): nu
 }
 
 // ======================
+// TEMPLATE VARIABLE VALIDATION
+// ======================
+
+/**
+ * Variables disponibles en el sistema que pueden resolverse en runtime
+ */
+const AVAILABLE_SYSTEM_VARIABLES = [
+  '{nombre}',
+  '{telefono}',
+  '{fecha}',
+  '{hora}',
+  '{servicio}',
+  '{precio}',
+  '{negocio}',
+  '{sucursal}',
+  '{direccion}',
+  '{telefono_negocio}',
+  '{horario}',
+  '{especialista}',
+  '{especialidad}',
+  '{saludo_tiempo}',
+  '{telefono_emergencia}',
+  '{descripcion_promo}',
+  '{fecha_fin}',
+  '{años}',
+];
+
+/**
+ * Resultado de validación de variables de template
+ */
+export interface TemplateVariableValidation {
+  isValid: boolean;
+  template: string;
+  detectedVariables: string[];
+  missingVariables: string[];
+  invalidVariables: string[];
+  warnings: string[];
+}
+
+/**
+ * Valida que las variables usadas en un template estén disponibles en el sistema
+ *
+ * @param templateText - Texto del template con variables {variable}
+ * @param availableContext - Variables adicionales disponibles en el contexto específico
+ * @returns Resultado de validación con variables detectadas, faltantes e inválidas
+ */
+export function validateTemplateVariables(
+  templateText: string,
+  availableContext: string[] = []
+): TemplateVariableValidation {
+  // Detectar todas las variables en el formato {variable}
+  const variablePattern = /\{([a-z_]+)\}/gi;
+  const detectedVariables: string[] = [];
+  let match;
+
+  while ((match = variablePattern.exec(templateText)) !== null) {
+    const variable = `{${match[1].toLowerCase()}}`;
+    if (!detectedVariables.includes(variable)) {
+      detectedVariables.push(variable);
+    }
+  }
+
+  // Combinar variables del sistema con las del contexto
+  const allAvailableVariables = [
+    ...AVAILABLE_SYSTEM_VARIABLES,
+    ...availableContext.map(v => v.toLowerCase()),
+  ];
+
+  // Identificar variables que no están disponibles
+  const missingVariables: string[] = [];
+  const invalidVariables: string[] = [];
+  const warnings: string[] = [];
+
+  for (const variable of detectedVariables) {
+    if (!allAvailableVariables.includes(variable)) {
+      missingVariables.push(variable);
+
+      // Sugerir variable similar si existe
+      const similarVariable = findSimilarVariable(variable, allAvailableVariables);
+      if (similarVariable) {
+        warnings.push(`Variable "${variable}" no reconocida. ¿Quisiste decir "${similarVariable}"?`);
+        invalidVariables.push(variable);
+      } else {
+        warnings.push(`Variable "${variable}" no está disponible en el sistema.`);
+        invalidVariables.push(variable);
+      }
+    }
+  }
+
+  return {
+    isValid: missingVariables.length === 0,
+    template: templateText,
+    detectedVariables,
+    missingVariables,
+    invalidVariables,
+    warnings,
+  };
+}
+
+/**
+ * Encuentra una variable similar usando distancia de Levenshtein simple
+ */
+function findSimilarVariable(target: string, available: string[]): string | null {
+  const targetClean = target.replace(/[{}]/g, '');
+
+  for (const variable of available) {
+    const variableClean = variable.replace(/[{}]/g, '');
+
+    // Si es substring o tiene alta similitud
+    if (variableClean.includes(targetClean) || targetClean.includes(variableClean)) {
+      return variable;
+    }
+
+    // Comparar primeras letras
+    if (targetClean.substring(0, 3) === variableClean.substring(0, 3)) {
+      return variable;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Valida múltiples templates de respuesta
+ *
+ * @param templates - Array de templates con su texto
+ * @returns Array de resultados de validación
+ */
+export function validateAllTemplates(
+  templates: Array<{ triggerType: string; name: string; template: string }>
+): Array<TemplateVariableValidation & { triggerType: string; name: string }> {
+  return templates.map(t => ({
+    ...validateTemplateVariables(t.template),
+    triggerType: t.triggerType,
+    name: t.name,
+  }));
+}
+
+/**
+ * Genera un reporte de validación de templates
+ */
+export function formatTemplateValidationReport(
+  validations: Array<TemplateVariableValidation & { triggerType: string; name: string }>
+): string {
+  const invalidTemplates = validations.filter(v => !v.isValid);
+
+  if (invalidTemplates.length === 0) {
+    return '✅ Todos los templates tienen variables válidas.';
+  }
+
+  const lines: string[] = [
+    `⚠️ ${invalidTemplates.length} template(s) con variables problemáticas:`,
+    '',
+  ];
+
+  for (const template of invalidTemplates) {
+    lines.push(`📋 ${template.name} (${template.triggerType}):`);
+    for (const warning of template.warnings) {
+      lines.push(`   - ${warning}`);
+    }
+    lines.push('');
+  }
+
+  lines.push('💡 Sugerencia: Usa solo variables disponibles: ' + AVAILABLE_SYSTEM_VARIABLES.slice(0, 5).join(', ') + '...');
+
+  return lines.join('\n');
+}
+
+// ======================
 // EXPORTS
 // ======================
 
@@ -1045,4 +1214,8 @@ export const PromptValidatorService = {
   generateCorrectionInstructions,
   isAutoCorrectible,
   getMaxCorrectionAttempts,
+  // Template validation (NUEVO)
+  validateTemplateVariables,
+  validateAllTemplates,
+  formatTemplateValidationReport,
 };

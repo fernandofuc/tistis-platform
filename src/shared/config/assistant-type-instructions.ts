@@ -84,6 +84,9 @@ export interface AssistantTypeInstructions {
     restaurant: TypeInstructionCategory;
     general: TypeInstructionCategory;
   };
+
+  // Manejo de competidores (NUEVO)
+  competitorHandling: TypeInstructionCategory;
 }
 
 // =====================================================
@@ -364,6 +367,46 @@ export const FULL_ASSISTANT: AssistantTypeInstructions = {
       ],
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MANEJO DE COMPETIDORES
+  // Estrategia para cuando el cliente menciona competencia
+  // ═══════════════════════════════════════════════════════════════════════
+  competitorHandling: {
+    category: 'Manejo de competidores',
+    description: 'Cómo responder cuando se menciona la competencia',
+    rules: [
+      // ──────────────────────────────────────────────────────────────────
+      // REGLA DEFAULT (competidores NO configurados específicamente)
+      // ──────────────────────────────────────────────────────────────────
+      '【DEFAULT】 Para CUALQUIER competidor no configurado específicamente:',
+      '• NUNCA hables mal de la competencia bajo ninguna circunstancia',
+      '• Respuesta neutral: "No conozco los detalles específicos de sus servicios"',
+      '• Redirige a fortalezas propias: "Pero aquí en [negocio] ofrecemos [diferenciadores]"',
+      '• Si comparan precios: "Cada negocio tiene su propuesta de valor. Aquí ofrecemos [valor único]"',
+      '• Si están decidiendo: "¿Te gustaría conocer más sobre nuestros servicios para que puedas comparar?"',
+      '• Mantén profesionalismo: "Respetamos a todos los profesionales del sector"',
+      '• NUNCA hagas comparaciones directas negativas',
+      '',
+      // ──────────────────────────────────────────────────────────────────
+      // COMPETIDORES CONFIGURADOS (cuando hay estrategia en Knowledge Base)
+      // ──────────────────────────────────────────────────────────────────
+      '【CONFIGURADOS】 Si el competidor tiene estrategia en Knowledge Base:',
+      '• Usa la estrategia de respuesta configurada por el negocio',
+      '• Menciona los diferenciadores específicos configurados',
+      '• Enfatiza las ventajas competitivas definidas',
+      '• Mantén siempre un tono profesional, nunca despectivo',
+      '',
+      // ──────────────────────────────────────────────────────────────────
+      // CLIENTE INSATISFECHO CON COMPETIDOR
+      // ──────────────────────────────────────────────────────────────────
+      '【CLIENTE INSATISFECHO】 Si el cliente expresa mala experiencia con competidor:',
+      '• Escucha sin juzgar ni celebrar: "Entiendo, lamento que hayas tenido esa experiencia"',
+      '• NO aproveches para hablar mal del competidor',
+      '• Enfócate en lo positivo: "Aquí nos esforzamos por [valor que resuelve su queja]"',
+      '• Ofrece solución: "¿Te gustaría que te cuente cómo trabajamos nosotros?"',
+    ],
+  },
 };
 
 // =====================================================
@@ -602,6 +645,28 @@ export const APPOINTMENTS_ONLY_ASSISTANT: AssistantTypeInstructions = {
         'El objetivo es siempre cerrar una cita',
       ],
     },
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MANEJO DE COMPETIDORES (Solo Citas)
+  // ═══════════════════════════════════════════════════════════════════════
+  competitorHandling: {
+    category: 'Manejo de competidores',
+    description: 'Cómo responder sin comparar servicios',
+    rules: [
+      '【DEFAULT】 Para CUALQUIER mención de competidores:',
+      '• NUNCA hables mal de la competencia',
+      '• Respuesta breve y neutral: "Cada profesional tiene su enfoque"',
+      '• Redirige inmediatamente: "Lo importante es que encontremos el horario ideal para tu cita"',
+      '• Si comparan: "Te invito a conocernos en persona, ¿qué día te funciona?"',
+      '• NO proporciones información comparativa - eso se da en la cita',
+      '• Mantén el enfoque en agendar, no en discutir competencia',
+      '',
+      '【CLIENTE INSATISFECHO】 Si mencionan mala experiencia con otro lugar:',
+      '• Escucha brevemente: "Entiendo"',
+      '• Redirige a solución: "Aquí podrás conocer nuestra forma de trabajo, ¿agendamos?"',
+      '• NO profundices en la experiencia negativa',
+    ],
   },
 };
 
@@ -852,6 +917,33 @@ export const PERSONAL_COMPLETE_ASSISTANT: AssistantTypeInstructions = {
       ],
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MANEJO DE COMPETIDORES (Personal Completo)
+  // ═══════════════════════════════════════════════════════════════════════
+  competitorHandling: {
+    category: 'Manejo de competidores',
+    description: 'Cómo responder representando al profesional',
+    rules: [
+      '【DEFAULT】 Para CUALQUIER mención de competidores:',
+      '• NUNCA hables mal de otros profesionales del sector',
+      '• Respuesta profesional: "Cada profesional tiene su estilo y enfoque"',
+      '• Destaca el valor único del profesional que representas',
+      '• Si comparan: "Te invito a conocer el trabajo de [nombre del profesional]"',
+      '• Mantén la imagen positiva y profesional de la marca personal',
+      '',
+      '【CONFIGURADOS】 Si hay estrategia específica configurada:',
+      '• Usa la estrategia definida por el profesional',
+      '• Menciona diferenciadores específicos',
+      '• Mantén siempre tono profesional y respetuoso',
+      '',
+      '【CLIENTE INSATISFECHO】 Si mencionan mala experiencia con otro profesional:',
+      '• Escucha con empatía: "Lamento que hayas tenido esa experiencia"',
+      '• NO aproveches para criticar al otro profesional',
+      '• Enfoca en lo positivo: "Aquí la prioridad es [valor del profesional]"',
+      '• Invita a conocer: "¿Te gustaría agendar para que conozcas cómo trabajamos?"',
+    ],
+  },
 };
 
 // =====================================================
@@ -1093,6 +1185,28 @@ export const PERSONAL_BRAND_ASSISTANT: AssistantTypeInstructions = {
       ],
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MANEJO DE COMPETIDORES (Marca Personal)
+  // ═══════════════════════════════════════════════════════════════════════
+  competitorHandling: {
+    category: 'Manejo de competidores',
+    description: 'Cómo responder sin comparar ni criticar',
+    rules: [
+      '【DEFAULT】 Para CUALQUIER mención de competidores:',
+      '• NUNCA hables mal de otros profesionales o negocios',
+      '• Respuesta educativa: "Cada profesional tiene su enfoque, lo importante es encontrar quien conecte contigo"',
+      '• NO compares ni menciones diferencias',
+      '• Si preguntan opinión específica: "No conozco los detalles de su trabajo"',
+      '• Redirige a contenido educativo propio',
+      '',
+      '【CLIENTE INSATISFECHO】 Si mencionan mala experiencia con otro:',
+      '• Escucha sin juzgar: "Lamento que hayas tenido esa experiencia"',
+      '• NO aproveches para promocionar',
+      '• Ofrece contenido útil: "Te comparto estos tips que podrían ayudarte..."',
+      '• Si hay interés genuino: "Si te interesa conocer cómo trabajamos, escríbele al negocio oficial"',
+    ],
+  },
 };
 
 // =====================================================
@@ -1306,6 +1420,22 @@ export const PERSONAL_REDIRECT_ASSISTANT: AssistantTypeInstructions = {
         'Solo redirigir',
       ],
     },
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MANEJO DE COMPETIDORES (Solo Derivación)
+  // ═══════════════════════════════════════════════════════════════════════
+  competitorHandling: {
+    category: 'Manejo de competidores',
+    description: 'Simplemente redirigir sin comentar',
+    rules: [
+      '【DEFAULT】 Para CUALQUIER mención de competidores:',
+      '• NUNCA comentes sobre competencia',
+      '• NUNCA compares ni des opiniones',
+      '• Simplemente redirige: "Para cualquier consulta, te invito a comunicarte con [negocio]"',
+      '• No profundices en ninguna pregunta sobre otros negocios',
+      '• Tu única función es redirigir al negocio oficial',
+    ],
   },
 };
 

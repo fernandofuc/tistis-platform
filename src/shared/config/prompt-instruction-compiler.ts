@@ -61,6 +61,7 @@ export interface CompiledInstructions {
     behavior: string;
     channel: string;
     situations: string;
+    competitors: string;
     vertical: string;
   };
 }
@@ -232,9 +233,17 @@ function buildSituationsSection(
   lines.push('');
   lines.push(formatCategory(style.situations.apologizing));
   lines.push('');
+  lines.push(formatCategory(style.situations.celebratingSuccess));
+  lines.push('');
   lines.push(formatCategory(style.situations.handlingUrgency));
   lines.push('');
   lines.push(formatCategory(style.situations.askingForInfo));
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CASOS ESPECIALES (NUEVO) - Insistencia, lenguaje inapropiado, etc.
+  // ═══════════════════════════════════════════════════════════════════════
+  lines.push('');
+  lines.push(formatCategory(style.situations.edgeCaseHandling));
 
   // Comportamiento de ventas del tipo (si aplica)
   // Los tipos personales no tienen comportamiento de ventas
@@ -251,6 +260,22 @@ function buildSituationsSection(
       lines.push(formatCategory(type.salesBehavior.upselling));
     }
   }
+
+  return lines.join('\n');
+}
+
+/**
+ * Construye la sección de MANEJO DE COMPETIDORES
+ */
+function buildCompetitorSection(type: AssistantTypeInstructions): string {
+  const lines: string[] = [];
+
+  lines.push('## MANEJO DE COMPETIDORES');
+  lines.push('');
+  lines.push('> Estrategias para cuando el cliente mencione la competencia.');
+  lines.push('');
+
+  lines.push(formatCategory(type.competitorHandling));
 
   return lines.join('\n');
 }
@@ -294,6 +319,7 @@ export function compileInstructions(
   const channelSection = buildChannelSection(style, channel);
   const situationsSection = buildSituationsSection(style, type);
   const flowSection = buildFlowSection(type);
+  const competitorSection = buildCompetitorSection(type);
 
   // Construir texto completo
   const fullText = [
@@ -321,6 +347,10 @@ export function compileInstructions(
     '---',
     '',
     situationsSection,
+    '',
+    '---',
+    '',
+    competitorSection,
     '',
     '---',
     '',
@@ -359,8 +389,10 @@ export function compileInstructions(
     style.situations.escalation,
     style.situations.closingConversation,
     style.situations.apologizing,
+    style.situations.celebratingSuccess,
     style.situations.handlingUrgency,
     style.situations.askingForInfo,
+    style.situations.edgeCaseHandling, // NUEVO: Casos especiales
   ]);
 
   const typeRules = countRules([
@@ -375,6 +407,7 @@ export function compileInstructions(
     type.responsePatterns.confirmationPatterns,
     type.salesBehavior.approach,
     type.salesBehavior.limitations,
+    type.competitorHandling, // NUEVO: Manejo de competidores
   ]);
 
   const totalRules = styleCoreRules + channelRules + situationRules + typeRules;
@@ -397,6 +430,7 @@ export function compileInstructions(
       behavior: behaviorSection,
       channel: channelSection,
       situations: situationsSection,
+      competitors: competitorSection,
       vertical: '', // Se construye dinámicamente según la vertical del negocio
     },
   };
