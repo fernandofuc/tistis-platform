@@ -25,7 +25,11 @@ import type { AISignal } from '@/src/shared/types/whatsapp';
 import { MessageLearningService } from './message-learning.service';
 import {
   getOptimizedPrompt,
+  generateMinimalPrompt,
+  generateAndCacheMinimalPrompt,
   type CacheChannel,
+  type BusinessContext as PromptBusinessContext,
+  type PromptType,
 } from './prompt-generator.service';
 import { PromptSanitizer } from './prompt-sanitizer.service';
 import { getProfileForAI } from './agent-profile.service';
@@ -277,21 +281,25 @@ async function queueForLearning(
  * en lugar de reconstruir el system_prompt desde los datos raw.
  * Esto reduce significativamente los tokens por request.
  *
+ * ARQUITECTURA V6: Cuando useMinimalPrompt=true, genera un prompt
+ * minimal (~1,200-1,500 tokens) en lugar del legacy (~4,000 tokens).
+ * Los datos del negocio se obtienen via Tools dinámicamente.
+ *
  * INTEGRACIÓN Agent Profiles: Aplica configuración del perfil activo
  * (response_style, custom_instructions_override, etc.)
  */
 async function loadTenantContext(
   tenantId: string,
   channel: CacheChannel = 'whatsapp',
-  profileType: ProfileType = 'business'
+  profileType: ProfileType = 'business',
+  useMinimalPrompt: boolean = false
 ): Promise<TenantInfo | null> {
   const supabase = createServerClient();
 
-  // 1. Cargar datos básicos del tenant, AI config y Agent Profile EN PARALELO
-  const [rpcResult, agentProfile, promptResult] = await Promise.all([
+  // 1. Cargar datos básicos del tenant y Agent Profile EN PARALELO
+  const [rpcResult, agentProfile] = await Promise.all([
     supabase.rpc('get_tenant_ai_context', { p_tenant_id: tenantId }),
     getProfileForAI(tenantId, profileType),
-    getOptimizedPrompt(tenantId, channel),
   ]);
 
   const { data, error } = rpcResult;
@@ -301,18 +309,74 @@ async function loadTenantContext(
     return null;
   }
 
-  // 2. Extraer datos del prompt cacheado
-  const { prompt: cachedPrompt, fromCache, version } = promptResult;
+  // Cast data.ai_config para evitar repetir el cast
+  const aiConfig = data.ai_config as Record<string, unknown> | undefined;
 
-  if (fromCache) {
-    console.log(`[LangGraph AI] Using cached prompt v${version} for channel ${channel}`);
-  } else if (cachedPrompt) {
-    console.log(`[LangGraph AI] Using freshly generated prompt for channel ${channel}`);
+  // 2. Determinar qué prompt usar
+  let finalSystemPrompt: string;
+  let promptSource: string;
+
+  if (useMinimalPrompt) {
+    // ARQUITECTURA V6: Usar prompt minimal CACHEADO
+    // generateAndCacheMinimalPrompt verifica si ya existe un prompt válido en caché
+    try {
+      const minimalResult = await generateAndCacheMinimalPrompt(tenantId, channel);
+
+      if (minimalResult.success) {
+        finalSystemPrompt = minimalResult.prompt;
+        promptSource = `minimal-v6-cached`;
+        console.log(`[LangGraph AI] ARQUITECTURA V6: Using cached minimal prompt`);
+      } else {
+        // Fallback a generación directa si el caché falla
+        const promptType: PromptType = channel === 'voice' ? 'voice' : 'messaging';
+        const businessContext: PromptBusinessContext = {
+          tenantId: data.tenant_id,
+          tenantName: data.tenant_name,
+          vertical: data.vertical || 'general',
+          assistantName: aiConfig?.assistant_name as string || 'el asistente',
+          assistantPersonality: aiConfig?.response_style as string || 'professional_friendly',
+          template_key: agentProfile?.template_key || 'general_full',
+          useFillerPhrases: (aiConfig?.use_filler_phrases as boolean) ?? true,
+          services: [],
+          branches: [],
+          staff: [],
+          faqs: [],
+          customInstructionsList: [],
+          businessPolicies: [],
+          knowledgeArticles: [],
+          responseTemplates: [],
+          competitorHandling: [],
+        };
+        const directResult = await generateMinimalPrompt(businessContext, promptType);
+        finalSystemPrompt = directResult.prompt;
+        promptSource = `minimal-v6-direct (~${directResult.tokenEstimate} tokens)`;
+        console.log(`[LangGraph AI] ARQUITECTURA V6: Generated minimal prompt directly`);
+      }
+    } catch (minimalError) {
+      console.error('[LangGraph AI] Error with minimal prompt, falling back to legacy:', minimalError);
+      // Cargar prompt legacy como fallback de emergencia
+      const legacyResult = await getOptimizedPrompt(tenantId, channel);
+      finalSystemPrompt = legacyResult.prompt || (aiConfig?.system_prompt as string) || '';
+      promptSource = 'legacy-fallback';
+    }
+  } else {
+    // LEGACY: Usar prompt cacheado completo
+    // Solo cargamos el prompt legacy cuando lo necesitamos (no en paralelo)
+    const promptResult = await getOptimizedPrompt(tenantId, channel);
+    const { prompt: cachedPrompt, fromCache, version } = promptResult;
+
+    if (fromCache) {
+      console.log(`[LangGraph AI] Using cached prompt v${version} for channel ${channel}`);
+    } else if (cachedPrompt) {
+      console.log(`[LangGraph AI] Using freshly generated prompt for channel ${channel}`);
+    }
+
+    finalSystemPrompt = cachedPrompt || (aiConfig?.system_prompt as string) || '';
+    promptSource = fromCache ? `cached-v${version}` : 'fresh';
   }
 
   // 3. Aplicar configuración del Agent Profile si existe
-  let finalSystemPrompt = cachedPrompt || data.ai_config?.system_prompt || '';
-  let responseStyle = data.ai_config?.response_style || 'professional';
+  let responseStyle = (aiConfig?.response_style as string) || 'professional';
 
   if (agentProfile) {
     console.log(`[LangGraph AI] Using Agent Profile: ${agentProfile.profile?.profile_name || profileType}`);
@@ -321,6 +385,7 @@ async function loadTenantContext(
     responseStyle = agentProfile.response_style || responseStyle;
 
     // Si el perfil tiene custom_instructions_override, añadirlo al prompt
+    // NOTA: En arquitectura v6, esto se añade al final del prompt minimal
     if (agentProfile.custom_instructions) {
       finalSystemPrompt = `${finalSystemPrompt}\n\n## INSTRUCCIONES ADICIONALES DEL PERFIL\n${agentProfile.custom_instructions}`;
     }
@@ -331,21 +396,28 @@ async function loadTenantContext(
     }
   }
 
+  // Validar vertical
+  const validVerticals = ['dental', 'restaurant', 'clinic', 'gym', 'beauty', 'veterinary'] as const;
+  const rawVertical = data.vertical || 'dental';
+  const vertical = validVerticals.includes(rawVertical as typeof validVerticals[number])
+    ? rawVertical as typeof validVerticals[number]
+    : 'dental';
+
   // Mapear al formato del estado
   return {
     tenant_id: data.tenant_id,
     tenant_name: data.tenant_name,
-    vertical: data.vertical || 'general',
+    vertical,
     timezone: data.timezone || 'America/Mexico_City',
     ai_config: {
       system_prompt: finalSystemPrompt,
-      model: data.ai_config?.model || 'gpt-5-mini',
-      temperature: data.ai_config?.temperature || 0.7,
-      response_style: responseStyle,
-      max_response_length: data.ai_config?.max_response_length || 300,
-      enable_scoring: data.ai_config?.enable_scoring ?? true,
-      auto_escalate_keywords: data.ai_config?.auto_escalate_keywords || [],
-      business_hours: data.ai_config?.business_hours || {
+      model: (aiConfig?.model as string) || 'gpt-5-mini',
+      temperature: (aiConfig?.temperature as number) || 0.7,
+      response_style: responseStyle as 'professional' | 'professional_friendly' | 'casual' | 'formal',
+      max_response_length: (aiConfig?.max_response_length as number) || 300,
+      enable_scoring: (aiConfig?.enable_scoring as boolean) ?? true,
+      auto_escalate_keywords: (aiConfig?.auto_escalate_keywords as string[]) || [],
+      business_hours: (aiConfig?.business_hours as { start: string; end: string; days: number[] }) || {
         start: '09:00',
         end: '18:00',
         days: [1, 2, 3, 4, 5],
@@ -360,6 +432,8 @@ async function loadTenantContext(
       response_delay_first_only: agentProfile.delay_config.first_only,
       ai_learning_config: agentProfile.learning_config,
     } : undefined,
+    // ARQUITECTURA V6: Indicar qué tipo de prompt se usó
+    prompt_source: promptSource,
   };
 }
 
@@ -887,6 +961,9 @@ function buildLoyaltyEnrichment(loyaltyContext: LoyaltyContextData): string {
  *
  * OPTIMIZACIÓN: Usa prompts pre-cacheados de ai_generated_prompts.
  * El prompt se determina según el canal de la conversación.
+ *
+ * ARQUITECTURA V6: Cuando está habilitada, usa prompt minimal (~1,200-1,500 tokens)
+ * y los datos del negocio se obtienen via Tools dinámicamente.
  */
 export async function generateAIResponseWithGraph(
   tenantId: string,
@@ -916,11 +993,17 @@ export async function generateAIResponseWithGraph(
     const conversationContext = await loadConversationContext(conversationId);
     const effectiveChannel = (channel || conversationContext?.channel || 'whatsapp') as CacheChannel;
 
+    // 0.5 ARQUITECTURA V6: Determinar si usar prompt minimal
+    const useMinimalPrompt = await shouldUseMinimalPromptV6(tenantId);
+    if (useMinimalPrompt) {
+      console.log(`[LangGraph AI] ARQUITECTURA V6 ACTIVA: Usando prompt minimal + tools dinámicos`);
+    }
+
     // 1. Cargar todos los contextos en paralelo
     // REVISIÓN 5.5: Ahora incluye Learning y Loyalty context para mejorar respuestas
-    // Nota: loadTenantContext ahora usa el prompt cacheado según el canal
+    // ARQUITECTURA V6: Pasa useMinimalPrompt a loadTenantContext
     const [tenantContext, leadContext, businessContext, learningContext, loyaltyContext] = await Promise.all([
-      loadTenantContext(tenantId, effectiveChannel),
+      loadTenantContext(tenantId, effectiveChannel, 'business', useMinimalPrompt),
       leadId ? loadLeadContext(leadId) : Promise.resolve(null),
       loadBusinessContext(tenantId),
       loadLearningContext(tenantId),          // NUEVO: AI Learning patterns
@@ -1024,8 +1107,47 @@ export async function generateAIResponseWithGraph(
 }
 
 // ======================
-// FEATURE FLAG
+// FEATURE FLAGS
 // ======================
+
+/**
+ * ARQUITECTURA V6: Determina si usar el prompt minimal + tools dinámicos
+ *
+ * Prioridad de decisión:
+ * 1. Variable de entorno USE_MINIMAL_PROMPT (override global)
+ * 2. Configuración del tenant en ai_tenant_config.use_minimal_prompt_v6
+ * 3. Default: false (usar prompt legacy completo)
+ *
+ * Cuando está activo:
+ * - El prompt inicial es ~1,200-1,500 tokens (vs ~4,000 legacy)
+ * - Los datos del negocio se obtienen via Tools dinámicamente
+ * - Solo instrucciones críticas (include_in_prompt=true) van en el prompt
+ */
+export async function shouldUseMinimalPromptV6(tenantId: string): Promise<boolean> {
+  // Feature flag global (override)
+  if (process.env.USE_MINIMAL_PROMPT === 'true') {
+    return true;
+  }
+
+  if (process.env.USE_MINIMAL_PROMPT === 'false') {
+    return false;
+  }
+
+  // Verificar configuración del tenant en ai_tenant_config
+  const supabase = createServerClient();
+  const { data: config } = await supabase
+    .from('ai_tenant_config')
+    .select('use_minimal_prompt_v6')
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (config?.use_minimal_prompt_v6 === true) {
+    return true;
+  }
+
+  // Por defecto, usar legacy mientras se hace rollout gradual
+  return false;
+}
 
 /**
  * Determina si usar el nuevo sistema LangGraph o el legacy
@@ -1091,6 +1213,7 @@ export const LangGraphAIService = {
   generateResponse: generateAIResponseWithGraph,
   generateSmart: generateAIResponseSmart,
   shouldUseLangGraph,
+  shouldUseMinimalPromptV6,  // ARQUITECTURA V6
   loadTenantContext,
   loadLeadContext,
   loadConversationContext,

@@ -81,6 +81,8 @@ interface CustomInstruction extends KnowledgeBaseItem {
   examples?: string;
   priority: number;
   created_at: string;
+  // ARQUITECTURA V6: Flag para instrucciones que van directamente en el prompt inicial
+  include_in_prompt?: boolean;
 }
 
 interface BusinessPolicy extends KnowledgeBaseItem {
@@ -661,6 +663,83 @@ export function KnowledgeBase() {
     }
   };
 
+  // =====================================================
+  // ARQUITECTURA V6: Toggle include_in_prompt para instrucciones
+  // =====================================================
+  // Permite marcar instrucciones como "críticas" que van en el prompt inicial
+  // Máximo 5 instrucciones pueden tener include_in_prompt = true
+
+  // Calcular cuántas instrucciones tienen include_in_prompt = true
+  const criticalInstructionsCount = useMemo(() => {
+    return data.instructions.filter(i => i.include_in_prompt === true).length;
+  }, [data.instructions]);
+
+  // Si ya hay 5, no se pueden agregar más
+  const canEnableIncludeInPrompt = criticalInstructionsCount < 5;
+
+  const handleToggleIncludeInPrompt = async (id: string, newState: boolean) => {
+    // Validar límite
+    if (newState && !canEnableIncludeInPrompt) {
+      showToast({
+        type: 'warning',
+        message: 'Límite alcanzado: máximo 5 instrucciones pueden estar en el prompt inicial',
+      });
+      return;
+    }
+
+    // Guardar copia para rollback
+    const previousData = { ...data };
+
+    // OPTIMISTIC UPDATE - Actualizar inmediatamente la UI
+    setData(prev => ({
+      ...prev,
+      instructions: prev.instructions.map(item =>
+        item.id === id ? { ...item, include_in_prompt: newState } : item
+      ),
+    }));
+
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/knowledge-base`, {
+        method: 'PATCH',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'instructions',
+          id,
+          data: { include_in_prompt: newState },
+        }),
+      });
+
+      if (response.ok) {
+        showToast({
+          type: 'success',
+          message: newState
+            ? 'Instrucción marcada como crítica (incluida en prompt)'
+            : 'Instrucción quitada del prompt inicial',
+        });
+      } else {
+        // ROLLBACK en caso de error
+        setData(previousData);
+        const errorData = await response.json().catch(() => ({}));
+        showToast({
+          type: 'error',
+          message: errorData.error || 'Error al actualizar',
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling include_in_prompt:', error);
+      // ROLLBACK en caso de error
+      setData(previousData);
+      showToast({
+        type: 'error',
+        message: 'Error de conexión al actualizar',
+      });
+    }
+  };
+
   const openAddModal = (type: ActiveTab) => {
     setModalType(type);
     setEditingItem(null);
@@ -867,6 +946,10 @@ export function KnowledgeBase() {
                         priority={item.priority}
                         onEdit={() => openEditModal('instructions', item)}
                         onDelete={() => handleDelete('instructions', item.id)}
+                        // ARQUITECTURA V6: Props para include_in_prompt
+                        includeInPrompt={item.include_in_prompt}
+                        onToggleIncludeInPrompt={handleToggleIncludeInPrompt}
+                        canEnableIncludeInPrompt={canEnableIncludeInPrompt}
                       />
                     ))}
                   </div>

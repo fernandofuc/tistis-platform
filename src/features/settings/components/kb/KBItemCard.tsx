@@ -28,6 +28,10 @@ interface Props {
   // For competitors
   talkingPoints?: string[];
   strategy?: string;
+  // ARQUITECTURA V6: Instrucciones críticas que van en el prompt inicial
+  includeInPrompt?: boolean;
+  onToggleIncludeInPrompt?: (id: string, newState: boolean) => void;
+  canEnableIncludeInPrompt?: boolean; // false si ya hay 5 instrucciones críticas
   // Actions
   onEdit: () => void;
   onDelete: () => void;
@@ -122,6 +126,15 @@ const VariableIcon = () => (
 );
 
 // ======================
+// PROMPT ICON
+// ======================
+const PromptIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+  </svg>
+);
+
+// ======================
 // MAIN COMPONENT
 // ======================
 export function KBItemCard({
@@ -136,6 +149,9 @@ export function KBItemCard({
   variables,
   talkingPoints,
   strategy,
+  includeInPrompt,
+  onToggleIncludeInPrompt,
+  canEnableIncludeInPrompt = true,
   onEdit,
   onDelete,
   onToggleActive,
@@ -193,6 +209,18 @@ export function KBItemCard({
                     : 'bg-gray-100 text-gray-500'
                 )}>
                   Prioridad: {priority}
+                </span>
+              )}
+
+              {/* ARQUITECTURA V6: Include in Prompt badge (solo para instrucciones) */}
+              {category === 'instructions' && includeInPrompt && (
+                <span className={cn(
+                  'inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg',
+                  'bg-gradient-to-r from-indigo-500 to-purple-600 text-white',
+                  'shadow-sm'
+                )}>
+                  <PromptIcon />
+                  En Prompt
                 </span>
               )}
 
@@ -331,6 +359,38 @@ export function KBItemCard({
             'flex items-center gap-1 transition-opacity',
             'opacity-0 group-hover:opacity-100'
           )}>
+            {/* ARQUITECTURA V6: Toggle Include in Prompt (solo para instrucciones) */}
+            {category === 'instructions' && onToggleIncludeInPrompt && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  // Si ya está incluido, siempre permitir desactivar
+                  // Si no está incluido, solo permitir si canEnableIncludeInPrompt
+                  if (includeInPrompt || canEnableIncludeInPrompt) {
+                    onToggleIncludeInPrompt(id, !includeInPrompt);
+                  }
+                }}
+                disabled={!includeInPrompt && !canEnableIncludeInPrompt}
+                className={cn(
+                  'p-2.5 rounded-xl transition-all',
+                  includeInPrompt
+                    ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+                    : canEnableIncludeInPrompt
+                      ? 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
+                      : 'text-gray-300 cursor-not-allowed opacity-50'
+                )}
+                title={
+                  includeInPrompt
+                    ? 'Quitar del Prompt Inicial'
+                    : canEnableIncludeInPrompt
+                      ? 'Incluir en Prompt Inicial'
+                      : 'Límite alcanzado (máx 5)'
+                }
+              >
+                <PromptIcon />
+              </motion.button>
+            )}
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}

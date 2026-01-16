@@ -2465,6 +2465,422 @@ export async function getOptimizedPromptSafe(
 }
 
 // ======================
+// ARQUITECTURA V6: PROMPT MINIMAL + TOOLS DINÁMICOS
+// ======================
+// Este sistema genera prompts MÍNIMOS (~1,200-1,500 tokens) que contienen:
+// 1. Identidad del agente (nombre, negocio, vertical)
+// 2. Personalidad compilada (estilo + tipo de asistente)
+// 3. Instrucciones críticas (solo las marcadas include_in_prompt)
+// 4. Declaración de tools disponibles
+// 5. Reglas de seguridad por vertical
+//
+// Los datos del negocio (servicios, sucursales, staff, KB) se acceden
+// dinámicamente via Tools cuando el agente los necesita.
+// ======================
+
+/**
+ * Interfaz para instrucciones críticas que van en el prompt
+ */
+export interface CriticalInstruction {
+  id: string;
+  type: string;
+  title: string;
+  instruction: string;
+  priority: number;
+}
+
+/**
+ * Obtiene las instrucciones críticas que deben ir en el prompt inicial
+ * Solo retorna instrucciones con include_in_prompt = true
+ * Máximo 5 instrucciones, máximo ~300 tokens
+ */
+export async function getCriticalInstructions(
+  tenantId: string
+): Promise<CriticalInstruction[]> {
+  const supabase = createServerClient();
+
+  try {
+    const { data, error } = await supabase
+      .from('ai_custom_instructions')
+      .select('id, instruction_type, title, instruction, priority')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .eq('include_in_prompt', true)
+      .order('priority', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.warn('[MinimalPrompt] Error fetching critical instructions:', error);
+      return [];
+    }
+
+    return (data || []).map(d => ({
+      id: d.id,
+      type: d.instruction_type,
+      title: d.title,
+      instruction: d.instruction,
+      priority: d.priority || 0,
+    }));
+  } catch (error) {
+    console.error('[MinimalPrompt] Exception fetching critical instructions:', error);
+    return [];
+  }
+}
+
+/**
+ * Construye la sección de IDENTIDAD del agente (~100 tokens)
+ */
+export function buildIdentitySection(
+  context: BusinessContext,
+  promptType: PromptType
+): string {
+  const channelLabel = promptType === 'voice' ? 'VOZ (Llamadas)' : 'MENSAJERÍA (Texto)';
+  const verticalLabel = VERTICAL_CONFIGS[context.vertical]?.type || 'negocio';
+
+  return `# IDENTIDAD
+
+Eres **${context.assistantName || 'el asistente virtual'}** de **${context.tenantName}**.
+- **Canal:** ${channelLabel}
+- **Vertical:** ${verticalLabel}
+- **Tenant ID:** ${context.tenantId}`;
+}
+
+/**
+ * Construye la sección de HERRAMIENTAS DISPONIBLES (~150 tokens)
+ * Le indica al agente qué tools tiene disponibles y cuándo usarlas
+ */
+export function buildToolsDeclaration(
+  assistantType: AssistantTypeKey,
+  vertical: string
+): string {
+  // Tools base disponibles para todos los tipos
+  const baseTools = [
+    'get_service_info - Obtiene información detallada de un servicio específico',
+    'list_services - Lista todos los servicios disponibles con precios',
+    'get_branch_info - Obtiene información de sucursales (dirección, teléfono, horarios)',
+    'get_staff_info - Obtiene información del equipo/especialistas',
+    'get_operating_hours - Obtiene horarios de operación',
+    'get_business_policy - Obtiene políticas del negocio (cancelación, pago, etc.)',
+    'search_knowledge_base - Busca en la base de conocimiento (RAG semántico)',
+    'get_faq_answer - Busca respuesta en preguntas frecuentes',
+  ];
+
+  // Tools de acción (solo para tipos que pueden agendar)
+  const actionTools = assistantType !== 'personal_redirect' ? [
+    'get_available_slots - Obtiene horarios disponibles para agendar',
+    'create_appointment - Crea una cita para el cliente',
+    'update_lead_info - Actualiza información del cliente',
+  ] : [];
+
+  // Tools de loyalty (si aplica)
+  const loyaltyTools = assistantType === 'full' || assistantType === 'personal_complete' ? [
+    'get_loyalty_balance - Obtiene balance de puntos del cliente',
+    'get_available_rewards - Lista recompensas canjeables',
+    'redeem_reward - Canjea una recompensa',
+  ] : [];
+
+  // Tools específicas de restaurant
+  const restaurantTools = vertical === 'restaurant' ? [
+    'get_menu_items - Obtiene items del menú',
+    'get_menu_categories - Lista categorías del menú',
+    'check_item_availability - Verifica disponibilidad de items',
+    'get_active_promotions - Obtiene promociones vigentes',
+  ] : [];
+
+  const allTools = [...baseTools, ...actionTools, ...loyaltyTools, ...restaurantTools];
+
+  return `# HERRAMIENTAS DISPONIBLES
+
+Tienes acceso a estas tools para obtener información en tiempo real:
+
+${allTools.map(t => `- ${t}`).join('\n')}
+
+## REGLAS DE USO DE TOOLS
+
+1. **USA las tools** cuando necesites información específica del negocio
+2. **NO inventes datos** - siempre consulta via tools si no estás seguro
+3. **Combina información** de múltiples tools cuando sea necesario
+4. **Prioriza la precisión** sobre la velocidad`;
+}
+
+/**
+ * Construye las reglas de SEGURIDAD específicas de la vertical (~100 tokens)
+ */
+export function buildSafetyRules(vertical: string): string {
+  const verticalConfig = VERTICAL_CONFIGS[vertical] || VERTICAL_CONFIGS.general;
+
+  const baseRules = [
+    'NUNCA inventes información que no tengas',
+    'Si no sabes algo, admítelo y ofrece alternativas',
+    'Respeta la privacidad del cliente en todo momento',
+    'Escala a un humano si la situación lo requiere',
+  ];
+
+  const verticalRules = verticalConfig.specialConsiderations.length > 0
+    ? verticalConfig.specialConsiderations
+    : [];
+
+  return `# REGLAS DE SEGURIDAD
+
+## Reglas Generales
+${baseRules.map(r => `- ${r}`).join('\n')}
+
+${verticalRules.length > 0 ? `## Reglas Específicas de ${verticalConfig.type.toUpperCase()}
+${verticalRules.map(r => `- ${r}`).join('\n')}` : ''}`;
+}
+
+/**
+ * Formatea las instrucciones críticas para el prompt (~200-300 tokens máx)
+ */
+function formatCriticalInstructions(instructions: CriticalInstruction[]): string {
+  if (instructions.length === 0) {
+    return '';
+  }
+
+  const formatted = instructions
+    .slice(0, 5) // Máximo 5
+    .map((inst, idx) => `${idx + 1}. **${inst.title}**: ${inst.instruction}`)
+    .join('\n');
+
+  return `# INSTRUCCIONES CRÍTICAS
+
+Estas reglas son OBLIGATORIAS y tienen prioridad máxima:
+
+${formatted}`;
+}
+
+/**
+ * GENERA UN PROMPT MINIMAL según la arquitectura v6
+ *
+ * Este prompt contiene SOLO lo esencial (~1,200-1,500 tokens):
+ * - Identidad del agente
+ * - Personalidad compilada (estilo + tipo)
+ * - Instrucciones críticas (solo include_in_prompt=true)
+ * - Declaración de tools
+ * - Reglas de seguridad
+ *
+ * Los datos del negocio (servicios, precios, sucursales, KB) se
+ * obtienen dinámicamente via Tools cuando el agente los necesita.
+ */
+export async function generateMinimalPrompt(
+  context: BusinessContext,
+  promptType: PromptType
+): Promise<{ prompt: string; tokenEstimate: number; sections: Record<string, string> }> {
+  const channel: ChannelContext = promptType === 'voice' ? 'voice' : 'messaging';
+
+  // 1. Obtener el tipo de asistente desde el template
+  const templateKey = context.template_key ||
+    (context.vertical === 'dental' ? 'dental_full' :
+     context.vertical === 'restaurant' ? 'resto_full' : 'general_full');
+  const assistantType: AssistantTypeKey = mapTemplateKeyToType(templateKey);
+
+  // 2. Obtener el estilo de respuesta
+  const styleKey: ResponseStyleKey = isValidStyle(context.assistantPersonality || '')
+    ? context.assistantPersonality as ResponseStyleKey
+    : 'professional_friendly';
+
+  // 3. Construir secciones del prompt
+
+  // Sección 1: Identidad (~100 tokens)
+  const identitySection = buildIdentitySection(context, promptType);
+
+  // Sección 2: Personalidad compilada (~600-800 tokens)
+  const compiledInstructions = getFullCompiledInstructions(
+    styleKey,
+    assistantType,
+    channel,
+    context.vertical as 'dental' | 'restaurant' | 'general'
+  );
+
+  const personalitySection = compiledInstructions
+    ? `# PERSONALIDAD Y COMPORTAMIENTO
+
+> Estilo: **${compiledInstructions.metadata.styleName}**
+> Tipo: **${compiledInstructions.metadata.typeName}**
+
+${compiledInstructions.fullInstructionText}`
+    : buildCompiledInstructionsSection(context, promptType);
+
+  // Sección 3: Instrucciones críticas (~200-300 tokens)
+  const criticalInstructions = await getCriticalInstructions(context.tenantId);
+  const criticalSection = formatCriticalInstructions(criticalInstructions);
+
+  // Sección 4: Tools disponibles (~150 tokens)
+  const toolsSection = buildToolsDeclaration(assistantType, context.vertical);
+
+  // Sección 5: Reglas de seguridad (~100 tokens)
+  const safetySection = buildSafetyRules(context.vertical);
+
+  // Sección especial: Reglas de canal
+  const channelRulesSection = promptType === 'voice'
+    ? `# REGLAS ESPECÍFICAS DE VOZ
+
+- Respuestas CONCISAS (2-3 oraciones máximo)
+- NUNCA uses emojis (es una llamada telefónica)
+- Precios como palabras: "mil quinientos pesos"
+- Usa muletillas naturales${context.useFillerPhrases === false ? ' (DESACTIVADO por cliente)' : ''}
+- Confirma datos importantes repitiendo al cliente`
+    : `# REGLAS ESPECÍFICAS DE MENSAJERÍA
+
+- Emojis funcionales permitidos: ✅ ❌ 📍 📞 ⏰ 📅
+- NO uses muletillas de voz (es texto escrito)
+- Respuestas pueden ser más detalladas
+- Usa formato estructurado cuando ayude`;
+
+  // Combinar todas las secciones
+  const sections: Record<string, string> = {
+    identity: identitySection,
+    personality: personalitySection,
+    critical: criticalSection,
+    tools: toolsSection,
+    safety: safetySection,
+    channel: channelRulesSection,
+  };
+
+  const fullPrompt = [
+    identitySection,
+    personalitySection,
+    criticalSection,
+    toolsSection,
+    safetySection,
+    channelRulesSection,
+  ].filter(s => s.trim() !== '').join('\n\n---\n\n');
+
+  // Estimar tokens (~4 chars por token en español)
+  const tokenEstimate = Math.ceil(fullPrompt.length / 4);
+
+  console.log(`[MinimalPrompt] Generated minimal prompt: ${tokenEstimate} tokens estimated (${fullPrompt.length} chars)`);
+
+  return {
+    prompt: fullPrompt,
+    tokenEstimate,
+    sections,
+  };
+}
+
+/**
+ * Calcula hash SOLO de los datos que afectan el prompt MINIMAL
+ * Excluye datos dinámicos que se obtienen via Tools
+ *
+ * Esto reduce las regeneraciones innecesarias del prompt
+ */
+export function calculateMinimalPromptHash(context: BusinessContext): string {
+  // Solo incluir datos que REALMENTE van en el prompt minimal
+  const dataForHash = {
+    // Identidad (siempre en prompt)
+    tenantId: context.tenantId,
+    tenantName: context.tenantName,
+    vertical: context.vertical,
+    assistantName: context.assistantName,
+
+    // Personalidad (afecta instrucciones compiladas)
+    assistantPersonality: context.assistantPersonality,
+    template_key: context.template_key,
+
+    // Config de voz (afecta reglas de canal)
+    useFillerPhrases: context.useFillerPhrases,
+
+    // NO incluir: services, branches, staff, faqs, policies, articles, templates, competitors
+    // Esos datos se obtienen via Tools dinámicamente
+  };
+
+  const jsonString = JSON.stringify(dataForHash, Object.keys(dataForHash).sort());
+  return crypto.createHash('sha256').update(jsonString).digest('hex').substring(0, 16);
+}
+
+/**
+ * Genera y cachea un prompt MINIMAL para un canal específico
+ * Esta función reemplaza generateAndCachePrompt para la arquitectura v6
+ */
+export async function generateAndCacheMinimalPrompt(
+  tenantId: string,
+  channel: CacheChannel
+): Promise<PromptGenerationResult> {
+  console.log(`[MinimalPrompt] Generating minimal prompt for tenant ${tenantId}, channel ${channel}`);
+
+  const startTime = Date.now();
+  const promptType: PromptType = channel === 'voice' ? 'voice' : 'messaging';
+
+  try {
+    // 1. Recopilar contexto básico (sin KB completa)
+    const context = await collectBusinessContext(tenantId, promptType);
+
+    if (!context) {
+      return {
+        success: false,
+        prompt: '',
+        error: 'No se pudo obtener el contexto del negocio',
+        generatedAt: new Date().toISOString(),
+        model: 'none',
+        processingTimeMs: 0,
+      };
+    }
+
+    // 2. Calcular hash de datos que afectan el prompt minimal
+    const sourceDataHash = calculateMinimalPromptHash(context);
+
+    // 3. Verificar si ya existe un prompt con el mismo hash
+    const existingPrompt = await getCachedPrompt(tenantId, channel);
+    if (existingPrompt.found && existingPrompt.source_data_hash === sourceDataHash) {
+      console.log(`[MinimalPrompt] Prompt already up-to-date for channel ${channel}`);
+      return {
+        success: true,
+        prompt: existingPrompt.generated_prompt || '',
+        generatedAt: existingPrompt.last_updated || new Date().toISOString(),
+        model: 'cached-minimal',
+        processingTimeMs: Date.now() - startTime,
+      };
+    }
+
+    // 4. Generar nuevo prompt minimal (sin llamar a Gemini)
+    const { prompt, tokenEstimate } = await generateMinimalPrompt(context, promptType);
+
+    // 5. Guardar en caché
+    const supabase = createServerClient();
+    const { error: saveError } = await supabase
+      .from('ai_generated_prompts')
+      .upsert({
+        tenant_id: tenantId,
+        channel,
+        generated_prompt: prompt,
+        system_prompt: prompt,
+        source_data_hash: sourceDataHash,
+        generator_model: 'minimal-v6',
+        tokens_estimated: tokenEstimate,
+        prompt_version: (existingPrompt.prompt_version || 0) + 1,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'tenant_id,channel',
+      });
+
+    if (saveError) {
+      console.error('[MinimalPrompt] Error saving to cache:', saveError);
+    }
+
+    console.log(`[MinimalPrompt] Generated minimal prompt: ${tokenEstimate} tokens in ${Date.now() - startTime}ms`);
+
+    return {
+      success: true,
+      prompt,
+      generatedAt: new Date().toISOString(),
+      model: 'minimal-v6',
+      processingTimeMs: Date.now() - startTime,
+    };
+  } catch (error) {
+    console.error('[MinimalPrompt] Exception generating prompt:', error);
+    return {
+      success: false,
+      prompt: '',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      generatedAt: new Date().toISOString(),
+      model: 'error',
+      processingTimeMs: Date.now() - startTime,
+    };
+  }
+}
+
+// ======================
 // EXPORTS
 // ======================
 
@@ -2493,4 +2909,19 @@ export const PromptGeneratorService = {
   // Funciones de sanitización (NUEVAS - FASE 6)
   sanitizeSensitiveData,
   sanitizeBusinessContext,
+
+  // =====================================================
+  // ARQUITECTURA V6: PROMPT MINIMAL + TOOLS DINÁMICOS
+  // =====================================================
+  // Estas funciones implementan la nueva arquitectura donde:
+  // - El prompt inicial es MÍNIMO (~1,200-1,500 tokens)
+  // - Los datos del negocio se obtienen via Tools dinámicamente
+  // - Solo instrucciones críticas van en el prompt inicial
+  generateMinimalPrompt,
+  generateAndCacheMinimalPrompt,
+  calculateMinimalPromptHash,
+  getCriticalInstructions,
+  buildIdentitySection,
+  buildToolsDeclaration,
+  buildSafetyRules,
 };

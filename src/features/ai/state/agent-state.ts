@@ -54,6 +54,8 @@ export interface TenantInfo {
   };
   // Agent Profile System integration (v4.6)
   agent_profile?: AgentProfileInfo;
+  // ARQUITECTURA V6: Indica qué tipo de prompt se usó
+  prompt_source?: string;
 }
 
 /**
