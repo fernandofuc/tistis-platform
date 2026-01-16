@@ -142,6 +142,21 @@ export const TextIcon = createIcon(
   'md', '0 0 24 24', 'none', 'TextIcon'
 );
 
+export const DocumentTextIcon = createIcon(
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
+  'md', '0 0 24 24', 'none', 'DocumentTextIcon'
+);
+
+export const EyeIcon = createIcon(
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />,
+  'md', '0 0 24 24', 'none', 'EyeIcon'
+);
+
+export const ClipboardCopyIcon = createIcon(
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />,
+  'md', '0 0 24 24', 'none', 'ClipboardCopyIcon'
+);
+
 export const MessagesIcon = createIcon(
   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />,
   'md', '0 0 24 24', 'none', 'MessagesIcon'
@@ -244,6 +259,9 @@ export const icons = {
   userSmall: <UserSmallIcon />,
   building: <BuildingIcon />,
   robot: <RobotIcon />,
+  documentText: <DocumentTextIcon />,
+  eye: <EyeIcon />,
+  clipboardCopy: <ClipboardCopyIcon />,
   // Assistant types
   assistantComplete: <StarIcon />,
   assistantBrand: <ChatBubbleIcon />,

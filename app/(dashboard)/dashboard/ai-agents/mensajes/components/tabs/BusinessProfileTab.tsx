@@ -21,6 +21,9 @@ import {
   validateTemplateKey,
 } from '../shared';
 
+// Import prompt viewer component
+import { PromptViewerSection } from '../PromptViewerSection';
+
 // ======================
 // TYPES
 // ======================
@@ -412,6 +415,14 @@ export function BusinessProfileTab({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Prompt Viewer Section */}
+      <PromptViewerSection
+        profileType="business"
+        profileName={profileName}
+        isProfileActive={profile?.is_active ?? false}
+        colorScheme="purple"
+      />
 
       {/* Save Button */}
       <div className="flex items-center justify-between pt-2">

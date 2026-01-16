@@ -24,6 +24,9 @@ import {
   validateTemplateKey,
 } from '../shared';
 
+// Import prompt viewer component
+import { PromptViewerSection } from '../PromptViewerSection';
+
 // ======================
 // TYPES
 // ======================
@@ -536,6 +539,14 @@ export function PersonalProfileTab({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Prompt Viewer Section */}
+      <PromptViewerSection
+        profileType="personal"
+        profileName={profileName}
+        isProfileActive={isActive}
+        colorScheme="orange"
+      />
 
       {/* Save Button */}
       <div className="flex items-center justify-between pt-2">
