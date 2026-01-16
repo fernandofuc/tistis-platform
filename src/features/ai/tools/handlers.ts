@@ -222,10 +222,12 @@ export async function handleListServices(
 
 /**
  * Handler: get_available_slots
- * Obtiene horarios disponibles
+ * Obtiene horarios disponibles consultando el calendario real
  *
- * NOTA: Esta es una implementación placeholder.
- * En producción debería consultar el sistema de calendario real.
+ * REVISIÓN 127: Implementación REAL que consulta:
+ * - Horarios de operación de sucursales
+ * - Citas existentes (conflictos)
+ * - Disponibilidad de staff
  */
 export async function handleGetAvailableSlots(
   params: {
@@ -236,62 +238,66 @@ export async function handleGetAvailableSlots(
   },
   context: ToolContext
 ): Promise<AvailableSlot[] | { error: string }> {
-  const { business_context } = context;
+  const { tenant_id, business_context } = context;
 
-  // Obtener sucursal (si se especifica o usar la primera disponible)
+  // Validar que hay tenant_id
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  // Obtener sucursal para validación inicial
   let branch = business_context?.branches?.[0];
   if (params.branch_id) {
     branch = business_context?.branches?.find((b) => b.id === params.branch_id);
   }
 
-  if (!branch) {
+  if (!branch && !params.branch_id) {
     return { error: 'No hay sucursales configuradas' };
   }
 
-  // Generar slots de ejemplo para los próximos 7 días
-  // TODO: En producción, esto debe consultar el sistema de calendario real
-  const slots: AvailableSlot[] = [];
-  const today = new Date();
+  try {
+    // Importar función real de disponibilidad
+    const { getAvailableSlots } = await import('../services/appointment-booking.service');
 
-  for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + dayOffset);
+    // Consultar slots disponibles reales
+    const realSlots = await getAvailableSlots(
+      tenant_id,
+      params.branch_id || branch?.id,
+      params.service_id,
+      params.staff_id,
+      params.date, // fromDate
+      10 // limit
+    );
 
-    // Skip domingos
-    if (date.getDay() === 0) continue;
-
-    const dateStr = date.toISOString().split('T')[0];
-
-    // Generar 3-4 slots por día
-    const times = ['09:00', '11:00', '14:00', '16:00'];
-    for (const time of times) {
-      // Simular disponibilidad aleatoria
-      const available = Math.random() > 0.3;
-
-      slots.push({
-        date: dateStr,
-        time,
-        branch_name: branch.name,
-        branch_id: branch.id,
-        staff_name: null, // TODO: Asociar con especialista
-        staff_id: null,
-        available,
-      });
-    }
-  }
-
-  // Si se especificó fecha, filtrar
-  if (params.date) {
-    const filteredSlots = slots.filter((s) => s.date === params.date);
-    if (filteredSlots.length === 0) {
+    if (realSlots.length === 0) {
+      // Mensaje más descriptivo según si se especificó fecha
+      if (params.date) {
+        return {
+          error: `No hay horarios disponibles para ${params.date}. ¿Te gustaría ver disponibilidad para otros días?`,
+        };
+      }
       return {
-        error: `No hay horarios disponibles para ${params.date}. Prueba con otra fecha.`,
+        error: 'No hay horarios disponibles en los próximos días. Por favor contacta a la clínica directamente.',
       };
     }
-    return filteredSlots.filter((s) => s.available);
-  }
 
-  return slots.filter((s) => s.available).slice(0, 10);
+    // Transformar al formato esperado por el tipo AvailableSlot
+    return realSlots.map((slot) => ({
+      date: slot.date,
+      time: slot.time,
+      branch_name: slot.branch_name,
+      branch_id: slot.branch_id,
+      staff_name: slot.staff_name || null,
+      staff_id: slot.staff_id || null,
+      available: true, // Solo retornamos los disponibles
+    }));
+  } catch (error) {
+    console.error('[handleGetAvailableSlots] Error:', error);
+    // Fallback a mensaje genérico en caso de error
+    return {
+      error: 'Ocurrió un error al consultar la disponibilidad. Por favor intenta de nuevo.',
+    };
+  }
 }
 
 /**
@@ -893,7 +899,22 @@ export async function handleGetMenuCategories(
  * Handler: create_order
  * Crea un pedido de restaurante
  *
- * NOTA: Implementación placeholder. En producción debe integrarse con POS/Kitchen system.
+ * =====================================================
+ * ARQUITECTURA IMPORTANTE:
+ * =====================================================
+ * Este handler es un FALLBACK de validación. La creación real de órdenes
+ * la realiza OrderingRestaurantAgent.createOrder() que:
+ * - Inserta en restaurant_orders con status 'confirmed'
+ * - Inserta en restaurant_order_items
+ * - Valida stock antes de crear (via RPC validate_order_stock)
+ * - Otorga tokens de lealtad
+ *
+ * El descuento de inventario ocurre AUTOMÁTICAMENTE via trigger
+ * trigger_consume_order_ingredients cuando la orden cambia a 'completed'.
+ *
+ * Ver: /src/features/ai/agents/specialists/ordering.agent.ts
+ * Ver: /supabase/migrations/101_INVENTORY_CONSUMPTION_SYSTEM.sql
+ * =====================================================
  */
 export async function handleCreateOrder(
   params: {
