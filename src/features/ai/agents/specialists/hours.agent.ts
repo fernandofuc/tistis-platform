@@ -3,12 +3,13 @@
 // Agente especializado en consultas de horarios
 // =====================================================
 //
-// ARQUITECTURA v6.0:
-// - Usa Tool Calling para obtener información on-demand
+// ARQUITECTURA V7.0:
+// - Tool Calling SIEMPRE activo para obtener info on-demand
 // - Consulta horarios específicos sin cargar todo el contexto
+// - CERO context stuffing
 // =====================================================
 
-import { BaseAgent, type AgentResult, formatBranchesForPrompt } from './base.agent';
+import { BaseAgent, type AgentResult } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
 import { createToolsForAgent } from '../../tools';
 
@@ -17,21 +18,18 @@ import { createToolsForAgent } from '../../tools';
 // ======================
 
 /**
- * Agente de Horarios
+ * Agente de Horarios - ARQUITECTURA V7
  *
  * Responsabilidades:
  * 1. Proporcionar horarios de atención
  * 2. Informar sobre días festivos o cierres especiales
  * 3. Indicar horarios por sucursal si hay múltiples
  *
- * TOOLS DISPONIBLES:
+ * TOOLS DISPONIBLES (se obtienen automáticamente vía Tool Calling):
  * - get_operating_hours: Horarios de atención por sucursal/día
  * - get_branch_info: Información adicional de sucursales
  */
 class HoursAgentClass extends BaseAgent {
-  /** Flag para usar Tool Calling vs modo legacy */
-  private useToolCalling: boolean = true;
-
   constructor() {
     super({
       name: 'hours',
@@ -98,80 +96,25 @@ Tu trabajo es proporcionar información clara sobre horarios de atención.
       additionalContext = `\nNOTA: El cliente pregunta por el día "${specificDay}". Usa get_operating_hours con day="${specificDay}" para obtener ese horario específico.`;
     }
 
-    let response: string;
-    let tokens: number;
-    let toolCalls: string[] = [];
+    // =====================================================
+    // ARQUITECTURA V7: Tool Calling SIEMPRE activo
+    // NO hay modo legacy - CERO context stuffing
+    // =====================================================
+    const tools = createToolsForAgent(this.config.name, state);
 
-    if (this.useToolCalling) {
-      // =====================================================
-      // NUEVA ARQUITECTURA: Tool Calling
-      // =====================================================
-      const tools = createToolsForAgent(this.config.name, state);
+    console.log(`[hours] V7 Tool Calling with ${tools.length} tools`);
 
-      console.log(`[hours] Using Tool Calling mode with ${tools.length} tools`);
+    const result = await this.callLLMWithTools(state, tools, additionalContext);
+    const response = result.response;
+    const tokens = result.tokens;
+    const toolCalls = result.toolCalls;
 
-      const result = await this.callLLMWithTools(state, tools, additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-      toolCalls = result.toolCalls;
-
-      console.log(`[hours] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
-    } else {
-      // =====================================================
-      // MODO LEGACY: Context Stuffing (para compatibilidad)
-      // =====================================================
-      console.log(`[hours] Using legacy mode (context stuffing)`);
-
-      const branches = state.business_context?.branches || [];
-
-      let hoursContext = '# HORARIOS DE ATENCIÓN\n\n';
-
-      for (const branch of branches) {
-        const hqTag = branch.is_headquarters ? ' (Principal)' : '';
-        hoursContext += `## ${branch.name}${hqTag}\n`;
-
-        if (branch.operating_hours && Object.keys(branch.operating_hours).length > 0) {
-          const dayNames: Record<string, string> = {
-            monday: 'Lunes',
-            tuesday: 'Martes',
-            wednesday: 'Miércoles',
-            thursday: 'Jueves',
-            friday: 'Viernes',
-            saturday: 'Sábado',
-            sunday: 'Domingo',
-          };
-
-          for (const [day, hours] of Object.entries(branch.operating_hours)) {
-            if (hours && typeof hours === 'object' && 'open' in hours) {
-              const dayName = dayNames[day.toLowerCase()] || day;
-              hoursContext += `- ${dayName}: ${hours.open} - ${hours.close}\n`;
-            }
-          }
-        } else {
-          hoursContext += '- Horarios no disponibles\n';
-        }
-
-        hoursContext += '\n';
-      }
-
-      const result = await this.callLLM(state, hoursContext + additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-    }
+    console.log(`[hours] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
 
     return {
       response,
       tokens_used: tokens,
     };
-  }
-
-  /**
-   * Habilita o deshabilita Tool Calling
-   * Útil para testing o rollback gradual
-   */
-  setToolCallingMode(enabled: boolean): void {
-    this.useToolCalling = enabled;
-    console.log(`[hours] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

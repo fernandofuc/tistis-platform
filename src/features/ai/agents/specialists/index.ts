@@ -1,5 +1,6 @@
 // =====================================================
 // TIS TIS PLATFORM - Specialist Agents Exports
+// ARQUITECTURA V7.0
 // =====================================================
 
 // Base Agent
@@ -7,6 +8,8 @@ export {
   BaseAgent,
   type AgentConfig,
   type AgentResult,
+  // @deprecated - V7: Los agentes usan Tool Calling, no context stuffing
+  // Estas funciones se mantienen para backwards compatibility pero NO deben usarse
   formatServicesForPrompt,
   formatBranchesForPrompt,
   formatFAQsForPrompt,

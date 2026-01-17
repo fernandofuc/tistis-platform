@@ -525,6 +525,7 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_BUSINESS_POLICY,
     TOOL_NAMES.GET_FAQ_ANSWER,
     TOOL_NAMES.GET_STAFF_INFO, // Para dental: mencionar qué especialista realiza el servicio
+    TOOL_NAMES.SEARCH_KNOWLEDGE_BASE, // V7: Buscar promociones, financiamiento, etc.
   ],
 
   booking: [

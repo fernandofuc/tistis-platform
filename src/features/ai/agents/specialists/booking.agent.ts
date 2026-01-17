@@ -3,17 +3,19 @@
 // Agente especializado en agendar citas
 // =====================================================
 //
-// ARQUITECTURA v6.0 (HÍBRIDA):
-// - Mantiene lógica directa de booking por seguridad y control
-// - Usa Tool Calling SOLO para consultas de información auxiliar
-// - Tools disponibles: get_service_info, get_branch_info, get_staff_info
+// ARQUITECTURA V7.0 (HÍBRIDA):
+// - Tool Calling SIEMPRE activo para consultas de información
+// - Lógica directa de booking por seguridad y control
+// - Tools disponibles: get_service_info, get_branch_info, get_staff_info,
+//   get_available_slots, list_services, search_knowledge_base
 // - CREATE_APPOINTMENT se ejecuta directamente, NO via tool calling
 //
 // NOTA: El booking requiere un flujo controlado. El LLM NO debe
 // decidir cuándo crear una cita - eso lo controla la lógica del agente.
+// CERO context stuffing - el LLM obtiene info via Tool Calling.
 // =====================================================
 
-import { BaseAgent, type AgentResult, formatServicesForPrompt, formatBranchesForPrompt } from './base.agent';
+import { BaseAgent, type AgentResult } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
 import {
   extractBookingData,
@@ -42,9 +44,6 @@ import { createToolsForAgent, TOOL_NAMES } from '../../tools';
  * - Lógica directa para: createBooking (seguridad)
  */
 class BookingAgentClass extends BaseAgent {
-  /** Flag para usar Tool Calling para consultas */
-  protected useToolCalling: boolean = true;
-
   constructor() {
     super({
       name: 'booking',
@@ -199,21 +198,13 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
         let response: string;
         let tokens: number;
 
-        if (this.useToolCalling) {
-          const allTools = createToolsForAgent(this.config.name, state);
-          const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+        // ARQUITECTURA V7: Siempre usar Tool Calling
+        const allTools = createToolsForAgent(this.config.name, state);
+        const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
 
-          const result = await this.callLLMWithTools(state, consultationTools, alternativeContext);
-          response = result.response;
-          tokens = result.tokens;
-        } else {
-          const servicesContext = formatServicesForPrompt(state.business_context);
-          const branchesContext = formatBranchesForPrompt(state.business_context);
-
-          const result = await this.callLLM(state, `${servicesContext}\n${branchesContext}${alternativeContext}`);
-          response = result.response;
-          tokens = result.tokens;
-        }
+        const result = await this.callLLMWithTools(state, consultationTools, alternativeContext);
+        response = result.response;
+        tokens = result.tokens;
 
         return {
           response,
@@ -256,54 +247,25 @@ Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucu
         }
       }
 
-      let response: string;
-      let tokens: number;
+      // =====================================================
+      // ARQUITECTURA V7: Tool Calling para consultas
+      // El LLM usa tools para obtener info de servicios/sucursales
+      // La creación de citas se controla directamente (seguridad)
+      // =====================================================
+      const allTools = createToolsForAgent(this.config.name, state);
+      const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
 
-      if (this.useToolCalling) {
-        // =====================================================
-        // ARQUITECTURA HÍBRIDA: Tool Calling para consultas
-        // El LLM puede usar tools para obtener info de servicios/sucursales
-        // pero NO para crear citas (eso lo controla este agente)
-        // =====================================================
-        const allTools = createToolsForAgent(this.config.name, state);
-        // Filtrar CREATE_APPOINTMENT - eso lo controlamos nosotros
-        const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+      console.log(`[booking] Using V7 Architecture with ${consultationTools.length} consultation tools`);
 
-        console.log(`[booking] Using Tool Calling mode with ${consultationTools.length} consultation tools`);
+      const result = await this.callLLMWithTools(state, consultationTools, additionalContext);
 
-        const result = await this.callLLMWithTools(state, consultationTools, additionalContext);
-        response = result.response;
-        tokens = result.tokens;
-
-        console.log(`[booking] Tool calls made: ${result.toolCalls.join(', ') || 'none'}`);
-      } else {
-        // =====================================================
-        // MODO LEGACY: Context Stuffing
-        // =====================================================
-        console.log(`[booking] Using legacy mode (context stuffing)`);
-
-        const servicesContext = formatServicesForPrompt(state.business_context);
-        const branchesContext = formatBranchesForPrompt(state.business_context);
-
-        const result = await this.callLLM(state, `${servicesContext}\n${branchesContext}${additionalContext}`);
-        response = result.response;
-        tokens = result.tokens;
-      }
+      console.log(`[booking] Tool calls made: ${result.toolCalls.join(', ') || 'none'}`);
 
       return {
-        response,
-        tokens_used: tokens,
+        response: result.response,
+        tokens_used: result.tokens,
       };
     }
-  }
-
-  /**
-   * Habilita o deshabilita Tool Calling para consultas
-   * La creación de citas siempre es controlada directamente
-   */
-  setToolCallingMode(enabled: boolean): void {
-    this.useToolCalling = enabled;
-    console.log(`[booking] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 
@@ -333,21 +295,17 @@ class BookingDentalAgentClass extends BookingAgentClass {
 
   /**
    * Override de execute para dental
+   * ARQUITECTURA V7: Usa Tool Calling para obtener información
+   *
    * Usa la información de urgencia del metadata para:
    * 1. Priorizar la búsqueda de slots (mismo día para urgencias)
    * 2. Añadir contexto sobre la urgencia detectada al LLM
    * 3. Guardar datos de trazabilidad AI en la cita
-   *
-   * NO modifica el prompt base, solo añade contexto adicional
    */
   async execute(state: TISTISAgentStateType): Promise<AgentResult> {
     const tenant = state.tenant;
     const lead = state.lead;
     const extracted = state.extracted_data;
-
-    // Construir contexto base
-    const servicesContext = formatServicesForPrompt(state.business_context);
-    const branchesContext = formatBranchesForPrompt(state.business_context);
 
     // 1. Obtener información de urgencia del metadata (detectada por vertical-router)
     const dentalUrgency = state.metadata?.dental_urgency as {
@@ -464,14 +422,19 @@ class BookingDentalAgentClass extends BookingAgentClass {
           }
         }
 
-        const { response, tokens } = await this.callLLM(
+        // ARQUITECTURA V7: Usar Tool Calling
+        const allTools = createToolsForAgent('booking_dental', state);
+        const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+
+        const result = await this.callLLMWithTools(
           state,
-          `${servicesContext}\n${branchesContext}${alternativeContext}\n\nOfrece alternativas de horario al cliente.`
+          consultationTools,
+          `${alternativeContext}\n\nOfrece alternativas de horario al cliente.`
         );
 
         return {
-          response,
-          tokens_used: tokens,
+          response: result.response,
+          tokens_used: result.tokens,
         };
       }
     } else {
@@ -491,7 +454,7 @@ class BookingDentalAgentClass extends BookingAgentClass {
         missingInfo.push('servicio deseado');
       }
 
-      let additionalContext = `${servicesContext}\n${branchesContext}`;
+      let additionalContext = '';
 
       // 8. Añadir contexto de urgencia detectada (NO modifica prompt, solo contexto)
       if (dentalUrgency && dentalUrgency.level >= 3) {
@@ -522,11 +485,15 @@ class BookingDentalAgentClass extends BookingAgentClass {
         additionalContext += `\n\nNOTA: Falta información para agendar: ${missingInfo.join(', ')}. Pregunta de manera natural.`;
       }
 
-      const { response, tokens } = await this.callLLM(state, additionalContext);
+      // ARQUITECTURA V7: Usar Tool Calling
+      const allTools = createToolsForAgent('booking_dental', state);
+      const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+
+      const result = await this.callLLMWithTools(state, consultationTools, additionalContext);
 
       return {
-        response,
-        tokens_used: tokens,
+        response: result.response,
+        tokens_used: result.tokens,
       };
     }
   }
@@ -551,13 +518,13 @@ class BookingRestaurantAgentClass extends BookingAgentClass {
     );
   }
 
+  /**
+   * ARQUITECTURA V7: Usa Tool Calling para obtener información
+   */
   async execute(state: TISTISAgentStateType): Promise<AgentResult> {
     const tenant = state.tenant;
     const lead = state.lead;
     const extracted = state.extracted_data;
-
-    const servicesContext = formatServicesForPrompt(state.business_context);
-    const branchesContext = formatBranchesForPrompt(state.business_context);
 
     // Extract booking data including restaurant-specific fields
     const bookingData = extractBookingData(state.current_message);
@@ -632,12 +599,17 @@ class BookingRestaurantAgentClass extends BookingAgentClass {
           }
         }
 
-        const { response, tokens } = await this.callLLM(
+        // ARQUITECTURA V7: Usar Tool Calling
+        const allTools = createToolsForAgent('booking_restaurant', state);
+        const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+
+        const result = await this.callLLMWithTools(
           state,
-          `${servicesContext}\n${branchesContext}${alternativeContext}\n\nOfrece alternativas de horario al cliente.`
+          consultationTools,
+          `${alternativeContext}\n\nOfrece alternativas de horario al cliente.`
         );
 
-        return { response, tokens_used: tokens };
+        return { response: result.response, tokens_used: result.tokens };
       }
     } else {
       // Not enough info, ask for what's missing
@@ -656,7 +628,7 @@ class BookingRestaurantAgentClass extends BookingAgentClass {
         missingInfo.push('número de personas');
       }
 
-      let additionalContext = `${servicesContext}\n${branchesContext}`;
+      let additionalContext = '';
 
       if (tenant && branchId) {
         const slots = await getAvailableSlots(tenant.tenant_id, branchId, undefined, undefined, undefined, 5);
@@ -674,8 +646,12 @@ class BookingRestaurantAgentClass extends BookingAgentClass {
         additionalContext += `\n\nNOTA: Falta información para reservar: ${missingInfo.join(', ')}. Pregunta de manera natural.`;
       }
 
-      const { response, tokens } = await this.callLLM(state, additionalContext);
-      return { response, tokens_used: tokens };
+      // ARQUITECTURA V7: Usar Tool Calling
+      const allTools = createToolsForAgent('booking_restaurant', state);
+      const consultationTools = allTools.filter(t => t.name !== TOOL_NAMES.CREATE_APPOINTMENT);
+
+      const result = await this.callLLMWithTools(state, consultationTools, additionalContext);
+      return { response: result.response, tokens_used: result.tokens };
     }
   }
 }

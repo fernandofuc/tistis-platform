@@ -3,13 +3,13 @@
 // Agente de propósito general para casos no específicos
 // =====================================================
 //
-// ARQUITECTURA v6.0:
-// - Usa Tool Calling para obtener información on-demand
-// - NO carga todo el contexto del negocio
-// - El LLM decide qué información necesita
+// ARQUITECTURA V7.0:
+// - Tool Calling SIEMPRE activo para obtener info on-demand
+// - Búsqueda RAG via search_knowledge_base
+// - CERO context stuffing - el LLM pide lo que necesita
 // =====================================================
 
-import { BaseAgent, type AgentResult, formatServicesForPrompt, formatBranchesForPrompt, formatFAQsForPrompt } from './base.agent';
+import { BaseAgent, type AgentResult } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
 import { createToolsForAgent } from '../../tools';
 
@@ -18,7 +18,7 @@ import { createToolsForAgent } from '../../tools';
 // ======================
 
 /**
- * Agente General
+ * Agente General - ARQUITECTURA V7
  *
  * Este es el agente de fallback cuando ningún otro es apropiado.
  * Responsabilidades:
@@ -27,7 +27,7 @@ import { createToolsForAgent } from '../../tools';
  * 3. Proporcionar información básica del negocio
  * 4. Escalar si es necesario
  *
- * TOOLS DISPONIBLES:
+ * TOOLS DISPONIBLES (se obtienen automáticamente vía Tool Calling):
  * - get_service_info: Información de servicios específicos
  * - list_services: Catálogo completo de servicios
  * - get_branch_info: Información de sucursales
@@ -37,9 +37,6 @@ import { createToolsForAgent } from '../../tools';
  * - get_business_policy: Políticas del negocio
  */
 class GeneralAgentClass extends BaseAgent {
-  /** Flag para usar Tool Calling vs modo legacy */
-  private useToolCalling: boolean = true;
-
   constructor() {
     super({
       name: 'general',
@@ -108,64 +105,26 @@ Eres un asistente versátil que puede ayudar con cualquier consulta general.
       additionalContext = '\nNOTA: El cliente está despidiéndose. Despídete amablemente y ofrece ayuda futura.';
     }
 
-    let response: string;
-    let tokens: number;
-    let toolCalls: string[] = [];
+    // =====================================================
+    // ARQUITECTURA V7: Tool Calling SIEMPRE activo
+    // El LLM decide qué información necesita y la obtiene on-demand
+    // NO hay modo legacy - CERO context stuffing
+    // =====================================================
+    const tools = createToolsForAgent(this.config.name, state);
 
-    if (this.useToolCalling) {
-      // =====================================================
-      // NUEVA ARQUITECTURA: Tool Calling
-      // El LLM decide qué información necesita y la obtiene on-demand
-      // =====================================================
-      const tools = createToolsForAgent(this.config.name, state);
+    console.log(`[general] V7 Tool Calling with ${tools.length} tools`);
 
-      console.log(`[general] Using Tool Calling mode with ${tools.length} tools`);
+    const result = await this.callLLMWithTools(state, tools, additionalContext);
+    const response = result.response;
+    const tokens = result.tokens;
+    const toolCalls = result.toolCalls;
 
-      const result = await this.callLLMWithTools(state, tools, additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-      toolCalls = result.toolCalls;
-
-      console.log(`[general] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
-    } else {
-      // =====================================================
-      // MODO LEGACY: Context Stuffing (para compatibilidad)
-      // =====================================================
-      console.log(`[general] Using legacy mode (context stuffing)`);
-
-      const servicesContext = formatServicesForPrompt(state.business_context);
-      const branchesContext = formatBranchesForPrompt(state.business_context);
-      const faqsContext = formatFAQsForPrompt(state.business_context);
-
-      const fullContext = `# INFORMACIÓN DEL NEGOCIO
-
-## SERVICIOS
-${servicesContext}
-
-## SUCURSALES
-${branchesContext}
-
-## PREGUNTAS FRECUENTES
-${faqsContext}`;
-
-      const result = await this.callLLM(state, fullContext + additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-    }
+    console.log(`[general] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
 
     return {
       response,
       tokens_used: tokens,
     };
-  }
-
-  /**
-   * Habilita o deshabilita Tool Calling
-   * Útil para testing o rollback gradual
-   */
-  setToolCallingMode(enabled: boolean): void {
-    this.useToolCalling = enabled;
-    console.log(`[general] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

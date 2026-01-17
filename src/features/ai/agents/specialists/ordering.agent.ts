@@ -2,11 +2,19 @@
 // TIS TIS PLATFORM - Restaurant Ordering Agent
 // Agente especializado en pedidos pickup/delivery
 // =====================================================
+//
+// ARQUITECTURA V7.0:
+// - Tool Calling para obtener menú on-demand (get_menu_items, get_menu_categories)
+// - Búsqueda RAG para información adicional
+// - CERO context stuffing del menú completo
+// - Parsing de orden optimizado con menú obtenido via tools
+// =====================================================
 
-import { BaseAgent, type AgentResult, formatBranchesForPrompt } from './base.agent';
+import { BaseAgent, type AgentResult } from './base.agent';
 import type { TISTISAgentStateType, OrderResult } from '../../state';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { SafetyResilienceService } from '../../services/safety-resilience.service';
+import { createToolsForAgent } from '../../tools';
 
 // ======================
 // TYPES
@@ -186,7 +194,10 @@ function parseOrderFromMessage(
 }
 
 /**
- * Formatea el menú para el prompt del agente
+ * @deprecated ARQUITECTURA V7: No usar context stuffing del menú.
+ * El agente ahora usa Tool Calling con get_menu_items y get_menu_categories.
+ * Esta función se mantiene temporalmente para referencia.
+ * TODO: Eliminar en v8.0
  */
 function formatMenuForPrompt(
   menuItems: NonNullable<TISTISAgentStateType['business_context']>['menu_items'],
@@ -508,7 +519,7 @@ async function createOrder(
 // ======================
 
 /**
- * Agente de Ordering para Restaurantes
+ * Agente de Ordering para Restaurantes - ARQUITECTURA V7
  *
  * IMPORTANTE: Este agente solo se activa cuando el cliente
  * explícitamente quiere hacer un pedido para recoger/llevar.
@@ -520,6 +531,11 @@ async function createOrder(
  * 3. Confirmar el pedido
  * 4. Crear la orden en el sistema
  * 5. Dar confirmación con número y tiempo estimado
+ *
+ * NOTA: Este agente usa un enfoque híbrido:
+ * - Parsing directo del mensaje para detectar items (optimizado para órdenes)
+ * - Tool Calling para clarificación y sugerencias del menú
+ * - NO usa context stuffing del menú completo
  */
 class OrderingRestaurantAgentClass extends BaseAgent {
   constructor() {
@@ -637,11 +653,9 @@ Tú: "Tu pedido está confirmado. Total: $180. Número de orden: #023. Estará l
     // END P1 FIX
     // =====================================================
 
-    // Format menu for prompt
-    const menuContext = formatMenuForPrompt(menuItems, menuCategories);
-    const branchesContext = formatBranchesForPrompt(business);
-
-    // Parse the order from the message
+    // Parse the order from the message using available menu items from state
+    // NOTA V7: El menú ya viene en business_context, no hacemos context stuffing
+    // El LLM usará Tool Calling para sugerencias si necesita clarificación
     const parsedOrder = parseOrderFromMessage(state.current_message, menuItems);
 
     // If we detected items with good confidence, try to create the order
@@ -650,11 +664,14 @@ Tú: "Tu pedido está confirmado. Total: $180. Número de orden: #023. Estará l
       const branchId = lead?.preferred_branch_id || business?.branches?.[0]?.id;
 
       if (!branchId || !tenant) {
-        const { response, tokens } = await this.callLLM(
+        // V7: Usar Tool Calling para que el LLM obtenga info de sucursales
+        const tools = createToolsForAgent(this.config.name, state);
+        const result = await this.callLLMWithTools(
           state,
-          `${menuContext}\n${branchesContext}\n\nNOTA: No se pudo determinar la sucursal. Pregunta al cliente.`
+          tools,
+          '\nNOTA: No se pudo determinar la sucursal. Usa get_branch_info para obtener sucursales y pregunta al cliente cuál prefiere.'
         );
-        return { response, tokens_used: tokens };
+        return { response: result.response, tokens_used: result.tokens };
       }
 
       // Create the order with channel from state
@@ -674,35 +691,44 @@ Tú: "Tu pedido está confirmado. Total: $180. Número de orden: #023. Estará l
           tokens_used: 0,
         };
       } else {
-        // Order failed, use LLM to handle gracefully
-        const { response, tokens } = await this.callLLM(
+        // Order failed, use V7 Tool Calling to handle gracefully
+        const tools = createToolsForAgent(this.config.name, state);
+        const result = await this.callLLMWithTools(
           state,
-          `${menuContext}\n\nNOTA: Hubo un problema al crear el pedido: ${orderResult.error}. Discúlpate y ofrece alternativas.`
+          tools,
+          `\nNOTA: Hubo un problema al crear el pedido: ${orderResult.error}. Discúlpate y usa get_menu_items para sugerir alternativas.`
         );
-        return { response, tokens_used: tokens };
+        return { response: result.response, tokens_used: result.tokens };
       }
     }
 
-    // Need clarification or no items detected - use LLM
-    let additionalContext = `${menuContext}\n${branchesContext}`;
+    // =====================================================
+    // V7: Need clarification or no items detected - use Tool Calling
+    // El LLM usará get_menu_items y get_menu_categories para sugerir opciones
+    // =====================================================
+    const tools = createToolsForAgent(this.config.name, state);
+    let additionalContext = '';
 
     if (parsedOrder.items.length > 0) {
       // We detected some items but need confirmation
-      additionalContext += `\n\n# ITEMS DETECTADOS (necesitan confirmación)\n`;
+      additionalContext = `\n# ITEMS DETECTADOS (necesitan confirmación)\n`;
       for (const item of parsedOrder.items) {
         additionalContext += `- ${item.quantity}x ${item.name} (confianza: ${Math.round(item.matched_confidence * 100)}%)\n`;
       }
-      additionalContext += `\nConfirma estos items con el cliente antes de procesar el pedido.`;
+      additionalContext += `\nConfirma estos items con el cliente antes de procesar el pedido. Usa get_menu_items si necesitas verificar precios.`;
     } else {
-      // No items detected
-      additionalContext += `\n\nNOTA: No se detectaron platillos claros en el mensaje. Pregunta qué desea ordenar y ofrece sugerencias del menú.`;
+      // No items detected - use tools to suggest options
+      additionalContext = `\nNOTA: No se detectaron platillos claros. Usa get_menu_categories para ver categorías y get_menu_items para sugerir opciones populares al cliente.`;
     }
 
-    const { response, tokens } = await this.callLLM(state, additionalContext);
+    console.log(`[ordering_restaurant] V7 Tool Calling with ${tools.length} tools`);
+    const result = await this.callLLMWithTools(state, tools, additionalContext);
+
+    console.log(`[ordering_restaurant] Tool calls made: ${result.toolCalls.join(', ') || 'none'}`);
 
     return {
-      response,
-      tokens_used: tokens,
+      response: result.response,
+      tokens_used: result.tokens,
     };
   }
 

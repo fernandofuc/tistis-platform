@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Tool Handlers
 // Implementación de la lógica de cada tool
+// ARQUITECTURA V7.0
 // =====================================================
 //
 // Este archivo implementa los handlers para cada tool.
@@ -11,8 +12,8 @@
 // para obtener la información. NO hacen queries directos a la BD
 // para mantener consistencia con el modelo actual.
 //
-// FUTURO: Cuando implementemos RAG, search_knowledge_base
-// hará queries con embeddings a Supabase.
+// RAG IMPLEMENTADO (V7): search_knowledge_base usa EmbeddingService
+// con pgvector para búsqueda semántica. Fallback a keywords si falla.
 // =====================================================
 
 import type { TISTISAgentStateType, BusinessContext } from '../state';
@@ -438,9 +439,9 @@ export async function handleGetBusinessPolicy(
  * Busca información en la base de conocimiento usando RAG (embeddings)
  * con fallback a búsqueda por palabras clave
  *
- * ARQUITECTURA v6.0:
- * 1. Intenta búsqueda semántica con embeddings (RAG)
- * 2. Si falla o no hay embeddings, usa búsqueda por keywords
+ * ARQUITECTURA V7.0 - RAG:
+ * 1. Intenta búsqueda semántica con embeddings (EmbeddingService + pgvector)
+ * 2. Si falla o no hay embeddings configurados, usa búsqueda por keywords
  */
 export async function handleSearchKnowledgeBase(
   params: { query: string; limit?: number },

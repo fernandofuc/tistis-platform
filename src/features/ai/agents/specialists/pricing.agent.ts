@@ -3,9 +3,10 @@
 // Agente especializado en consultas de precios
 // =====================================================
 //
-// ARQUITECTURA v6.0:
-// - Usa Tool Calling para obtener información de servicios on-demand
-// - NO carga todo el catálogo en el contexto inicial
+// ARQUITECTURA V7.0:
+// - Tool Calling SIEMPRE activo para obtener info on-demand
+// - Búsqueda RAG via search_knowledge_base para knowledge base
+// - CERO context stuffing - el LLM pide lo que necesita
 // - Reduce tokens de ~20K a ~2K por mensaje
 // =====================================================
 
@@ -18,7 +19,7 @@ import { createToolsForAgent } from '../../tools';
 // ======================
 
 /**
- * Agente de Precios
+ * Agente de Precios - ARQUITECTURA V7
  *
  * Responsabilidades:
  * 1. Proporcionar información clara de precios
@@ -26,16 +27,14 @@ import { createToolsForAgent } from '../../tools';
  * 3. Mencionar promociones activas
  * 4. Guiar hacia booking si el cliente está interesado
  *
- * TOOLS DISPONIBLES:
+ * TOOLS DISPONIBLES (se obtienen automáticamente vía Tool Calling):
  * - get_service_info: Obtener precio de un servicio específico
  * - list_services: Listar todos los servicios con precios
  * - get_business_policy: Obtener políticas de pago
  * - get_faq_answer: Buscar respuestas a preguntas frecuentes
+ * - search_knowledge_base: Buscar en RAG del tenant (promociones, etc.)
  */
 class PricingAgentClass extends BaseAgent {
-  /** Flag para usar Tool Calling vs modo legacy */
-  private useToolCalling: boolean = true;
-
   constructor() {
     super({
       name: 'pricing',
@@ -82,40 +81,21 @@ Tu trabajo es proporcionar información clara y transparente sobre precios.
       additionalContext += '\nNOTA: El cliente parece sensible al precio. Si existen opciones de financiamiento o paquetes, menciónalos.';
     }
 
-    let response: string;
-    let tokens: number;
-    let toolCalls: string[] = [];
+    // =====================================================
+    // ARQUITECTURA V7: Tool Calling SIEMPRE activo
+    // El LLM decide qué información necesita y la obtiene on-demand
+    // NO hay modo legacy - CERO context stuffing
+    // =====================================================
+    const tools = createToolsForAgent(this.config.name, state);
 
-    if (this.useToolCalling) {
-      // =====================================================
-      // NUEVA ARQUITECTURA: Tool Calling
-      // El LLM decide qué información necesita y la obtiene on-demand
-      // =====================================================
-      const tools = createToolsForAgent(this.config.name, state);
+    console.log(`[pricing] V7 Tool Calling with ${tools.length} tools`);
 
-      console.log(`[pricing] Using Tool Calling mode with ${tools.length} tools`);
+    const result = await this.callLLMWithTools(state, tools, additionalContext);
+    const response = result.response;
+    const tokens = result.tokens;
+    const toolCalls = result.toolCalls;
 
-      const result = await this.callLLMWithTools(state, tools, additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-      toolCalls = result.toolCalls;
-
-      console.log(`[pricing] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
-    } else {
-      // =====================================================
-      // MODO LEGACY: Context Stuffing (para compatibilidad)
-      // =====================================================
-      console.log(`[pricing] Using legacy mode (context stuffing)`);
-
-      // Importar función helper del modo legacy
-      const { formatServicesForPrompt } = await import('./base.agent');
-
-      const servicesContext = `# CATÁLOGO DE SERVICIOS Y PRECIOS\n${formatServicesForPrompt(state.business_context)}`;
-
-      const result = await this.callLLM(state, servicesContext + additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-    }
+    console.log(`[pricing] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
 
     // Detectar si el cliente está listo para agendar
     const bookingIndicators = ['cuándo', 'cuando', 'cita', 'agendar', 'disponible', 'horario', 'quiero', 'me interesa'];
@@ -137,15 +117,6 @@ Tu trabajo es proporcionar información clara y transparente sobre precios.
       response,
       tokens_used: tokens,
     };
-  }
-
-  /**
-   * Habilita o deshabilita Tool Calling
-   * Útil para testing o rollback gradual
-   */
-  setToolCallingMode(enabled: boolean): void {
-    this.useToolCalling = enabled;
-    console.log(`[pricing] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

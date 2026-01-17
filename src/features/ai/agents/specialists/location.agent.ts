@@ -3,12 +3,13 @@
 // Agente especializado en consultas de ubicación
 // =====================================================
 //
-// ARQUITECTURA v6.0:
-// - Usa Tool Calling para obtener información on-demand
+// ARQUITECTURA V7.0:
+// - Tool Calling SIEMPRE activo para obtener info on-demand
 // - Consulta sucursales específicas sin cargar todas
+// - CERO context stuffing
 // =====================================================
 
-import { BaseAgent, type AgentResult, formatBranchesForPrompt } from './base.agent';
+import { BaseAgent, type AgentResult } from './base.agent';
 import type { TISTISAgentStateType } from '../../state';
 import { createToolsForAgent } from '../../tools';
 
@@ -17,7 +18,7 @@ import { createToolsForAgent } from '../../tools';
 // ======================
 
 /**
- * Agente de Ubicación
+ * Agente de Ubicación - ARQUITECTURA V7
  *
  * Responsabilidades:
  * 1. Proporcionar direcciones claras
@@ -25,14 +26,11 @@ import { createToolsForAgent } from '../../tools';
  * 3. Explicar cómo llegar
  * 4. Informar sobre estacionamiento
  *
- * TOOLS DISPONIBLES:
+ * TOOLS DISPONIBLES (se obtienen automáticamente vía Tool Calling):
  * - get_branch_info: Información de sucursales específicas
  * - get_operating_hours: Horarios de atención
  */
 class LocationAgentClass extends BaseAgent {
-  /** Flag para usar Tool Calling vs modo legacy */
-  private useToolCalling: boolean = true;
-
   constructor() {
     super({
       name: 'location',
@@ -98,51 +96,25 @@ Tu trabajo es ayudar a los clientes a encontrar nuestras sucursales.
       additionalContext = '\nNOTA: Hay múltiples sucursales. Pregunta al cliente cuál le queda más cerca o usa get_branch_info sin parámetros para obtener todas.';
     }
 
-    let response: string;
-    let tokens: number;
-    let toolCalls: string[] = [];
+    // =====================================================
+    // ARQUITECTURA V7: Tool Calling SIEMPRE activo
+    // NO hay modo legacy - CERO context stuffing
+    // =====================================================
+    const tools = createToolsForAgent(this.config.name, state);
 
-    if (this.useToolCalling) {
-      // =====================================================
-      // NUEVA ARQUITECTURA: Tool Calling
-      // =====================================================
-      const tools = createToolsForAgent(this.config.name, state);
+    console.log(`[location] V7 Tool Calling with ${tools.length} tools`);
 
-      console.log(`[location] Using Tool Calling mode with ${tools.length} tools`);
+    const result = await this.callLLMWithTools(state, tools, additionalContext);
+    const response = result.response;
+    const tokens = result.tokens;
+    const toolCalls = result.toolCalls;
 
-      const result = await this.callLLMWithTools(state, tools, additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-      toolCalls = result.toolCalls;
-
-      console.log(`[location] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
-    } else {
-      // =====================================================
-      // MODO LEGACY: Context Stuffing (para compatibilidad)
-      // =====================================================
-      console.log(`[location] Using legacy mode (context stuffing)`);
-
-      const branchesContext = `# SUCURSALES Y UBICACIONES
-${formatBranchesForPrompt(state.business_context)}`;
-
-      const result = await this.callLLM(state, branchesContext + additionalContext);
-      response = result.response;
-      tokens = result.tokens;
-    }
+    console.log(`[location] Tool calls made: ${toolCalls.join(', ') || 'none'}`);
 
     return {
       response,
       tokens_used: tokens,
     };
-  }
-
-  /**
-   * Habilita o deshabilita Tool Calling
-   * Útil para testing o rollback gradual
-   */
-  setToolCallingMode(enabled: boolean): void {
-    this.useToolCalling = enabled;
-    console.log(`[location] Tool Calling mode: ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

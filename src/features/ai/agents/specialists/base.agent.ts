@@ -128,12 +128,10 @@ export abstract class BaseAgent {
     } else {
       // =====================================================
       // FALLBACK: Use hardcoded template if no cached prompt
-      // This happens when:
-      // - Prompt generation failed
-      // - New tenant without generated prompt
-      // - Cache invalidated
+      // ARQUITECTURA V7: NO usar context stuffing
+      // Los agentes DEBEN usar Tool Calling para obtener información
       // =====================================================
-      console.warn(`[${this.config.name}] No cached prompt available, using template fallback`);
+      console.warn(`[${this.config.name}] No cached prompt available, using template fallback with V7 architecture`);
 
       prompt = this.config.systemPromptTemplate;
 
@@ -155,10 +153,39 @@ export abstract class BaseAgent {
       const style = tenant?.ai_config?.response_style || 'professional';
       prompt = prompt.replace('{{STYLE_DESCRIPTION}}', styleDescriptions[style] || 'profesional');
 
-      // Add full business context since we don't have cached prompt
-      const fullContext = buildFullBusinessContext(state);
-      if (fullContext) {
-        prompt += `\n${fullContext}`;
+      // =====================================================
+      // ARQUITECTURA V7: Instrucciones para usar Tools
+      // NO se incluye business context - se obtiene via Tools/RAG
+      // =====================================================
+      const vertical = state.vertical || tenant?.vertical || 'dental';
+      if (vertical === 'restaurant') {
+        prompt += `\n\n# HERRAMIENTAS DISPONIBLES
+Tienes acceso a herramientas para obtener información. USA LAS HERRAMIENTAS cuando necesites:
+- Items del menú y precios (get_menu_items)
+- Categorías del menú (get_menu_categories)
+- Disponibilidad de platillos (check_item_availability)
+- Crear pedidos (create_order)
+- Promociones activas (get_active_promotions)
+- Información de sucursales/ubicaciones (get_branch_info)
+- Horarios de operación (get_operating_hours)
+- Preguntas frecuentes (get_faq_answer)
+- Políticas del negocio (get_business_policy)
+- Buscar en base de conocimiento (search_knowledge_base)
+
+NO inventes información de precios o disponibilidad. Si no la tienes, usa la herramienta correspondiente.`;
+      } else {
+        prompt += `\n\n# HERRAMIENTAS DISPONIBLES
+Tienes acceso a herramientas para obtener información. USA LAS HERRAMIENTAS cuando necesites:
+- Información de servicios o precios (get_service_info, list_services)
+- Disponibilidad de horarios (get_available_slots)
+- Información de sucursales (get_branch_info)
+- Políticas del negocio (get_business_policy)
+- Preguntas frecuentes (get_faq_answer)
+- Información del equipo (get_staff_info)
+- Crear citas (create_appointment)
+- Buscar en base de conocimiento (search_knowledge_base)
+
+NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
       }
     }
 
@@ -332,10 +359,11 @@ export abstract class BaseAgent {
   /**
    * Llama al LLM con herramientas (Tool Calling)
    *
-   * NUEVA ARQUITECTURA v6.0:
+   * ARQUITECTURA V7.0:
    * - El LLM puede invocar tools para obtener información on-demand
-   * - Reduce el contexto inicial significativamente
+   * - CERO context stuffing - toda info se obtiene via tools
    * - Soporta múltiples iteraciones de tool calls
+   * - RAG habilitado via search_knowledge_base
    *
    * @param state Estado actual del grafo
    * @param tools Array de DynamicStructuredTool de LangChain
@@ -673,7 +701,9 @@ Usa las herramientas disponibles para obtener información cuando sea necesario.
 // ======================
 
 /**
- * Formatea servicios para incluir en el prompt
+ * @deprecated ARQUITECTURA V7: No usar context stuffing.
+ * Los agentes deben usar Tool Calling con `list_services` o `get_service_info`.
+ * Esta función se mantiene solo para compatibilidad temporal.
  */
 export function formatServicesForPrompt(
   services: TISTISAgentStateType['business_context']
@@ -706,7 +736,9 @@ export function formatServicesForPrompt(
 }
 
 /**
- * Formatea sucursales para incluir en el prompt
+ * @deprecated ARQUITECTURA V7: No usar context stuffing.
+ * Los agentes deben usar Tool Calling con `get_branch_info`.
+ * Esta función se mantiene solo para compatibilidad temporal.
  */
 export function formatBranchesForPrompt(
   business: TISTISAgentStateType['business_context']
@@ -731,7 +763,9 @@ export function formatBranchesForPrompt(
 }
 
 /**
- * Formatea FAQs para incluir en el prompt
+ * @deprecated ARQUITECTURA V7: No usar context stuffing.
+ * Los agentes deben usar Tool Calling con `get_faq_answer`.
+ * Esta función se mantiene solo para compatibilidad temporal.
  */
 export function formatFAQsForPrompt(
   business: TISTISAgentStateType['business_context']
@@ -750,23 +784,28 @@ export function formatFAQsForPrompt(
 }
 
 // ======================
-// FULL CONTEXT BUILDER
+// FULL CONTEXT BUILDER (DEPRECATED)
 // ======================
 
 /**
- * Construye el contexto COMPLETO del negocio para los prompts de los agentes
- * Replica la lógica del sistema legacy (ai.service.ts) para que los agentes
- * tengan acceso a toda la información personalizada del cliente.
+ * @deprecated ARQUITECTURA V7: NO USAR CONTEXT STUFFING.
  *
- * Incluye:
- * - Instrucciones personalizadas
- * - Políticas del negocio
- * - Servicios con precios
- * - FAQs
- * - Knowledge Base (artículos de conocimiento)
- * - Sucursales con horarios y personal
- * - Manejo de competencia
- * - Plantillas de respuesta
+ * Esta función fue reemplazada por el sistema de Tool Calling + RAG.
+ * Los agentes ahora obtienen información on-demand usando:
+ * - list_services / get_service_info (servicios)
+ * - get_branch_info (sucursales)
+ * - get_faq_answer (FAQs)
+ * - search_knowledge_base (base de conocimiento con RAG semántico)
+ * - get_business_policy (políticas)
+ *
+ * BENEFICIOS DE V7 vs CONTEXT STUFFING:
+ * - Reducción de ~70% en tokens por request
+ * - Respuestas más rápidas (menor latencia)
+ * - Información siempre actualizada desde DB
+ * - RAG semántico para búsquedas inteligentes
+ *
+ * Esta función se mantiene solo para compatibilidad temporal.
+ * TODO: Eliminar completamente en v8.0
  */
 export function buildFullBusinessContext(
   state: TISTISAgentStateType

@@ -72,11 +72,14 @@ Si el AI no puede resolver:
     // Determinar tipo de escalación
     let escalationType: 'urgent' | 'human_request' | 'limit' | 'general' = 'general';
 
+    // Obtener configuración de límite del tenant
+    const maxIterations = state.tenant?.ai_config?.max_turns_before_escalation ?? 5;
+
     if (intent === 'PAIN_URGENT' || state.extracted_data.pain_level && state.extracted_data.pain_level >= 4) {
       escalationType = 'urgent';
     } else if (intent === 'HUMAN_REQUEST') {
       escalationType = 'human_request';
-    } else if (state.control.max_iterations_reached || state.control.iteration_count >= 5) {
+    } else if (state.control.max_iterations_reached || state.control.iteration_count >= maxIterations) {
       escalationType = 'limit';
     }
 
