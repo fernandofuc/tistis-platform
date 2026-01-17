@@ -4,7 +4,7 @@
 // =====================================================
 
 import { StateGraph, END, START } from '@langchain/langgraph';
-import { HumanMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage, type BaseMessage } from '@langchain/core/messages';
 import {
   TISTISAgentState,
   type TISTISAgentStateType,
@@ -43,14 +43,21 @@ const MAX_ITERATIONS = 5;
 /**
  * Nodo de inicialización
  * Prepara el estado inicial con el mensaje del usuario
+ * IMPORTANTE: Preserva mensajes previos para conversaciones multi-turn
  */
 async function initializeNode(
   state: TISTISAgentStateType
 ): Promise<Partial<TISTISAgentStateType>> {
   console.log('[Graph] Initializing...');
 
+  // Preservar mensajes previos (de conversaciones multi-turn) y agregar el mensaje actual
+  const existingMessages = state.messages || [];
+  const updatedMessages = [...existingMessages, new HumanMessage(state.current_message)];
+
+  console.log(`[Graph] Messages: ${existingMessages.length} previous + 1 current = ${updatedMessages.length} total`);
+
   return {
-    messages: [new HumanMessage(state.current_message)],
+    messages: updatedMessages,
     processing_started_at: new Date().toISOString(),
     control: {
       ...state.control,
@@ -440,6 +447,11 @@ export interface GraphExecutionInput {
   lead_context: TISTISAgentStateType['lead'];
   conversation_context: TISTISAgentStateType['conversation'];
   business_context: TISTISAgentStateType['business_context'];
+  /** Historial de mensajes previos (para preview multi-turn) */
+  previous_messages?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
 }
 
 export interface GraphExecutionResult {
@@ -471,9 +483,23 @@ export async function executeGraph(
     // Compilar el grafo
     const graph = compileTISTISGraph();
 
+    // Construir historial de mensajes previos si existe (para preview multi-turn)
+    const previousMessages: BaseMessage[] = [];
+    if (input.previous_messages && input.previous_messages.length > 0) {
+      for (const msg of input.previous_messages) {
+        if (msg.role === 'user') {
+          previousMessages.push(new HumanMessage(msg.content));
+        } else {
+          previousMessages.push(new AIMessage(msg.content));
+        }
+      }
+      console.log(`[Graph] Loaded ${previousMessages.length} previous messages for context`);
+    }
+
     // Preparar estado inicial
     const initialState: Partial<TISTISAgentStateType> = {
       ...createInitialState(),
+      messages: previousMessages, // Inyectar historial previo
       tenant: input.tenant_context,
       lead: input.lead_context,
       conversation: input.conversation_context,

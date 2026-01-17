@@ -1206,12 +1206,218 @@ export async function generateAIResponseSmart(
 }
 
 // ======================
+// PREVIEW RESPONSE (LIVE PREVIEW WITH FULL LANGGRAPH)
+// ======================
+
+/**
+ * Interfaz para solicitud de preview
+ */
+export interface PreviewRequestInput {
+  tenantId: string;
+  message: string;
+  profileType: ProfileType;
+  channel?: CacheChannel;
+  conversationHistory?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
+}
+
+/**
+ * Interfaz para resultado de preview
+ */
+export interface PreviewResponseResult {
+  success: boolean;
+  response: string;
+  intent: string;
+  signals: Array<{ signal: string; points: number }>;
+  score_change: number;
+  processing_time_ms: number;
+  tokens_used: number;
+  model_used: string;
+  agents_used: string[];
+  escalated: boolean;
+  escalation_reason?: string;
+  profile_config: {
+    profile_type: ProfileType;
+    response_style: string;
+    template_key: string;
+    delay_minutes: number;
+    delay_first_only: boolean;
+  };
+  prompt_source?: string;
+  error?: string;
+}
+
+/**
+ * Genera una respuesta de preview usando el flujo COMPLETO de LangGraph
+ * Esta función es específica para el "Preview en vivo" del UI
+ *
+ * CARACTERÍSTICAS:
+ * - Usa la arquitectura completa LangGraph con Tools + RAG
+ * - Soporta selección de perfil (business/personal)
+ * - Soporta historial de conversación multi-turn
+ * - Carga contexto real del tenant (Knowledge Base, servicios, etc.)
+ * - Aplica configuración del perfil (response_style, template, delay)
+ *
+ * @param input - Parámetros del preview
+ * @returns Resultado del preview con metadata completa
+ */
+export async function generatePreviewResponse(
+  input: PreviewRequestInput
+): Promise<PreviewResponseResult> {
+  const startTime = Date.now();
+  const { tenantId, message, profileType, channel = 'whatsapp', conversationHistory = [] } = input;
+
+  console.log(`[LangGraph Preview] Starting preview for tenant ${tenantId}, profile: ${profileType}`);
+
+  try {
+    // 1. Sanitizar mensaje
+    const sanitizationResult = PromptSanitizer.sanitizeUserPrompt(message);
+    const sanitizedMessage = sanitizationResult.sanitized;
+
+    if (sanitizationResult.wasModified) {
+      console.warn(
+        `[LangGraph Preview] Message sanitized. Risk: ${sanitizationResult.riskLevel}, ` +
+        `Patterns: ${sanitizationResult.detectedPatterns.map(p => p.type).join(', ')}`
+      );
+    }
+
+    // 2. Determinar si usar prompt minimal
+    const useMinimalPrompt = await shouldUseMinimalPromptV6(tenantId);
+    if (useMinimalPrompt) {
+      console.log(`[LangGraph Preview] ARQUITECTURA V6 ACTIVA: Usando prompt minimal + tools dinámicos`);
+    }
+
+    // 3. Cargar todos los contextos en PARALELO
+    // IMPORTANTE: Usamos el profileType seleccionado por el usuario
+    const [tenantContext, businessContext, learningContext, loyaltyContext] = await Promise.all([
+      loadTenantContext(tenantId, channel, profileType, useMinimalPrompt),
+      loadBusinessContext(tenantId),
+      loadLearningContext(tenantId),
+      loadLoyaltyContext(tenantId), // Sin leadId para preview
+    ]);
+
+    if (!tenantContext) {
+      throw new Error('Could not load tenant context for preview');
+    }
+
+    // 4. Extraer configuración del perfil para el response
+    const profileConfig = {
+      profile_type: profileType,
+      response_style: tenantContext.ai_config.response_style,
+      template_key: tenantContext.agent_profile?.template_key || 'general_full',
+      delay_minutes: tenantContext.agent_profile?.response_delay_minutes || 0,
+      delay_first_only: tenantContext.agent_profile?.response_delay_first_only ?? true,
+    };
+
+    console.log(`[LangGraph Preview] Profile config:`, profileConfig);
+
+    // 5. Enriquecer system_prompt con contexto de aprendizaje si existe
+    if (learningContext && (
+      learningContext.topServiceRequests.length > 0 ||
+      learningContext.commonObjections.length > 0 ||
+      learningContext.learnedVocabulary.length > 0
+    )) {
+      const learningEnrichment = buildLearningEnrichment(learningContext);
+      tenantContext.ai_config.system_prompt = `${tenantContext.ai_config.system_prompt}\n\n${learningEnrichment}`;
+      console.log('[LangGraph Preview] System prompt enriched with learning context');
+    }
+
+    // 6. Enriquecer con contexto de loyalty si existe
+    if (loyaltyContext?.program) {
+      const loyaltyEnrichment = buildLoyaltyEnrichment(loyaltyContext);
+      tenantContext.ai_config.system_prompt = `${tenantContext.ai_config.system_prompt}\n\n${loyaltyEnrichment}`;
+      console.log('[LangGraph Preview] System prompt enriched with loyalty context');
+    }
+
+    // 7. Construir contexto de conversación simulado para multi-turn
+    // En preview NO tenemos una conversación real en DB, usamos el historial pasado
+    const simulatedConversationContext: ConversationInfo = {
+      conversation_id: `preview-${tenantId}-${Date.now()}`,
+      channel: channel,
+      status: 'active',
+      ai_handling: true,
+      message_count: conversationHistory.length + 1,
+      started_at: new Date().toISOString(),
+      last_message_at: new Date().toISOString(),
+    };
+
+    // 8. Preparar input para el grafo
+    const graphInput: GraphExecutionInput = {
+      tenant_id: tenantId,
+      conversation_id: simulatedConversationContext.conversation_id,
+      lead_id: '', // No hay lead en preview
+      current_message: sanitizedMessage,
+      channel: channel,
+      tenant_context: tenantContext,
+      lead_context: null, // No hay lead en preview
+      conversation_context: simulatedConversationContext,
+      business_context: businessContext,
+      // IMPORTANTE: Pasar historial de conversación para multi-turn en preview
+      previous_messages: conversationHistory,
+    };
+
+    // 9. Ejecutar el grafo LangGraph completo
+    const result = await executeGraph(graphInput);
+
+    const processingTime = Date.now() - startTime;
+
+    console.log(`[LangGraph Preview] Completed in ${processingTime}ms. Agents: ${result.agents_used.join(' -> ')}`);
+
+    return {
+      success: result.success,
+      response: result.response,
+      intent: result.intent,
+      signals: result.signals,
+      score_change: result.score_change,
+      processing_time_ms: processingTime,
+      tokens_used: result.tokens_used,
+      model_used: 'langgraph-gpt-5-mini',
+      agents_used: result.agents_used,
+      escalated: result.escalated,
+      escalation_reason: result.escalation_reason,
+      profile_config: profileConfig,
+      prompt_source: tenantContext.prompt_source,
+    };
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    console.error('[LangGraph Preview] Error:', error);
+
+    // Obtener configuración básica del perfil para el error response
+    const defaultProfileConfig = {
+      profile_type: profileType,
+      response_style: 'professional_friendly',
+      template_key: 'general_full',
+      delay_minutes: profileType === 'personal' ? 8 : 0,
+      delay_first_only: true,
+    };
+
+    return {
+      success: false,
+      response: 'Lo siento, ocurrió un error al generar la respuesta de preview.',
+      intent: 'UNKNOWN',
+      signals: [],
+      score_change: 0,
+      processing_time_ms: processingTime,
+      tokens_used: 0,
+      model_used: 'langgraph-error',
+      agents_used: [],
+      escalated: false,
+      profile_config: defaultProfileConfig,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// ======================
 // EXPORTS
 // ======================
 
 export const LangGraphAIService = {
   generateResponse: generateAIResponseWithGraph,
   generateSmart: generateAIResponseSmart,
+  generatePreview: generatePreviewResponse,  // NUEVO: Preview con LangGraph completo
   shouldUseLangGraph,
   shouldUseMinimalPromptV6,  // ARQUITECTURA V6
   loadTenantContext,

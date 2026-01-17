@@ -18,3 +18,4 @@ export { CharacterCountBar } from './CharacterCountBar';
 export { ResponseStyleSelector } from './ResponseStyleSelector';
 export { AssistantTypeSelector } from './AssistantTypeSelector';
 export { ConversationPreview } from './ConversationPreview';
+export { LivePreviewChat } from './LivePreviewChat';

@@ -216,22 +216,20 @@ export abstract class BaseAgent {
 
   /**
    * Construye el historial de mensajes para el LLM
+   *
+   * NOTA: El mensaje actual (state.current_message) ya está incluido en
+   * state.messages por el nodo initializeNode del grafo. NO lo duplicamos aquí.
    */
   protected buildMessageHistory(state: TISTISAgentStateType): (HumanMessage | AIMessage)[] {
     const messages: (HumanMessage | AIMessage)[] = [];
 
-    // Agregar mensajes previos del estado de LangGraph
+    // Agregar mensajes del estado de LangGraph (incluye historial previo + mensaje actual)
     for (const msg of state.messages) {
       if (msg._getType() === 'human') {
         messages.push(new HumanMessage(msg.content as string));
       } else if (msg._getType() === 'ai') {
         messages.push(new AIMessage(msg.content as string));
       }
-    }
-
-    // Agregar mensaje actual
-    if (state.current_message) {
-      messages.push(new HumanMessage(state.current_message));
     }
 
     return messages;

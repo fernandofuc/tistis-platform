@@ -34,7 +34,12 @@ export { LangGraphAIService } from './services/langgraph-ai.service';
 export {
   generateAIResponseWithGraph,
   generateAIResponseSmart,
+  generatePreviewResponse,  // NUEVO: Preview con LangGraph completo
   shouldUseLangGraph,
+} from './services/langgraph-ai.service';
+export type {
+  PreviewRequestInput,
+  PreviewResponseResult,
 } from './services/langgraph-ai.service';
 
 // Graph exports
