@@ -65,7 +65,13 @@ export interface APIKey {
   // Usage tracking
   last_used_at?: string;
   last_used_ip?: string;
+  last_used_endpoint?: string;
   usage_count: number;
+  usage_count_today?: number;
+  usage_reset_date?: string;
+
+  // Metadata (custom fields)
+  metadata?: Record<string, unknown>;
 
   // Audit
   created_at: string;

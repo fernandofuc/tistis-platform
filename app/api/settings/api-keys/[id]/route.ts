@@ -19,6 +19,7 @@ import type {
   RevokeAPIKeyRequest,
   RevokeAPIKeyResponse,
 } from '@/src/features/api-settings/types';
+import { filterValidScopes } from '@/src/features/api-settings/utils';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -34,23 +35,22 @@ const ALLOWED_ROLES = ['owner', 'admin'];
 // ======================
 
 /**
- * Validate scopes format
+ * Validate scopes using the official scope validator
+ * Returns null if scopes not provided (for PATCH operations)
  */
-function validateScopes(scopes: unknown): string[] | null {
+function validateScopesForUpdate(scopes: unknown): string[] | null {
   if (scopes === undefined) {
     return null; // Not provided, don't update
   }
   if (!Array.isArray(scopes)) {
     return [];
   }
-  return scopes.filter(
-    (scope): scope is string =>
-      typeof scope === 'string' && /^[a-z_]+:[a-z:]+$/.test(scope)
-  );
+  return filterValidScopes(scopes);
 }
 
 /**
- * Validate IP whitelist format
+ * Validate IP whitelist format (supports IPv4, IPv6, and CIDR notation)
+ * Returns undefined if not provided, null to clear, or array of valid IPs
  */
 function validateIPWhitelist(ips: unknown): string[] | null | undefined {
   if (ips === undefined) {
@@ -62,10 +62,17 @@ function validateIPWhitelist(ips: unknown): string[] | null | undefined {
   if (!Array.isArray(ips)) {
     return undefined;
   }
-  const ipRegex =
-    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^([a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}$/;
+
+  // IPv4 with optional CIDR
+  const ipv4Regex =
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\/(?:3[0-2]|[12]?[0-9]))?$/;
+
+  // IPv6 with optional CIDR (simplified)
+  const ipv6Regex = /^([a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}(?:\/(?:12[0-8]|1[01][0-9]|[1-9]?[0-9]))?$/;
+
   const validIps = ips.filter(
-    (ip): ip is string => typeof ip === 'string' && ipRegex.test(ip)
+    (ip): ip is string =>
+      typeof ip === 'string' && (ipv4Regex.test(ip) || ipv6Regex.test(ip))
   );
   return validIps.length > 0 ? validIps : null;
 }
@@ -336,8 +343,8 @@ export async function PATCH(
       updateData.description = body.description?.trim() || null;
     }
 
-    // Validate and add scopes if provided
-    const scopes = validateScopes(body.scopes);
+    // Validate and add scopes if provided (only allow defined scopes)
+    const scopes = validateScopesForUpdate(body.scopes);
     if (scopes !== null) {
       updateData.scopes = scopes;
     }

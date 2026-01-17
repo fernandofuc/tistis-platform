@@ -16,7 +16,10 @@ import type {
   CreateAPIKeyResponse,
   APIKeyListItem,
 } from '@/src/features/api-settings/types';
-import crypto from 'crypto';
+import {
+  generateAPIKey,
+  filterValidScopes,
+} from '@/src/features/api-settings/utils';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -39,50 +42,28 @@ const PLAN_LIMITS = {
 // ======================
 
 /**
- * Generate a secure API key
- */
-function generateAPIKey(environment: 'live' | 'test'): {
-  key: string;
-  hash: string;
-  hint: string;
-  prefix: string;
-} {
-  const prefix = `tis_${environment}_`;
-  const timestamp = Date.now().toString(36);
-  const random = crypto.randomBytes(24).toString('hex');
-
-  const key = `${prefix}${timestamp}_${random}`;
-  const hash = crypto.createHash('sha256').update(key).digest('hex');
-  const hint = `...${key.slice(-4)}`;
-
-  return { key, hash, hint, prefix };
-}
-
-/**
- * Validate scopes format
- */
-function validateScopes(scopes: unknown): string[] {
-  if (!Array.isArray(scopes)) {
-    return [];
-  }
-  // Filter to only valid scope strings
-  return scopes.filter(
-    (scope): scope is string =>
-      typeof scope === 'string' && /^[a-z_]+:[a-z:]+$/.test(scope)
-  );
-}
-
-/**
- * Validate IP whitelist format
+ * Validate IP whitelist format (supports IPv4, IPv6, and CIDR notation)
+ * Returns null if empty or no valid IPs (null means "allow all")
  */
 function validateIPWhitelist(ips: unknown): string[] | null {
   if (!Array.isArray(ips) || ips.length === 0) {
     return null;
   }
-  // Basic IP validation (IPv4 and IPv6)
-  const ipRegex =
-    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^([a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}$/;
-  return ips.filter((ip): ip is string => typeof ip === 'string' && ipRegex.test(ip));
+
+  // IPv4 with optional CIDR
+  const ipv4Regex =
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\/(?:3[0-2]|[12]?[0-9]))?$/;
+
+  // IPv6 with optional CIDR (simplified)
+  const ipv6Regex = /^([a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}(?:\/(?:12[0-8]|1[01][0-9]|[1-9]?[0-9]))?$/;
+
+  const validIps = ips.filter(
+    (ip): ip is string =>
+      typeof ip === 'string' && (ipv4Regex.test(ip) || ipv6Regex.test(ip))
+  );
+
+  // Return null if no valid IPs (allow all) instead of empty array
+  return validIps.length > 0 ? validIps : null;
 }
 
 // ======================
@@ -265,8 +246,8 @@ export async function POST(request: NextRequest) {
     // Generate the API key
     const generatedKey = generateAPIKey(environment);
 
-    // Validate and sanitize scopes
-    const scopes = validateScopes(body.scopes);
+    // Validate and sanitize scopes (only allow defined scopes)
+    const scopes = filterValidScopes(body.scopes || []);
 
     // Validate IP whitelist
     const ipWhitelist = validateIPWhitelist(body.ip_whitelist);
