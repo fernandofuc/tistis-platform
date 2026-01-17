@@ -680,7 +680,7 @@ export function getToolsForAgent(agentName: string): ToolName[] {
 // EXPORTS
 // ======================
 
-export default {
+const toolDefinitions = {
   TOOL_NAMES,
   TOOL_DESCRIPTIONS,
   TOOLS_BY_AGENT,
@@ -704,3 +704,5 @@ export default {
   CheckItemAvailabilitySchema,
   GetActivePromotionsSchema,
 };
+
+export default toolDefinitions;

@@ -400,9 +400,11 @@ export {
   type ToolContext,
 };
 
-export default {
+const ToolFactory = {
   createToolsForAgent,
   createTools,
   createAllTools,
   extractToolContext,
 };
+
+export default ToolFactory;

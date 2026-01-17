@@ -11,6 +11,7 @@ import type {
   ChannelConnection,
   VoiceConfigSummary,
   AILearningConfig,
+  AgentProfileSettings,
 } from '@/src/shared/types/agent-profiles';
 import {
   DEFAULT_AI_LEARNING_CONFIG,
@@ -393,24 +394,25 @@ export async function updateAgentProfile(
     // para que la IA los lea correctamente (solo para perfil business)
     if (profileType === 'business') {
       const escalationFields: Record<string, unknown> = {};
+      const settings = updates.settings as AgentProfileSettings;
 
-      if (updates.settings.escalation_keywords !== undefined) {
-        escalationFields.escalation_keywords = updates.settings.escalation_keywords;
+      if (settings.escalation_keywords !== undefined) {
+        escalationFields.escalation_keywords = settings.escalation_keywords;
       }
-      if (updates.settings.max_turns_before_escalation !== undefined) {
-        escalationFields.max_turns_before_escalation = updates.settings.max_turns_before_escalation;
+      if (settings.max_turns_before_escalation !== undefined) {
+        escalationFields.max_turns_before_escalation = settings.max_turns_before_escalation;
       }
-      if (updates.settings.escalate_on_hot_lead !== undefined) {
-        escalationFields.escalate_on_hot_lead = updates.settings.escalate_on_hot_lead;
+      if (settings.escalate_on_hot_lead !== undefined) {
+        escalationFields.escalate_on_hot_lead = settings.escalate_on_hot_lead;
       }
-      if (updates.settings.out_of_hours_enabled !== undefined) {
-        escalationFields.out_of_hours_enabled = updates.settings.out_of_hours_enabled;
+      if (settings.out_of_hours_enabled !== undefined) {
+        escalationFields.out_of_hours_enabled = settings.out_of_hours_enabled;
       }
-      if (updates.settings.out_of_hours_message !== undefined) {
-        escalationFields.out_of_hours_message = updates.settings.out_of_hours_message;
+      if (settings.out_of_hours_message !== undefined) {
+        escalationFields.out_of_hours_message = settings.out_of_hours_message;
       }
-      if (updates.settings.max_response_length !== undefined) {
-        escalationFields.max_tokens = updates.settings.max_response_length;
+      if (settings.max_response_length !== undefined) {
+        escalationFields.max_tokens = settings.max_response_length;
       }
 
       // Solo sincronizar si hay campos de escalamiento para actualizar
