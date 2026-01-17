@@ -202,6 +202,21 @@ export const SCOPE_DEFINITIONS: Record<APIScope, ScopeDefinition> = {
     category: 'webhooks',
     icon: 'Settings',
   },
+  'webhook:read': {
+    key: 'webhook:read',
+    name: 'Leer Webhooks',
+    description: 'Ver eventos de webhook recibidos',
+    category: 'webhooks',
+    icon: 'Eye',
+  },
+  'webhook:write': {
+    key: 'webhook:write',
+    name: 'Enviar Webhooks',
+    description: 'Enviar eventos via webhook entrante',
+    category: 'webhooks',
+    icon: 'Send',
+    requires: ['webhook:read'],
+  },
 
   // Analytics
   'analytics:read': {

@@ -59,6 +59,8 @@ export type CommonScope =
   | 'appointments:write'
   // Webhooks
   | 'webhooks:manage'
+  | 'webhook:read'
+  | 'webhook:write'
   // Analytics
   | 'analytics:read'
   // AI

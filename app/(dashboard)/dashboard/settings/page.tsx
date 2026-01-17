@@ -19,6 +19,7 @@ import {
 } from '@/src/features/settings';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { IntegrationHub } from '@/src/features/integrations';
+import { APIKeysSection } from '@/src/features/api-settings';
 import { cn } from '@/src/shared/utils';
 
 // ======================
@@ -80,13 +81,18 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
     </svg>
   ),
+  api: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+    </svg>
+  ),
 };
 
 // ======================
 // TABS
 // ======================
 // NOTA: El tab 'ai' fue migrado a /dashboard/ai-agents/configuracion
-type SettingsTab = 'profile' | 'notifications' | 'channels' | 'payments' | 'billing' | 'integrations' | 'security';
+type SettingsTab = 'profile' | 'notifications' | 'channels' | 'payments' | 'billing' | 'integrations' | 'api' | 'security';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: 'Mi Perfil', icon: icons.user },
@@ -95,6 +101,7 @@ const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'notifications', label: 'Notificaciones', icon: icons.bell },
   { key: 'billing', label: 'Facturación', icon: icons.billing },
   { key: 'integrations', label: 'Integraciones', icon: icons.integrations },
+  { key: 'api', label: 'API', icon: icons.api },
   { key: 'security', label: 'Seguridad', icon: icons.lock },
 ];
 
@@ -679,6 +686,11 @@ export default function SettingsPage() {
           {/* Integrations Tab */}
           {activeTab === 'integrations' && (
             <IntegrationHub />
+          )}
+
+          {/* API Tab */}
+          {activeTab === 'api' && (
+            <APIKeysSection />
           )}
 
           {/* Security Tab */}
