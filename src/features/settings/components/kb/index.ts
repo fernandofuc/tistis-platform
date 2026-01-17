@@ -34,3 +34,7 @@ export type { KBSmartSuggestionsProps, Suggestion, AILearningInsight } from './K
 // RAG Preview (FASE 8)
 export { KBRAGPreview } from './KBRAGPreview';
 export type { KBRAGPreviewProps, SearchResult } from './KBRAGPreview';
+
+// RAG Status Card (V7.2)
+export { KBRAGStatusCard } from './KBRAGStatusCard';
+export type { KBRAGStatusCardProps, RAGHealthStatus } from './KBRAGStatusCard';

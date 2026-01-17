@@ -473,9 +473,12 @@ export async function handleGetBusinessPolicy(
  * Busca información en la base de conocimiento usando RAG (embeddings)
  * con fallback a búsqueda por palabras clave
  *
- * ARQUITECTURA V7.0 - RAG:
- * 1. Intenta búsqueda semántica con embeddings (EmbeddingService + pgvector)
- * 2. Si falla o no hay embeddings configurados, usa búsqueda por keywords
+ * ARQUITECTURA V7.2 - RAG Avanzado:
+ * 1. Query Enhancement - mejora la consulta antes de buscar
+ * 2. Hybrid Search - combina búsqueda semántica + keywords
+ * 3. Re-ranking - ordena resultados por relevancia múltiple
+ * 4. Context Sufficiency - valida si hay suficiente contexto
+ * 5. Fallback a keywords si RAG no está disponible
  */
 export async function handleSearchKnowledgeBase(
   params: { query: string; limit?: number },
@@ -485,38 +488,56 @@ export async function handleSearchKnowledgeBase(
   const limit = params.limit || 3;
 
   // =====================================================
-  // 1. INTENTAR BÚSQUEDA SEMÁNTICA (RAG)
-  // V7.1: Import estático + thresholds por vertical
+  // 1. INTENTAR BÚSQUEDA AVANZADA (RAG V7.2)
+  // Query Enhancement + Hybrid Search + Re-ranking
   // =====================================================
   if (tenant_id) {
     try {
       const startTime = Date.now();
       const threshold = getRAGThreshold(context.vertical);
 
-      const semanticResults = await EmbeddingService.searchKnowledgeBase(
+      // V7.2: Usar búsqueda avanzada con Query Enhancement
+      const advancedResponse = await EmbeddingService.searchKnowledgeBaseAdvanced(
         tenant_id,
         params.query,
-        limit,
-        threshold
+        {
+          limit,
+          similarityThreshold: threshold,
+          enableHybridSearch: true,
+          enableReranking: true,
+          queryEnhancementConfig: {
+            vertical: context.vertical as 'dental' | 'medical' | 'restaurant' | 'general',
+          },
+        }
       );
 
       const duration = Date.now() - startTime;
 
-      if (semanticResults.length > 0) {
-        console.log(`[search_knowledge_base] RAG: ${semanticResults.length} results (threshold=${threshold}, ${duration}ms)`);
+      if (advancedResponse.results.length > 0) {
+        // V7.2: Log con métricas completas
+        console.log(
+          `[search_knowledge_base] RAG V7.2: ${advancedResponse.results.length} results | ` +
+          `semantic=${advancedResponse.metrics.semanticResults} keyword=${advancedResponse.metrics.keywordResults} | ` +
+          `sufficiency=${advancedResponse.metrics.contextSufficiencyScore.toFixed(2)} | ` +
+          `intent=${advancedResponse.enhancedQuery.intent} | ` +
+          `${duration}ms`
+        );
 
-        return semanticResults.map(r => ({
+        // V7.2: Retornar resultados enriquecidos
+        return advancedResponse.results.map(r => ({
           title: r.title,
           content: r.content.substring(0, 500),
           category: r.category,
-          relevance_score: r.similarity,
+          relevance_score: r.final_score, // Usar final_score después de re-ranking
         }));
       }
 
-      console.log(`[search_knowledge_base] RAG: 0 results (threshold=${threshold}, ${duration}ms), fallback to keywords`);
+      console.log(
+        `[search_knowledge_base] RAG V7.2: 0 results (threshold=${threshold}, ${duration}ms), fallback to keywords`
+      );
     } catch (error) {
       // RAG no disponible (embeddings no configurados), usar fallback
-      console.log('[search_knowledge_base] RAG not available, using keyword fallback');
+      console.log('[search_knowledge_base] RAG V7.2 not available, using keyword fallback');
     }
   }
 
