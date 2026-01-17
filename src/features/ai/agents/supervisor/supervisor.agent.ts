@@ -583,8 +583,9 @@ export function supervisorRouter(state: TISTISAgentStateType): string {
     return 'escalation';
   }
 
-  // Si alcanzó límite de iteraciones, escalar
-  if (state.control.iteration_count >= 5) {
+  // Si alcanzó límite de iteraciones, escalar (usar configuración del tenant)
+  const maxIterations = state.tenant?.ai_config?.max_turns_before_escalation ?? 5;
+  if (state.control.iteration_count >= maxIterations) {
     return 'escalation';
   }
 

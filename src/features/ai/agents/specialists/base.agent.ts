@@ -413,6 +413,9 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
     // Import messages types once, outside the loop for efficiency
     const { AIMessage: AIMsg, ToolMessage: ToolMsg } = await import('@langchain/core/messages');
 
+    // V7.1: Track timing for observability
+    const startTime = Date.now();
+
     try {
       // Agentic loop: ejecutar hasta que el LLM responda sin tool calls
       while (iterations < maxIterations) {
@@ -434,7 +437,8 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
 
           response = this.appendSafetyDisclaimer(response, state);
 
-          console.log(`[${this.config.name}] Completed with ${toolCallsLog.length} tool calls`);
+          const duration = Date.now() - startTime;
+          console.log(`[${this.config.name}] Completed in ${duration}ms | iterations=${iterations} | tools=${toolCallsLog.length} (${toolCallsLog.join(', ') || 'none'}) | tokens≈${totalTokens}`);
 
           return { response, tokens: totalTokens, toolCalls: toolCallsLog };
         }
@@ -482,7 +486,9 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
       }
 
       // Si llegamos aquí, alcanzamos max iterations
-      console.warn(`[${this.config.name}] Max tool iterations reached (${maxIterations})`);
+      const duration = Date.now() - startTime;
+      console.warn(`[${this.config.name}] Max iterations (${maxIterations}) reached in ${duration}ms | tools=${toolCallsLog.join(', ')}`);
+
       return {
         response: 'Estoy teniendo dificultades para procesar tu solicitud. ¿Podrías reformularla?',
         tokens: totalTokens,

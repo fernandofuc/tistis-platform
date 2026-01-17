@@ -34,7 +34,16 @@ import {
 // GRAPH CONFIGURATION
 // ======================
 
-const MAX_ITERATIONS = 5;
+// Valor por defecto si no hay configuración del tenant
+const DEFAULT_MAX_ITERATIONS = 5;
+
+/**
+ * Obtiene el límite de iteraciones desde la configuración del tenant
+ * o usa el valor por defecto si no está disponible
+ */
+function getMaxIterations(state: TISTISAgentStateType): number {
+  return state.tenant?.ai_config?.max_turns_before_escalation ?? DEFAULT_MAX_ITERATIONS;
+}
 
 // ======================
 // HELPER NODES
@@ -101,9 +110,10 @@ function mainRouter(state: TISTISAgentStateType): string {
     return 'escalation';
   }
 
-  // Si alcanzó límite de iteraciones
-  if (state.control.iteration_count >= MAX_ITERATIONS) {
-    console.log('[Graph] Max iterations reached, escalating');
+  // Si alcanzó límite de iteraciones (usar configuración del tenant)
+  const maxIterations = getMaxIterations(state);
+  if (state.control.iteration_count >= maxIterations) {
+    console.log(`[Graph] Max iterations (${maxIterations}) reached, escalating`);
     return 'escalation';
   }
 
@@ -167,8 +177,9 @@ function postAgentRouter(state: TISTISAgentStateType): string {
 
   // Si hay handoff pendiente
   if (state.next_agent && state.next_agent !== state.current_agent) {
-    // Verificar límite de iteraciones
-    if (state.control.iteration_count >= MAX_ITERATIONS) {
+    // Verificar límite de iteraciones (usar configuración del tenant)
+    const maxIterations = getMaxIterations(state);
+    if (state.control.iteration_count >= maxIterations) {
       return 'escalation';
     }
     return agentRouter(state);

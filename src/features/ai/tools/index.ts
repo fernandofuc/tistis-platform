@@ -54,6 +54,8 @@ export {
 export {
   type ToolContext,
   toolHandlers,
+  // V7.1: RAG thresholds por vertical
+  RAG_THRESHOLDS,
   // Common handlers
   handleGetServiceInfo,
   handleListServices,
@@ -72,6 +74,11 @@ export {
   handleCreateOrder,
   handleCheckItemAvailability,
   handleGetActivePromotions,
+  // Loyalty handlers (v5.5.1)
+  handleGetLoyaltyBalance,
+  handleGetAvailableRewards,
+  handleGetMembershipInfo,
+  handleRedeemReward,
 } from './handlers';
 
 // Factory

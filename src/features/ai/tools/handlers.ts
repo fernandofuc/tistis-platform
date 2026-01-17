@@ -43,6 +43,35 @@ import type {
   RewardRedemptionResult,
 } from './definitions';
 import { createServerClient } from '@/src/shared/lib/supabase';
+// V7.1: Static imports para mejor performance (elimina dynamic imports)
+import { getAvailableSlots } from '../services/appointment-booking.service';
+import { EmbeddingService } from '../services/embedding.service';
+
+// ======================
+// RAG CONFIGURATION
+// ======================
+
+/**
+ * V7.1: Thresholds configurables por vertical
+ * Valores más altos = más estrictos (menos resultados, más relevantes)
+ * Valores más bajos = más permisivos (más resultados, posiblemente menos relevantes)
+ */
+export const RAG_THRESHOLDS = {
+  dental: 0.55,      // Dental requiere respuestas precisas
+  medical: 0.55,     // Medical igual, alta precisión
+  restaurant: 0.45,  // Restaurant más flexible (nombres de platillos varían)
+  default: 0.50,     // Default balanceado
+} as const;
+
+/**
+ * Obtiene el threshold de RAG según la vertical del tenant
+ */
+function getRAGThreshold(vertical?: string): number {
+  if (vertical && vertical in RAG_THRESHOLDS) {
+    return RAG_THRESHOLDS[vertical as keyof typeof RAG_THRESHOLDS];
+  }
+  return RAG_THRESHOLDS.default;
+}
 
 // ======================
 // CONTEXT TYPE
@@ -57,6 +86,8 @@ export interface ToolContext {
   lead_id: string;
   business_context: BusinessContext | null;
   lead: TISTISAgentStateType['lead'];
+  /** V7.1: Vertical del tenant para thresholds por vertical */
+  vertical?: string;
 }
 
 // ======================
@@ -257,8 +288,8 @@ export async function handleGetAvailableSlots(
   }
 
   try {
-    // Importar función real de disponibilidad
-    const { getAvailableSlots } = await import('../services/appointment-booking.service');
+    // V7.1: Usando import estático para mejor performance
+    const startTime = Date.now();
 
     // Consultar slots disponibles reales
     const realSlots = await getAvailableSlots(
@@ -282,6 +313,9 @@ export async function handleGetAvailableSlots(
       };
     }
 
+    const duration = Date.now() - startTime;
+    console.log(`[get_available_slots] Found ${realSlots.length} slots in ${duration}ms`);
+
     // Transformar al formato esperado por el tipo AvailableSlot
     return realSlots.map((slot) => ({
       date: slot.date,
@@ -293,7 +327,7 @@ export async function handleGetAvailableSlots(
       available: true, // Solo retornamos los disponibles
     }));
   } catch (error) {
-    console.error('[handleGetAvailableSlots] Error:', error);
+    console.error('[get_available_slots] Error:', error);
     // Fallback a mensaje genérico en caso de error
     return {
       error: 'Ocurrió un error al consultar la disponibilidad. Por favor intenta de nuevo.',
@@ -452,21 +486,24 @@ export async function handleSearchKnowledgeBase(
 
   // =====================================================
   // 1. INTENTAR BÚSQUEDA SEMÁNTICA (RAG)
+  // V7.1: Import estático + thresholds por vertical
   // =====================================================
   if (tenant_id) {
     try {
-      // Dynamic import para evitar problemas de bundling
-      const { EmbeddingService } = await import('../services/embedding.service');
+      const startTime = Date.now();
+      const threshold = getRAGThreshold(context.vertical);
 
       const semanticResults = await EmbeddingService.searchKnowledgeBase(
         tenant_id,
         params.query,
         limit,
-        0.5 // similarity threshold
+        threshold
       );
 
+      const duration = Date.now() - startTime;
+
       if (semanticResults.length > 0) {
-        console.log(`[search_kb] RAG search returned ${semanticResults.length} results`);
+        console.log(`[search_knowledge_base] RAG: ${semanticResults.length} results (threshold=${threshold}, ${duration}ms)`);
 
         return semanticResults.map(r => ({
           title: r.title,
@@ -476,10 +513,10 @@ export async function handleSearchKnowledgeBase(
         }));
       }
 
-      console.log('[search_kb] RAG search returned 0 results, falling back to keyword search');
+      console.log(`[search_knowledge_base] RAG: 0 results (threshold=${threshold}, ${duration}ms), fallback to keywords`);
     } catch (error) {
       // RAG no disponible (embeddings no configurados), usar fallback
-      console.log('[search_kb] RAG not available, using keyword fallback:', error);
+      console.log('[search_knowledge_base] RAG not available, using keyword fallback');
     }
   }
 

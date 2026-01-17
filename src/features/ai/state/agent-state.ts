@@ -46,6 +46,9 @@ export interface TenantInfo {
     max_response_length: number;
     enable_scoring: boolean;
     auto_escalate_keywords: string[];
+    // Configuración de escalación (sincronizado con agent_profiles.settings)
+    max_turns_before_escalation: number;
+    escalate_on_hot_lead: boolean;
     business_hours: {
       start: string;
       end: string;
@@ -817,11 +820,13 @@ export function shouldEscalate(state: TISTISAgentStateType): boolean {
   // Por flags de control
   if (state.control.should_escalate) return true;
 
-  // Por score muy alto
-  if (state.score_change >= 50) return true;
+  // Por score muy alto (y configurado para escalar en HOT leads)
+  const escalateOnHot = state.tenant?.ai_config?.escalate_on_hot_lead ?? true;
+  if (escalateOnHot && state.score_change >= 50) return true;
 
-  // Por límite de iteraciones
-  if (state.control.iteration_count >= 5) return true;
+  // Por límite de iteraciones (usar configuración del tenant o default 5)
+  const maxIterations = state.tenant?.ai_config?.max_turns_before_escalation ?? 5;
+  if (state.control.iteration_count >= maxIterations) return true;
 
   return false;
 }

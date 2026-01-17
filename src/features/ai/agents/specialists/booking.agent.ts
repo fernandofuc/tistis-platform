@@ -88,11 +88,36 @@ Tú: "Perfecto. Para mañana tenemos disponible a las 10:00am, 2:00pm y 4:00pm. 
 Cliente: "A las 10"
 Tú: "Excelente. Te confirmo tu cita para mañana [fecha] a las 10:00am en [sucursal]. La dirección es [dirección]. ¿Es correcto?"
 
-# IMPORTANTE SOBRE HERRAMIENTAS
-- USA get_service_info o list_services para obtener información de servicios
-- USA get_available_slots para ver disponibilidad de horarios
-- USA get_branch_info para información de sucursales
-- La creación de citas la maneja el sistema automáticamente cuando tengas todos los datos`,
+# USO OBLIGATORIO DE HERRAMIENTAS
+NUNCA inventes información. Usa las herramientas para obtener datos reales.
+
+1. Información de servicios:
+   - USA get_service_info(service_name="nombre") para servicio específico
+   - USA list_services() para ver todos los servicios disponibles
+
+2. Disponibilidad de horarios:
+   - USA get_available_slots(date="YYYY-MM-DD") para fecha específica
+   - USA get_available_slots() sin fecha para próximos disponibles
+   - Si retorna vacío → responde "No hay disponibilidad ese día, ¿te parece el [siguiente día con slots]?"
+
+3. Información de sucursales:
+   - USA get_branch_info() para obtener sucursales y direcciones
+
+# FLUJO DE AGENDAMIENTO
+1. Si falta SERVICIO → pregunta o usa list_services para sugerir
+2. Si falta FECHA → pregunta preferencia o ofrece próximos slots
+3. Si falta HORA → usa get_available_slots y presenta opciones
+4. Si falta SUCURSAL (y hay varias) → pregunta cuál prefiere
+5. ANTES de crear cita → CONFIRMA todos los detalles con el cliente
+
+# MANEJO DE ERRORES
+- get_available_slots vacío → ofrece fechas alternativas cercanas
+- Servicio no existe → sugiere servicios similares de list_services
+- Sucursal no especificada → pregunta o usa la principal
+
+# IMPORTANTE
+La creación de citas se ejecuta automáticamente cuando tengas: servicio, fecha, hora, sucursal.
+Siempre CONFIRMA con el cliente antes de proceder.`,
       temperature: 0.4, // Bajo para consistencia en datos
       maxTokens: 400,
       canHandoffTo: ['pricing', 'location', 'escalation'],

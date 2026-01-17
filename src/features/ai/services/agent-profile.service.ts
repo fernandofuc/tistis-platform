@@ -388,6 +388,52 @@ export async function updateAgentProfile(
       ...(current?.settings || {}),
       ...updates.settings,
     };
+
+    // Sincronizar campos de escalamiento con ai_tenant_config
+    // para que la IA los lea correctamente (solo para perfil business)
+    if (profileType === 'business') {
+      const escalationFields: Record<string, unknown> = {};
+
+      if (updates.settings.escalation_keywords !== undefined) {
+        escalationFields.escalation_keywords = updates.settings.escalation_keywords;
+      }
+      if (updates.settings.max_turns_before_escalation !== undefined) {
+        escalationFields.max_turns_before_escalation = updates.settings.max_turns_before_escalation;
+      }
+      if (updates.settings.escalate_on_hot_lead !== undefined) {
+        escalationFields.escalate_on_hot_lead = updates.settings.escalate_on_hot_lead;
+      }
+      if (updates.settings.out_of_hours_enabled !== undefined) {
+        escalationFields.out_of_hours_enabled = updates.settings.out_of_hours_enabled;
+      }
+      if (updates.settings.out_of_hours_message !== undefined) {
+        escalationFields.out_of_hours_message = updates.settings.out_of_hours_message;
+      }
+      if (updates.settings.max_response_length !== undefined) {
+        escalationFields.max_tokens = updates.settings.max_response_length;
+      }
+
+      // Solo sincronizar si hay campos de escalamiento para actualizar
+      if (Object.keys(escalationFields).length > 0) {
+        // Usar upsert para crear el registro si no existe
+        const { error: aiConfigError } = await supabase
+          .from('ai_tenant_config')
+          .upsert({
+            tenant_id: tenantId,
+            ...escalationFields,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'tenant_id',
+          });
+
+        if (aiConfigError) {
+          console.warn('[AgentProfile] Could not sync escalation settings to ai_tenant_config:', aiConfigError);
+          // No lanzamos error, solo warning - el perfil aún se puede guardar
+        } else {
+          console.log('[AgentProfile] Synced escalation settings to ai_tenant_config');
+        }
+      }
+    }
   }
 
   const { data, error } = await supabase

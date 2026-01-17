@@ -417,6 +417,9 @@ async function loadTenantContext(
       max_response_length: (aiConfig?.max_response_length as number) || 300,
       enable_scoring: (aiConfig?.enable_scoring as boolean) ?? true,
       auto_escalate_keywords: (aiConfig?.auto_escalate_keywords as string[]) || [],
+      // Configuración de escalación (desde ai_tenant_config y agent_profiles)
+      max_turns_before_escalation: (aiConfig?.max_turns_before_escalation as number) || 10,
+      escalate_on_hot_lead: (aiConfig?.escalate_on_hot_lead as boolean) ?? true,
       business_hours: (aiConfig?.business_hours as { start: string; end: string; days: number[] }) || {
         start: '09:00',
         end: '18:00',

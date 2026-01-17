@@ -76,6 +76,7 @@ import {
 
 /**
  * Extrae el contexto necesario para las tools desde el estado del grafo
+ * V7.1: Ahora incluye vertical para thresholds por vertical en RAG
  */
 export function extractToolContext(state: TISTISAgentStateType): ToolContext {
   return {
@@ -83,6 +84,7 @@ export function extractToolContext(state: TISTISAgentStateType): ToolContext {
     lead_id: state.lead?.lead_id || '',
     business_context: state.business_context,
     lead: state.lead,
+    vertical: state.tenant?.vertical,
   };
 }
 
