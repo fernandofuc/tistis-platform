@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
 import type { AgentProfileWithChannels, AgentProfileInput } from '@/src/shared/types/agent-profiles';
 import type { VerticalType, ResponseStyle } from '@/src/shared/config/agent-templates';
-import { RESPONSE_STYLES, getTemplatesForVertical } from '@/src/shared/config/agent-templates';
+import { RESPONSE_STYLES, getTemplatesForVertical, RESPONSE_STYLE_EXAMPLES } from '@/src/shared/config/agent-templates';
 
 // Shared imports from centralized modules
 import {
@@ -281,11 +281,33 @@ export function BusinessProfileTab({
 
         {/* Example response for selected style */}
         {responseStyle && (
-          <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
-            <p className="text-xs font-medium text-slate-500 mb-1">Ejemplo de respuesta:</p>
-            <p className="text-sm text-slate-700 italic">
+          <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-100">
+            <p className="text-xs font-medium text-slate-600 mb-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              Ejemplo de respuesta:
+            </p>
+            <p className="text-sm text-slate-700 italic leading-relaxed">
               {RESPONSE_STYLES.find(s => s.value === responseStyle)?.example}
             </p>
+
+            {/* Extended examples preview */}
+            <div className="mt-3 pt-3 border-t border-purple-100/50">
+              <p className="text-xs font-medium text-slate-500 mb-2">Más ejemplos de este estilo:</p>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-purple-600 font-medium min-w-[60px]">Saludo:</span>
+                  <span className="text-xs text-slate-600 italic">
+                    {RESPONSE_STYLE_EXAMPLES[responseStyle]?.greeting}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-purple-600 font-medium min-w-[60px]">Despedida:</span>
+                  <span className="text-xs text-slate-600 italic">
+                    {RESPONSE_STYLE_EXAMPLES[responseStyle]?.farewell}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

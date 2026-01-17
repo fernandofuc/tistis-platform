@@ -102,6 +102,57 @@ export const RESPONSE_STYLES: ResponseStyleOption[] = [
 ];
 
 // ======================
+// EXTENDED RESPONSE STYLE EXAMPLES
+// ======================
+// Ejemplos extendidos para mostrar diferentes escenarios
+
+export interface ResponseStyleExamples {
+  greeting: string;
+  priceInquiry: string;
+  objection: string;
+  appointment: string;
+  farewell: string;
+}
+
+export const RESPONSE_STYLE_EXAMPLES: Record<ResponseStyle, ResponseStyleExamples> = {
+  professional: {
+    greeting: '¡Buen día! Bienvenido a nuestra clínica. ¿En qué puedo asistirle?',
+    priceInquiry: 'El servicio tiene un costo de $800 MXN. El tiempo estimado es de 45 minutos. ¿Desea agendar una cita?',
+    objection: 'Entiendo su preocupación por el precio. Nuestros tratamientos incluyen materiales de primera calidad y garantía. ¿Le interesa conocer nuestras opciones de pago?',
+    appointment: 'Su cita está confirmada para el día 15 de enero a las 10:00 AM. Le enviaré un recordatorio el día anterior.',
+    farewell: 'Gracias por contactarnos. Quedamos a sus órdenes para cualquier consulta adicional.',
+  },
+  professional_friendly: {
+    greeting: '¡Hola! 👋 Gracias por escribirnos. Soy el asistente virtual de la clínica. ¿En qué puedo ayudarte hoy?',
+    priceInquiry: 'Con gusto te informo que el servicio tiene un costo de $800 MXN e incluye atención completa por nuestros especialistas. ¿Te gustaría agendar una cita para conocernos?',
+    objection: 'Te entiendo perfectamente, es una inversión importante en tu salud. La buena noticia es que trabajamos con planes de pago y el tratamiento incluye seguimiento completo. ¿Te cuento más sobre las opciones?',
+    appointment: '¡Perfecto! ✅ Tu cita quedó agendada para el 15 de enero a las 10:00 AM. Te enviaré un recordatorio para que no se te pase.',
+    farewell: '¡Gracias por escribirnos! Si tienes más preguntas, aquí estamos para ayudarte. ¡Que tengas excelente día! 😊',
+  },
+  casual: {
+    greeting: '¡Hey! ¿Qué tal? 👋 Gracias por escribir. ¿En qué te puedo echar la mano?',
+    priceInquiry: 'Claro que sí, el servicio te sale en $800 y tardamos como 45 mins. ¿Quieres que te aparte un espacio?',
+    objection: 'Te entiendo, pero la neta vale mucho la pena. Además tenemos opción de pagos chiquitos si te acomoda más. ¿Te platico?',
+    appointment: '¡Listo! 🎉 Ya quedó tu cita para el 15 de enero a las 10 de la mañana. Te mando un mensajito antes para que no se te olvide.',
+    farewell: '¡Sale! Si necesitas algo más, aquí andamos. ¡Cuídate mucho! 🙌',
+  },
+  formal: {
+    greeting: 'Estimado/a cliente, reciba un cordial saludo. Es un placer atenderle. ¿En qué podemos servirle el día de hoy?',
+    priceInquiry: 'Estimado/a cliente, le informo que el servicio solicitado tiene un costo de $800.00 MXN. El procedimiento tiene una duración aproximada de 45 minutos. Quedamos a sus órdenes para agendar una cita cuando usted disponga.',
+    objection: 'Comprendo perfectamente su inquietud respecto al costo. Me permito informarle que nuestros servicios incluyen materiales de la más alta calidad y atención personalizada. Adicionalmente, contamos con diversas facilidades de pago. ¿Desea que le proporcione mayor información al respecto?',
+    appointment: 'Estimado/a cliente, me complace confirmarle que su cita ha sido agendada exitosamente para el día 15 de enero del presente año, a las 10:00 horas. Recibirá un recordatorio con anticipación.',
+    farewell: 'Agradecemos sinceramente su comunicación. Quedamos a su entera disposición para cualquier consulta adicional que requiera. Reciba un cordial saludo.',
+  },
+};
+
+/**
+ * Obtiene ejemplos de respuesta para un estilo específico
+ */
+export function getStyleExamples(style: ResponseStyle): ResponseStyleExamples {
+  return RESPONSE_STYLE_EXAMPLES[style] || RESPONSE_STYLE_EXAMPLES.professional_friendly;
+}
+
+// ======================
 // AGENT TEMPLATES - DENTAL
 // ======================
 
