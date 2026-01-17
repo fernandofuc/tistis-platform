@@ -21,6 +21,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isTyping?: boolean; // Para efecto typewriter
   metadata?: {
     intent?: string;
     signals?: Array<{ signal: string; points: number }>;
@@ -186,6 +187,11 @@ export function LivePreviewChat({
   const delayTimerRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
+  const typewriterRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Estado para el mensaje que se está escribiendo (typewriter)
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+  const [displayedContent, setDisplayedContent] = useState<string>('');
 
   // Derived state
   const showPersonal = vertical === 'dental' && personalProfile?.is_active;
@@ -226,11 +232,42 @@ export function LivePreviewChat({
       if (delayTimerRef.current) {
         clearInterval(delayTimerRef.current);
       }
+      if (typewriterRef.current) {
+        clearInterval(typewriterRef.current);
+      }
       // Abort any pending requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
     };
+  }, []);
+
+  // Función para efecto typewriter premium
+  const startTypewriterEffect = useCallback((messageId: string, fullContent: string, onComplete: () => void) => {
+    setTypingMessageId(messageId);
+    setDisplayedContent('');
+
+    let currentIndex = 0;
+    const charsPerTick = 2; // Caracteres por tick (ajusta velocidad)
+    const tickInterval = 20; // ms entre ticks (ajusta velocidad)
+
+    typewriterRef.current = setInterval(() => {
+      if (!isMountedRef.current) {
+        if (typewriterRef.current) clearInterval(typewriterRef.current);
+        return;
+      }
+
+      currentIndex += charsPerTick;
+
+      if (currentIndex >= fullContent.length) {
+        setDisplayedContent(fullContent);
+        setTypingMessageId(null);
+        if (typewriterRef.current) clearInterval(typewriterRef.current);
+        onComplete();
+      } else {
+        setDisplayedContent(fullContent.substring(0, currentIndex));
+      }
+    }, tickInterval);
   }, []);
 
   // Get access token
@@ -349,12 +386,14 @@ export function LivePreviewChat({
         setProfileConfig(result.profile_config);
       }
 
-      // Add assistant message
+      // Add assistant message with typewriter effect
+      const assistantMessageId = `assistant-${Date.now()}`;
       const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
+        id: assistantMessageId,
         role: 'assistant',
         content: result.response,
         timestamp: new Date(),
+        isTyping: true, // Marca para efecto typewriter
         metadata: {
           intent: result.intent,
           signals: result.signals,
@@ -365,6 +404,14 @@ export function LivePreviewChat({
         },
       };
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Iniciar efecto typewriter
+      startTypewriterEffect(assistantMessageId, result.response, () => {
+        // Cuando termine el typewriter, marcar mensaje como completo
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMessageId ? { ...m, isTyping: false } : m
+        ));
+      });
 
     } catch (err) {
       // Ignore abort errors
@@ -384,7 +431,7 @@ export function LivePreviewChat({
         clearInterval(delayTimerRef.current);
       }
     }
-  }, [inputValue, isLoading, messages, selectedProfile, selectedChannel, currentDelay, profileConfig, getAccessToken]);
+  }, [inputValue, isLoading, messages, selectedProfile, selectedChannel, currentDelay, profileConfig, getAccessToken, startTypewriterEffect]);
 
   // Handle enter key
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -558,7 +605,16 @@ export function LivePreviewChat({
                       ? 'bg-slate-200 text-slate-900 rounded-br-sm'
                       : cn('border rounded-bl-sm', c.bubble, c.primaryText)
                   )}>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <p className="whitespace-pre-wrap">
+                      {/* Efecto typewriter: mostrar contenido progresivo si está escribiendo */}
+                      {msg.role === 'assistant' && typingMessageId === msg.id
+                        ? displayedContent
+                        : msg.content}
+                      {/* Cursor parpadeante durante typewriter */}
+                      {msg.role === 'assistant' && typingMessageId === msg.id && (
+                        <span className="inline-block w-0.5 h-4 ml-0.5 bg-current animate-pulse" />
+                      )}
+                    </p>
                   </div>
 
                   {/* Metadata (for assistant messages) */}
@@ -621,9 +677,9 @@ export function LivePreviewChat({
               </motion.div>
             ))}
 
-            {/* Loading / Delay indicator */}
+            {/* Loading / Delay indicator - Premium typing animation */}
             <AnimatePresence>
-              {(isLoading || delayCountdown !== null) && (
+              {(isLoading || delayCountdown !== null) && !typingMessageId && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -636,18 +692,25 @@ export function LivePreviewChat({
                   )}>
                     <RobotIcon />
                   </div>
-                  <div className={cn('px-4 py-2.5 rounded-2xl rounded-bl-sm border', c.bubble)}>
-                    {delayCountdown !== null ? (
-                      <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <ClockIcon />
-                        <span>Respondiendo en {delayCountdown}s...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <SpinnerIcon />
-                        <span className="text-sm text-slate-500">Pensando...</span>
-                      </div>
-                    )}
+                  <div className={cn('px-4 py-3 rounded-2xl rounded-bl-sm border', c.bubble)}>
+                    {/* Animación de puntos premium tipo iMessage/WhatsApp */}
+                    <div className="flex items-center gap-1">
+                      <motion.span
+                        className={cn('w-2 h-2 rounded-full', selectedProfile === 'business' ? 'bg-purple-400' : 'bg-orange-400')}
+                        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+                      />
+                      <motion.span
+                        className={cn('w-2 h-2 rounded-full', selectedProfile === 'business' ? 'bg-purple-400' : 'bg-orange-400')}
+                        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                      />
+                      <motion.span
+                        className={cn('w-2 h-2 rounded-full', selectedProfile === 'business' ? 'bg-purple-400' : 'bg-orange-400')}
+                        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+                      />
+                    </div>
                   </div>
                 </motion.div>
               )}
