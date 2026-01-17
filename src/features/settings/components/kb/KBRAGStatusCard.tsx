@@ -208,7 +208,7 @@ export function KBRAGStatusCard({
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/knowledge-base/rag-status?tenant_id=${tenantId}`);
+      const response = await fetch(`/api/knowledge-base/rag-status?tenant_id=${encodeURIComponent(tenantId)}`);
 
       if (!response.ok) {
         throw new Error('Error al obtener estado del RAG');

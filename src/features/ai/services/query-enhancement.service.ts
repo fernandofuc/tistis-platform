@@ -174,11 +174,13 @@ const INTENT_PATTERNS: Array<{ intent: QueryIntent; patterns: RegExp[] }> = [
     intent: 'booking_inquiry',
     patterns: [
       /agendar|reservar|apartar/i,
-      /cita|turno|consulta/i,
+      /cita|turno/i, // Removido "consulta" porque es ambiguo con medical
+      /quiero\s*(una\s*)?(cita|turno)/i,
       /disponibilidad|disponible/i,
       /horarios?\s*(disponibles?|libres?)/i,
-      /cu[aá]ndo\s*pueden/i,
+      /cu[aá]ndo\s*pueden\s*(atenderme|recibirme)/i,
       /pr[oó]xima\s*cita/i,
+      /hacer\s*(una\s*)?(cita|reservaci[oó]n)/i,
     ],
   },
   {
@@ -194,8 +196,10 @@ const INTENT_PATTERNS: Array<{ intent: QueryIntent; patterns: RegExp[] }> = [
   {
     intent: 'order_inquiry',
     patterns: [
-      /pedir|ordenar|quiero/i,
-      /pedido|orden/i,
+      /quiero\s*(pedir|ordenar|un|una|el|la|los|las)/i, // "quiero pedir", "quiero una pizza"
+      /pedir\s*(comida|platillo|orden)/i,
+      /ordenar\s*(comida|platillo)/i,
+      /pedido|mi\s*orden/i,
       /domicilio|delivery/i,
       /para\s*llevar|pickup/i,
       /cu[aá]nto\s*tarda/i,
@@ -357,6 +361,8 @@ class QueryEnhancementServiceClass {
 
     const words = query
       .split(/\s+/)
+      // Limpiar caracteres especiales de cada palabra (excepto acentos)
+      .map(word => word.replace(/[^\p{L}\p{N}]/gu, ''))
       .filter(word => word.length > 2 && !stopwords.has(word));
 
     // Retornar palabras únicas
@@ -450,12 +456,15 @@ class QueryEnhancementServiceClass {
       default:
         // Para FAQ general, mantener la query pero añadir contexto de vertical
         if (config.vertical && config.vertical !== 'general') {
-          const verticalContext = {
+          const verticalContext: Record<string, string> = {
             dental: 'clínica dental',
             medical: 'consultorio médico',
             restaurant: 'restaurante',
           };
-          rewritten = `${verticalContext[config.vertical]}: ${query}`;
+          const context = verticalContext[config.vertical];
+          if (context) {
+            rewritten = `${context}: ${query}`;
+          }
         }
     }
 

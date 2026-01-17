@@ -340,14 +340,32 @@ class EmbeddingServiceClass {
     keywords: string[],
     limit: number
   ): Promise<SemanticSearchResult[]> {
+    if (keywords.length === 0) return [];
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
     try {
-      // Construir patrón de búsqueda
-      const searchPattern = keywords.join(' | '); // OR search
+      // Construir filtro OR para múltiples keywords (máximo 3 para performance)
+      // Sanitizar keywords: escapar caracteres especiales de LIKE (%_) y limpiar
+      const sanitizeKeyword = (k: string) =>
+        k.replace(/[%_\\]/g, '').replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+
+      const keywordsToSearch = keywords
+        .slice(0, 3)
+        .map(sanitizeKeyword)
+        .filter(k => k.length > 1); // Solo keywords con al menos 2 caracteres
+
+      if (keywordsToSearch.length === 0) return [];
+
+      const articleFilters = keywordsToSearch
+        .map(k => `title.ilike.%${k}%,content.ilike.%${k}%`)
+        .join(',');
+      const faqFilters = keywordsToSearch
+        .map(k => `question.ilike.%${k}%,answer.ilike.%${k}%`)
+        .join(',');
 
       // Buscar en knowledge_articles
       const { data: articles } = await supabase
@@ -355,7 +373,7 @@ class EmbeddingServiceClass {
         .select('id, title, content, category')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
-        .or(`title.ilike.%${keywords[0]}%,content.ilike.%${keywords[0]}%`)
+        .or(articleFilters)
         .limit(limit);
 
       // Buscar en FAQs
@@ -364,7 +382,7 @@ class EmbeddingServiceClass {
         .select('id, question, answer, category')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
-        .or(`question.ilike.%${keywords[0]}%,answer.ilike.%${keywords[0]}%`)
+        .or(faqFilters)
         .limit(limit);
 
       // Convertir a SemanticSearchResult con score de keyword matching
@@ -417,10 +435,12 @@ class EmbeddingServiceClass {
 
   /**
    * V7.2: Calcula score de matching de keywords
+   * Score ponderado: keywords al inicio de la lista tienen más peso
    */
   private calculateKeywordScore(text: string, keywords: string[]): number {
+    if (keywords.length === 0) return 0;
+
     const lowerText = text.toLowerCase();
-    let matchedKeywords = 0;
     let totalWeight = 0;
 
     for (let i = 0; i < keywords.length; i++) {
@@ -429,12 +449,10 @@ class EmbeddingServiceClass {
       const weight = 1 - (i * 0.1);
 
       if (lowerText.includes(keyword)) {
-        matchedKeywords++;
         totalWeight += weight;
       }
     }
 
-    if (keywords.length === 0) return 0;
     return totalWeight / keywords.length;
   }
 
