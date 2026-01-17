@@ -1,7 +1,8 @@
 // =====================================================
 // TIS TIS PLATFORM - Advanced Tab (Agent Messages)
-// Technical configuration options for power users
+// Technical configuration + Escalation settings
 // Design: Premium TIS TIS (Apple/Google aesthetics)
+// Migrated: Escalation from Leads y Prioridades
 // =====================================================
 
 'use client';
@@ -13,6 +14,23 @@ import type { AgentProfileWithChannels, AgentProfileInput } from '@/src/shared/t
 
 // Shared imports from centralized modules
 import { icons, DEFAULT_ESCALATION_KEYWORDS } from '../shared';
+
+// ======================
+// CONSTANTS
+// ======================
+
+const ESCALATION_SUGGESTIONS = [
+  'queja', 'molesto', 'enojado', 'gerente', 'supervisor',
+  'demanda', 'abogado', 'cancelar', 'reembolso', 'denuncia'
+];
+
+const MESSAGE_LIMIT_OPTIONS = [
+  { value: 5, label: '5', desc: 'Rápido' },
+  { value: 10, label: '10', desc: 'Recomendado' },
+  { value: 15, label: '15', desc: 'Moderado' },
+  { value: 20, label: '20', desc: 'Paciente' },
+  { value: 0, label: '∞', desc: 'Desactivado' },
+];
 
 // ======================
 // TYPES
@@ -34,12 +52,22 @@ export function AdvancedTab({
   // Settings state from profile
   const settings = businessProfile?.settings || {};
 
-  // Form state
+  // Form state - Response settings
   const [maxResponseLength, setMaxResponseLength] = useState(settings.max_response_length || 300);
+
+  // Form state - Escalation settings (migrated from Leads y Prioridades)
   const [escalationKeywords, setEscalationKeywords] = useState<string[]>(
     settings.escalation_keywords || DEFAULT_ESCALATION_KEYWORDS
   );
   const [newKeyword, setNewKeyword] = useState('');
+  const [maxTurnsBeforeEscalation, setMaxTurnsBeforeEscalation] = useState(
+    settings.max_turns_before_escalation ?? 15
+  );
+  const [escalateOnHotLead, setEscalateOnHotLead] = useState(
+    settings.escalate_on_hot_lead ?? true
+  );
+
+  // Form state - Out of hours
   const [outOfHoursEnabled, setOutOfHoursEnabled] = useState(settings.out_of_hours_enabled ?? true);
   const [outOfHoursMessage, setOutOfHoursMessage] = useState(
     settings.out_of_hours_message ||
@@ -55,11 +83,13 @@ export function AdvancedTab({
   // Sync state when businessProfile changes
   useEffect(() => {
     if (businessProfile?.settings) {
-      const settings = businessProfile.settings;
-      setMaxResponseLength(settings.max_response_length || 300);
-      setEscalationKeywords(settings.escalation_keywords || DEFAULT_ESCALATION_KEYWORDS);
-      setOutOfHoursEnabled(settings.out_of_hours_enabled ?? true);
-      setOutOfHoursMessage(settings.out_of_hours_message ||
+      const s = businessProfile.settings;
+      setMaxResponseLength(s.max_response_length || 300);
+      setEscalationKeywords(s.escalation_keywords || DEFAULT_ESCALATION_KEYWORDS);
+      setMaxTurnsBeforeEscalation(s.max_turns_before_escalation ?? 15);
+      setEscalateOnHotLead(s.escalate_on_hot_lead ?? true);
+      setOutOfHoursEnabled(s.out_of_hours_enabled ?? true);
+      setOutOfHoursMessage(s.out_of_hours_message ||
         'Gracias por tu mensaje. Nuestro horario de atención es de Lunes a Viernes de 9am a 7pm. Te responderemos en cuanto estemos disponibles.');
       setHasChanges(false);
     }
@@ -87,6 +117,14 @@ export function AdvancedTab({
     markChange();
   }, [escalationKeywords, markChange]);
 
+  // Add suggested keyword
+  const addSuggestion = useCallback((suggestion: string) => {
+    if (!escalationKeywords.includes(suggestion)) {
+      setEscalationKeywords([...escalationKeywords, suggestion]);
+      markChange();
+    }
+  }, [escalationKeywords, markChange]);
+
   // Handle save
   const handleSave = useCallback(async () => {
     setIsSaving(true);
@@ -97,6 +135,8 @@ export function AdvancedTab({
       settings: {
         max_response_length: maxResponseLength,
         escalation_keywords: escalationKeywords,
+        max_turns_before_escalation: maxTurnsBeforeEscalation,
+        escalate_on_hot_lead: escalateOnHotLead,
         out_of_hours_enabled: outOfHoursEnabled,
         out_of_hours_message: outOfHoursMessage,
       },
@@ -111,12 +151,12 @@ export function AdvancedTab({
       } else {
         setSaveError('No se pudo guardar. Intenta de nuevo.');
       }
-    } catch (err) {
+    } catch {
       setSaveError('Error al guardar. Verifica tu conexión.');
     } finally {
       setIsSaving(false);
     }
-  }, [maxResponseLength, escalationKeywords, outOfHoursEnabled, outOfHoursMessage, onSave]);
+  }, [maxResponseLength, escalationKeywords, maxTurnsBeforeEscalation, escalateOnHotLead, outOfHoursEnabled, outOfHoursMessage, onSave]);
 
   if (isLoading) {
     return (
@@ -142,7 +182,7 @@ export function AdvancedTab({
           </div>
           <div>
             <h2 className="text-xl font-bold">Configuración Avanzada</h2>
-            <p className="text-white/70 text-sm">Opciones técnicas para usuarios expertos</p>
+            <p className="text-white/70 text-sm">Escalamiento automático y opciones técnicas</p>
           </div>
         </div>
       </div>
@@ -156,6 +196,222 @@ export function AdvancedTab({
           </p>
         </div>
       </div>
+
+      {/* ============================== */}
+      {/* ESCALATION SECTION (MIGRATED) */}
+      {/* ============================== */}
+
+      {/* Escalation Header */}
+      <div className="border-t border-slate-200 pt-6">
+        <h3 className="text-lg font-semibold text-slate-900 mb-1">Escalamiento Automático</h3>
+        <p className="text-sm text-slate-500 mb-4">
+          Configura cuándo el AI debe transferir la conversación a tu equipo
+        </p>
+      </div>
+
+      {/* Escalation Triggers Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Lead HOT */}
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-red-900">Servicio HOT Detectado</p>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-200 text-red-800">
+                Auto
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-red-700">
+            Cuando el lead pregunta por implantes, ortodoncia u otro servicio HOT.
+          </p>
+        </div>
+
+        {/* Human Request */}
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-blue-900">Solicitud de Humano</p>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-200 text-blue-800">
+                Auto
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-blue-700">
+            Cuando el cliente pide hablar con una persona o asesor.
+          </p>
+        </div>
+
+        {/* Emergency / Pain */}
+        <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-purple-900">Emergencia / Dolor</p>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-200 text-purple-800">
+                Prioridad
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-purple-700">
+            Detecta &quot;emergencia&quot;, &quot;dolor fuerte&quot;, &quot;urgente&quot;.
+          </p>
+        </div>
+
+        {/* Message Limit */}
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-slate-900">Límite de Mensajes</p>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-300 text-slate-700">
+                Configurable
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-slate-600">
+            Conversaciones largas sin conversión se escalan automáticamente.
+          </p>
+        </div>
+      </div>
+
+      {/* Message Limit Configuration */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="font-medium text-slate-900">Escalar por Conversación Larga</p>
+            <p className="text-sm text-slate-500">
+              Número de mensajes antes de escalar automáticamente
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {MESSAGE_LIMIT_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => { setMaxTurnsBeforeEscalation(option.value); markChange(); }}
+              className={cn(
+                'p-3 rounded-xl border-2 text-center transition-all',
+                maxTurnsBeforeEscalation === option.value
+                  ? 'border-purple-500 bg-purple-50'
+                  : 'border-slate-200 hover:border-slate-300'
+              )}
+            >
+              <p className="font-bold text-slate-900">{option.label}</p>
+              <p className="text-xs text-slate-500">{option.desc}</p>
+            </button>
+          ))}
+        </div>
+        {maxTurnsBeforeEscalation > 0 && (
+          <p className="text-sm text-slate-500 mt-3">
+            Después de <strong>{maxTurnsBeforeEscalation} mensajes</strong> sin conversión,
+            la conversación se transferirá a tu equipo.
+          </p>
+        )}
+        {maxTurnsBeforeEscalation === 0 && (
+          <p className="text-sm text-amber-600 mt-3">
+            El escalamiento por límite de mensajes está desactivado. Los otros triggers siguen activos.
+          </p>
+        )}
+      </div>
+
+      {/* Escalation Keywords */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <div className="mb-4">
+          <p className="font-medium text-slate-900">Palabras Clave de Escalamiento</p>
+          <p className="text-sm text-slate-500">
+            El AI escalará inmediatamente si detecta estas palabras
+          </p>
+        </div>
+
+        {/* Current keywords */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {escalationKeywords.map((keyword) => (
+            <span
+              key={keyword}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-800 rounded-full text-sm"
+            >
+              {keyword}
+              <button
+                onClick={() => removeKeyword(keyword)}
+                className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-200 transition-colors"
+              >
+                {icons.x}
+              </button>
+            </span>
+          ))}
+          {escalationKeywords.length === 0 && (
+            <span className="text-slate-400 text-sm">No hay palabras clave configuradas</span>
+          )}
+        </div>
+
+        {/* Add new keyword */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newKeyword}
+            onChange={(e) => setNewKeyword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
+            placeholder="Agregar palabra clave..."
+            className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+          <button
+            onClick={addKeyword}
+            disabled={!newKeyword.trim()}
+            className={cn(
+              'px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
+              newKeyword.trim()
+                ? 'bg-slate-800 text-white hover:bg-slate-900'
+                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            )}
+          >
+            Agregar
+          </button>
+        </div>
+
+        {/* Suggestions */}
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <p className="text-xs text-slate-500 mb-2">Sugerencias comunes:</p>
+          <div className="flex flex-wrap gap-2">
+            {ESCALATION_SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => addSuggestion(suggestion)}
+                disabled={escalationKeywords.includes(suggestion)}
+                className={cn(
+                  'px-2 py-1 text-xs rounded-lg border transition-colors',
+                  escalationKeywords.includes(suggestion)
+                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                    : 'bg-white text-slate-600 border-slate-300 hover:border-purple-300 hover:bg-purple-50'
+                )}
+              >
+                + {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ============================== */}
+      {/* OTHER ADVANCED SETTINGS */}
+      {/* ============================== */}
 
       {/* Max Response Length */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
@@ -185,61 +441,6 @@ export function AdvancedTab({
             Número aproximado de caracteres. Respuestas más cortas son más efectivas en mensajería.
           </span>
         </p>
-      </div>
-
-      {/* Escalation Keywords */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-slate-600">{icons.alert}</span>
-          <label className="text-sm font-medium text-slate-700">
-            Palabras clave de escalamiento
-          </label>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">
-          Cuando el cliente use estas palabras, el agente notificará para atención humana
-        </p>
-
-        {/* Current keywords */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {escalationKeywords.map((keyword) => (
-            <span
-              key={keyword}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 rounded-full text-sm"
-            >
-              {keyword}
-              <button
-                onClick={() => removeKeyword(keyword)}
-                className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-200 transition-colors"
-              >
-                {icons.x}
-              </button>
-            </span>
-          ))}
-        </div>
-
-        {/* Add new keyword */}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newKeyword}
-            onChange={(e) => setNewKeyword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
-            placeholder="Agregar palabra clave..."
-            className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-500 focus:border-transparent"
-          />
-          <button
-            onClick={addKeyword}
-            disabled={!newKeyword.trim()}
-            className={cn(
-              'px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
-              newKeyword.trim()
-                ? 'bg-slate-800 text-white hover:bg-slate-900'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-            )}
-          >
-            Agregar
-          </button>
-        </div>
       </div>
 
       {/* Out of Hours Message */}

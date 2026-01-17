@@ -54,9 +54,13 @@ export interface AgentProfileSettings {
 
   // Configuración avanzada
   max_response_length?: number;
-  escalation_keywords?: string[];
   out_of_hours_enabled?: boolean;
   out_of_hours_message?: string;
+
+  // Configuración de escalamiento (migrado de Leads y Prioridades)
+  escalation_keywords?: string[];
+  max_turns_before_escalation?: number;
+  escalate_on_hot_lead?: boolean;
 }
 
 /**
@@ -263,8 +267,11 @@ export const DEFAULT_PROFILE_SETTINGS: AgentProfileSettings = {
   template_variables: {},
   enabled_channels: ['whatsapp'],
   max_response_length: 300,
-  escalation_keywords: ['queja', 'molesto', 'enojado', 'gerente', 'supervisor'],
   out_of_hours_enabled: true,
+  // Escalation settings (sincronizados con ai_tenant_config)
+  escalation_keywords: ['queja', 'molesto', 'enojado', 'gerente', 'supervisor'],
+  max_turns_before_escalation: 15,
+  escalate_on_hot_lead: true,
 };
 
 export const DEFAULT_BUSINESS_PROFILE: Partial<AgentProfile> = {

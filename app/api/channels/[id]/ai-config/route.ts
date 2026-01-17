@@ -122,6 +122,7 @@ export async function GET(
       max_tokens: tenantConfig?.max_tokens ?? 500,
       escalation_keywords: tenantConfig?.escalation_keywords || [],
       max_turns_before_escalation: tenantConfig?.max_turns_before_escalation ?? 10,
+      escalate_on_hot_lead: tenantConfig?.escalate_on_hot_lead ?? true,
       supported_languages: tenantConfig?.supported_languages || ['es'],
       default_language: tenantConfig?.default_language || 'es',
     };

@@ -105,6 +105,7 @@ export interface EffectiveChannelAIConfig {
   max_tokens: number;
   escalation_keywords: string[];
   max_turns_before_escalation: number;
+  escalate_on_hot_lead: boolean;
   supported_languages: string[];
   default_language: string;
 }
