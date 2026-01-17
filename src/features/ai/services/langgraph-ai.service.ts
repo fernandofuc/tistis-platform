@@ -1185,6 +1185,9 @@ export async function shouldUseLangGraph(tenantId: string): Promise<boolean> {
 
 /**
  * Wrapper que decide qué sistema usar
+ *
+ * ARQUITECTURA V7: Cuando use_v7_unified está activo, usa generateAIResponseV7
+ * que garantiza el mismo código path que Preview.
  */
 export async function generateAIResponseSmart(
   tenantId: string,
@@ -1192,6 +1195,49 @@ export async function generateAIResponseSmart(
   currentMessage: string,
   leadId?: string
 ): Promise<AIProcessingResult> {
+  // ARQUITECTURA V7: Verificar si usar sistema unificado
+  const { shouldUseV7, generateAIResponseV7 } = await import('./ai-v7.service');
+  const useV7 = await shouldUseV7(tenantId);
+
+  if (useV7) {
+    console.log('[AI Router] Using V7 UNIFIED system (same as Preview)');
+
+    // Determinar canal desde la conversación
+    const conversationContext = await loadConversationContext(conversationId);
+    const channel = (conversationContext?.channel || 'whatsapp') as CacheChannel;
+
+    const result = await generateAIResponseV7(tenantId, currentMessage, {
+      conversationId,
+      leadId,
+      channel,
+      profileType: 'business', // Default para producción
+      isPreview: false, // IMPORTANTE: false para producción
+    });
+
+    // Mapear resultado V7 a AIProcessingResult
+    return {
+      response: result.response,
+      intent: result.intent as AIProcessingResult['intent'],
+      signals: result.signals,
+      score_change: result.score_change,
+      escalate: result.escalated,
+      escalate_reason: result.escalation_reason,
+      tokens_used: result.tokens_used,
+      model_used: result.model_used,
+      processing_time_ms: result.processing_time_ms,
+      appointment_created: result.booking_result?.success
+        ? {
+            appointment_id: result.booking_result.appointment_id!,
+            scheduled_at: result.booking_result.scheduled_at!,
+            branch_name: result.booking_result.branch_name!,
+            service_name: result.booking_result.service_name,
+            staff_name: result.booking_result.staff_name,
+          }
+        : undefined,
+    };
+  }
+
+  // Fallback: Sistema anterior (LangGraph o Legacy)
   const useLangGraph = await shouldUseLangGraph(tenantId);
 
   if (useLangGraph) {
@@ -1253,6 +1299,9 @@ export interface PreviewResponseResult {
  * Genera una respuesta de preview usando el flujo COMPLETO de LangGraph
  * Esta función es específica para el "Preview en vivo" del UI
  *
+ * ARQUITECTURA V7: Ahora usa generateAIResponseV7 para garantizar
+ * que Preview y Producción usen exactamente el mismo código path.
+ *
  * CARACTERÍSTICAS:
  * - Usa la arquitectura completa LangGraph con Tools + RAG
  * - Soporta selección de perfil (business/personal)
@@ -1266,10 +1315,50 @@ export interface PreviewResponseResult {
 export async function generatePreviewResponse(
   input: PreviewRequestInput
 ): Promise<PreviewResponseResult> {
+  const { tenantId, message, profileType, channel = 'whatsapp', conversationHistory = [] } = input;
+
+  console.log(`[LangGraph Preview V7] Starting preview for tenant ${tenantId}, profile: ${profileType}`);
+
+  // ARQUITECTURA V7: Usar función unificada con isPreview=true
+  const { generateAIResponseV7 } = await import('./ai-v7.service');
+
+  const result = await generateAIResponseV7(tenantId, message, {
+    channel: channel as CacheChannel,
+    profileType,
+    conversationHistory,
+    isPreview: true, // CLAVE: indica modo preview
+  });
+
+  // Mapear resultado V7 a PreviewResponseResult
+  return {
+    success: result.success,
+    response: result.response,
+    intent: result.intent,
+    signals: result.signals,
+    score_change: result.score_change,
+    processing_time_ms: result.processing_time_ms,
+    tokens_used: result.tokens_used,
+    model_used: result.model_used,
+    agents_used: result.agents_used,
+    escalated: result.escalated,
+    escalation_reason: result.escalation_reason,
+    profile_config: result.profile_config,
+    prompt_source: result.prompt_source,
+    error: result.error,
+  };
+}
+
+/**
+ * @deprecated Use generatePreviewResponse() instead.
+ * Implementación legacy de preview (mantenida para referencia)
+ */
+async function _legacyGeneratePreviewResponse(
+  input: PreviewRequestInput
+): Promise<PreviewResponseResult> {
   const startTime = Date.now();
   const { tenantId, message, profileType, channel = 'whatsapp', conversationHistory = [] } = input;
 
-  console.log(`[LangGraph Preview] Starting preview for tenant ${tenantId}, profile: ${profileType}`);
+  console.log(`[LangGraph Preview Legacy] Starting preview for tenant ${tenantId}, profile: ${profileType}`);
 
   try {
     // 1. Sanitizar mensaje

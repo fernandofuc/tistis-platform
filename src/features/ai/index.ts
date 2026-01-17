@@ -28,19 +28,31 @@ export {
 } from './services/ai.service';
 
 // ======================
-// LANGGRAPH SYSTEM (New Multi-Agent Architecture)
+// LANGGRAPH SYSTEM (Multi-Agent Architecture)
 // ======================
 export { LangGraphAIService } from './services/langgraph-ai.service';
 export {
   generateAIResponseWithGraph,
   generateAIResponseSmart,
-  generatePreviewResponse,  // NUEVO: Preview con LangGraph completo
+  generatePreviewResponse,
   shouldUseLangGraph,
 } from './services/langgraph-ai.service';
 export type {
   PreviewRequestInput,
   PreviewResponseResult,
 } from './services/langgraph-ai.service';
+
+// ======================
+// V7 UNIFIED ARCHITECTURE (Preview === Production)
+// ======================
+export { AIV7Service, generateAIResponseV7, shouldUseV7 } from './services/ai-v7.service';
+export type { AIResponseV7Options, AIResponseV7Result } from './services/ai-v7.service';
+export {
+  AICircuitBreaker,
+  getAICircuitBreaker,
+  executeWithCircuitBreaker,
+  getCircuitBreakerStats,
+} from './services/ai-circuit-breaker';
 
 // Graph exports
 export { TISTISGraph, executeGraph } from './graph';
