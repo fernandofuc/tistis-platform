@@ -19,7 +19,12 @@ import type {
   RevokeAPIKeyRequest,
   RevokeAPIKeyResponse,
 } from '@/src/features/api-settings/types';
-import { filterValidScopes } from '@/src/features/api-settings/utils';
+import {
+  filterValidScopes,
+  isValidUUID,
+  validateIPWhitelistForUpdate,
+  validateExpirationDateForUpdate,
+} from '@/src/features/api-settings/utils';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -46,44 +51,6 @@ function validateScopesForUpdate(scopes: unknown): string[] | null {
     return [];
   }
   return filterValidScopes(scopes);
-}
-
-/**
- * Validate IP whitelist format (supports IPv4, IPv6, and CIDR notation)
- * Returns undefined if not provided, null to clear, or array of valid IPs
- */
-function validateIPWhitelist(ips: unknown): string[] | null | undefined {
-  if (ips === undefined) {
-    return undefined; // Not provided, don't update
-  }
-  if (ips === null || (Array.isArray(ips) && ips.length === 0)) {
-    return null; // Explicitly clear whitelist
-  }
-  if (!Array.isArray(ips)) {
-    return undefined;
-  }
-
-  // IPv4 with optional CIDR
-  const ipv4Regex =
-    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\/(?:3[0-2]|[12]?[0-9]))?$/;
-
-  // IPv6 with optional CIDR (simplified)
-  const ipv6Regex = /^([a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}(?:\/(?:12[0-8]|1[01][0-9]|[1-9]?[0-9]))?$/;
-
-  const validIps = ips.filter(
-    (ip): ip is string =>
-      typeof ip === 'string' && (ipv4Regex.test(ip) || ipv6Regex.test(ip))
-  );
-  return validIps.length > 0 ? validIps : null;
-}
-
-/**
- * Validate UUID format
- */
-function isValidUUID(id: string): boolean {
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(id);
 }
 
 // ======================
@@ -364,31 +331,21 @@ export async function PATCH(
     }
 
     // Validate and add IP whitelist if provided
-    const ipWhitelist = validateIPWhitelist(body.ip_whitelist);
+    const ipWhitelist = validateIPWhitelistForUpdate(body.ip_whitelist);
     if (ipWhitelist !== undefined) {
       updateData.ip_whitelist = ipWhitelist;
     }
 
     // Validate and add expiration if provided
-    if (body.expires_at !== undefined) {
-      if (body.expires_at === null) {
-        updateData.expires_at = null;
-      } else {
-        const expirationDate = new Date(body.expires_at);
-        if (isNaN(expirationDate.getTime())) {
-          return NextResponse.json(
-            { error: 'Fecha de expiración inválida' },
-            { status: 400 }
-          );
-        }
-        if (expirationDate <= new Date()) {
-          return NextResponse.json(
-            { error: 'La fecha de expiración debe ser en el futuro' },
-            { status: 400 }
-          );
-        }
-        updateData.expires_at = expirationDate.toISOString();
-      }
+    const expirationResult = validateExpirationDateForUpdate(body.expires_at);
+    if (!expirationResult.valid) {
+      return NextResponse.json(
+        { error: expirationResult.error },
+        { status: 400 }
+      );
+    }
+    if (expirationResult.value !== undefined) {
+      updateData.expires_at = expirationResult.value;
     }
 
     // Update the API key

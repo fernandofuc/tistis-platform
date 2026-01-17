@@ -79,6 +79,13 @@ export const SCOPE_CATEGORIES: Record<ScopeCategory, ScopeCategoryMetadata> = {
     description: 'Cotizaciones de tratamientos',
     vertical: 'dental',
   },
+  services: {
+    key: 'services',
+    name: 'Servicios',
+    icon: 'Briefcase',
+    description: 'Catálogo de servicios dentales',
+    vertical: 'dental',
+  },
   // Restaurant categories
   menu: {
     key: 'menu',
@@ -310,7 +317,7 @@ export const SCOPE_DEFINITIONS: Record<APIScope, ScopeDefinition> = {
     key: 'services:read',
     name: 'Leer Servicios',
     description: 'Ver catálogo de servicios dentales',
-    category: 'treatments',
+    category: 'services',
     vertical: 'dental',
     icon: 'Eye',
   },
@@ -318,7 +325,7 @@ export const SCOPE_DEFINITIONS: Record<APIScope, ScopeDefinition> = {
     key: 'services:write',
     name: 'Escribir Servicios',
     description: 'Gestionar catálogo de servicios',
-    category: 'treatments',
+    category: 'services',
     vertical: 'dental',
     icon: 'Pencil',
     requires: ['services:read'],

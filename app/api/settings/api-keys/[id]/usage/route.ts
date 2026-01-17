@@ -14,6 +14,7 @@ import type {
   APIKeyUsageStats,
   APIKeyUsageLog,
 } from '@/src/features/api-settings/types';
+import { isValidUUID } from '@/src/features/api-settings/utils';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -26,19 +27,6 @@ const ALLOWED_ROLES = ['owner', 'admin'];
 const MAX_DAYS = 90;
 const DEFAULT_DAYS = 30;
 const MAX_LOGS_LIMIT = 100;
-
-// ======================
-// HELPER FUNCTIONS
-// ======================
-
-/**
- * Validate UUID format
- */
-function isValidUUID(id: string): boolean {
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(id);
-}
 
 // ======================
 // GET - Get usage statistics
@@ -257,8 +245,6 @@ export async function GET(
           response_time_ms,
           ip_address,
           user_agent,
-          request_size_bytes,
-          response_size_bytes,
           error_message,
           error_code,
           created_at
@@ -294,8 +280,6 @@ export async function GET(
           response_time_ms: log.response_time_ms,
           ip_address: log.ip_address,
           user_agent: log.user_agent,
-          request_size_bytes: log.request_size_bytes,
-          response_size_bytes: log.response_size_bytes,
           error_message: log.error_message,
           error_code: log.error_code,
           created_at: log.created_at,

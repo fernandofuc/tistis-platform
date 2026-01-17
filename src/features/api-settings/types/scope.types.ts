@@ -31,6 +31,7 @@ export type ScopeCategory =
   | 'patients'
   | 'treatments'
   | 'quotes'
+  | 'services'
   // Restaurant-specific
   | 'menu'
   | 'orders'

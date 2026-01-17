@@ -25,10 +25,6 @@ export interface APIKeyUsageLog {
   ip_address?: string;
   user_agent?: string;
 
-  // Request details
-  request_size_bytes?: number;
-  response_size_bytes?: number;
-
   // Error tracking
   error_message?: string;
   error_code?: string;

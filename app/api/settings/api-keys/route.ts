@@ -19,7 +19,10 @@ import type {
 import {
   generateAPIKey,
   filterValidScopes,
+  validateIPWhitelist,
+  validateExpirationDate,
 } from '@/src/features/api-settings/utils';
+import { getPlanRateLimits } from '@/src/features/api-settings/constants';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -29,42 +32,6 @@ export const dynamic = 'force-dynamic';
 // ======================
 
 const ALLOWED_ROLES = ['owner', 'admin'];
-
-// Rate limits by plan (can be moved to constants file later)
-const PLAN_LIMITS = {
-  starter: { max_keys: 2, default_rpm: 30, default_daily: 1000 },
-  growth: { max_keys: 10, default_rpm: 60, default_daily: 10000 },
-  enterprise: { max_keys: 50, default_rpm: 100, default_daily: 100000 },
-};
-
-// ======================
-// HELPER FUNCTIONS
-// ======================
-
-/**
- * Validate IP whitelist format (supports IPv4, IPv6, and CIDR notation)
- * Returns null if empty or no valid IPs (null means "allow all")
- */
-function validateIPWhitelist(ips: unknown): string[] | null {
-  if (!Array.isArray(ips) || ips.length === 0) {
-    return null;
-  }
-
-  // IPv4 with optional CIDR
-  const ipv4Regex =
-    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\/(?:3[0-2]|[12]?[0-9]))?$/;
-
-  // IPv6 with optional CIDR (simplified)
-  const ipv6Regex = /^([a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}(?:\/(?:12[0-8]|1[01][0-9]|[1-9]?[0-9]))?$/;
-
-  const validIps = ips.filter(
-    (ip): ip is string =>
-      typeof ip === 'string' && (ipv4Regex.test(ip) || ipv6Regex.test(ip))
-  );
-
-  // Return null if no valid IPs (allow all) instead of empty array
-  return validIps.length > 0 ? validIps : null;
-}
 
 // ======================
 // GET - List all API keys
@@ -216,8 +183,8 @@ export async function POST(request: NextRequest) {
       .eq('id', tenantId)
       .single();
 
-    const plan = (tenant?.plan || 'starter') as keyof typeof PLAN_LIMITS;
-    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter;
+    const plan = tenant?.plan || 'starter';
+    const limits = getPlanRateLimits(plan);
 
     if ((existingKeysCount || 0) >= limits.max_keys) {
       return NextResponse.json(
@@ -252,34 +219,25 @@ export async function POST(request: NextRequest) {
     // Validate IP whitelist
     const ipWhitelist = validateIPWhitelist(body.ip_whitelist);
 
-    // Validate rate limits
+    // Validate rate limits (using plan max values)
     const rateLimitRpm = Math.min(
       Math.max(body.rate_limit_rpm || limits.default_rpm, 1),
-      limits.default_rpm * 2
+      limits.max_rpm
     );
     const rateLimitDaily = Math.min(
       Math.max(body.rate_limit_daily || limits.default_daily, 100),
-      limits.default_daily * 2
+      limits.max_daily
     );
 
     // Validate expiration date
-    let expiresAt: string | null = null;
-    if (body.expires_at) {
-      const expirationDate = new Date(body.expires_at);
-      if (isNaN(expirationDate.getTime())) {
-        return NextResponse.json(
-          { error: 'Fecha de expiración inválida' },
-          { status: 400 }
-        );
-      }
-      if (expirationDate <= new Date()) {
-        return NextResponse.json(
-          { error: 'La fecha de expiración debe ser en el futuro' },
-          { status: 400 }
-        );
-      }
-      expiresAt = expirationDate.toISOString();
+    const expirationResult = validateExpirationDate(body.expires_at);
+    if (!expirationResult.valid) {
+      return NextResponse.json(
+        { error: expirationResult.error },
+        { status: 400 }
+      );
     }
+    const expiresAt = expirationResult.value ?? null;
 
     // Insert the new API key
     const { data: newKey, error: insertError } = await supabase
