@@ -449,12 +449,33 @@ export function LivePreviewChat({
     inputRef.current?.focus();
   }, []);
 
-  // Handle profile change
+  // Handle profile change - MUST clear conversation because profiles are different agents
   const handleProfileChange = useCallback((profile: ProfileType) => {
+    // Cancel any pending request when switching profiles
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    // Stop any running typewriter effect
+    if (typewriterRef.current) {
+      clearInterval(typewriterRef.current);
+      setTypingMessageId(null);
+      setDisplayedContent('');
+    }
+    // Stop delay timer
+    if (delayTimerRef.current) {
+      clearInterval(delayTimerRef.current);
+    }
+
+    // Clear state for new agent context
     setSelectedProfile(profile);
-    // Optionally clear conversation on profile change
-    // setMessages([]);
-    // setProfileConfig(null);
+    setMessages([]); // Different agent = fresh conversation
+    setProfileConfig(null);
+    setError(null);
+    setIsLoading(false);
+    setDelayCountdown(null);
+
+    // Focus input for new conversation
+    inputRef.current?.focus();
   }, []);
 
   return (

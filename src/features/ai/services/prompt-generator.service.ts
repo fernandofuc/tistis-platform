@@ -2855,27 +2855,19 @@ export async function generateAndCacheMinimalPrompt(
     // 4. Generar nuevo prompt minimal (sin llamar a Gemini)
     const { prompt, tokenEstimate } = await generateMinimalPrompt(context, promptType);
 
-    // 5. Guardar en caché
+    // 5. Guardar en caché usando RPC para evitar problemas de ON CONFLICT
     const supabase = createServerClient();
-    const { error: saveError } = await supabase
-      .from('ai_generated_prompts')
-      .upsert({
-        tenant_id: tenantId,
-        channel,
-        generated_prompt: prompt,
-        system_prompt: prompt,
-        source_data_hash: sourceDataHash,
-        generator_model: 'minimal-v6',
-        tokens_estimated: tokenEstimate,
-        prompt_version: (existingPrompt.prompt_version || 0) + 1,
-        status: 'active',
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'tenant_id,channel',
-      });
+    const { error: saveError } = await supabase.rpc('upsert_minimal_prompt', {
+      p_tenant_id: tenantId,
+      p_channel: channel,
+      p_prompt: prompt,
+      p_source_hash: sourceDataHash,
+      p_token_estimate: tokenEstimate,
+    });
 
     if (saveError) {
-      console.error('[MinimalPrompt] Error saving to cache:', saveError);
+      // Log but don't fail - cache is optional, system continues working
+      console.warn('[MinimalPrompt] Error saving to cache (non-blocking):', saveError.message);
     }
 
     console.log(`[MinimalPrompt] Generated minimal prompt: ${tokenEstimate} tokens in ${Date.now() - startTime}ms`);
