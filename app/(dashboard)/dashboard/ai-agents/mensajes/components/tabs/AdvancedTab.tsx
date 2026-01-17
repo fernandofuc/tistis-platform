@@ -52,9 +52,6 @@ export function AdvancedTab({
   // Settings state from profile
   const settings = businessProfile?.settings || {};
 
-  // Form state - Response settings
-  const [maxResponseLength, setMaxResponseLength] = useState(settings.max_response_length || 300);
-
   // Form state - Escalation settings (migrated from Leads y Prioridades)
   const [escalationKeywords, setEscalationKeywords] = useState<string[]>(
     settings.escalation_keywords || DEFAULT_ESCALATION_KEYWORDS
@@ -67,13 +64,6 @@ export function AdvancedTab({
     settings.escalate_on_hot_lead ?? true
   );
 
-  // Form state - Out of hours
-  const [outOfHoursEnabled, setOutOfHoursEnabled] = useState(settings.out_of_hours_enabled ?? true);
-  const [outOfHoursMessage, setOutOfHoursMessage] = useState(
-    settings.out_of_hours_message ||
-    'Gracias por tu mensaje. Nuestro horario de atención es de Lunes a Viernes de 9am a 7pm. Te responderemos en cuanto estemos disponibles.'
-  );
-
   // UI state
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -84,13 +74,9 @@ export function AdvancedTab({
   useEffect(() => {
     if (businessProfile?.settings) {
       const s = businessProfile.settings;
-      setMaxResponseLength(s.max_response_length || 300);
       setEscalationKeywords(s.escalation_keywords || DEFAULT_ESCALATION_KEYWORDS);
       setMaxTurnsBeforeEscalation(s.max_turns_before_escalation ?? 15);
       setEscalateOnHotLead(s.escalate_on_hot_lead ?? true);
-      setOutOfHoursEnabled(s.out_of_hours_enabled ?? true);
-      setOutOfHoursMessage(s.out_of_hours_message ||
-        'Gracias por tu mensaje. Nuestro horario de atención es de Lunes a Viernes de 9am a 7pm. Te responderemos en cuanto estemos disponibles.');
       setHasChanges(false);
     }
   }, [businessProfile]);
@@ -133,12 +119,9 @@ export function AdvancedTab({
 
     const data: Partial<AgentProfileInput> = {
       settings: {
-        max_response_length: maxResponseLength,
         escalation_keywords: escalationKeywords,
         max_turns_before_escalation: maxTurnsBeforeEscalation,
         escalate_on_hot_lead: escalateOnHotLead,
-        out_of_hours_enabled: outOfHoursEnabled,
-        out_of_hours_message: outOfHoursMessage,
       },
     };
 
@@ -156,7 +139,7 @@ export function AdvancedTab({
     } finally {
       setIsSaving(false);
     }
-  }, [maxResponseLength, escalationKeywords, maxTurnsBeforeEscalation, escalateOnHotLead, outOfHoursEnabled, outOfHoursMessage, onSave]);
+  }, [escalationKeywords, maxTurnsBeforeEscalation, escalateOnHotLead, onSave]);
 
   if (isLoading) {
     return (
@@ -407,92 +390,6 @@ export function AdvancedTab({
             ))}
           </div>
         </div>
-      </div>
-
-      {/* ============================== */}
-      {/* OTHER ADVANCED SETTINGS */}
-      {/* ============================== */}
-
-      {/* Max Response Length */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-slate-600">{icons.text}</span>
-          <label className="text-sm font-medium text-slate-700">
-            Longitud máxima de respuesta
-          </label>
-        </div>
-        <div className="flex items-center gap-4">
-          <input
-            type="range"
-            min="100"
-            max="500"
-            step="50"
-            value={maxResponseLength}
-            onChange={(e) => { setMaxResponseLength(Number(e.target.value)); markChange(); }}
-            className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-700"
-          />
-          <span className="w-20 text-center font-mono text-sm bg-slate-100 px-3 py-2 rounded-lg">
-            {maxResponseLength}
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-slate-500 flex items-start gap-1.5">
-          <span className="text-slate-400 mt-0.5">{icons.info}</span>
-          <span>
-            Número aproximado de caracteres. Respuestas más cortas son más efectivas en mensajería.
-          </span>
-        </p>
-      </div>
-
-      {/* Out of Hours Message */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-600">{icons.moon}</span>
-            <div>
-              <label className="text-sm font-medium text-slate-700">
-                Mensaje fuera de horario
-              </label>
-              <p className="text-xs text-slate-500">
-                Se envía cuando el negocio está cerrado
-              </p>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-            <input
-              type="checkbox"
-              checked={outOfHoursEnabled}
-              onChange={(e) => { setOutOfHoursEnabled(e.target.checked); markChange(); }}
-              className="sr-only peer"
-            />
-            <div className={cn(
-              'w-11 h-6 rounded-full transition-colors',
-              outOfHoursEnabled ? 'bg-slate-700' : 'bg-slate-200'
-            )} />
-            <div className={cn(
-              'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
-              outOfHoursEnabled && 'translate-x-5'
-            )} />
-          </label>
-        </div>
-
-        {outOfHoursEnabled && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <textarea
-              value={outOfHoursMessage}
-              onChange={(e) => { setOutOfHoursMessage(e.target.value); markChange(); }}
-              placeholder="Mensaje que se enviará fuera de horario..."
-              rows={3}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500 focus:border-transparent resize-none text-sm"
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              Este mensaje se envía automáticamente cuando alguien escribe fuera del horario configurado en tu perfil.
-            </p>
-          </motion.div>
-        )}
       </div>
 
       {/* API/Webhook Info (Read-only info card) */}
