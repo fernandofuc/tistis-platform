@@ -225,6 +225,8 @@ async function loadTenantContext(
 ): Promise<TenantInfo | null> {
   const supabase = createServerClient();
 
+  console.log(`[AI V7] Loading tenant context for: ${tenantId}, channel: ${channel}, profile: ${profileType}`);
+
   const [rpcResult, agentProfile] = await Promise.all([
     supabase.rpc('get_tenant_ai_context', { p_tenant_id: tenantId }),
     getProfileForAI(tenantId, profileType),
@@ -232,8 +234,41 @@ async function loadTenantContext(
 
   const { data, error } = rpcResult;
 
-  if (error || !data) {
-    console.error('[AI V7] Error loading tenant context:', error);
+  if (error) {
+    console.error('[AI V7] RPC error loading tenant context:', {
+      error: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      tenantId,
+    });
+    return null;
+  }
+
+  if (!data) {
+    // El RPC retornó null - el tenant no existe o no está activo
+    console.error('[AI V7] Tenant context is null - tenant may not exist or status is not active:', { tenantId });
+
+    // Verificar si el tenant existe para dar mejor diagnóstico
+    const { data: tenantCheck, error: tenantCheckError } = await supabase
+      .from('tenants')
+      .select('id, name, status')
+      .eq('id', tenantId)
+      .single();
+
+    if (tenantCheckError) {
+      console.error('[AI V7] Tenant lookup failed:', tenantCheckError.message);
+    } else if (tenantCheck) {
+      console.error('[AI V7] Tenant found but RPC returned null:', {
+        tenantId: tenantCheck.id,
+        tenantName: tenantCheck.name,
+        tenantStatus: tenantCheck.status,
+        hint: tenantCheck.status !== 'active' ? 'Tenant status is not active!' : 'Check ai_tenant_config table',
+      });
+    } else {
+      console.error('[AI V7] Tenant does not exist in tenants table:', { tenantId });
+    }
+
     return null;
   }
 
@@ -695,7 +730,7 @@ export async function generateAIResponseV7(
       ];
 
     if (!tenantContext) {
-      throw new Error('Could not load tenant context');
+      throw new Error(`Could not load tenant context for preview. TenantId: ${tenantId}. Check server logs for details.`);
     }
 
     // 4. EXTRAER CONFIGURACIÓN DEL PERFIL
