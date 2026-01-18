@@ -50,26 +50,25 @@ export function PromptConfigSection({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'in_prompt'>('all');
 
-  // Colors
-  const colors = colorScheme === 'purple'
-    ? {
-        gradient: 'from-purple-50 to-indigo-50',
-        border: 'border-purple-200',
-        text: 'text-purple-700',
-        bg: 'bg-purple-100',
-        button: 'bg-purple-600 hover:bg-purple-700',
-        icon: 'text-purple-600',
-        badge: 'bg-purple-100 text-purple-700',
-      }
-    : {
-        gradient: 'from-orange-50 to-amber-50',
-        border: 'border-orange-200',
-        text: 'text-orange-700',
-        bg: 'bg-orange-100',
-        button: 'bg-orange-600 hover:bg-orange-700',
-        icon: 'text-orange-600',
-        badge: 'bg-orange-100 text-orange-700',
-      };
+  // Colors - TIS TIS Design System (coral primary)
+  const colors = {
+    // Section styling
+    sectionBg: 'bg-white',
+    border: 'border-gray-200',
+    // Primary coral color
+    primary: '#FF6B5B',
+    primaryLight: '#FFF5F4',
+    button: 'bg-[#FF6B5B] hover:bg-[#e55a4a]',
+    // Icon container
+    iconBg: 'bg-[#FFF5F4]',
+    iconColor: 'text-[#FF6B5B]',
+    // Badge
+    badge: 'bg-[#FFF5F4] text-[#FF6B5B]',
+    // Text
+    text: 'text-[#FF6B5B]',
+    // Stats
+    statBorder: 'border-gray-100',
+  };
 
   // Fetch instructions
   const fetchInstructions = useCallback(async () => {
@@ -276,22 +275,22 @@ export function PromptConfigSection({
   return (
     <>
       <div className={cn(
-        'bg-gradient-to-r rounded-2xl border overflow-hidden shadow-sm',
-        colors.gradient,
-        colors.border
+        'bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow'
       )}>
-        {/* Header - Always visible */}
+        {/* Header - Premium Apple-style */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/50 transition-colors"
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors active:scale-[0.995]"
         >
           <div className="flex items-center gap-3">
-            <div className={cn('p-2 rounded-lg', colors.bg)}>
-              {icons.sparkles}
+            <div className="p-2.5 rounded-xl bg-[#FFF5F4]">
+              <svg className="w-5 h-5 text-[#FF6B5B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+              </svg>
             </div>
             <div className="text-left">
-              <h3 className="font-semibold text-slate-900">Prompt Inicial</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="font-semibold text-gray-900">Prompt Inicial</h3>
+              <p className="text-sm text-gray-500">
                 {instructions.length > 0
                   ? `${activeInstructions.length} instrucciones activas • ${inPromptCount}/5 en prompt`
                   : 'Configura el comportamiento de tu asistente'
@@ -302,17 +301,19 @@ export function PromptConfigSection({
 
           <div className="flex items-center gap-3">
             {inPromptCount >= 5 && (
-              <span className="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
+              <span className="px-2.5 py-1 text-xs font-medium bg-amber-50 text-amber-600 rounded-full border border-amber-200">
                 Límite alcanzado
               </span>
             )}
-            <motion.span
+            <motion.div
               animate={{ rotate: isExpanded ? 180 : 0 }}
               transition={{ duration: 0.2 }}
-              className="text-slate-400"
+              className="p-1 rounded-full bg-gray-100"
             >
-              {icons.chevronDown}
-            </motion.span>
+              <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </motion.div>
           </div>
         </button>
 
@@ -327,11 +328,14 @@ export function PromptConfigSection({
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="px-5 pb-5 space-y-4 border-t border-slate-100">
+              <div className="px-5 pb-5 space-y-4 border-t border-gray-100">
                 {/* Loading State */}
                 {isLoading && (
-                  <div className="pt-4 flex items-center justify-center gap-2 text-slate-500">
-                    {icons.spinner}
+                  <div className="pt-4 flex items-center justify-center gap-2 text-gray-500">
+                    <svg className="w-5 h-5 animate-spin text-[#FF6B5B]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
                     <span>Cargando instrucciones...</span>
                   </div>
                 )}
@@ -352,13 +356,20 @@ export function PromptConfigSection({
                 {/* Instructions List */}
                 {!isLoading && !error && (
                   <>
-                    {/* Info Banner */}
-                    <div className="pt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                      <p className="text-sm text-blue-700">
-                        <span className="font-medium">Instrucciones del Prompt Inicial:</span> Define cómo
-                        debe comportarse tu asistente. Las instrucciones marcadas como &quot;En Prompt&quot; se
-                        incluyen directamente en el prompt del agente (máximo 5).
-                      </p>
+                    {/* Info Banner - Premium style */}
+                    <div className="pt-4 p-4 bg-gradient-to-r from-[#FFF5F4] to-white border border-[#FF6B5B]/10 rounded-xl">
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 p-1.5 rounded-lg bg-white shadow-sm">
+                          <svg className="w-4 h-4 text-[#FF6B5B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          <span className="font-medium text-gray-900">Instrucciones del Prompt Inicial:</span> Define cómo
+                          debe comportarse tu asistente. Las instrucciones marcadas como &quot;En Prompt&quot; se
+                          incluyen directamente en el prompt del agente (máximo 5).
+                        </p>
+                      </div>
                     </div>
 
                     {/* Search and Filters - Only shown with 4+ instructions */}
@@ -366,12 +377,10 @@ export function PromptConfigSection({
                       <div className="pt-3 space-y-3">
                         {/* Search Input */}
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                            {icons.search || (
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                              </svg>
-                            )}
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
                           </span>
                           <input
                             type="text"
@@ -379,18 +388,19 @@ export function PromptConfigSection({
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Buscar instrucciones..."
                             className={cn(
-                              'w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl',
-                              'text-sm text-slate-900 placeholder:text-slate-400',
-                              'focus:ring-2 focus:border-transparent transition-all',
-                              colorScheme === 'purple' ? 'focus:ring-purple-500' : 'focus:ring-orange-500'
+                              'w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl',
+                              'text-sm text-gray-900 placeholder:text-gray-400',
+                              'focus:ring-2 focus:ring-[#FF6B5B]/30 focus:border-[#FF6B5B] transition-all'
                             )}
                           />
                           {searchQuery && (
                             <button
                               onClick={() => setSearchQuery('')}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                             >
-                              {icons.x}
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
                             </button>
                           )}
                         </div>
@@ -409,10 +419,8 @@ export function PromptConfigSection({
                               className={cn(
                                 'px-3 py-1.5 text-xs font-medium rounded-full transition-all',
                                 filterStatus === key
-                                  ? colorScheme === 'purple'
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-orange-600 text-white'
-                                  : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                                  ? 'bg-[#FF6B5B] text-white shadow-sm'
+                                  : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                               )}
                             >
                               {label} ({count})
@@ -422,7 +430,7 @@ export function PromptConfigSection({
 
                         {/* Active filters summary */}
                         {(searchQuery || filterStatus !== 'all') && (
-                          <div className="flex items-center justify-between text-xs text-slate-500">
+                          <div className="flex items-center justify-between text-xs text-gray-500">
                             <span>
                               Mostrando {filteredInstructions.length} de {instructions.length} instrucciones
                             </span>
@@ -432,10 +440,7 @@ export function PromptConfigSection({
                                   setSearchQuery('');
                                   setFilterStatus('all');
                                 }}
-                                className={cn(
-                                  'text-xs font-medium hover:underline',
-                                  colorScheme === 'purple' ? 'text-purple-600' : 'text-orange-600'
-                                )}
+                                className="text-xs font-medium text-[#FF6B5B] hover:underline"
                               >
                                 Limpiar filtros
                               </button>
@@ -468,7 +473,7 @@ export function PromptConfigSection({
                         </div>
                       ) : (
                         <div className="pt-4 text-center py-6">
-                          <p className="text-slate-500 text-sm">
+                          <p className="text-gray-500 text-sm">
                             No se encontraron instrucciones con los filtros actuales
                           </p>
                           <button
@@ -476,10 +481,7 @@ export function PromptConfigSection({
                               setSearchQuery('');
                               setFilterStatus('all');
                             }}
-                            className={cn(
-                              'mt-2 text-sm font-medium hover:underline',
-                              colorScheme === 'purple' ? 'text-purple-600' : 'text-orange-600'
-                            )}
+                            className="mt-2 text-sm font-medium text-[#FF6B5B] hover:underline"
                           >
                             Limpiar filtros
                           </button>
@@ -487,51 +489,59 @@ export function PromptConfigSection({
                       )
                     ) : (
                       <div className="pt-4 text-center py-8">
-                        <div className={cn(
-                          'w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center',
-                          colors.bg
-                        )}>
-                          {icons.documentText}
+                        <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center bg-[#FFF5F4]">
+                          <svg className="w-7 h-7 text-[#FF6B5B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                          </svg>
                         </div>
-                        <p className="text-slate-600 font-medium">Sin instrucciones</p>
-                        <p className="text-sm text-slate-500 mt-1">
+                        <p className="text-gray-700 font-medium">Sin instrucciones</p>
+                        <p className="text-sm text-gray-500 mt-1">
                           Agrega instrucciones para personalizar el comportamiento de tu asistente
                         </p>
                       </div>
                     )}
 
-                    {/* Add Button */}
+                    {/* Add Button - Premium style */}
                     <button
                       onClick={handleAddNew}
                       className={cn(
-                        'w-full mt-4 px-4 py-3 rounded-xl font-medium text-white',
-                        'flex items-center justify-center gap-2 transition-all shadow-lg',
-                        colors.button
+                        'w-full mt-4 px-4 py-3.5 rounded-xl font-medium text-white',
+                        'flex items-center justify-center gap-2 transition-all',
+                        'bg-[#FF6B5B] hover:bg-[#e55a4a] shadow-lg shadow-[#FF6B5B]/25',
+                        'active:scale-[0.98]'
                       )}
                     >
-                      {icons.plus || '+'}
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
                       <span>Agregar Instrucción</span>
                     </button>
 
-                    {/* Quick Stats */}
+                    {/* Quick Stats - Premium cards */}
                     {instructions.length > 0 && (
                       <div className="pt-2 grid grid-cols-3 gap-3">
-                        <div className="p-3 bg-white rounded-xl border border-slate-100 text-center">
-                          <p className="text-2xl font-bold text-slate-900">{instructions.length}</p>
-                          <p className="text-xs text-slate-500">Total</p>
+                        <div className="p-3 bg-gray-50 rounded-xl text-center">
+                          <p className="text-2xl font-bold text-gray-900">{instructions.length}</p>
+                          <p className="text-xs text-gray-500 font-medium">Total</p>
                         </div>
-                        <div className="p-3 bg-white rounded-xl border border-slate-100 text-center">
+                        <div className="p-3 bg-emerald-50 rounded-xl text-center">
                           <p className="text-2xl font-bold text-emerald-600">{activeInstructions.length}</p>
-                          <p className="text-xs text-slate-500">Activas</p>
+                          <p className="text-xs text-emerald-600/70 font-medium">Activas</p>
                         </div>
-                        <div className="p-3 bg-white rounded-xl border border-slate-100 text-center">
+                        <div className={cn(
+                          'p-3 rounded-xl text-center',
+                          inPromptCount >= 5 ? 'bg-amber-50' : 'bg-[#FFF5F4]'
+                        )}>
                           <p className={cn(
                             'text-2xl font-bold',
-                            inPromptCount >= 5 ? 'text-amber-600' : 'text-blue-600'
+                            inPromptCount >= 5 ? 'text-amber-600' : 'text-[#FF6B5B]'
                           )}>
                             {inPromptCount}/5
                           </p>
-                          <p className="text-xs text-slate-500">En Prompt</p>
+                          <p className={cn(
+                            'text-xs font-medium',
+                            inPromptCount >= 5 ? 'text-amber-600/70' : 'text-[#FF6B5B]/70'
+                          )}>En Prompt</p>
                         </div>
                       </div>
                     )}

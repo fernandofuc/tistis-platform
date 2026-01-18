@@ -46,26 +46,23 @@ export function TemplateConfigSection({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false); // Track if initial fetch was done
 
-  // Colors
-  const colors = colorScheme === 'purple'
-    ? {
-        gradient: 'from-indigo-50 to-purple-50',
-        border: 'border-indigo-200',
-        text: 'text-indigo-700',
-        bg: 'bg-indigo-100',
-        button: 'bg-indigo-600 hover:bg-indigo-700',
-        icon: 'text-indigo-600',
-        badge: 'bg-indigo-100 text-indigo-700',
-      }
-    : {
-        gradient: 'from-amber-50 to-orange-50',
-        border: 'border-amber-200',
-        text: 'text-amber-700',
-        bg: 'bg-amber-100',
-        button: 'bg-amber-600 hover:bg-amber-700',
-        icon: 'text-amber-600',
-        badge: 'bg-amber-100 text-amber-700',
-      };
+  // Colors - TIS TIS Design System (coral primary)
+  const colors = {
+    // Section styling
+    sectionBg: 'bg-white',
+    border: 'border-gray-200',
+    // Primary coral color
+    primary: '#FF6B5B',
+    primaryLight: '#FFF5F4',
+    button: 'bg-[#FF6B5B] hover:bg-[#e55a4a]',
+    // Icon container
+    iconBg: 'bg-[#FFF5F4]',
+    iconColor: 'text-[#FF6B5B]',
+    // Badge
+    badge: 'bg-[#FFF5F4] text-[#FF6B5B]',
+    // Text
+    text: 'text-[#FF6B5B]',
+  };
 
   // Fetch templates - stable reference, doesn't depend on onTemplatesChange
   const fetchTemplates = useCallback(async () => {
@@ -250,22 +247,22 @@ export function TemplateConfigSection({
   return (
     <>
       <div className={cn(
-        'bg-gradient-to-r rounded-2xl border overflow-hidden shadow-sm',
-        colors.gradient,
-        colors.border
+        'bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow'
       )}>
-        {/* Header - Always visible */}
+        {/* Header - Premium Apple-style */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/50 transition-colors"
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors active:scale-[0.995]"
         >
           <div className="flex items-center gap-3">
-            <div className={cn('p-2 rounded-lg', colors.bg)}>
-              {icons.chat}
+            <div className="p-2.5 rounded-xl bg-[#FFF5F4]">
+              <svg className="w-5 h-5 text-[#FF6B5B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+              </svg>
             </div>
             <div className="text-left">
-              <h3 className="font-semibold text-slate-900">Plantillas de Respuesta</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="font-semibold text-gray-900">Plantillas de Respuesta</h3>
+              <p className="text-sm text-gray-500">
                 {templates.length > 0
                   ? `${activeTemplates.length} plantillas activas`
                   : 'Respuestas predefinidas para situaciones comunes'
@@ -276,20 +273,19 @@ export function TemplateConfigSection({
 
           <div className="flex items-center gap-3">
             {templates.length > 0 && (
-              <span className={cn(
-                'px-2 py-1 text-xs font-medium rounded-full',
-                colors.badge
-              )}>
+              <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-[#FFF5F4] text-[#FF6B5B]">
                 {templates.length} plantilla{templates.length !== 1 ? 's' : ''}
               </span>
             )}
-            <motion.span
+            <motion.div
               animate={{ rotate: isExpanded ? 180 : 0 }}
               transition={{ duration: 0.2 }}
-              className="text-slate-400"
+              className="p-1 rounded-full bg-gray-100"
             >
-              {icons.chevronDown}
-            </motion.span>
+              <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </motion.div>
           </div>
         </button>
 
@@ -304,11 +300,14 @@ export function TemplateConfigSection({
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="px-5 pb-5 space-y-4 border-t border-slate-100">
+              <div className="px-5 pb-5 space-y-4 border-t border-gray-100">
                 {/* Loading State */}
                 {isLoading && (
-                  <div className="pt-4 flex items-center justify-center gap-2 text-slate-500">
-                    {icons.spinner}
+                  <div className="pt-4 flex items-center justify-center gap-2 text-gray-500">
+                    <svg className="w-5 h-5 animate-spin text-[#FF6B5B]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
                     <span>Cargando plantillas...</span>
                   </div>
                 )}
@@ -329,13 +328,20 @@ export function TemplateConfigSection({
                 {/* Templates List */}
                 {!isLoading && !error && (
                   <>
-                    {/* Info Banner */}
-                    <div className="pt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                      <p className="text-sm text-blue-700">
-                        <span className="font-medium">Plantillas de Respuesta:</span> Respuestas predefinidas
-                        que tu asistente puede usar. Incluye variables como {'{nombre}'} o {'{fecha}'} que se
-                        reemplazan automáticamente con datos reales.
-                      </p>
+                    {/* Info Banner - Premium style */}
+                    <div className="pt-4 p-4 bg-gradient-to-r from-[#FFF5F4] to-white border border-[#FF6B5B]/10 rounded-xl">
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 p-1.5 rounded-lg bg-white shadow-sm">
+                          <svg className="w-4 h-4 text-[#FF6B5B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          <span className="font-medium text-gray-900">Plantillas de Respuesta:</span> Respuestas predefinidas
+                          que tu asistente puede usar. Incluye variables como {'{nombre}'} o {'{fecha}'} que se
+                          reemplazan automáticamente con datos reales.
+                        </p>
+                      </div>
                     </div>
 
                     {/* Templates Grid */}
@@ -358,42 +364,44 @@ export function TemplateConfigSection({
                       </div>
                     ) : (
                       <div className="pt-4 text-center py-8">
-                        <div className={cn(
-                          'w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center',
-                          colors.bg
-                        )}>
-                          {icons.chat}
+                        <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center bg-[#FFF5F4]">
+                          <svg className="w-7 h-7 text-[#FF6B5B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                          </svg>
                         </div>
-                        <p className="text-slate-600 font-medium">Sin plantillas</p>
-                        <p className="text-sm text-slate-500 mt-1">
+                        <p className="text-gray-700 font-medium">Sin plantillas</p>
+                        <p className="text-sm text-gray-500 mt-1">
                           Crea plantillas para responder rápidamente a situaciones comunes
                         </p>
                       </div>
                     )}
 
-                    {/* Add Button */}
+                    {/* Add Button - Premium style */}
                     <button
                       onClick={handleAddNew}
                       className={cn(
-                        'w-full mt-4 px-4 py-3 rounded-xl font-medium text-white',
-                        'flex items-center justify-center gap-2 transition-all shadow-lg',
-                        colors.button
+                        'w-full mt-4 px-4 py-3.5 rounded-xl font-medium text-white',
+                        'flex items-center justify-center gap-2 transition-all',
+                        'bg-[#FF6B5B] hover:bg-[#e55a4a] shadow-lg shadow-[#FF6B5B]/25',
+                        'active:scale-[0.98]'
                       )}
                     >
-                      {icons.plus || '+'}
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
                       <span>Agregar Plantilla</span>
                     </button>
 
-                    {/* Quick Stats */}
+                    {/* Quick Stats - Premium cards */}
                     {templates.length > 0 && (
                       <div className="pt-2 grid grid-cols-2 gap-3">
-                        <div className="p-3 bg-white rounded-xl border border-slate-100 text-center">
-                          <p className="text-2xl font-bold text-slate-900">{templates.length}</p>
-                          <p className="text-xs text-slate-500">Total</p>
+                        <div className="p-3 bg-gray-50 rounded-xl text-center">
+                          <p className="text-2xl font-bold text-gray-900">{templates.length}</p>
+                          <p className="text-xs text-gray-500 font-medium">Total</p>
                         </div>
-                        <div className="p-3 bg-white rounded-xl border border-slate-100 text-center">
+                        <div className="p-3 bg-emerald-50 rounded-xl text-center">
                           <p className="text-2xl font-bold text-emerald-600">{activeTemplates.length}</p>
-                          <p className="text-xs text-slate-500">Activas</p>
+                          <p className="text-xs text-emerald-600/70 font-medium">Activas</p>
                         </div>
                       </div>
                     )}

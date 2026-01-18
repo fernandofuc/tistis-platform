@@ -9,16 +9,72 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
-import { icons, CharacterCountBar } from '../shared';
+import { CharacterCountBar } from '../shared';
 import {
   RESPONSE_TEMPLATE_TYPES,
-  getTemplatesByCategory,
-  TEMPLATE_CATEGORY_LABELS,
   TEMPLATE_VARIABLES,
   detectTemplateVariables,
   type ResponseTemplateTriggerType,
 } from '../shared/config';
 import type { ResponseTemplate } from './TemplateCard';
+
+// ======================
+// ICONS FOR TEMPLATE TYPES - Premium Design
+// ======================
+const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
+  greeting: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.05 4.575a1.575 1.575 0 10-3.15 0v3m3.15-3v-1.5a1.575 1.575 0 013.15 0v1.5m-3.15 0l.075 5.925m3.075.75V4.575m0 0a1.575 1.575 0 013.15 0V15M6.9 7.575a1.575 1.575 0 10-3.15 0v8.175a6.75 6.75 0 006.75 6.75h2.018a5.25 5.25 0 003.712-1.538l1.732-1.732a5.25 5.25 0 001.538-3.712l.003-2.024a.668.668 0 01.198-.471 1.575 1.575 0 10-2.228-2.228 3.818 3.818 0 00-1.12 2.687M6.9 7.575V12m6.27 4.318A4.49 4.49 0 0116.35 15" />
+    </svg>
+  ),
+  farewell: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
+    </svg>
+  ),
+  appointment_confirm: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />
+    </svg>
+  ),
+  pricing_inquiry: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  emergency: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+    </svg>
+  ),
+  out_of_hours: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  follow_up: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3" />
+    </svg>
+  ),
+  promotion: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+    </svg>
+  ),
+  custom: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+    </svg>
+  ),
+};
+
+// Default icon for unknown types
+const DefaultTemplateIcon = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+  </svg>
+);
 
 // ======================
 // TYPES
@@ -49,7 +105,7 @@ export function TemplateModal({
   onClose,
   onSave,
   template,
-  colorScheme = 'purple',
+  colorScheme: _colorScheme = 'purple', // Deprecated: now using unified TIS TIS colors
   existingTypes = [],
 }: TemplateModalProps) {
   // Form state
@@ -64,7 +120,6 @@ export function TemplateModal({
 
   // Get selected type info
   const selectedTypeInfo = RESPONSE_TEMPLATE_TYPES.find(t => t.key === selectedType);
-  const templatesByCategory = getTemplatesByCategory();
 
   // Determine if this is an edit (has valid ID) or new/duplicate (no ID)
   const isEditing = Boolean(template?.id && template.id.trim() !== '');
@@ -73,26 +128,17 @@ export function TemplateModal({
   // Detected variables in current text
   const detectedVariables = detectTemplateVariables(templateText);
 
-  // Colors
-  const colors = colorScheme === 'purple'
-    ? {
-        gradient: 'from-purple-600 to-indigo-600',
-        button: 'bg-purple-600 hover:bg-purple-700',
-        buttonSecondary: 'border-purple-300 text-purple-700 hover:bg-purple-50',
-        selected: 'border-purple-500 bg-purple-50',
-        text: 'text-purple-700',
-        ring: 'focus:ring-purple-500',
-        variable: 'bg-purple-100 text-purple-700 hover:bg-purple-200',
-      }
-    : {
-        gradient: 'from-orange-500 to-pink-500',
-        button: 'bg-orange-500 hover:bg-orange-600',
-        buttonSecondary: 'border-orange-300 text-orange-700 hover:bg-orange-50',
-        selected: 'border-orange-500 bg-orange-50',
-        text: 'text-orange-700',
-        ring: 'focus:ring-orange-500',
-        variable: 'bg-orange-100 text-orange-700 hover:bg-orange-200',
-      };
+  // Colors - TIS TIS Premium Design System
+  const colors = {
+    button: 'bg-[#FF6B5B] hover:bg-[#e55a4a]',
+    buttonSecondary: 'border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300',
+    selected: 'border-[#FF6B5B] bg-[#FFF5F4] ring-1 ring-[#FF6B5B]/20',
+    text: 'text-[#FF6B5B]',
+    ring: 'focus:ring-[#FF6B5B]',
+    iconBg: 'bg-[#FFF5F4]',
+    iconColor: 'text-[#FF6B5B]',
+    variable: 'bg-[#FFF5F4] text-[#FF6B5B] hover:bg-[#FFE8E5]',
+  };
 
   // Reset form when opening
   useEffect(() => {
@@ -218,20 +264,23 @@ export function TemplateModal({
           </div>
 
           {/* Header */}
-          <div className={cn(
-            'px-4 md:px-6 py-3 md:py-4 bg-gradient-to-r text-white',
-            colors.gradient
-          )}>
+          {/* Header - Clean Apple-style design */}
+          <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
-                  {icons.chat}
+                <div className={cn(
+                  'w-11 h-11 rounded-2xl flex items-center justify-center',
+                  colors.iconBg
+                )}>
+                  <svg className={cn('w-6 h-6', colors.iconColor)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                  </svg>
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold">
+                  <h2 className="text-lg font-semibold text-gray-900">
                     {isEditing ? 'Editar Plantilla' : isDuplicating ? 'Duplicar Plantilla' : 'Nueva Plantilla'}
                   </h2>
-                  <p className="text-sm text-white/80">
+                  <p className="text-sm text-gray-500">
                     {isDuplicating
                       ? 'Crea una copia de la plantilla existente'
                       : 'Respuestas predefinidas para situaciones comunes'}
@@ -240,9 +289,12 @@ export function TemplateModal({
               </div>
               <button
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-white/20 transition-colors"
+                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+                aria-label="Cerrar"
               >
-                {icons.x}
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
           </div>
@@ -259,51 +311,96 @@ export function TemplateModal({
                   <span>¿Qué tipo de plantilla?</span>
                 </div>
 
-                {/* Recommended Types */}
+                {/* Recommended Types - Premium Card Design */}
                 <div className="space-y-2">
                   {recommendedTypes.map((type) => {
                     const isUsed = existingTypes.includes(type.key) && !template;
+                    const TypeIcon = TEMPLATE_ICONS[type.key] || DefaultTemplateIcon;
                     return (
                       <button
                         key={type.key}
                         onClick={() => !isUsed && handleSelectType(type.key)}
                         disabled={isUsed}
                         className={cn(
-                          'w-full p-3 rounded-xl border-2 text-left transition-all',
+                          'w-full p-4 rounded-2xl border text-left transition-all group',
                           selectedType === type.key
                             ? colors.selected
                             : isUsed
-                              ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
-                              : 'border-slate-200 hover:border-slate-300'
+                              ? 'border-gray-100 bg-gray-50/50 opacity-60 cursor-not-allowed'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 hover:shadow-sm'
                         )}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-900">{type.label}</span>
-                          {isUsed && (
-                            <span className="text-xs text-slate-400">Ya existe</span>
+                        <div className="flex items-start gap-3">
+                          {/* Icon */}
+                          <div className={cn(
+                            'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors',
+                            selectedType === type.key
+                              ? 'bg-[#FF6B5B] text-white'
+                              : isUsed
+                                ? 'bg-gray-100 text-gray-400'
+                                : 'bg-gray-100 text-gray-500 group-hover:bg-[#FFF5F4] group-hover:text-[#FF6B5B]'
+                          )}>
+                            {TypeIcon}
+                          </div>
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={cn(
+                                'font-medium',
+                                selectedType === type.key ? 'text-[#FF6B5B]' : 'text-gray-900'
+                              )}>
+                                {type.label}
+                              </span>
+                              {isUsed && (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">
+                                  Ya existe
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500 mt-0.5 leading-relaxed">{type.description}</p>
+                          </div>
+                          {/* Chevron */}
+                          {!isUsed && (
+                            <svg className={cn(
+                              'w-5 h-5 flex-shrink-0 transition-colors',
+                              selectedType === type.key ? 'text-[#FF6B5B]' : 'text-gray-300 group-hover:text-gray-400'
+                            )} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                            </svg>
                           )}
                         </div>
-                        <p className="text-sm text-slate-500 mt-0.5">{type.description}</p>
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Show More Button */}
-                <button
-                  onClick={() => setShowMoreTypes(!showMoreTypes)}
-                  className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1"
-                >
-                  {showMoreTypes ? 'Ver menos opciones' : 'Ver más opciones...'}
-                  <motion.span
-                    animate={{ rotate: showMoreTypes ? 180 : 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {icons.chevronDown}
-                  </motion.span>
-                </button>
+                {/* Show More Button - Subtle divider style */}
+                <div className="relative py-3">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <button
+                      onClick={() => setShowMoreTypes(!showMoreTypes)}
+                      className="px-4 py-2 bg-white text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1.5 transition-colors"
+                    >
+                      {showMoreTypes ? 'Ver menos opciones' : 'Más opciones'}
+                      <motion.svg
+                        animate={{ rotate: showMoreTypes ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </motion.svg>
+                    </button>
+                  </div>
+                </div>
 
-                {/* Other Types */}
+                {/* Other Types - Same premium design */}
                 <AnimatePresence>
                   {showMoreTypes && (
                     <motion.div
@@ -314,27 +411,57 @@ export function TemplateModal({
                     >
                       {otherTypes.map((type) => {
                         const isUsed = existingTypes.includes(type.key) && !template;
+                        const TypeIcon = TEMPLATE_ICONS[type.key] || DefaultTemplateIcon;
                         return (
                           <button
                             key={type.key}
                             onClick={() => !isUsed && handleSelectType(type.key)}
                             disabled={isUsed}
                             className={cn(
-                              'w-full p-3 rounded-xl border-2 text-left transition-all',
+                              'w-full p-4 rounded-2xl border text-left transition-all group',
                               selectedType === type.key
                                 ? colors.selected
                                 : isUsed
-                                  ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
-                                  : 'border-slate-200 hover:border-slate-300'
+                                  ? 'border-gray-100 bg-gray-50/50 opacity-60 cursor-not-allowed'
+                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 hover:shadow-sm'
                             )}
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-slate-900">{type.label}</span>
-                              {isUsed && (
-                                <span className="text-xs text-slate-400">Ya existe</span>
+                            <div className="flex items-start gap-3">
+                              <div className={cn(
+                                'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors',
+                                selectedType === type.key
+                                  ? 'bg-[#FF6B5B] text-white'
+                                  : isUsed
+                                    ? 'bg-gray-100 text-gray-400'
+                                    : 'bg-gray-100 text-gray-500 group-hover:bg-[#FFF5F4] group-hover:text-[#FF6B5B]'
+                              )}>
+                                {TypeIcon}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={cn(
+                                    'font-medium',
+                                    selectedType === type.key ? 'text-[#FF6B5B]' : 'text-gray-900'
+                                  )}>
+                                    {type.label}
+                                  </span>
+                                  {isUsed && (
+                                    <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">
+                                      Ya existe
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-500 mt-0.5 leading-relaxed">{type.description}</p>
+                              </div>
+                              {!isUsed && (
+                                <svg className={cn(
+                                  'w-5 h-5 flex-shrink-0 transition-colors',
+                                  selectedType === type.key ? 'text-[#FF6B5B]' : 'text-gray-300 group-hover:text-gray-400'
+                                )} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                </svg>
                               )}
                             </div>
-                            <p className="text-sm text-slate-500 mt-0.5">{type.description}</p>
                           </button>
                         );
                       })}
@@ -438,22 +565,28 @@ export function TemplateModal({
                 </div>
 
                 {/* Variables Helper */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
                   <button
                     onClick={() => setShowVariables(!showVariables)}
-                    className="w-full px-4 py-3 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors"
+                    className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-slate-600">{icons.info}</span>
-                      <span className="text-sm font-medium text-slate-700">Variables disponibles</span>
+                      <span className="text-[#FF6B5B]">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </span>
+                      <span className="text-sm font-medium text-gray-700">Variables disponibles</span>
                     </div>
-                    <motion.span
+                    <motion.div
                       animate={{ rotate: showVariables ? 180 : 0 }}
                       transition={{ duration: 0.2 }}
-                      className="text-slate-400"
+                      className="text-gray-400"
                     >
-                      {icons.chevronDown}
-                    </motion.span>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </motion.div>
                   </button>
 
                   <AnimatePresence>
@@ -504,19 +637,22 @@ export function TemplateModal({
             )}
           </div>
 
-          {/* Footer */}
-          <div className="px-4 md:px-6 py-4 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
+          {/* Footer - Premium Apple-style */}
+          <div className="px-4 md:px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
             {step === 2 && !template ? (
               <button
                 onClick={() => setStep(1)}
-                className="px-3 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors min-h-[44px]"
+                className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-gray-600 hover:text-gray-900 transition-colors min-h-[44px] active:scale-95"
               >
-                ← Cambiar tipo
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                Cambiar tipo
               </button>
             ) : (
               <button
                 onClick={onClose}
-                className="flex-1 md:flex-none px-4 py-2.5 min-h-[44px] rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
+                className="flex-1 md:flex-none px-4 py-2.5 min-h-[44px] rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-100 font-medium transition-all active:scale-[0.98]"
               >
                 Cancelar
               </button>
@@ -526,7 +662,7 @@ export function TemplateModal({
               {step === 2 && (isEditing || isDuplicating) && (
                 <button
                   onClick={onClose}
-                  className="hidden md:flex px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-all"
+                  className="hidden md:flex px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-100 font-medium transition-all active:scale-[0.98]"
                 >
                   Cancelar
                 </button>
@@ -536,20 +672,25 @@ export function TemplateModal({
                   onClick={handleSave}
                   disabled={isSaving || !name.trim() || !templateText.trim()}
                   className={cn(
-                    'flex-1 md:flex-none px-5 py-2.5 min-h-[44px] rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all',
+                    'flex-1 md:flex-none px-5 py-2.5 min-h-[44px] rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98]',
                     isSaving || !name.trim() || !templateText.trim()
-                      ? 'bg-slate-300 cursor-not-allowed'
-                      : colors.button
+                      ? 'bg-gray-300 cursor-not-allowed shadow-none'
+                      : `${colors.button} shadow-[#FF6B5B]/25`
                   )}
                 >
                   {isSaving ? (
                     <>
-                      {icons.spinner}
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
                       <span>Guardando...</span>
                     </>
                   ) : (
                     <>
-                      {icons.check}
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
                       <span>{isEditing ? 'Guardar' : isDuplicating ? 'Duplicar' : 'Crear'}</span>
                     </>
                   )}
