@@ -392,33 +392,6 @@ export function AdvancedTab({
         </div>
       </div>
 
-      {/* API/Webhook Info (Read-only info card) */}
-      <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-slate-600">{icons.link}</span>
-          <label className="text-sm font-medium text-slate-700">
-            Integraciones
-          </label>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-xs font-medium text-slate-500 mb-1">Webhook URL</p>
-            <p className="text-sm text-slate-700 font-mono truncate">
-              {`https://api.tistis.ai/v1/webhook/${businessProfile?.tenant_id || 'TENANT_ID'}`}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-xs font-medium text-slate-500 mb-1">Profile ID</p>
-            <p className="text-sm text-slate-700 font-mono truncate">
-              {businessProfile?.id || 'Sin perfil'}
-            </p>
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Usa estos datos para integraciones avanzadas. Contacta soporte para más información.
-        </p>
-      </div>
-
       {/* Save Button */}
       <div className="flex items-center justify-between pt-2">
         <div className="flex items-center gap-2">
