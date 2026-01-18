@@ -271,9 +271,10 @@ function KeysList({ keys, onViewDetails, onRevoke }: KeysListProps) {
 interface IntegrationInfoProps {
   tenantId: string | null;
   webhookUrl: string;
+  onViewDocs?: () => void;
 }
 
-function IntegrationInfo({ tenantId, webhookUrl }: IntegrationInfoProps) {
+function IntegrationInfo({ tenantId, webhookUrl, onViewDocs }: IntegrationInfoProps) {
   const [copiedField, setCopiedField] = useState<'webhook' | 'tenant' | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -393,18 +394,17 @@ function IntegrationInfo({ tenantId, webhookUrl }: IntegrationInfoProps) {
 
         {/* Documentation Link */}
         <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-          <a
-            href="/docs/api"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={onViewDocs}
             className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
           >
             <BookIcon />
             <span>Ver documentación de la API</span>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </a>
+          </button>
         </div>
       </div>
     </Card>
@@ -624,6 +624,7 @@ export function APIKeysSection({
             <IntegrationInfo
               tenantId={tenantId}
               webhookUrl={webhookUrl}
+              onViewDocs={() => setActiveTab('docs')}
             />
           )}
 
