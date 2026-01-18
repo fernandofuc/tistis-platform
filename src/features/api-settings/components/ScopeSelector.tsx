@@ -8,7 +8,8 @@
 import { useState } from 'react';
 import { cn } from '@/shared/utils';
 import type { ScopeGroup, APIScope, ScopeDefinition } from '../types';
-import { SCOPE_PRESETS } from '../constants/scopes';
+import { SCOPE_PRESETS, getScopePresetsForVertical } from '../constants/scopes';
+import type { Vertical } from '../types/scope.types';
 
 // ======================
 // ICONS
@@ -134,6 +135,7 @@ export interface ScopeSelectorProps {
   onSelectPreset: (presetKey: string) => void;
   onSelectAll: () => void;
   onClearAll: () => void;
+  vertical?: Vertical;
   className?: string;
 }
 
@@ -148,8 +150,12 @@ export function ScopeSelector({
   onSelectPreset,
   onSelectAll,
   onClearAll,
+  vertical = 'dental',
   className,
 }: ScopeSelectorProps) {
+  // Get presets for the current vertical (includes vertical-specific scopes)
+  const presets = vertical ? getScopePresetsForVertical(vertical) : SCOPE_PRESETS;
+
   return (
     <div className={cn('space-y-4', className)}>
       {/* Presets */}
@@ -158,7 +164,7 @@ export function ScopeSelector({
           Permisos Rápidos
         </label>
         <div className="flex flex-wrap gap-2">
-          {Object.entries(SCOPE_PRESETS).map(([key, preset]) => (
+          {Object.entries(presets).map(([key, preset]) => (
             <button
               key={key}
               type="button"

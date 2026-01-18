@@ -86,11 +86,12 @@ export function Modal({
       />
 
       {/* Modal Container - Scrollable wrapper for centering */}
-      <div className="fixed inset-0 overflow-y-auto">
+      {/* pointer-events-none allows clicks to pass through to backdrop */}
+      <div className="fixed inset-0 overflow-y-auto pointer-events-none">
         <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
           <div
             className={cn(
-              'relative w-full bg-white rounded-xl shadow-2xl',
+              'relative w-full bg-white rounded-xl shadow-2xl pointer-events-auto',
               'transform transition-all max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)]',
               'flex flex-col',
               sizeClasses[size]

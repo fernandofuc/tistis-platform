@@ -262,6 +262,7 @@ export function CreateAPIKeyModal({
               onSelectPreset={selectPreset}
               onSelectAll={selectAll}
               onClearAll={clearAll}
+              vertical={vertical}
             />
           </div>
 

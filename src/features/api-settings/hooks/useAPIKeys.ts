@@ -25,6 +25,7 @@ import {
   getScopesGroupedByCategory,
   getCommonScopes,
   SCOPE_PRESETS,
+  getScopePresetsForVertical,
 } from '../constants/scopes';
 
 // ======================
@@ -361,13 +362,14 @@ export function useScopeSelector(
     );
   }, []);
 
-  // Select a preset
+  // Select a preset (uses vertical-specific presets)
   const selectPreset = useCallback((presetKey: string) => {
-    const preset = SCOPE_PRESETS[presetKey];
+    const presets = getScopePresetsForVertical(vertical);
+    const preset = presets[presetKey];
     if (preset) {
       setSelectedScopes(preset.scopes);
     }
-  }, []);
+  }, [vertical]);
 
   // Select all scopes
   const selectAll = useCallback(() => {
@@ -390,10 +392,16 @@ export function useScopeSelector(
     setSelectedScopes(scopes);
   }, []);
 
+  // Get presets for the current vertical
+  const presets = useMemo(
+    () => getScopePresetsForVertical(vertical),
+    [vertical]
+  );
+
   return {
     scopeGroups,
     commonScopes,
-    presets: SCOPE_PRESETS,
+    presets,
     selectedScopes,
     toggleScope,
     selectPreset,

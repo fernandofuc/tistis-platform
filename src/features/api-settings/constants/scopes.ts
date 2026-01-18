@@ -522,7 +522,7 @@ export function getVerticalScopes(vertical: Vertical): ScopeDefinition[] {
 }
 
 /**
- * Get suggested scopes for common use cases
+ * Base presets (common scopes only)
  */
 export const SCOPE_PRESETS: Record<string, { name: string; scopes: APIScope[] }> = {
   read_only: {
@@ -550,3 +550,44 @@ export const SCOPE_PRESETS: Record<string, { name: string; scopes: APIScope[] }>
     scopes: ['webhooks:manage'],
   },
 };
+
+/**
+ * Get presets with vertical-specific scopes included
+ * This ensures that "Acceso Completo" includes all read/write scopes for the vertical
+ */
+export function getScopePresetsForVertical(
+  vertical: Vertical
+): Record<string, { name: string; scopes: APIScope[] }> {
+  // Get vertical-specific scopes
+  const verticalScopes = getVerticalScopes(vertical);
+  const verticalReadScopes = verticalScopes
+    .filter((s) => s.key.endsWith(':read'))
+    .map((s) => s.key);
+  const verticalWriteScopes = verticalScopes
+    .filter((s) => s.key.endsWith(':write'))
+    .map((s) => s.key);
+
+  return {
+    read_only: {
+      name: 'Solo Lectura',
+      scopes: [
+        ...SCOPE_PRESETS.read_only.scopes,
+        ...verticalReadScopes,
+      ],
+    },
+    full_access: {
+      name: 'Acceso Completo',
+      scopes: [
+        ...SCOPE_PRESETS.full_access.scopes,
+        ...verticalReadScopes,
+        ...verticalWriteScopes,
+      ],
+    },
+    ai_integration: {
+      ...SCOPE_PRESETS.ai_integration,
+    },
+    webhooks_only: {
+      ...SCOPE_PRESETS.webhooks_only,
+    },
+  };
+}
