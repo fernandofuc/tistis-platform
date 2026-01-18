@@ -18,7 +18,9 @@ import type {
   UpdateAPIKeyRequest,
   Vertical,
   APIScope,
+  RotateAPIKeyResponse,
 } from '../types';
+import { daysSince, ROTATION_RECOMMENDATION_DAYS } from '../utils/securityAlerts';
 
 // ======================
 // ICONS
@@ -78,6 +80,24 @@ const ShieldIcon = () => (
   </svg>
 );
 
+const RefreshIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  </svg>
+);
+
 // ======================
 // TYPES
 // ======================
@@ -88,6 +108,7 @@ export interface APIKeyDetailModalProps {
   apiKey: APIKeyWithCreator | null;
   onUpdate: (id: string, data: UpdateAPIKeyRequest) => Promise<void>;
   onRevoke: (id: string, reason?: string) => Promise<void>;
+  onRotate?: (id: string, gracePeriodHours?: number) => Promise<RotateAPIKeyResponse>;
   vertical?: Vertical;
   loading?: boolean;
 }
@@ -240,6 +261,7 @@ export function APIKeyDetailModal({
   apiKey,
   onUpdate,
   onRevoke,
+  onRotate,
   vertical = 'dental',
   loading = false,
 }: APIKeyDetailModalProps) {
@@ -268,6 +290,13 @@ export function APIKeyDetailModal({
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
   const [revokeReason, setRevokeReason] = useState('');
 
+  // Rotation state
+  const [showRotateConfirm, setShowRotateConfirm] = useState(false);
+  const [rotationGracePeriod, setRotationGracePeriod] = useState(24);
+  const [rotating, setRotating] = useState(false);
+  const [rotationResult, setRotationResult] = useState<RotateAPIKeyResponse | null>(null);
+  const [newKeyCopied, setNewKeyCopied] = useState(false);
+
   // Update/revoke loading
   const [updating, setUpdating] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -291,6 +320,10 @@ export function APIKeyDetailModal({
       setIsEditing(false);
       setShowRevokeConfirm(false);
       setRevokeReason('');
+      setShowRotateConfirm(false);
+      setRotationGracePeriod(24);
+      setRotationResult(null);
+      setNewKeyCopied(false);
       setError(null);
     }
   }, [isOpen]);
@@ -347,6 +380,51 @@ export function APIKeyDetailModal({
     }
   };
 
+  // Handle rotate
+  const handleRotate = async () => {
+    if (!apiKey || !onRotate) return;
+
+    setRotating(true);
+    setError(null);
+
+    try {
+      const result = await onRotate(apiKey.id, rotationGracePeriod);
+      setRotationResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al rotar la key');
+      setRotating(false);
+    }
+  };
+
+  // Handle copy new key
+  const handleCopyNewKey = async () => {
+    if (!rotationResult) return;
+
+    try {
+      await navigator.clipboard.writeText(rotationResult.new_key.api_key_secret);
+      setNewKeyCopied(true);
+      setTimeout(() => setNewKeyCopied(false), 3000);
+    } catch {
+      setError('No se pudo copiar al portapapeles');
+    }
+  };
+
+  // Calculate rotation recommendation
+  const getRotationRecommendation = () => {
+    if (!apiKey) return null;
+    const age = daysSince(new Date(apiKey.created_at));
+    if (age >= ROTATION_RECOMMENDATION_DAYS) {
+      return {
+        recommended: true,
+        message: `Esta key tiene ${age} días de antigüedad. Se recomienda rotarla por seguridad.`,
+      };
+    }
+    return {
+      recommended: false,
+      daysUntilRecommended: ROTATION_RECOMMENDATION_DAYS - age,
+    };
+  };
+
   // Cancel edit
   const handleCancelEdit = () => {
     if (apiKey) {
@@ -394,6 +472,134 @@ export function APIKeyDetailModal({
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      ) : rotationResult ? (
+        /* Rotation Success - Show New Key */
+        <div className="space-y-4">
+          <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+            <h3 className="font-semibold text-green-800 mb-2 flex items-center gap-2">
+              <CheckIcon />
+              API Key rotada exitosamente
+            </h3>
+            <p className="text-sm text-green-700">
+              {rotationResult.message}
+            </p>
+          </div>
+
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="flex items-start gap-2">
+              <AlertIcon />
+              <div>
+                <h4 className="font-semibold text-amber-800">Importante</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  Guarda esta nueva key ahora. No podrás verla de nuevo después de cerrar esta ventana.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Nueva API Key
+            </label>
+            <div className="flex gap-2">
+              <div className="flex-1 p-3 bg-gray-900 rounded-lg overflow-x-auto">
+                <code className="text-green-400 font-mono text-sm break-all">
+                  {rotationResult.new_key.api_key_secret}
+                </code>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleCopyNewKey}
+                leftIcon={newKeyCopied ? <CheckIcon /> : <CopyIcon />}
+              >
+                {newKeyCopied ? 'Copiada' : 'Copiar'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 rounded-xl">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Información de la rotación</h4>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                <span className="font-medium">Key anterior:</span>{' '}
+                La key anterior quedará activa hasta{' '}
+                {new Date(rotationResult.old_key.deactivation_scheduled_at).toLocaleString('es-ES')}
+              </p>
+              <p>
+                <span className="font-medium">Nueva key:</span>{' '}
+                {rotationResult.new_key.name}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button variant="primary" onClick={onClose}>
+              Entendido
+            </Button>
+          </div>
+        </div>
+      ) : showRotateConfirm ? (
+        /* Rotation Confirmation */
+        <div className="space-y-4">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <h3 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+              <RefreshIcon />
+              Rotar API Key
+            </h3>
+            <p className="text-sm text-blue-700">
+              La rotación creará una nueva API Key con los mismos permisos y configuración.
+              La key anterior seguirá funcionando durante el período de gracia para
+              permitir una transición sin interrupciones.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="grace-period" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Período de gracia (horas)
+            </label>
+            <select
+              id="grace-period"
+              value={rotationGracePeriod}
+              onChange={(e) => setRotationGracePeriod(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value={0}>Sin período de gracia (revocación inmediata)</option>
+              <option value={1}>1 hora</option>
+              <option value={6}>6 horas</option>
+              <option value={12}>12 horas</option>
+              <option value={24}>24 horas (recomendado)</option>
+              <option value={48}>48 horas</option>
+              <option value={72}>72 horas (3 días)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              La key anterior se desactivará automáticamente después de este período.
+            </p>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowRotateConfirm(false)}
+              disabled={rotating}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleRotate}
+              isLoading={rotating}
+              leftIcon={<RefreshIcon />}
+            >
+              Rotar API Key
+            </Button>
+          </div>
         </div>
       ) : showRevokeConfirm ? (
         /* Revoke Confirmation */
@@ -677,6 +883,43 @@ export function APIKeyDetailModal({
 
           {activeTab === 'security' && (
             <div className="space-y-6" role="tabpanel" id="tabpanel-security" aria-labelledby="tab-security">
+              {/* Key Rotation */}
+              {isActive && onRotate && (
+                <div className={cn(
+                  'p-4 rounded-xl border',
+                  getRotationRecommendation()?.recommended
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-gray-50 border-gray-200'
+                )}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <RefreshIcon />
+                        <h4 className="font-medium text-gray-900">Rotación de Key</h4>
+                      </div>
+                      {getRotationRecommendation()?.recommended ? (
+                        <p className="text-sm text-amber-700">
+                          {getRotationRecommendation()?.message}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          Antigüedad: {daysSince(new Date(apiKey.created_at))} días.
+                          Se recomienda rotar cada {ROTATION_RECOMMENDATION_DAYS} días.
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant={getRotationRecommendation()?.recommended ? 'primary' : 'outline'}
+                      size="sm"
+                      onClick={() => setShowRotateConfirm(true)}
+                      leftIcon={<RefreshIcon />}
+                    >
+                      Rotar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Expiration */}
               <div className="p-4 bg-gray-50 rounded-xl">
                 <div className="flex items-center gap-2 mb-2">

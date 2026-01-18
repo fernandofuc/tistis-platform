@@ -27,3 +27,10 @@ export { APIKeyDetailModal, type APIKeyDetailModalProps } from './APIKeyDetailMo
 
 // Main section component
 export { APIKeysSection, type APIKeysSectionProps } from './APIKeysSection';
+
+// Documentation components
+export { APIDocumentation } from './APIDocumentation';
+export { APISandbox } from './APISandbox';
+
+// Audit components
+export { AuditHistory, type AuditHistoryProps } from './AuditHistory';

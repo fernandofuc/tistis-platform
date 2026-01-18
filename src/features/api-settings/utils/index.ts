@@ -11,3 +11,6 @@ export * from './scopeValidator';
 
 // Common validators
 export * from './validators';
+
+// Security alerts utilities
+export * from './securityAlerts';

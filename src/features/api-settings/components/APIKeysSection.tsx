@@ -14,6 +14,8 @@ import { useAuthContext } from '@/features/auth';
 import { APIKeyCard } from './APIKeyCard';
 import { CreateAPIKeyModal } from './CreateAPIKeyModal';
 import { APIKeyDetailModal } from './APIKeyDetailModal';
+import { APIDocumentation } from './APIDocumentation';
+import { APISandbox } from './APISandbox';
 import { useAPIKeys, useAPIKeyDetail } from '../hooks/useAPIKeys';
 import type {
   APIKeyListItem,
@@ -35,6 +37,12 @@ const PlusIcon = () => (
 const KeyIcon = () => (
   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+  </svg>
+);
+
+const TabKeyIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
   </svg>
 );
 
@@ -74,6 +82,12 @@ const BookIcon = () => (
   </svg>
 );
 
+const TerminalIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
 // ======================
 // TYPES
 // ======================
@@ -86,6 +100,7 @@ export interface APIKeysSectionProps {
 
 type FilterStatus = 'all' | 'active' | 'revoked' | 'expired';
 type FilterEnvironment = 'all' | APIKeyEnvironment;
+type SectionTab = 'keys' | 'docs' | 'sandbox';
 
 // ======================
 // HELPER FUNCTIONS
@@ -438,6 +453,9 @@ export function APIKeysSection({
     revokeKey,
   } = useAPIKeys();
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<SectionTab>('keys');
+
   // Filter state
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [environmentFilter, setEnvironmentFilter] = useState<FilterEnvironment>('all');
@@ -521,6 +539,13 @@ export function APIKeysSection({
   const activeKeysCount = keys.filter((k) => k.is_active && !isExpired(k.expires_at)).length;
   const canCreateMore = activeKeysCount < limits.max_keys;
 
+  // Tab definitions
+  const tabs: { id: SectionTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'keys', label: 'API Keys', icon: <TabKeyIcon /> },
+    { id: 'docs', label: 'Documentación', icon: <BookIcon /> },
+    { id: 'sandbox', label: 'Sandbox', icon: <TerminalIcon /> },
+  ];
+
   return (
     <div className={cn('space-y-6', className)}>
       {/* Header */}
@@ -536,82 +561,156 @@ export function APIKeysSection({
             )}
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setShowCreateModal(true)}
-          leftIcon={<PlusIcon />}
-          disabled={!canCreateMore}
-        >
-          Nueva API Key
-        </Button>
+        {activeTab === 'keys' && (
+          <Button
+            variant="primary"
+            onClick={() => setShowCreateModal(true)}
+            leftIcon={<PlusIcon />}
+            disabled={!canCreateMore}
+          >
+            Nueva API Key
+          </Button>
+        )}
       </div>
 
-      {/* Integration Info (Webhook URL & Tenant ID) */}
-      {webhookUrl && (
-        <IntegrationInfo
-          tenantId={tenantId}
-          webhookUrl={webhookUrl}
-        />
-      )}
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <div className="-mb-px flex gap-6" role="tablist" aria-label="Secciones de API">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`tabpanel-${tab.id}`}
+              id={`tab-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors',
+                activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              )}
+            >
+              <span className={cn(
+                'w-5 h-5',
+                activeTab === tab.id ? 'text-blue-500' : 'text-gray-400'
+              )}>
+                {tab.icon}
+              </span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-          <p className="font-medium">Error al cargar las API Keys</p>
-          <p className="text-sm mt-1">{error}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refresh}
-            className="mt-3"
-          >
-            Reintentar
-          </Button>
+      {/* Tab Content: Keys */}
+      {activeTab === 'keys' && (
+        <div
+          role="tabpanel"
+          id="tabpanel-keys"
+          aria-labelledby="tab-keys"
+          className="space-y-6"
+        >
+          {/* Integration Info (Webhook URL & Tenant ID) */}
+          {webhookUrl && (
+            <IntegrationInfo
+              tenantId={tenantId}
+              webhookUrl={webhookUrl}
+            />
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+              <p className="font-medium">Error al cargar las API Keys</p>
+              <p className="text-sm mt-1">{error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refresh}
+                className="mt-3"
+              >
+                Reintentar
+              </Button>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {loading && keys.length === 0 ? (
+            <Card className="p-8">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            </Card>
+          ) : keys.length === 0 ? (
+            <Card className="p-8">
+              <EmptyState onCreateClick={() => setShowCreateModal(true)} />
+            </Card>
+          ) : (
+            <>
+              {/* Filter Bar */}
+              <FilterBar
+                statusFilter={statusFilter}
+                environmentFilter={environmentFilter}
+                onStatusChange={setStatusFilter}
+                onEnvironmentChange={setEnvironmentFilter}
+                onRefresh={refresh}
+                loading={loading}
+              />
+
+              {/* Keys List */}
+              <KeysList
+                keys={filteredKeys}
+                onViewDetails={handleViewDetails}
+                onRevoke={handleRevokeFromCard}
+              />
+            </>
+          )}
+
+          {/* Plan Limit Warning */}
+          {!canCreateMore && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-amber-800 font-medium">
+                Has alcanzado el límite de API Keys
+              </p>
+              <p className="text-sm text-amber-700 mt-1">
+                Tu plan {plan} permite hasta {limits.max_keys} API Keys activas.
+                Revoca una key existente o actualiza tu plan para crear más.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Loading State */}
-      {loading && keys.length === 0 ? (
-        <Card className="p-8">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          </div>
-        </Card>
-      ) : keys.length === 0 ? (
-        <Card className="p-8">
-          <EmptyState onCreateClick={() => setShowCreateModal(true)} />
-        </Card>
-      ) : (
-        <>
-          {/* Filter Bar */}
-          <FilterBar
-            statusFilter={statusFilter}
-            environmentFilter={environmentFilter}
-            onStatusChange={setStatusFilter}
-            onEnvironmentChange={setEnvironmentFilter}
-            onRefresh={refresh}
-            loading={loading}
-          />
-
-          {/* Keys List */}
-          <KeysList
-            keys={filteredKeys}
-            onViewDetails={handleViewDetails}
-            onRevoke={handleRevokeFromCard}
-          />
-        </>
+      {/* Tab Content: Documentation */}
+      {activeTab === 'docs' && (
+        <div
+          role="tabpanel"
+          id="tabpanel-docs"
+          aria-labelledby="tab-docs"
+        >
+          <Card className="p-6 bg-zinc-950 border-zinc-800">
+            <APIDocumentation
+              tenantId={tenantId}
+              baseUrl={origin}
+            />
+          </Card>
+        </div>
       )}
 
-      {/* Plan Limit Warning */}
-      {!canCreateMore && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-          <p className="text-amber-800 font-medium">
-            Has alcanzado el límite de API Keys
-          </p>
-          <p className="text-sm text-amber-700 mt-1">
-            Tu plan {plan} permite hasta {limits.max_keys} API Keys activas.
-            Revoca una key existente o actualiza tu plan para crear más.
-          </p>
+      {/* Tab Content: Sandbox */}
+      {activeTab === 'sandbox' && (
+        <div
+          role="tabpanel"
+          id="tabpanel-sandbox"
+          aria-labelledby="tab-sandbox"
+        >
+          <Card className="p-6 bg-zinc-950 border-zinc-800">
+            <APISandbox
+              tenantId={tenantId}
+              baseUrl={origin}
+            />
+          </Card>
         </div>
       )}
 

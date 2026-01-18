@@ -13,3 +13,15 @@ export {
   type UseAPIKeyUsageReturn,
   type UseScopeSelectorReturn,
 } from './useAPIKeys';
+
+// Audit hooks
+export {
+  useAuditLogs,
+  useKeyAuditLogs,
+  useAuditStatistics,
+  useSecurityAlerts,
+  type UseAuditLogsReturn,
+  type UseKeyAuditLogsReturn,
+  type UseAuditStatisticsReturn,
+  type UseSecurityAlertsReturn,
+} from './useAudit';

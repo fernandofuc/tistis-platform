@@ -11,3 +11,6 @@ export * from './scope.types';
 
 // Usage types
 export * from './usage.types';
+
+// Audit and security types
+export * from './audit.types';
