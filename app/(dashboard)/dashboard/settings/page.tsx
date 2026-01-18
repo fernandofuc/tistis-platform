@@ -123,7 +123,7 @@ const roleLabels: Record<string, string> = {
 // COMPONENT
 // ======================
 export default function SettingsPage() {
-  const { staff, user, updateStaff } = useAuthContext();
+  const { staff, user, tenant, updateStaff } = useAuthContext();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
@@ -690,7 +690,10 @@ export default function SettingsPage() {
 
           {/* API Tab */}
           {activeTab === 'api' && (
-            <APIKeysSection />
+            <APIKeysSection
+              vertical={(tenant?.vertical as 'dental' | 'restaurant') || 'dental'}
+              plan={tenant?.plan || 'starter'}
+            />
           )}
 
           {/* Security Tab */}
