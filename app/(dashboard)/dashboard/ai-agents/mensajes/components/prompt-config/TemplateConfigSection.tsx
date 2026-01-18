@@ -294,9 +294,10 @@ export function TemplateConfigSection({
         </button>
 
         {/* Expandable Content */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {isExpanded && (
             <motion.div
+              key="template-config-content"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}

@@ -55,6 +55,7 @@ export function PromptViewerSection({
   // State
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false); // Track if initial fetch was done
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [promptData, setPromptData] = useState<PromptData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +89,7 @@ export function PromptViewerSection({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setError('Sesión no válida');
+        setHasFetched(true); // Mark as fetched even on error to prevent infinite loop
         return;
       }
 
@@ -112,6 +114,7 @@ export function PromptViewerSection({
       console.error('[PromptViewer] Fetch error:', err);
     } finally {
       setIsLoading(false);
+      setHasFetched(true); // Mark as fetched after completion
     }
   }, [profileType]);
 
@@ -172,12 +175,12 @@ export function PromptViewerSection({
     }
   }, [promptData?.prompt]);
 
-  // Fetch on expand
+  // Fetch on expand - only fetch once when first expanded
   useEffect(() => {
-    if (isExpanded && !promptData && !isLoading) {
+    if (isExpanded && !hasFetched && !isLoading) {
       fetchPromptData();
     }
-  }, [isExpanded, promptData, isLoading, fetchPromptData]);
+  }, [isExpanded, hasFetched, isLoading, fetchPromptData]);
 
   // Format date
   const formatDate = (dateStr: string | null) => {
@@ -235,9 +238,10 @@ export function PromptViewerSection({
       </button>
 
       {/* Expandable Content */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isExpanded && (
           <motion.div
+            key="prompt-viewer-content"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}

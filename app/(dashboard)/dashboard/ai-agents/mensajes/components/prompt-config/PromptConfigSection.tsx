@@ -39,6 +39,7 @@ export function PromptConfigSection({
   // State
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false); // Track if initial fetch was done
   const [instructions, setInstructions] = useState<Instruction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,6 +80,7 @@ export function PromptConfigSection({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setError('Sesión no válida');
+        setHasFetched(true); // Mark as fetched even on error to prevent infinite loop
         return;
       }
 
@@ -104,6 +106,7 @@ export function PromptConfigSection({
       console.error('[PromptConfig] Fetch error:', err);
     } finally {
       setIsLoading(false);
+      setHasFetched(true); // Mark as fetched after completion
     }
   }, [profileType, onInstructionsChange]);
 
@@ -238,12 +241,12 @@ export function PromptConfigSection({
     setIsModalOpen(true);
   }, []);
 
-  // Fetch on expand
+  // Fetch on expand - only fetch once when first expanded
   useEffect(() => {
-    if (isExpanded && instructions.length === 0 && !isLoading) {
+    if (isExpanded && !hasFetched && !isLoading) {
       fetchInstructions();
     }
-  }, [isExpanded, instructions.length, isLoading, fetchInstructions]);
+  }, [isExpanded, hasFetched, isLoading, fetchInstructions]);
 
   // Calculate stats
   const activeInstructions = instructions.filter(i => i.is_active);
@@ -314,9 +317,10 @@ export function PromptConfigSection({
         </button>
 
         {/* Expandable Content */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {isExpanded && (
             <motion.div
+              key="prompt-config-content"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
