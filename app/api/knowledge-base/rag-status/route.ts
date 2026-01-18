@@ -11,6 +11,9 @@ import {
   createAuthErrorResponse,
 } from '@/src/shared/lib/auth-helper';
 
+// Force dynamic rendering - this API uses request headers
+export const dynamic = 'force-dynamic';
+
 // ======================
 // TYPES
 // ======================

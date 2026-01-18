@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 import {
   Plus,
   Trash2,
@@ -257,12 +258,14 @@ function IngredientSearchModal({
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-left transition-colors"
                   >
-                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0 relative overflow-hidden">
                       {item.image_url ? (
-                        <img
+                        <Image
                           src={item.image_url}
                           alt={item.name}
-                          className="w-full h-full object-cover rounded-lg"
+                          fill
+                          sizes="40px"
+                          className="object-cover rounded-lg"
                         />
                       ) : (
                         <Package className="w-5 h-5 text-slate-400" />
@@ -318,12 +321,14 @@ function IngredientRow({
     <div className="group relative bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors">
       <div className="flex items-start gap-4">
         {/* Item Info */}
-        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0 relative overflow-hidden">
           {ingredient.inventory_item?.image_url ? (
-            <img
+            <Image
               src={ingredient.inventory_item.image_url}
               alt={ingredient.inventory_item.name}
-              className="w-full h-full object-cover rounded-lg"
+              fill
+              sizes="40px"
+              className="object-cover rounded-lg"
             />
           ) : (
             <Package className="w-5 h-5 text-slate-400" />
