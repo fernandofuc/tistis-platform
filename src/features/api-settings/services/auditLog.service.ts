@@ -118,6 +118,15 @@ function createLogEntry(
 // SERVER-SIDE LOGGING
 // ======================
 
+// Supabase client type - using generic to avoid complex type matching
+type SupabaseClient = {
+  from: (table: string) => {
+    insert: (data: Record<string, unknown> | Record<string, unknown>[]) => {
+      then: (fn: (result: { error: unknown }) => void) => void;
+    };
+  };
+};
+
 /**
  * Log an audit event (server-side)
  * This function should be called from API routes
@@ -129,11 +138,7 @@ export async function logAuditEvent(
     actorId?: string;
     actorType: 'user' | 'system' | 'api_key';
     actorEmail?: string;
-    supabase?: {
-      from: (table: string) => {
-        insert: (data: unknown) => Promise<{ error: unknown }>;
-      };
-    };
+    supabase?: SupabaseClient;
   }
 ): Promise<void> {
   const entry = createLogEntry(request, context);
@@ -181,11 +186,7 @@ export async function logAuditEvent(
  * Flush buffered logs to database
  */
 async function flushLogBuffer(
-  supabase?: {
-    from: (table: string) => {
-      insert: (data: unknown[]) => Promise<{ error: unknown }>;
-    };
-  }
+  supabase?: SupabaseClient
 ): Promise<void> {
   if (flushTimeout) {
     clearTimeout(flushTimeout);

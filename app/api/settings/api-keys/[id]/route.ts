@@ -25,6 +25,10 @@ import {
   validateIPWhitelistForUpdate,
   validateExpirationDateForUpdate,
 } from '@/src/features/api-settings/utils';
+import {
+  logKeyUpdated,
+  logKeyRevoked,
+} from '@/src/features/api-settings/services/auditLog.service';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -395,6 +399,40 @@ export async function PATCH(
       );
     }
 
+    // Get user email for audit log
+    const { data: staffData } = await supabase
+      .from('staff')
+      .select('email')
+      .eq('user_id', authResult.user.id)
+      .single();
+
+    // Build changes array for audit log
+    const changes: { field: string; old_value: unknown; new_value: unknown }[] = [];
+    if (body.name !== undefined && body.name !== existingKey.name) {
+      changes.push({ field: 'name', old_value: existingKey.name, new_value: body.name });
+    }
+    if (body.scopes !== undefined) {
+      changes.push({ field: 'scopes', old_value: 'updated', new_value: 'updated' });
+    }
+    if (body.rate_limit_rpm !== undefined) {
+      changes.push({ field: 'rate_limit_rpm', old_value: 'updated', new_value: body.rate_limit_rpm });
+    }
+    if (body.rate_limit_daily !== undefined) {
+      changes.push({ field: 'rate_limit_daily', old_value: 'updated', new_value: body.rate_limit_daily });
+    }
+
+    // Log the update event
+    if (changes.length > 0) {
+      await logKeyUpdated(id, updatedKey.name, changes, {
+        tenantId,
+        actorId: authResult.user.id,
+        actorEmail: staffData?.email,
+        supabase,
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+        user_agent: request.headers.get('user-agent') || undefined,
+      });
+    }
+
     const response: UpdateAPIKeyResponse = {
       key: {
         ...updatedKey,
@@ -462,7 +500,7 @@ export async function DELETE(
     // Check if key exists
     const { data: existingKey, error: fetchError } = await supabase
       .from('api_keys')
-      .select('id, is_active')
+      .select('id, is_active, name')
       .eq('id', id)
       .eq('tenant_id', tenantId)
       .single();
@@ -501,6 +539,23 @@ export async function DELETE(
         { status: 500 }
       );
     }
+
+    // Get user email for audit log
+    const { data: staffData } = await supabase
+      .from('staff')
+      .select('email')
+      .eq('user_id', user.id)
+      .single();
+
+    // Log the revocation event
+    await logKeyRevoked(id, existingKey.name, body.reason?.trim(), {
+      tenantId,
+      actorId: user.id,
+      actorEmail: staffData?.email,
+      supabase,
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+      user_agent: request.headers.get('user-agent') || undefined,
+    });
 
     const response: RevokeAPIKeyResponse = {
       success: true,

@@ -23,6 +23,7 @@ import {
   validateExpirationDate,
 } from '@/src/features/api-settings/utils';
 import { getPlanRateLimits } from '@/src/features/api-settings/constants';
+import { logKeyCreated } from '@/src/features/api-settings/services/auditLog.service';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -291,6 +292,23 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Get user email for audit log
+    const { data: staffData } = await supabase
+      .from('staff')
+      .select('email')
+      .eq('user_id', user.id)
+      .single();
+
+    // Log the creation event
+    await logKeyCreated(newKey.id, newKey.name, {
+      tenantId,
+      actorId: user.id,
+      actorEmail: staffData?.email,
+      supabase,
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+      user_agent: request.headers.get('user-agent') || undefined,
+    });
 
     // Build response with the secret key (shown only once)
     const keyListItem: APIKeyListItem = {

@@ -14,6 +14,7 @@ import type {
   UpdateAPIKeyRequest,
   APIKeyUsageResponse,
   APIKeysListResponse,
+  RotateAPIKeyResponse,
   Vertical,
   ScopeGroup,
   APIScope,
@@ -69,6 +70,7 @@ export interface UseAPIKeysReturn {
   createKey: (data: CreateAPIKeyRequest) => Promise<CreateAPIKeyResponse>;
   updateKey: (id: string, data: UpdateAPIKeyRequest) => Promise<APIKeyListItem>;
   revokeKey: (id: string, reason?: string) => Promise<void>;
+  rotateKey: (id: string, gracePeriodHours?: number) => Promise<RotateAPIKeyResponse>;
   getKeyById: (id: string) => APIKeyListItem | undefined;
 }
 
@@ -149,6 +151,23 @@ export function useAPIKeys(): UseAPIKeysReturn {
     []
   );
 
+  // Rotate API key
+  const rotateKey = useCallback(
+    async (id: string, gracePeriodHours?: number): Promise<RotateAPIKeyResponse> => {
+      const response = await fetchAPI<RotateAPIKeyResponse>(
+        `/api/settings/api-keys/${id}/rotate`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ grace_period_hours: gracePeriodHours }),
+        }
+      );
+      // Add the new key to the list and refresh to get updated states
+      await fetchKeys();
+      return response;
+    },
+    [fetchKeys]
+  );
+
   // Get key by ID
   const getKeyById = useCallback(
     (id: string): APIKeyListItem | undefined => {
@@ -181,6 +200,7 @@ export function useAPIKeys(): UseAPIKeysReturn {
     createKey,
     updateKey,
     revokeKey,
+    rotateKey,
     getKeyById,
   };
 }

@@ -451,6 +451,7 @@ export function APIKeysSection({
     createKey,
     updateKey,
     revokeKey,
+    rotateKey,
   } = useAPIKeys();
 
   // Tab state
@@ -533,6 +534,13 @@ export function APIKeysSection({
   const handleRevokeFromDetail = async (id: string, reason?: string) => {
     await revokeKey(id, reason);
     setSelectedKeyId(null);
+  };
+
+  const handleRotateKey = async (id: string, gracePeriodHours?: number) => {
+    const result = await rotateKey(id, gracePeriodHours);
+    // Close the modal after rotation
+    setSelectedKeyId(null);
+    return result;
   };
 
   // Active keys count for limit display
@@ -733,6 +741,7 @@ export function APIKeysSection({
         apiKey={selectedKeyDetail}
         onUpdate={handleUpdateKey}
         onRevoke={handleRevokeFromDetail}
+        onRotate={handleRotateKey}
         vertical={vertical}
         loading={detailLoading}
       />
