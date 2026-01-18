@@ -523,11 +523,65 @@ export function getHighestAlertPriority(
 // CLIENT API
 // ======================
 
+// Import supabase for getting auth token (only used in browser)
+let getAuthToken: (() => Promise<string | null>) | null = null;
+
+// Lazy initialization to avoid importing supabase on server
+async function initAuthToken() {
+  if (typeof window === 'undefined') return null;
+
+  if (!getAuthToken) {
+    const { supabase } = await import('@/src/shared/lib/supabase');
+    getAuthToken = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token || null;
+    };
+  }
+
+  return getAuthToken();
+}
+
+/**
+ * Authenticated fetch helper for client-side API calls
+ */
+async function authenticatedFetch(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  const token = await initAuthToken();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Copy existing headers if provided
+  if (options?.headers) {
+    const existingHeaders = options.headers;
+    if (existingHeaders instanceof Headers) {
+      existingHeaders.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else if (Array.isArray(existingHeaders)) {
+      existingHeaders.forEach(([key, value]) => {
+        headers[key] = value;
+      });
+    } else {
+      Object.assign(headers, existingHeaders);
+    }
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return fetch(url, { ...options, headers });
+}
+
 /**
  * Fetch security alerts for the current tenant (client-side)
  */
 export async function fetchSecurityAlerts(): Promise<SecurityAlert[]> {
-  const response = await fetch('/api/settings/api-keys/alerts');
+  const response = await authenticatedFetch('/api/settings/api-keys/alerts');
 
   if (!response.ok) {
     const data = await response.json();
@@ -542,7 +596,7 @@ export async function fetchSecurityAlerts(): Promise<SecurityAlert[]> {
  * Dismiss a security alert (client-side)
  */
 export async function dismissSecurityAlert(alertId: string): Promise<void> {
-  const response = await fetch(`/api/settings/api-keys/alerts/${alertId}/dismiss`, {
+  const response = await authenticatedFetch(`/api/settings/api-keys/alerts/${alertId}/dismiss`, {
     method: 'POST',
   });
 
@@ -556,7 +610,7 @@ export async function dismissSecurityAlert(alertId: string): Promise<void> {
  * Mark an alert as read (client-side)
  */
 export async function markAlertAsRead(alertId: string): Promise<void> {
-  const response = await fetch(`/api/settings/api-keys/alerts/${alertId}/read`, {
+  const response = await authenticatedFetch(`/api/settings/api-keys/alerts/${alertId}/read`, {
     method: 'POST',
   });
 

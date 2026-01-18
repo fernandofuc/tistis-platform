@@ -234,6 +234,41 @@ async function flushLogBuffer(
 // CLIENT-SIDE API
 // ======================
 
+// Import supabase for getting auth token (only used in browser)
+let getAuthToken: (() => Promise<string | null>) | null = null;
+
+// Lazy initialization to avoid importing supabase on server
+async function initAuthToken() {
+  if (typeof window === 'undefined') return null;
+
+  if (!getAuthToken) {
+    const { supabase } = await import('@/src/shared/lib/supabase');
+    getAuthToken = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token || null;
+    };
+  }
+
+  return getAuthToken();
+}
+
+/**
+ * Authenticated fetch helper for client-side API calls
+ */
+async function authenticatedFetch(url: string): Promise<Response> {
+  const token = await initAuthToken();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return fetch(url, { headers });
+}
+
 /**
  * Fetch audit logs for a tenant (client-side)
  */
@@ -265,7 +300,7 @@ export async function fetchAuditLogs(
   const queryString = params.toString();
   const url = `/api/settings/api-keys/audit${queryString ? `?${queryString}` : ''}`;
 
-  const response = await fetch(url);
+  const response = await authenticatedFetch(url);
 
   if (!response.ok) {
     const data = await response.json();
@@ -281,7 +316,7 @@ export async function fetchAuditLogs(
 export async function fetchAuditStatistics(
   period: 'last_7_days' | 'last_30_days' | 'last_90_days' = 'last_30_days'
 ): Promise<AuditStatistics> {
-  const response = await fetch(`/api/settings/api-keys/audit/stats?period=${period}`);
+  const response = await authenticatedFetch(`/api/settings/api-keys/audit/stats?period=${period}`);
 
   if (!response.ok) {
     const data = await response.json();

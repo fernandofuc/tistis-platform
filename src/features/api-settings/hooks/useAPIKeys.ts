@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { supabase } from '@/src/shared/lib/supabase';
 import type {
   APIKeyListItem,
   APIKeyWithCreator,
@@ -30,14 +31,25 @@ import {
 // API CLIENT FUNCTIONS
 // ======================
 
+/**
+ * Fetch API with authentication token from Supabase session
+ */
 async function fetchAPI<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  // Get the current session token
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error('Authentication required');
+  }
+
   const response = await fetch(endpoint, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
       ...options?.headers,
     },
   });
