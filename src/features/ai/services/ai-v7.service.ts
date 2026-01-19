@@ -12,9 +12,13 @@
 import { createServerClient } from '@/src/shared/lib/supabase';
 import {
   executeGraph,
+  resumeConversation,
+  hasResumableCheckpoint,
   type GraphExecutionInput,
   type GraphExecutionResult,
 } from '../graph';
+// MEJORA-2.1: Inicialización del servicio de checkpoints
+import { getCheckpointService, shutdownCheckpointService } from './checkpoint.service';
 import type {
   TenantInfo,
   LeadInfo,
@@ -40,6 +44,8 @@ import { getPIIDetectionService, type PIIDetectionResult } from '@/src/shared/li
 import { createSanitizerForTenant, type BusinessContext as SanitizerBusinessContext } from '@/src/shared/lib/llm-output-sanitizer.service';
 // MEJORA-1.3: Redis Rate Limiter distribuido
 import { getRedisRateLimiter } from '@/src/shared/lib/redis-rate-limiter';
+// MEJORA-2.4: Dead Letter Queue para mensajes fallidos
+import { getDLQService, type ProcessingStage } from '@/src/shared/services/dead-letter-queue.service';
 
 // ======================
 // TYPES V7
@@ -871,8 +877,16 @@ export async function generateAIResponseV7(
       previous_messages: conversationHistory,
     };
 
-    // 9. EJECUTAR EL GRAFO
-    const result = await executeGraph(graphInput);
+    // MEJORA-2.1: Inicializar servicio de checkpoints (lazy, solo si DATABASE_URL está configurado)
+    getCheckpointService().catch((err) => {
+      console.warn('[AI V7] Checkpoint service not available:', err.message);
+    });
+
+    // 9. EJECUTAR EL GRAFO (con checkpointing habilitado)
+    const result = await executeGraph(graphInput, {
+      enableCheckpointing: !isPreview, // Solo checkpointing en producción
+      resumeFromCheckpoint: false, // No resumir automáticamente en primera ejecución
+    });
 
     // MEJORA-1.2: Sanitizar respuesta del LLM antes de enviarla
     // Construir dominios del tenant (nueva instancia por request para evitar contaminación)
@@ -991,7 +1005,105 @@ export async function generateAIResponseV7(
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[AI V7] Error:', error);
+
+    // MEJORA-2.1: Intentar recuperar desde checkpoint si fue timeout
+    if (
+      !isPreview &&
+      conversationId &&
+      (errorMessage.includes('timeout') ||
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('ECONNRESET'))
+    ) {
+      console.log('[AI V7] Timeout detected, attempting checkpoint recovery...');
+
+      try {
+        // Verificar si hay un checkpoint recuperable
+        const hasCheckpoint = await hasResumableCheckpoint(conversationId);
+
+        if (hasCheckpoint) {
+          // Intentar resumir desde checkpoint
+          // Nota: resumeConversation cargará los contextos desde el checkpoint,
+          // pero necesitamos proveer valores mínimos para satisfacer los tipos
+          const minimalConversationContext: ConversationInfo = {
+            conversation_id: conversationId,
+            channel: channel,
+            status: 'active',
+            ai_handling: true,
+            message_count: 0,
+            started_at: new Date().toISOString(),
+            last_message_at: new Date().toISOString(),
+          };
+
+          const resumedResult = await resumeConversation({
+            tenant_id: tenantId,
+            conversation_id: conversationId,
+            lead_id: leadId || '',
+            current_message: message,
+            channel: channel as GraphExecutionInput['channel'],
+            // Los contextos se recuperarán del checkpoint, estos son fallbacks mínimos
+            tenant_context: undefined as unknown as TenantInfo, // Will be loaded from checkpoint
+            lead_context: null,
+            conversation_context: minimalConversationContext,
+            business_context: null,
+          });
+
+          if (resumedResult && resumedResult.success) {
+            console.log('[AI V7] Successfully recovered from checkpoint');
+            return {
+              success: true,
+              response: resumedResult.response,
+              intent: resumedResult.intent,
+              signals: resumedResult.signals,
+              score_change: resumedResult.score_change,
+              agents_used: resumedResult.agents_used,
+              processing_time_ms: Date.now() - startTime,
+              tokens_used: resumedResult.tokens_used,
+              model_used: 'langgraph-recovered',
+              escalated: resumedResult.escalated,
+              escalation_reason: resumedResult.escalation_reason,
+              profile_config: {
+                profile_type: profileType,
+                response_style: 'professional_friendly',
+                template_key: 'general_full',
+                delay_minutes: 0,
+                delay_first_only: true,
+              },
+              error: 'Recovered from checkpoint after timeout',
+            };
+          }
+        }
+      } catch (recoveryError) {
+        console.error('[AI V7] Checkpoint recovery failed:', recoveryError);
+      }
+    }
+    // MEJORA-2.1: FIN
+
+    // MEJORA-2.4: Añadir a Dead Letter Queue para investigación y retry
+    if (!isPreview) {
+      try {
+        const dlqService = getDLQService();
+        await dlqService.addMessage({
+          tenantId,
+          conversationId,
+          originalMessage: message,
+          originalPayload: {
+            channel,
+            profileType,
+            leadId,
+            conversationHistory: conversationHistory.length,
+          },
+          error: error as Error,
+          channel,
+          processingStage: 'ai_processing' as ProcessingStage,
+        });
+      } catch (dlqError) {
+        // No fallar si DLQ falla, solo loguear
+        console.error('[AI V7] Error adding to DLQ:', dlqError);
+      }
+    }
+    // MEJORA-2.4: FIN
 
     return {
       success: false,
@@ -1004,7 +1116,7 @@ export async function generateAIResponseV7(
       tokens_used: 0,
       model_used: 'langgraph-error',
       escalated: true,
-      escalation_reason: error instanceof Error ? error.message : 'Unknown error',
+      escalation_reason: errorMessage,
       profile_config: {
         profile_type: profileType,
         response_style: 'professional_friendly',
@@ -1012,7 +1124,7 @@ export async function generateAIResponseV7(
         delay_minutes: 0,
         delay_first_only: true,
       },
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMessage,
     };
   }
 }
@@ -1024,4 +1136,6 @@ export async function generateAIResponseV7(
 export const AIV7Service = {
   generateResponse: generateAIResponseV7,
   shouldUseV7,
+  // MEJORA-2.1: Función para shutdown limpio de checkpoints
+  shutdown: shutdownCheckpointService,
 };

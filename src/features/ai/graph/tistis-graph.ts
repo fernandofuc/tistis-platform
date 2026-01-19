@@ -1,9 +1,17 @@
 // =====================================================
 // TIS TIS PLATFORM - Main LangGraph
 // Grafo principal que orquesta todos los agentes
+// MEJORA-2.1: Soporte para checkpointing y persistencia
 // =====================================================
 
 import { StateGraph, END, START } from '@langchain/langgraph';
+// MEJORA-2.1: Importar servicio de checkpoints
+import {
+  getCheckpointService,
+  isCheckpointServiceReady,
+  type CheckpointData,
+  type CheckpointMetadata,
+} from '../services/checkpoint.service';
 import { HumanMessage, AIMessage, type BaseMessage } from '@langchain/core/messages';
 import {
   TISTISAgentState,
@@ -444,6 +452,244 @@ export function invalidateGraphCache(): void {
   console.log('[Graph] Graph cache invalidated, will recompile on next execution');
 }
 
+// ============================================
+// MEJORA-2.1: CHECKPOINT HELPERS
+// ============================================
+
+/**
+ * Genera un ID de checkpoint único
+ */
+function generateCheckpointId(): string {
+  return `cp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Convierte el estado del grafo a formato de checkpoint
+ */
+function stateToCheckpoint(
+  state: TISTISAgentStateType,
+  checkpointId: string
+): CheckpointData {
+  return {
+    id: checkpointId,
+    ts: new Date().toISOString(),
+    channel_values: {
+      messages: state.messages?.map((m) => ({
+        type: m._getType(),
+        content: m.content,
+      })) || [],
+      current_message: state.current_message,
+      final_response: state.final_response,
+      detected_intent: state.detected_intent,
+      detected_signals: state.detected_signals,
+      score_change: state.score_change,
+      next_agent: state.next_agent,
+      current_agent: state.current_agent,
+      agent_trace: state.agent_trace,
+      control: state.control,
+      errors: state.errors,
+    },
+    channel_versions: {},
+    versions_seen: {},
+    pending_sends: [],
+  };
+}
+
+/**
+ * Guarda checkpoint después de cada nodo (si está habilitado)
+ */
+async function saveCheckpointAfterNode(
+  threadId: string,
+  state: TISTISAgentStateType,
+  nodeName: string,
+  parentCheckpointId?: string
+): Promise<string | undefined> {
+  if (!isCheckpointServiceReady()) {
+    return undefined;
+  }
+
+  try {
+    const checkpointService = await getCheckpointService();
+    const checkpointId = generateCheckpointId();
+    const checkpoint = stateToCheckpoint(state, checkpointId);
+    const metadata: CheckpointMetadata = {
+      source: nodeName,
+      step: state.control?.iteration_count || 0,
+      writes: {},
+      parents: parentCheckpointId ? { '': parentCheckpointId } : {},
+    };
+
+    await checkpointService.putCheckpoint(
+      threadId,
+      '', // default namespace
+      checkpoint,
+      metadata,
+      parentCheckpointId
+    );
+
+    return checkpointId;
+  } catch (error) {
+    console.error('[Graph] Error saving checkpoint:', error);
+    return undefined;
+  }
+}
+
+/**
+ * Type guard para validar mensaje serializado
+ */
+function isSerializedMessage(value: unknown): value is { type: string; content: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    'content' in value &&
+    typeof (value as Record<string, unknown>).type === 'string' &&
+    typeof (value as Record<string, unknown>).content === 'string'
+  );
+}
+
+/**
+ * Intenta recuperar el estado de un checkpoint
+ */
+export async function getCheckpointState(
+  threadId: string
+): Promise<Partial<TISTISAgentStateType> | null> {
+  if (!isCheckpointServiceReady()) {
+    return null;
+  }
+
+  try {
+    const checkpointService = await getCheckpointService();
+    const tuple = await checkpointService.getLatestCheckpoint(threadId);
+
+    if (!tuple) {
+      return null;
+    }
+
+    console.log('[Graph] Retrieved checkpoint for thread:', {
+      threadId,
+      checkpointId: tuple.checkpoint.id,
+      step: tuple.metadata?.step,
+    });
+
+    // Reconstruir estado desde checkpoint
+    const channelValues = tuple.checkpoint.channel_values;
+
+    // Reconstruir mensajes con validación de tipo
+    const messages: BaseMessage[] = [];
+    const rawMessages = channelValues.messages;
+
+    if (Array.isArray(rawMessages)) {
+      for (const msg of rawMessages) {
+        if (isSerializedMessage(msg)) {
+          if (msg.type === 'human') {
+            messages.push(new HumanMessage(msg.content));
+          } else if (msg.type === 'ai') {
+            messages.push(new AIMessage(msg.content));
+          }
+        }
+      }
+    }
+
+    // Extraer valores con validación segura
+    const safeString = (val: unknown): string | undefined =>
+      typeof val === 'string' ? val : undefined;
+    const safeNumber = (val: unknown): number | undefined =>
+      typeof val === 'number' ? val : undefined;
+    const safeStringArray = (val: unknown): string[] | undefined =>
+      Array.isArray(val) && val.every(item => typeof item === 'string') ? val : undefined;
+
+    // Type guard para AgentTraceEntry
+    const isAgentTraceEntry = (val: unknown): val is { agent_name: string; started_at: string } =>
+      typeof val === 'object' &&
+      val !== null &&
+      'agent_name' in val &&
+      'started_at' in val &&
+      typeof (val as Record<string, unknown>).agent_name === 'string' &&
+      typeof (val as Record<string, unknown>).started_at === 'string';
+
+    const safeAgentTrace = (val: unknown): TISTISAgentStateType['agent_trace'] | undefined => {
+      if (!Array.isArray(val)) return undefined;
+      const validEntries = val.filter(isAgentTraceEntry);
+      return validEntries.length > 0 ? validEntries as TISTISAgentStateType['agent_trace'] : undefined;
+    };
+
+    // Type guard para control object
+    const isValidControl = (val: unknown): val is TISTISAgentStateType['control'] =>
+      typeof val === 'object' &&
+      val !== null &&
+      'iteration_count' in val &&
+      typeof (val as Record<string, unknown>).iteration_count === 'number';
+
+    // Type guard para detected_signals
+    const isSignalArray = (val: unknown): val is Array<{ signal: string; points: number }> =>
+      Array.isArray(val) &&
+      val.every(item =>
+        typeof item === 'object' &&
+        item !== null &&
+        'signal' in item &&
+        'points' in item &&
+        typeof (item as Record<string, unknown>).signal === 'string' &&
+        typeof (item as Record<string, unknown>).points === 'number'
+      );
+
+    const safeSignals = (val: unknown): Array<{ signal: string; points: number }> | undefined =>
+      isSignalArray(val) ? val : undefined;
+
+    return {
+      messages,
+      current_message: safeString(channelValues.current_message) || '',
+      final_response: safeString(channelValues.final_response),
+      detected_intent: safeString(channelValues.detected_intent),
+      detected_signals: safeSignals(channelValues.detected_signals),
+      score_change: safeNumber(channelValues.score_change),
+      next_agent: safeString(channelValues.next_agent),
+      current_agent: safeString(channelValues.current_agent),
+      agent_trace: safeAgentTrace(channelValues.agent_trace),
+      control: isValidControl(channelValues.control) ? channelValues.control : undefined,
+      errors: safeStringArray(channelValues.errors),
+    };
+  } catch (error) {
+    console.error('[Graph] Error retrieving checkpoint:', error);
+    return null;
+  }
+}
+
+/**
+ * Verifica si hay un checkpoint que puede ser resumido
+ */
+export async function hasResumableCheckpoint(threadId: string): Promise<boolean> {
+  if (!isCheckpointServiceReady()) {
+    return false;
+  }
+
+  try {
+    const checkpointService = await getCheckpointService();
+    const tuple = await checkpointService.getLatestCheckpoint(threadId);
+    return tuple !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Limpia checkpoints de un thread específico
+ */
+export async function clearThreadCheckpoints(threadId: string): Promise<void> {
+  if (!isCheckpointServiceReady()) {
+    return;
+  }
+
+  try {
+    const checkpointService = await getCheckpointService();
+    await checkpointService.deleteThread(threadId);
+    console.log('[Graph] Cleared checkpoints for thread:', threadId);
+  } catch (error) {
+    console.error('[Graph] Error clearing checkpoints:', error);
+  }
+}
+// MEJORA-2.1: FIN CHECKPOINT HELPERS
+
 // ======================
 // EXECUTION INTERFACE
 // ======================
@@ -482,48 +728,92 @@ export interface GraphExecutionResult {
 
 /**
  * Ejecuta el grafo completo con el input proporcionado
+ * MEJORA-2.1: Soporte para checkpointing y recuperación
  */
 export async function executeGraph(
-  input: GraphExecutionInput
+  input: GraphExecutionInput,
+  options?: {
+    enableCheckpointing?: boolean;
+    resumeFromCheckpoint?: boolean;
+  }
 ): Promise<GraphExecutionResult> {
   const startTime = Date.now();
+  const threadId = input.conversation_id; // Usamos conversation_id como thread_id
+  const enableCheckpointing = options?.enableCheckpointing ?? true;
+  const resumeFromCheckpoint = options?.resumeFromCheckpoint ?? false;
 
-  console.log(`[Graph] Starting execution for conversation ${input.conversation_id}`);
+  console.log(`[Graph] Starting execution for conversation ${threadId}`, {
+    checkpointing: enableCheckpointing,
+    resume: resumeFromCheckpoint,
+  });
 
   try {
     // Compilar el grafo
     const graph = compileTISTISGraph();
 
-    // Construir historial de mensajes previos si existe (para preview multi-turn)
-    const previousMessages: BaseMessage[] = [];
-    if (input.previous_messages && input.previous_messages.length > 0) {
-      for (const msg of input.previous_messages) {
-        if (msg.role === 'user') {
-          previousMessages.push(new HumanMessage(msg.content));
-        } else {
-          previousMessages.push(new AIMessage(msg.content));
-        }
-      }
-      console.log(`[Graph] Loaded ${previousMessages.length} previous messages for context`);
-    }
+    // MEJORA-2.1: Intentar resumir desde checkpoint si está habilitado
+    let initialState: Partial<TISTISAgentStateType>;
 
-    // Preparar estado inicial
-    const initialState: Partial<TISTISAgentStateType> = {
-      ...createInitialState(),
-      messages: previousMessages, // Inyectar historial previo
-      tenant: input.tenant_context,
-      lead: input.lead_context,
-      conversation: input.conversation_context,
-      business_context: input.business_context,
-      current_message: input.current_message,
-      channel: input.channel,
-      vertical: input.tenant_context?.vertical || 'dental', // Default to dental (active vertical)
-    };
+    if (resumeFromCheckpoint && enableCheckpointing) {
+      const checkpointState = await getCheckpointState(threadId);
+
+      if (checkpointState && checkpointState.final_response) {
+        // Ya tiene respuesta final, retornar directamente
+        console.log('[Graph] Checkpoint has final response, returning cached result');
+        return {
+          success: true,
+          response: checkpointState.final_response,
+          intent: checkpointState.detected_intent || 'UNKNOWN',
+          signals: checkpointState.detected_signals || [],
+          score_change: checkpointState.score_change || 0,
+          escalated: checkpointState.control?.should_escalate || false,
+          escalation_reason: checkpointState.control?.escalation_reason,
+          tokens_used: 0,
+          processing_time_ms: Date.now() - startTime,
+          agents_used: checkpointState.agent_trace?.map((t) => t.agent_name) || [],
+          errors: checkpointState.errors,
+        };
+      }
+
+      if (checkpointState) {
+        // Tenemos un checkpoint parcial, continuar desde ahí
+        console.log('[Graph] Resuming from checkpoint');
+        initialState = {
+          ...createInitialState(),
+          ...checkpointState,
+          tenant: input.tenant_context,
+          lead: input.lead_context,
+          conversation: input.conversation_context,
+          business_context: input.business_context,
+          // Actualizar mensaje actual si es diferente
+          current_message: input.current_message,
+          channel: input.channel,
+          vertical: input.tenant_context?.vertical || 'dental',
+        };
+      } else {
+        // No hay checkpoint, iniciar desde cero
+        initialState = buildInitialState(input);
+      }
+    } else {
+      // Sin resumir, iniciar desde cero
+      initialState = buildInitialState(input);
+    }
 
     // Ejecutar el grafo
     const finalState = await graph.invoke(initialState);
 
     const processingTime = Date.now() - startTime;
+
+    // MEJORA-2.1: Guardar checkpoint final si está habilitado
+    if (enableCheckpointing && finalState) {
+      saveCheckpointAfterNode(
+        threadId,
+        finalState as TISTISAgentStateType,
+        'finalize'
+      ).catch((err) => {
+        console.error('[Graph] Error saving final checkpoint:', err);
+      });
+    }
 
     console.log(`[Graph] Execution completed in ${processingTime}ms`);
 
@@ -545,6 +835,30 @@ export async function executeGraph(
     const processingTime = Date.now() - startTime;
     console.error('[Graph] Execution error:', error);
 
+    // MEJORA-2.1: Intentar recuperar desde checkpoint en caso de error
+    if (enableCheckpointing) {
+      try {
+        const checkpointState = await getCheckpointState(threadId);
+        if (checkpointState?.final_response) {
+          console.log('[Graph] Recovered response from checkpoint after error');
+          return {
+            success: true,
+            response: checkpointState.final_response,
+            intent: checkpointState.detected_intent || 'UNKNOWN',
+            signals: checkpointState.detected_signals || [],
+            score_change: checkpointState.score_change || 0,
+            escalated: checkpointState.control?.should_escalate || false,
+            tokens_used: 0,
+            processing_time_ms: processingTime,
+            agents_used: checkpointState.agent_trace?.map((t) => t.agent_name) || [],
+            errors: ['Recovered from checkpoint after error'],
+          };
+        }
+      } catch (recoveryError) {
+        console.error('[Graph] Checkpoint recovery failed:', recoveryError);
+      }
+    }
+
     return {
       success: false,
       response: 'Disculpa, estoy experimentando dificultades técnicas. Un asesor te atenderá pronto.',
@@ -561,6 +875,62 @@ export async function executeGraph(
   }
 }
 
+/**
+ * Construye el estado inicial del grafo
+ * MEJORA-2.1: Función helper para evitar duplicación
+ */
+function buildInitialState(input: GraphExecutionInput): Partial<TISTISAgentStateType> {
+  // Construir historial de mensajes previos si existe (para preview multi-turn)
+  const previousMessages: BaseMessage[] = [];
+  if (input.previous_messages && input.previous_messages.length > 0) {
+    for (const msg of input.previous_messages) {
+      if (msg.role === 'user') {
+        previousMessages.push(new HumanMessage(msg.content));
+      } else {
+        previousMessages.push(new AIMessage(msg.content));
+      }
+    }
+    console.log(`[Graph] Loaded ${previousMessages.length} previous messages for context`);
+  }
+
+  return {
+    ...createInitialState(),
+    messages: previousMessages,
+    tenant: input.tenant_context,
+    lead: input.lead_context,
+    conversation: input.conversation_context,
+    business_context: input.business_context,
+    current_message: input.current_message,
+    channel: input.channel,
+    vertical: input.tenant_context?.vertical || 'dental',
+  };
+}
+
+/**
+ * Intenta resumir una conversación interrumpida
+ * MEJORA-2.1: Función pública para resumir desde checkpoint
+ */
+export async function resumeConversation(
+  input: GraphExecutionInput
+): Promise<GraphExecutionResult | null> {
+  const threadId = input.conversation_id;
+
+  // Verificar si hay un checkpoint
+  const hasCheckpoint = await hasResumableCheckpoint(threadId);
+  if (!hasCheckpoint) {
+    console.log('[Graph] No resumable checkpoint found for thread:', threadId);
+    return null;
+  }
+
+  console.log('[Graph] Attempting to resume conversation:', threadId);
+
+  // Ejecutar con flag de resume
+  return executeGraph(input, {
+    enableCheckpointing: true,
+    resumeFromCheckpoint: true,
+  });
+}
+
 // ======================
 // EXPORTS
 // ======================
@@ -570,4 +940,9 @@ export const TISTISGraph = {
   compile: compileTISTISGraph,
   execute: executeGraph,
   invalidateCache: invalidateGraphCache,
+  // MEJORA-2.1: Nuevas funciones de checkpointing
+  resumeConversation,
+  getCheckpointState,
+  hasResumableCheckpoint,
+  clearThreadCheckpoints,
 };
