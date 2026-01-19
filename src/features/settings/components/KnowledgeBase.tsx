@@ -17,6 +17,7 @@ import { cn } from '@/src/shared/utils';
 import { supabase } from '@/src/shared/lib/supabase';
 import { KnowledgeBasePageSkeleton } from '@/src/shared/components/skeletons';
 import { KBCompletenessIndicator } from './KBCompletenessIndicator';
+import { PromptPreview } from './PromptPreview';
 import {
   KBScoreCardPremium,
   KBBranchSelector,
@@ -1066,6 +1067,17 @@ export function KnowledgeBase() {
           vertical={tenantVertical}
         />
 
+        {/* Prompt Preview - FASE 5 */}
+        <div className="pt-6">
+          <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            Vista Previa de Prompts
+          </h4>
+          <PromptPreview />
+        </div>
       </div>
 
       {/* Premium Modal - Rendered via Portal to be above everything */}

@@ -119,11 +119,12 @@ export interface BusinessContext {
     question: string;
     answer: string;
   }>;
-  // Knowledge Base - Instrucciones Personalizadas
+  // Knowledge Base - Instrucciones Personalizadas (solo las marcadas include_in_prompt=true)
   customInstructionsList?: Array<{
     type: string;
     title: string;
     instruction: string;
+    priority?: number;
   }>;
   // Knowledge Base - Políticas del Negocio
   businessPolicies?: Array<{
@@ -346,12 +347,16 @@ async function collectBusinessContextFallback(
       .limit(20);
 
     // 7-11. Knowledge Base tables
+    // ARQUITECTURA V6: Solo incluir instrucciones marcadas con include_in_prompt = true
+    // y ordenar por priority (mayor priority primero)
     const { data: instructionsData } = await supabase
       .from('ai_custom_instructions')
-      .select('instruction_type, title, instruction')
+      .select('instruction_type, title, instruction, priority')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
-      .limit(30);
+      .eq('include_in_prompt', true)
+      .order('priority', { ascending: false })
+      .limit(5);
 
     const { data: policiesData } = await supabase
       .from('ai_business_policies')
@@ -429,6 +434,7 @@ async function collectBusinessContextFallback(
         type: i.instruction_type,
         title: i.title,
         instruction: i.instruction,
+        priority: i.priority || 0,
       })),
       businessPolicies: (policiesData || []).map(p => ({
         type: p.policy_type,
@@ -584,10 +590,12 @@ export async function collectBusinessContext(
       answer: f.answer as string,
     }));
 
+    // ARQUITECTURA V6: Las instrucciones ya vienen filtradas por include_in_prompt=true desde el RPC
     const customInstructionsList = (rpcData.custom_instructions || []).map((i: Record<string, unknown>) => ({
       type: i.type as string,
       title: i.title as string,
       instruction: i.instruction as string,
+      priority: (i.priority as number) || 0,
     }));
 
     const businessPolicies = (rpcData.business_policies || []).map((p: Record<string, unknown>) => ({
@@ -1394,9 +1402,12 @@ function buildMetaPrompt(
     ? context.faqs.map(f => `P: ${f.question}\nR: ${f.answer}`).join('\n\n')
     : '';
 
-  // Formatear instrucciones personalizadas
+  // Formatear instrucciones personalizadas (ordenadas por priority, mayor primero)
   const customInstructionsText = context.customInstructionsList && context.customInstructionsList.length > 0
-    ? context.customInstructionsList.map(i => `[${i.type.toUpperCase()}] ${i.title}: ${i.instruction}`).join('\n')
+    ? [...context.customInstructionsList]
+        .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+        .map(i => `[${i.type.toUpperCase()}] ${i.title}: ${i.instruction}`)
+        .join('\n')
     : '';
 
   // Formatear políticas
