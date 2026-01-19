@@ -34,6 +34,12 @@ import {
 import { PromptSanitizer } from './prompt-sanitizer.service';
 import { getProfileForAI } from './agent-profile.service';
 import type { ProfileType } from '@/src/shared/config/agent-templates';
+// MEJORA-1.1: PII Detection Service
+import { getPIIDetectionService, type PIIDetectionResult } from '@/src/shared/lib/pii-detection.service';
+// MEJORA-1.2: LLM Output Sanitizer
+import { createSanitizerForTenant, type BusinessContext as SanitizerBusinessContext } from '@/src/shared/lib/llm-output-sanitizer.service';
+// MEJORA-1.3: Redis Rate Limiter distribuido
+import { getRedisRateLimiter } from '@/src/shared/lib/redis-rate-limiter';
 
 // ======================
 // TYPES V7
@@ -612,6 +618,28 @@ async function queueForLearning(
   );
 }
 
+// MEJORA-1.1: Función para loguear detecciones de PII (compliance GDPR/HIPAA)
+async function logPIIDetection(
+  tenantId: string,
+  conversationId: string | undefined,
+  piiResult: PIIDetectionResult
+): Promise<void> {
+  try {
+    const supabase = createServerClient();
+    await supabase.from('ai_pii_detection_logs').insert({
+      tenant_id: tenantId,
+      conversation_id: conversationId || null,
+      pii_types: piiResult.matches.map(m => m.type),
+      detection_count: piiResult.matches.length,
+      detection_time_ms: piiResult.detectionTimeMs,
+      original_hash: piiResult.originalHash,
+      detected_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[AI V7] Error logging PII detection:', error);
+  }
+}
+
 // ======================
 // FEATURE FLAG CHECK
 // ======================
@@ -692,9 +720,43 @@ export async function generateAIResponseV7(
   console.log(`[AI V7] ${isPreview ? 'PREVIEW' : 'PRODUCTION'} - Tenant: ${tenantId}, Profile: ${profileType}`);
 
   try {
+    // MEJORA-1.3: Rate limiting distribuido con Redis
+    const rateLimiter = getRedisRateLimiter('aiMessages');
+    const rateLimitResult = await rateLimiter.check(tenantId);
+
+    if (!rateLimitResult.allowed) {
+      console.warn('[AI V7] Rate limit exceeded:', {
+        tenantId,
+        totalHits: rateLimitResult.totalHits,
+        retryAfterMs: rateLimitResult.retryAfterMs,
+      });
+
+      return {
+        success: false,
+        response: 'Estamos recibiendo muchas solicitudes. Por favor, espera un momento antes de enviar otro mensaje.',
+        intent: 'RATE_LIMITED',
+        signals: [],
+        score_change: 0,
+        agents_used: [],
+        processing_time_ms: Date.now() - startTime,
+        tokens_used: 0,
+        model_used: 'rate-limited',
+        escalated: false,
+        profile_config: {
+          profile_type: profileType,
+          response_style: 'professional_friendly',
+          template_key: 'general_full',
+          delay_minutes: 0,
+          delay_first_only: true,
+        },
+        error: `Rate limit exceeded. Retry after ${Math.ceil(rateLimitResult.retryAfterMs / 1000)} seconds`,
+      };
+    }
+    // MEJORA-1.3: FIN
+
     // 1. SANITIZACIÓN
     const sanitizationResult = PromptSanitizer.sanitizeUserPrompt(message);
-    const sanitizedMessage = sanitizationResult.sanitized;
+    let sanitizedMessage = sanitizationResult.sanitized;
 
     if (sanitizationResult.wasModified) {
       console.warn(
@@ -702,6 +764,29 @@ export async function generateAIResponseV7(
         `Patterns: ${sanitizationResult.detectedPatterns.map(p => p.type).join(', ')}`
       );
     }
+
+    // MEJORA-1.1: Detectar y enmascarar PII en mensaje del usuario
+    const piiService = getPIIDetectionService();
+    const piiResult = await piiService.detect(sanitizedMessage);
+
+    if (piiResult.hasPII) {
+      console.log('[AI V7] PII detected in user message:', {
+        tenantId,
+        conversationId,
+        types: piiResult.matches.map(m => m.type),
+        count: piiResult.matches.length,
+        detectionTimeMs: piiResult.detectionTimeMs,
+      });
+
+      // Usar mensaje con PII enmascarado para el LLM
+      sanitizedMessage = piiResult.sanitizedText;
+
+      // Guardar log de detección para compliance (async, no bloquea)
+      logPIIDetection(tenantId, conversationId, piiResult).catch(err => {
+        console.error('[AI V7] Error in PII logging:', err);
+      });
+    }
+    // MEJORA-1.1: FIN
 
     // 2. DETERMINAR SI USAR PROMPT MINIMAL
     const useMinimalPrompt = await shouldUseMinimalPrompt(tenantId);
@@ -789,6 +874,84 @@ export async function generateAIResponseV7(
     // 9. EJECUTAR EL GRAFO
     const result = await executeGraph(graphInput);
 
+    // MEJORA-1.2: Sanitizar respuesta del LLM antes de enviarla
+    // Construir dominios del tenant (nueva instancia por request para evitar contaminación)
+    const tenantDomains: string[] = [];
+    if (tenantContext.tenant_name) {
+      tenantDomains.push(
+        `${tenantContext.tenant_name.toLowerCase().replace(/\s+/g, '')}.com`,
+        `${tenantContext.tenant_name.toLowerCase().replace(/\s+/g, '')}.mx`,
+      );
+    }
+
+    // Construir contexto de negocio para validación de coherencia
+    let sanitizerBusinessContext: SanitizerBusinessContext | undefined;
+    if (businessContext && businessContext.services.length > 0) {
+      sanitizerBusinessContext = {
+        businessName: tenantContext.tenant_name,
+        businessType: tenantContext.vertical,
+        validServices: businessContext.services.map(s => s.name),
+        validPrices: new Map(
+          businessContext.services.map(s => [
+            s.name,
+            { min: s.price_min * 0.8, max: s.price_max * 1.2 }
+          ])
+        ),
+        validLocations: businessContext.branches.map(b => b.address).filter(Boolean),
+        validHours: '',
+      };
+    }
+
+    // Crear sanitizer específico para este tenant (evita contaminación entre tenants)
+    const outputSanitizer = createSanitizerForTenant(tenantDomains, sanitizerBusinessContext);
+
+    const outputSanitizationResult = await outputSanitizer.sanitize(result.response, {
+      userMessage: sanitizedMessage,
+      businessContext: sanitizerBusinessContext,
+    });
+
+    // Log issues encontrados
+    if (outputSanitizationResult.issues.length > 0) {
+      console.log('[AI V7] Output sanitization issues:', {
+        tenantId,
+        conversationId,
+        issueCount: outputSanitizationResult.issues.length,
+        issues: outputSanitizationResult.issues.map((i: { type: string; severity: string }) => ({ type: i.type, severity: i.severity })),
+        confidence: outputSanitizationResult.confidence,
+      });
+    }
+
+    // Si la respuesta no es válida, usar fallback
+    if (!outputSanitizationResult.isValid) {
+      console.error('[AI V7] Invalid LLM response, using fallback:', {
+        tenantId,
+        conversationId,
+        issues: outputSanitizationResult.issues,
+      });
+
+      const processingTime = Date.now() - startTime;
+      return {
+        success: false,
+        response: 'Lo siento, no pude procesar tu solicitud correctamente. ¿Podrías reformular tu pregunta?',
+        intent: result.intent || 'UNKNOWN',
+        signals: [],
+        score_change: 0,
+        agents_used: result.agents_used,
+        processing_time_ms: processingTime,
+        tokens_used: result.tokens_used,
+        model_used: 'langgraph-gpt-5-mini',
+        escalated: true,
+        escalation_reason: 'output_validation_failed',
+        profile_config: profileConfig,
+        prompt_source: tenantContext.prompt_source,
+        error: 'Output validation failed',
+      };
+    }
+
+    // Usar respuesta sanitizada
+    const finalResponse = outputSanitizationResult.sanitizedText;
+    // MEJORA-1.2: FIN
+
     const processingTime = Date.now() - startTime;
 
     console.log(`[AI V7] Completed in ${processingTime}ms. Agents: ${result.agents_used.join(' -> ')}`);
@@ -811,7 +974,7 @@ export async function generateAIResponseV7(
     // 11. RETORNAR RESULTADO UNIFICADO
     return {
       success: result.success,
-      response: result.response,
+      response: finalResponse, // MEJORA-1.2: Usar respuesta sanitizada
       intent: result.intent,
       signals: result.signals,
       score_change: result.score_change,

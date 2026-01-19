@@ -46,6 +46,13 @@ import { createServerClient } from '@/src/shared/lib/supabase';
 // V7.1: Static imports para mejor performance (elimina dynamic imports)
 import { getAvailableSlots } from '../services/appointment-booking.service';
 import { EmbeddingService } from '../services/embedding.service';
+// MEJORA-1.4: Tool Anomaly Detection
+import {
+  getToolAnomalyDetectionService,
+  executeToolWithAnomalyDetection,
+  type ToolCall,
+  type AnomalyDetectionResult,
+} from '@/src/shared/lib/tool-anomaly-detection.service';
 
 // ======================
 // RAG CONFIGURATION
@@ -1567,6 +1574,73 @@ export async function handleRedeemReward(
     new_balance: newBalance,
     confirmation_message: `¡Listo! Has canjeado "${reward.name}" por ${reward.tokens_required} puntos. Tu nuevo balance es ${newBalance} puntos.${rpcResult.redemption_code ? ` Código: ${rpcResult.redemption_code}` : ''}`,
   };
+}
+
+// ======================
+// MEJORA-1.4: ANOMALY DETECTION WRAPPER
+// ======================
+
+/**
+ * Ejecuta un tool handler con detección de anomalías
+ * Wrapper que envuelve cualquier handler para monitorear patrones sospechosos
+ *
+ * @param conversationId - ID de la conversación
+ * @param toolName - Nombre del tool
+ * @param params - Parámetros del tool
+ * @param context - Contexto del tool
+ * @param handler - Función handler a ejecutar
+ * @returns Resultado del handler o error si se bloquea
+ */
+export async function executeToolWithAnomalyCheck<T, P>(
+  conversationId: string,
+  toolName: string,
+  params: P,
+  context: ToolContext,
+  handler: (params: P, context: ToolContext) => Promise<T>
+): Promise<T | { error: string; blocked?: boolean; reason?: string }> {
+  return executeToolWithAnomalyDetection(
+    conversationId,
+    toolName,
+    params as Record<string, unknown>,
+    async () => handler(params, context)
+  );
+}
+
+/**
+ * Analiza un tool call sin ejecutarlo (solo detección)
+ * Útil para pre-validación antes de ejecutar
+ */
+export async function analyzeToolCallOnly(
+  conversationId: string,
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<AnomalyDetectionResult> {
+  const anomalyService = getToolAnomalyDetectionService();
+
+  const toolCall: ToolCall = {
+    toolName,
+    timestamp: new Date(),
+    arguments: args,
+  };
+
+  return anomalyService.analyzeToolCall(conversationId, toolCall);
+}
+
+/**
+ * Resetea el historial de anomalías para una conversación
+ * Útil cuando termina una conversación o se necesita limpiar el estado
+ */
+export function resetAnomalyHistory(conversationId: string): void {
+  const anomalyService = getToolAnomalyDetectionService();
+  anomalyService.resetConversation(conversationId);
+}
+
+/**
+ * Obtiene estadísticas del servicio de detección de anomalías
+ */
+export function getAnomalyStats(): { activeConversations: number; totalCalls: number } {
+  const anomalyService = getToolAnomalyDetectionService();
+  return anomalyService.getStats();
 }
 
 // ======================
