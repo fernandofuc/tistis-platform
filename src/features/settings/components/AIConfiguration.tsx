@@ -12,6 +12,12 @@ import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { updateTenant, type UpdateTenantData } from '@/src/features/auth/services/authService';
 import { cn } from '@/src/shared/utils';
+import { useToast } from '@/src/shared/hooks';
+import {
+  Skeleton,
+  BranchCardSkeleton,
+  StaffCardSkeleton,
+} from '@/src/shared/components/skeletons';
 import { KnowledgeBase } from './KnowledgeBase';
 import { ServicePriorityConfig } from './ServicePriorityConfig';
 import { ServiceCatalogConfig } from './ServiceCatalogConfig';
@@ -194,6 +200,7 @@ const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday
 export function AIConfiguration() {
   const { tenant, isAdmin } = useAuthContext();
   const { vertical, terminology } = useVerticalTerminology();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<'clinic' | 'knowledge' | 'scoring' | 'catalog'>('clinic');
@@ -564,17 +571,17 @@ export function AIConfiguration() {
 
       if (!response.ok) {
         console.error('Error saving config:', result.error);
-        alert(`Error al guardar: ${result.error}`);
+        showToast({ type: 'error', message: `Error al guardar: ${result.error}` });
       } else {
         // Update local state with saved data
         if (result.data) {
           setConfig(prev => ({ ...prev, ...result.data }));
         }
-        console.log('✅ Configuración guardada correctamente');
+        showToast({ type: 'success', message: 'Configuración guardada correctamente' });
       }
     } catch (error) {
       console.error('Error saving config:', error);
-      alert('Error al guardar la configuración');
+      showToast({ type: 'error', message: 'Error al guardar la configuración' });
     } finally {
       setSaving(false);
     }
@@ -598,7 +605,7 @@ export function AIConfiguration() {
 
       if (!response.ok) {
         console.error('Error saving branch:', result.error);
-        alert(`Error al guardar: ${result.error}`);
+        showToast({ type: 'error', message: `Error al guardar: ${result.error}` });
       } else {
         // Reload branches from API
         const reloadResponse = await fetch('/api/settings/branches', { headers });
@@ -608,11 +615,11 @@ export function AIConfiguration() {
         }
         setShowBranchModal(false);
         setEditingBranch(null);
-        console.log('✅ Sucursal guardada correctamente');
+        showToast({ type: 'success', message: 'Sucursal guardada correctamente' });
       }
     } catch (error) {
       console.error('Error saving branch:', error);
-      alert('Error al guardar la sucursal');
+      showToast({ type: 'error', message: 'Error al guardar la sucursal' });
     } finally {
       setSaving(false);
     }
@@ -744,16 +751,17 @@ export function AIConfiguration() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message || data.error || 'Error al eliminar sucursal');
+        showToast({ type: 'error', message: data.message || data.error || 'Error al eliminar sucursal' });
         return;
       }
 
       // Remove branch from local state
       setBranches(prev => prev.filter(b => b.id !== deletingBranch.id));
       setDeletingBranch(null);
+      showToast({ type: 'success', message: 'Sucursal eliminada correctamente' });
     } catch (error) {
       console.error('Error deleting branch:', error);
-      alert('Error al eliminar sucursal');
+      showToast({ type: 'error', message: 'Error al eliminar sucursal' });
     } finally {
       setDeletingBranchLoading(false);
     }
@@ -774,7 +782,7 @@ export function AIConfiguration() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message || data.error || 'Error al eliminar personal');
+        showToast({ type: 'error', message: data.message || data.error || 'Error al eliminar personal' });
         return;
       }
 
@@ -783,9 +791,10 @@ export function AIConfiguration() {
       // Also remove staff_branches associations
       setStaffBranches(prev => prev.filter(sb => sb.staff_id !== deletingStaff.id));
       setDeletingStaff(null);
+      showToast({ type: 'success', message: 'Personal eliminado correctamente' });
     } catch (error) {
       console.error('Error deleting staff:', error);
-      alert('Error al eliminar personal');
+      showToast({ type: 'error', message: 'Error al eliminar personal' });
     } finally {
       setDeletingStaffLoading(false);
     }
@@ -793,13 +802,66 @@ export function AIConfiguration() {
 
   if (loading) {
     return (
-      <Card variant="bordered">
-        <CardContent>
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        {/* AI Status Card Skeleton */}
+        <Card variant="bordered">
+          <CardContent className="p-0">
+            <div className="p-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="w-14 h-14 rounded-2xl" />
+                  <div>
+                    <Skeleton className="h-6 w-48 mb-2" />
+                    <Skeleton className="h-4 w-64" />
+                  </div>
+                </div>
+                <Skeleton className="h-7 w-12 rounded-full" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Section Tabs Skeleton */}
+        <div className="flex gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-32 rounded-lg" />
+          ))}
+        </div>
+
+        {/* Content Skeleton */}
+        <Card variant="bordered">
+          <CardContent className="p-6">
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                <div>
+                  <Skeleton className="h-6 w-48 mb-2" />
+                  <Skeleton className="h-4 w-64" />
+                </div>
+                <Skeleton className="h-10 w-32 rounded-lg" />
+              </div>
+
+              {/* Branch/Staff Cards Skeleton */}
+              <div className="grid gap-4">
+                <BranchCardSkeleton />
+                <BranchCardSkeleton />
+              </div>
+
+              {/* Staff Section */}
+              <div className="pt-6 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-9 w-28 rounded-lg" />
+                </div>
+                <div className="grid gap-3">
+                  <StaffCardSkeleton />
+                  <StaffCardSkeleton />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -2492,6 +2554,7 @@ interface StaffModalProps {
 }
 
 function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave, terms }: StaffModalProps) {
+  const { showToast } = useToast();
   const isEditing = !!staff;
 
   // Default role is the first role in the vertical's staffRoles list
@@ -2529,12 +2592,12 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
 
   const handleSave = async () => {
     if (!formData.first_name || !formData.last_name) {
-      alert('Nombre y apellido son requeridos');
+      showToast({ type: 'warning', message: 'Nombre y apellido son requeridos' });
       return;
     }
 
     if (!formData.email || !formData.email.includes('@')) {
-      alert('Email válido es requerido');
+      showToast({ type: 'warning', message: 'Email válido es requerido' });
       return;
     }
 
@@ -2560,21 +2623,21 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
       if (!response.ok) {
         const errorMessage = result.error || 'Error desconocido';
         if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
-          alert('Error de permisos: No tienes autorización para realizar esta acción. Contacta al administrador.');
+          showToast({ type: 'error', message: 'Error de permisos: No tienes autorización para realizar esta acción.' });
         } else if (errorMessage.includes('unique constraint') || errorMessage.includes('duplicate')) {
-          alert('Este miembro ya está asignado a esa sucursal.');
+          showToast({ type: 'warning', message: 'Este miembro ya está asignado a esa sucursal.' });
         } else {
-          alert(`Error al guardar: ${errorMessage}`);
+          showToast({ type: 'error', message: `Error al guardar: ${errorMessage}` });
         }
         return;
       }
 
-      console.log('✅ Personal guardado correctamente');
+      showToast({ type: 'success', message: 'Personal guardado correctamente' });
       onSave();
       onClose();
     } catch (error: unknown) {
       console.error('Error saving staff:', error);
-      alert('Error al guardar');
+      showToast({ type: 'error', message: 'Error al guardar' });
     } finally {
       setSaving(false);
     }
@@ -2601,19 +2664,19 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
       if (!response.ok) {
         const errorMessage = result.error || 'Error desconocido';
         if (errorMessage.includes('row-level security') || errorMessage.includes('policy')) {
-          alert(`Error de permisos: No tienes autorización para eliminar este ${terms.staffSingular.toLowerCase()}.`);
+          showToast({ type: 'error', message: `Error de permisos: No tienes autorización para eliminar este ${terms.staffSingular.toLowerCase()}.` });
         } else {
-          alert(`Error al eliminar: ${errorMessage}`);
+          showToast({ type: 'error', message: `Error al eliminar: ${errorMessage}` });
         }
         return;
       }
 
-      console.log('✅ Personal eliminado correctamente');
+      showToast({ type: 'success', message: 'Personal eliminado correctamente' });
       onSave();
       onClose();
     } catch (error: unknown) {
       console.error('Error deleting staff:', error);
-      alert(`Error al eliminar el ${terms.staffSingular.toLowerCase()}`);
+      showToast({ type: 'error', message: `Error al eliminar el ${terms.staffSingular.toLowerCase()}` });
     } finally {
       setSaving(false);
     }
