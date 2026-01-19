@@ -1,7 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Embedding Service
 // Servicio para generar y gestionar embeddings para RAG
-// V7.2: Hybrid Search + Re-ranking + Query Enhancement
+// V7.3: Hybrid Search + Re-ranking + Query Enhancement + FASE 3 Mejoras
 // =====================================================
 //
 // Este servicio maneja:
@@ -12,25 +12,43 @@
 // - V7.2: Re-ranking con metadatos y recency
 // - V7.2: Context Sufficiency Check
 //
+// MEJORAS FASE 3 (2026):
+// - MEJORA-3.1: Semantic Chunking (chunking.service.ts)
+// - MEJORA-3.2: BM25 Real (bm25.service.ts)
+// - MEJORA-3.3: RRF Fusion (rrf.ts)
+// - MEJORA-3.4: Embedding Cache (embedding-cache.service.ts)
+// - MEJORA-3.5: Recency Boost Activation
+//
 // MODELO: text-embedding-3-small (1536 dimensiones)
 // - Más económico que text-embedding-ada-002
 // - Mejor rendimiento en español
 // - Suficiente para knowledge base empresarial
-//
-// Mejores prácticas implementadas (2025-2026):
-// - Query Enhancement antes de embedding
-// - Hybrid Search para mejor recall
-// - Re-ranking para mejor precision
-// - Context Sufficiency validation
 // =====================================================
 
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { createHash } from 'crypto';
 import {
   QueryEnhancementService,
   type EnhancedQuery,
   type QueryEnhancementConfig,
 } from './query-enhancement.service';
+
+// MEJORA-3.1: Chunking Service
+import { getChunkingService } from './chunking.service';
+
+// MEJORA-3.2: BM25 Service
+import { getBM25Index } from './bm25.service';
+
+// MEJORA-3.3: RRF Fusion
+import {
+  fuseTwoLists,
+  normalizeRRFScores,
+  type RankedDocument,
+} from '../utils/rrf';
+
+// MEJORA-3.4: Embedding Cache
+import { getEmbeddingCacheService } from './embedding-cache.service';
 
 // ======================
 // TYPES
@@ -66,6 +84,23 @@ export interface EnrichedSearchResult extends SemanticSearchResult {
   category_boost: number;
   /** Indica si el contexto es suficiente */
   context_sufficient: boolean;
+  /** MEJORA-3.5: Fecha de actualización (para recency boost) */
+  updated_at?: string;
+}
+
+/**
+ * MEJORA-3.1: Resultado de búsqueda en chunks
+ */
+export interface ChunkSearchResult {
+  chunk_id: string;
+  source_id: string;
+  source_type: string;
+  content: string;
+  chunk_index: number;
+  total_chunks: number;
+  headings: string[];
+  keywords: string[];
+  similarity: number;
 }
 
 /**
@@ -160,23 +195,37 @@ class EmbeddingServiceClass {
 
   /**
    * Genera embedding para un texto dado
+   * MEJORA-3.4: Utiliza caché para reducir latencia y costos
    */
   async generateEmbedding(text: string): Promise<EmbeddingResult> {
     // Truncar texto si es muy largo
-    const truncatedText = text.length > MAX_TEXT_LENGTH
-      ? text.substring(0, MAX_TEXT_LENGTH)
-      : text;
+    const truncatedText =
+      text.length > MAX_TEXT_LENGTH ? text.substring(0, MAX_TEXT_LENGTH) : text;
 
     try {
-      const response = await this.openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: truncatedText,
-        dimensions: EMBEDDING_DIMENSIONS,
-      });
+      // MEJORA-3.4: Usar caché de embeddings
+      const cacheService = getEmbeddingCacheService();
+      const { embedding, fromCache } = await cacheService.getOrGenerate(
+        truncatedText,
+        EMBEDDING_MODEL,
+        async () => {
+          // Generar embedding si no está en caché
+          const response = await this.openai.embeddings.create({
+            model: EMBEDDING_MODEL,
+            input: truncatedText,
+            dimensions: EMBEDDING_DIMENSIONS,
+          });
+          return response.data[0].embedding;
+        }
+      );
+
+      if (fromCache) {
+        console.log('[embedding] Cache hit for query');
+      }
 
       return {
-        embedding: response.data[0].embedding,
-        tokens_used: response.usage.total_tokens,
+        embedding,
+        tokens_used: fromCache ? 0 : Math.ceil(truncatedText.length / 4), // Estimación si viene de caché
       };
     } catch (error) {
       console.error('[embedding] Error generating embedding:', error);
@@ -333,7 +382,7 @@ class EmbeddingServiceClass {
   }
 
   /**
-   * V7.2: Búsqueda por keywords (para Hybrid Search)
+   * V7.2 + MEJORA-3.2: Búsqueda por keywords usando BM25 real
    */
   private async searchByKeywords(
     tenantId: string,
@@ -348,29 +397,95 @@ class EmbeddingServiceClass {
     );
 
     try {
-      // Construir filtro OR para múltiples keywords (máximo 3 para performance)
-      // Sanitizar keywords: escapar caracteres especiales de LIKE (%_) y limpiar
+      // MEJORA-3.2: Usar BM25 real en lugar de ILIKE
+      const bm25Index = await getBM25Index(supabase, tenantId);
+      const query = keywords.join(' ');
+      const bm25Results = bm25Index.search(query, limit * 2);
+
+      if (bm25Results.length === 0) {
+        console.log('[embedding] No BM25 results, falling back to ILIKE');
+        return this.searchByKeywordsLegacy(tenantId, keywords, limit);
+      }
+
+      console.log('[embedding] BM25 search results:', {
+        tenantId,
+        query: query.substring(0, 50),
+        resultsCount: bm25Results.length,
+      });
+
+      // Necesitamos obtener el contenido completo de los documentos
+      const results: SemanticSearchResult[] = [];
+
+      // FIX: Normalizar usando el max score real de los resultados
+      const maxScore = bm25Results.length > 0 ? Math.max(...bm25Results.map(r => r.score)) : 1;
+      const normalizeScore = (score: number) => maxScore > 0 ? score / maxScore : 0;
+
+      for (const bm25Result of bm25Results.slice(0, limit)) {
+        // Parsear el ID para obtener tipo y ID real
+        const [type, ...idParts] = bm25Result.id.split('-');
+        const sourceId = idParts.join('-');
+
+        // Normalizar score BM25 al rango 0-1 usando el max score real
+        const normalizedScore = normalizeScore(bm25Result.score);
+
+        results.push({
+          source_type: type === 'article' ? 'knowledge_article' : (type as SemanticSearchResult['source_type']),
+          source_id: sourceId,
+          title: (bm25Result.metadata?.title as string) || '',
+          content: '', // El contenido se obtiene del documento original si es necesario
+          category: (bm25Result.metadata?.type as string) || 'general',
+          similarity: normalizedScore,
+        });
+      }
+
+      return results;
+    } catch (error) {
+      console.error('[embedding] BM25 search error, falling back to ILIKE:', error);
+      return this.searchByKeywordsLegacy(tenantId, keywords, limit);
+    }
+  }
+
+  /**
+   * Búsqueda legacy por keywords usando ILIKE (fallback)
+   */
+  private async searchByKeywordsLegacy(
+    tenantId: string,
+    keywords: string[],
+    limit: number
+  ): Promise<SemanticSearchResult[]> {
+    if (keywords.length === 0) return [];
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    try {
+      // Sanitizar keywords
       const sanitizeKeyword = (k: string) =>
-        k.replace(/[%_\\]/g, '').replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+        k
+          .replace(/[%_\\]/g, '')
+          .replace(/[^\p{L}\p{N}\s]/gu, '')
+          .trim();
 
       const keywordsToSearch = keywords
         .slice(0, 3)
         .map(sanitizeKeyword)
-        .filter(k => k.length > 1); // Solo keywords con al menos 2 caracteres
+        .filter((k) => k.length > 1);
 
       if (keywordsToSearch.length === 0) return [];
 
       const articleFilters = keywordsToSearch
-        .map(k => `title.ilike.%${k}%,content.ilike.%${k}%`)
+        .map((k) => `title.ilike.%${k}%,content.ilike.%${k}%`)
         .join(',');
       const faqFilters = keywordsToSearch
-        .map(k => `question.ilike.%${k}%,answer.ilike.%${k}%`)
+        .map((k) => `question.ilike.%${k}%,answer.ilike.%${k}%`)
         .join(',');
 
       // Buscar en knowledge_articles
       const { data: articles } = await supabase
         .from('ai_knowledge_articles')
-        .select('id, title, content, category')
+        .select('id, title, content, category, updated_at')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .or(articleFilters)
@@ -379,13 +494,12 @@ class EmbeddingServiceClass {
       // Buscar en FAQs
       const { data: faqs } = await supabase
         .from('faqs')
-        .select('id, question, answer, category')
+        .select('id, question, answer, category, updated_at')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .or(faqFilters)
         .limit(limit);
 
-      // Convertir a SemanticSearchResult con score de keyword matching
       const results: SemanticSearchResult[] = [];
 
       if (articles) {
@@ -401,7 +515,7 @@ class EmbeddingServiceClass {
               title: article.title,
               content: article.content,
               category: article.category || 'general',
-              similarity: keywordScore, // Usar keyword score como similarity
+              similarity: keywordScore,
             });
           }
         }
@@ -428,7 +542,7 @@ class EmbeddingServiceClass {
 
       return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
     } catch (error) {
-      console.error('[embedding] Keyword search error:', error);
+      console.error('[embedding] Legacy keyword search error:', error);
       return [];
     }
   }
@@ -457,61 +571,80 @@ class EmbeddingServiceClass {
   }
 
   /**
-   * V7.2: Combina resultados de búsqueda semántica y keywords
+   * V7.2 + MEJORA-3.3: Combina resultados usando RRF (Reciprocal Rank Fusion)
+   * RRF es más robusto que la combinación lineal porque no depende de la escala de scores
    */
   private combineResults(
     semanticResults: SemanticSearchResult[],
     keywordResults: SemanticSearchResult[],
     semanticWeight: number
   ): SemanticSearchResult[] {
-    const resultMap = new Map<string, SemanticSearchResult & { combinedScore: number }>();
-    const keywordWeight = 1 - semanticWeight;
-
-    // Añadir resultados semánticos
-    for (const result of semanticResults) {
-      const key = `${result.source_type}-${result.source_id}`;
-      resultMap.set(key, {
-        ...result,
-        combinedScore: result.similarity * semanticWeight,
-      });
+    // Early return si no hay resultados
+    if (semanticResults.length === 0 && keywordResults.length === 0) {
+      return [];
     }
 
-    // Añadir/combinar resultados de keywords
-    for (const result of keywordResults) {
-      const key = `${result.source_type}-${result.source_id}`;
-      const existing = resultMap.get(key);
-
-      if (existing) {
-        // Combinar scores
-        existing.combinedScore += result.similarity * keywordWeight;
-        existing.similarity = existing.combinedScore;
-      } else {
-        resultMap.set(key, {
-          ...result,
-          combinedScore: result.similarity * keywordWeight,
-        });
-      }
+    // Si solo hay un tipo de resultados, retornarlos directamente
+    if (keywordResults.length === 0) {
+      return semanticResults;
+    }
+    if (semanticResults.length === 0) {
+      return keywordResults;
     }
 
-    return Array.from(resultMap.values()).map(r => ({
-      source_type: r.source_type,
-      source_id: r.source_id,
-      title: r.title,
-      content: r.content,
-      category: r.category,
-      similarity: r.combinedScore,
+    // MEJORA-3.3: Usar RRF para combinar resultados
+    // Convertir a formato RankedDocument
+    const semanticRanked: RankedDocument<SemanticSearchResult>[] = semanticResults.map((r, index) => ({
+      id: `${r.source_type}-${r.source_id}`,
+      score: r.similarity,
+      rank: index + 1,
+      document: r,
+    }));
+
+    const keywordRanked: RankedDocument<SemanticSearchResult>[] = keywordResults.map((r, index) => ({
+      id: `${r.source_type}-${r.source_id}`,
+      score: r.similarity,
+      rank: index + 1,
+      document: r,
+    }));
+
+    // Aplicar RRF con pesos configurables
+    // Asegurar que los pesos sean positivos
+    const clampedSemanticWeight = Math.max(0.1, Math.min(1, semanticWeight));
+    const keywordWeight = Math.max(0.1, 1 - clampedSemanticWeight);
+    const rrfResults = fuseTwoLists<SemanticSearchResult>(
+      semanticRanked,
+      keywordRanked,
+      clampedSemanticWeight,
+      keywordWeight,
+      60 // k=60 es el valor estándar de RRF
+    );
+
+    // Normalizar scores RRF a rango 0-1
+    const normalizedResults = normalizeRRFScores(rrfResults);
+
+    console.log('[embedding] RRF fusion completed:', {
+      semanticCount: semanticResults.length,
+      keywordCount: keywordResults.length,
+      fusedCount: normalizedResults.length,
+    });
+
+    // Convertir de vuelta a SemanticSearchResult
+    return normalizedResults.map(r => ({
+      ...r.document,
+      similarity: r.rrfScore,
     }));
   }
 
   /**
-   * V7.2: Re-ranking de resultados con metadatos
+   * V7.2 + MEJORA-3.5: Re-ranking de resultados con metadatos y recency boost real
    */
   private rerankResults(
     results: SemanticSearchResult[],
     enhancedQuery: EnhancedQuery,
     preferredCategories: string[]
   ): EnrichedSearchResult[] {
-    const { weights } = RERANKING_CONFIG;
+    const { weights, recencyBoosts } = RERANKING_CONFIG;
 
     return results.map(result => {
       // Score semántico
@@ -523,8 +656,22 @@ class EmbeddingServiceClass {
         enhancedQuery.keywords
       );
 
-      // Boost por recency (simplificado - en producción usar updated_at)
-      const recencyBoost = 0; // TODO: Implementar con timestamps reales
+      // MEJORA-3.5: Boost por recency real usando updated_at
+      let recencyBoost = 0;
+      const enrichedResult = result as EnrichedSearchResult;
+      if (enrichedResult.updated_at) {
+        const updatedAt = new Date(enrichedResult.updated_at);
+        const now = new Date();
+        const daysDiff = Math.floor((now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (daysDiff <= 7) {
+          recencyBoost = recencyBoosts[7]; // 0.1 para última semana
+        } else if (daysDiff <= 30) {
+          recencyBoost = recencyBoosts[30]; // 0.05 para último mes
+        } else if (daysDiff <= 90) {
+          recencyBoost = recencyBoosts[90]; // 0.02 para último trimestre
+        }
+      }
 
       // Boost por categoría preferida
       let categoryBoost = 0;
@@ -556,6 +703,7 @@ class EmbeddingServiceClass {
         recency_boost: recencyBoost,
         category_boost: categoryBoost,
         context_sufficient: contextSufficient,
+        updated_at: enrichedResult.updated_at,
       };
     });
   }
@@ -814,6 +962,264 @@ class EmbeddingServiceClass {
 
     console.log(`[embedding] Processed ${processed} embeddings, ${errors} errors`);
     return { processed, errors };
+  }
+
+  // ============================================
+  // MEJORA-3.1: MÉTODOS DE CHUNKS
+  // ============================================
+
+  /**
+   * MEJORA-3.1: Busca en chunks semánticos
+   * Usa la tabla ai_knowledge_chunks para búsqueda más precisa
+   */
+  async searchKnowledgeChunks(
+    tenantId: string,
+    query: string,
+    options: {
+      limit?: number;
+      similarityThreshold?: number;
+      sourceTypes?: string[];
+    } = {}
+  ): Promise<ChunkSearchResult[]> {
+    const {
+      limit = 5,
+      similarityThreshold = 0.5,
+      sourceTypes = null,
+    } = options;
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    try {
+      // Generar embedding de la query
+      const queryEmbedding = await this.generateEmbedding(query);
+
+      // Buscar en chunks usando la función RPC
+      const { data, error } = await supabase.rpc('search_knowledge_chunks', {
+        p_tenant_id: tenantId,
+        p_query_embedding: `[${queryEmbedding.embedding.join(',')}]`,
+        p_limit: limit,
+        p_similarity_threshold: similarityThreshold,
+        p_source_types: sourceTypes,
+      });
+
+      if (error) {
+        console.error('[embedding] Chunk search error:', error);
+        throw error;
+      }
+
+      console.log(`[embedding] Chunk search: ${(data || []).length} results for tenant ${tenantId}`);
+
+      return (data || []).map((row: {
+        chunk_id: string;
+        source_id: string;
+        source_type: string;
+        content: string;
+        chunk_index: number;
+        total_chunks: number;
+        headings: string[];
+        keywords: string[];
+        similarity: number;
+      }) => ({
+        chunk_id: row.chunk_id,
+        source_id: row.source_id,
+        source_type: row.source_type,
+        content: row.content,
+        chunk_index: row.chunk_index,
+        total_chunks: row.total_chunks,
+        headings: row.headings || [],
+        keywords: row.keywords || [],
+        similarity: row.similarity,
+      }));
+    } catch (error) {
+      console.error('[embedding] Search knowledge chunks error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * MEJORA-3.1: Procesa un documento dividiéndolo en chunks con embeddings
+   * Ideal para documentos largos que necesitan búsqueda granular
+   */
+  async processDocumentWithChunking(
+    tenantId: string,
+    sourceId: string,
+    sourceType: 'article' | 'faq' | 'policy' | 'service',
+    content: string,
+    title?: string
+  ): Promise<{
+    chunksCreated: number;
+    embeddingsGenerated: number;
+    processingTimeMs: number;
+  }> {
+    const startTime = Date.now();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    try {
+      // 1. Obtener servicio de chunking
+      const chunkingService = getChunkingService();
+
+      // 2. Dividir documento en chunks
+      const fullContent = title ? `${title}\n\n${content}` : content;
+      const chunkingResult = await chunkingService.chunkText(
+        fullContent,
+        sourceId,
+        sourceType
+      );
+
+      console.log(`[embedding] Chunking complete: ${chunkingResult.totalChunks} chunks, avg size ${Math.round(chunkingResult.avgChunkSize)}`);
+
+      // 3. Eliminar chunks existentes del documento
+      const { error: deleteError } = await supabase.rpc('regenerate_document_chunks', {
+        p_tenant_id: tenantId,
+        p_source_id: sourceId,
+        p_source_type: sourceType,
+      });
+
+      if (deleteError) {
+        console.warn('[embedding] Error deleting existing chunks:', deleteError);
+      }
+
+      // 4. Generar embeddings en batch
+      const chunkTexts = chunkingResult.chunks.map(c => c.content);
+      const embeddings = await this.generateEmbeddingsBatch(chunkTexts);
+
+      // 5. Insertar chunks con embeddings
+      let embeddingsGenerated = 0;
+      for (let i = 0; i < chunkingResult.chunks.length; i++) {
+        const chunk = chunkingResult.chunks[i];
+        const embedding = embeddings[i];
+
+        // Generar hash del contenido para deduplicación
+        const contentHash = createHash('sha256')
+          .update(chunk.content)
+          .digest('hex');
+
+        const { error: insertError } = await supabase
+          .from('ai_knowledge_chunks')
+          .insert({
+            tenant_id: tenantId,
+            source_id: sourceId,
+            source_type: sourceType,
+            content: chunk.content,
+            content_hash: contentHash,
+            embedding: `[${embedding.embedding.join(',')}]`,
+            embedding_model: EMBEDDING_MODEL,
+            embedding_updated_at: new Date().toISOString(),
+            chunk_index: chunk.index,
+            total_chunks: chunk.totalChunks,
+            start_char: chunk.metadata.startChar,
+            end_char: chunk.metadata.endChar,
+            word_count: chunk.metadata.wordCount,
+            has_overlap_before: chunk.metadata.hasOverlapBefore,
+            has_overlap_after: chunk.metadata.hasOverlapAfter,
+            headings: chunk.metadata.headings || [],
+            keywords: chunk.metadata.keywords || [],
+          });
+
+        if (insertError) {
+          console.error(`[embedding] Error inserting chunk ${i}:`, insertError);
+        } else {
+          embeddingsGenerated++;
+        }
+      }
+
+      const processingTimeMs = Date.now() - startTime;
+      console.log(`[embedding] Document processing complete: ${embeddingsGenerated}/${chunkingResult.totalChunks} chunks in ${processingTimeMs}ms`);
+
+      return {
+        chunksCreated: chunkingResult.totalChunks,
+        embeddingsGenerated,
+        processingTimeMs,
+      };
+    } catch (error) {
+      console.error('[embedding] Process document with chunking error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * MEJORA-3.1: Obtiene chunks de un documento específico
+   */
+  async getDocumentChunks(
+    tenantId: string,
+    sourceId: string,
+    sourceType: string
+  ): Promise<{
+    chunks: Array<{
+      chunk_id: string;
+      content: string;
+      chunk_index: number;
+      total_chunks: number;
+      word_count: number;
+      headings: string[];
+      keywords: string[];
+      has_embedding: boolean;
+    }>;
+    totalChunks: number;
+  }> {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    try {
+      const { data, error } = await supabase.rpc('get_document_chunks', {
+        p_tenant_id: tenantId,
+        p_source_id: sourceId,
+        p_source_type: sourceType,
+      });
+
+      if (error) {
+        console.error('[embedding] Get document chunks error:', error);
+        throw error;
+      }
+
+      return {
+        chunks: data || [],
+        totalChunks: (data || []).length,
+      };
+    } catch (error) {
+      console.error('[embedding] Get document chunks error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * MEJORA-3.1: Obtiene estadísticas de chunks por tenant
+   */
+  async getChunkStats(tenantId: string): Promise<Array<{
+    source_type: string;
+    total_chunks: number;
+    chunks_with_embedding: number;
+    avg_word_count: number;
+    total_documents: number;
+  }>> {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    try {
+      const { data, error } = await supabase.rpc('get_chunk_stats', {
+        p_tenant_id: tenantId,
+      });
+
+      if (error) {
+        console.error('[embedding] Get chunk stats error:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('[embedding] Get chunk stats error:', error);
+      throw error;
+    }
   }
 }
 
