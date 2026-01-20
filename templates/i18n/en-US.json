@@ -1,0 +1,190 @@
+{
+  "greetings": {
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening",
+    "night": "Good evening",
+    "generic": "Hello"
+  },
+
+  "days": {
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday"
+  },
+
+  "daysShort": {
+    "sunday": "Sun",
+    "monday": "Mon",
+    "tuesday": "Tue",
+    "wednesday": "Wed",
+    "thursday": "Thu",
+    "friday": "Fri",
+    "saturday": "Sat"
+  },
+
+  "months": {
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December"
+  },
+
+  "time": {
+    "today": "today",
+    "tomorrow": "tomorrow",
+    "yesterday": "yesterday",
+    "now": "now",
+    "inMinutes": "in {n} minutes",
+    "inHours": "in {n} hours",
+    "ago": "{n} ago",
+    "at": "at",
+    "from": "from",
+    "to": "to",
+    "and": "and",
+    "morning": "in the morning",
+    "afternoon": "in the afternoon",
+    "evening": "in the evening",
+    "oclock": "o'clock",
+    "half": "thirty",
+    "quarter": "fifteen",
+    "quarterTo": "forty-five"
+  },
+
+  "phrases": {
+    "welcome": "Welcome",
+    "goodbye": "Goodbye",
+    "thanks": "Thank you",
+    "pleaseWait": "Please wait a moment",
+    "oneSecond": "One second",
+    "understood": "Understood",
+    "letMeCheck": "Let me check",
+    "anythingElse": "Is there anything else I can help you with?",
+    "sorryDidntUnderstand": "Sorry, I didn't quite understand. Could you repeat that?",
+    "transferring": "I'm going to transfer you to an agent",
+    "holdPlease": "Please hold",
+    "imHere": "I'm here",
+    "perfect": "Perfect",
+    "confirmed": "Confirmed",
+    "cancelled": "Cancelled",
+    "modified": "Modified",
+    "notAvailable": "Not available",
+    "available": "Available"
+  },
+
+  "numbers": {
+    "one": "one",
+    "two": "two",
+    "three": "three",
+    "four": "four",
+    "five": "five",
+    "six": "six",
+    "seven": "seven",
+    "eight": "eight",
+    "nine": "nine",
+    "ten": "ten",
+    "person": "person",
+    "persons": "people"
+  },
+
+  "restaurant": {
+    "reservation": "reservation",
+    "reservations": "reservations",
+    "table": "table",
+    "tables": "tables",
+    "menu": "menu",
+    "order": "order",
+    "orders": "orders",
+    "delivery": "delivery",
+    "takeaway": "takeout",
+    "dineIn": "dine in",
+    "persons": "people",
+    "guests": "guests",
+    "dish": "dish",
+    "dishes": "dishes",
+    "drink": "drink",
+    "drinks": "drinks",
+    "dessert": "dessert",
+    "desserts": "desserts",
+    "appetizer": "appetizer",
+    "mainCourse": "main course",
+    "special": "today's special",
+    "recommendation": "recommendation",
+    "popular": "popular",
+    "available": "available",
+    "soldOut": "sold out",
+    "promotion": "promotion",
+    "discount": "discount"
+  },
+
+  "dental": {
+    "appointment": "appointment",
+    "appointments": "appointments",
+    "doctor": "doctor",
+    "doctors": "doctors",
+    "dentist": "dentist",
+    "service": "service",
+    "services": "services",
+    "treatment": "treatment",
+    "treatments": "treatments",
+    "emergency": "emergency",
+    "emergencies": "emergencies",
+    "insurance": "insurance",
+    "insurances": "insurances",
+    "coverage": "coverage",
+    "cleaning": "dental cleaning",
+    "checkup": "checkup",
+    "filling": "filling",
+    "extraction": "extraction",
+    "rootCanal": "root canal",
+    "crown": "crown",
+    "whitening": "whitening",
+    "braces": "braces",
+    "implant": "implant",
+    "xray": "x-ray",
+    "pain": "pain",
+    "sensitivity": "sensitivity",
+    "swelling": "swelling",
+    "bleeding": "bleeding"
+  },
+
+  "currency": {
+    "symbol": "$",
+    "code": "USD",
+    "name": "dollars",
+    "format": "{symbol}{amount}",
+    "decimal": ".",
+    "thousands": ",",
+    "spoken": "US dollars"
+  },
+
+  "errors": {
+    "notFound": "Not found",
+    "notAvailable": "Not available",
+    "tryAgain": "Please try again",
+    "invalidInput": "Invalid input",
+    "systemError": "System error"
+  },
+
+  "confirmations": {
+    "areYouSure": "Are you sure?",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "yes": "Yes",
+    "no": "No",
+    "correct": "Correct",
+    "incorrect": "Incorrect"
+  }
+}

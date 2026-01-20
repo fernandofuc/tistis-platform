@@ -1,0 +1,190 @@
+{
+  "greetings": {
+    "morning": "Buenos días",
+    "afternoon": "Buenas tardes",
+    "evening": "Buenas noches",
+    "night": "Buenas noches",
+    "generic": "Hola"
+  },
+
+  "days": {
+    "sunday": "Domingo",
+    "monday": "Lunes",
+    "tuesday": "Martes",
+    "wednesday": "Miércoles",
+    "thursday": "Jueves",
+    "friday": "Viernes",
+    "saturday": "Sábado"
+  },
+
+  "daysShort": {
+    "sunday": "Dom",
+    "monday": "Lun",
+    "tuesday": "Mar",
+    "wednesday": "Mié",
+    "thursday": "Jue",
+    "friday": "Vie",
+    "saturday": "Sáb"
+  },
+
+  "months": {
+    "january": "Enero",
+    "february": "Febrero",
+    "march": "Marzo",
+    "april": "Abril",
+    "may": "Mayo",
+    "june": "Junio",
+    "july": "Julio",
+    "august": "Agosto",
+    "september": "Septiembre",
+    "october": "Octubre",
+    "november": "Noviembre",
+    "december": "Diciembre"
+  },
+
+  "time": {
+    "today": "hoy",
+    "tomorrow": "mañana",
+    "yesterday": "ayer",
+    "now": "ahora",
+    "inMinutes": "en {n} minutos",
+    "inHours": "en {n} horas",
+    "ago": "hace {n}",
+    "at": "a las",
+    "from": "de",
+    "to": "a",
+    "and": "y",
+    "morning": "de la mañana",
+    "afternoon": "de la tarde",
+    "evening": "de la noche",
+    "oclock": "en punto",
+    "half": "y media",
+    "quarter": "y cuarto",
+    "quarterTo": "menos cuarto"
+  },
+
+  "phrases": {
+    "welcome": "Bienvenido",
+    "goodbye": "Hasta luego",
+    "thanks": "Gracias",
+    "pleaseWait": "Un momento por favor",
+    "oneSecond": "Un segundo",
+    "understood": "Entendido",
+    "letMeCheck": "Déjame verificar",
+    "anythingElse": "¿Hay algo más en lo que pueda ayudarte?",
+    "sorryDidntUnderstand": "Disculpa, no entendí bien. ¿Podrías repetirlo?",
+    "transferring": "Te voy a transferir con un agente",
+    "holdPlease": "Espera un momento",
+    "imHere": "Aquí estoy",
+    "perfect": "Perfecto",
+    "confirmed": "Confirmado",
+    "cancelled": "Cancelado",
+    "modified": "Modificado",
+    "notAvailable": "No disponible",
+    "available": "Disponible"
+  },
+
+  "numbers": {
+    "one": "uno",
+    "two": "dos",
+    "three": "tres",
+    "four": "cuatro",
+    "five": "cinco",
+    "six": "seis",
+    "seven": "siete",
+    "eight": "ocho",
+    "nine": "nueve",
+    "ten": "diez",
+    "person": "persona",
+    "persons": "personas"
+  },
+
+  "restaurant": {
+    "reservation": "reservación",
+    "reservations": "reservaciones",
+    "table": "mesa",
+    "tables": "mesas",
+    "menu": "menú",
+    "order": "pedido",
+    "orders": "pedidos",
+    "delivery": "entrega a domicilio",
+    "takeaway": "para llevar",
+    "dineIn": "para comer aquí",
+    "persons": "personas",
+    "guests": "comensales",
+    "dish": "platillo",
+    "dishes": "platillos",
+    "drink": "bebida",
+    "drinks": "bebidas",
+    "dessert": "postre",
+    "desserts": "postres",
+    "appetizer": "entrada",
+    "mainCourse": "plato fuerte",
+    "special": "especial del día",
+    "recommendation": "recomendación",
+    "popular": "popular",
+    "available": "disponible",
+    "soldOut": "agotado",
+    "promotion": "promoción",
+    "discount": "descuento"
+  },
+
+  "dental": {
+    "appointment": "cita",
+    "appointments": "citas",
+    "doctor": "doctor",
+    "doctors": "doctores",
+    "dentist": "dentista",
+    "service": "servicio",
+    "services": "servicios",
+    "treatment": "tratamiento",
+    "treatments": "tratamientos",
+    "emergency": "urgencia",
+    "emergencies": "urgencias",
+    "insurance": "seguro",
+    "insurances": "seguros",
+    "coverage": "cobertura",
+    "cleaning": "limpieza dental",
+    "checkup": "revisión general",
+    "filling": "empaste",
+    "extraction": "extracción",
+    "rootCanal": "endodoncia",
+    "crown": "corona",
+    "whitening": "blanqueamiento",
+    "braces": "ortodoncia",
+    "implant": "implante",
+    "xray": "radiografía",
+    "pain": "dolor",
+    "sensitivity": "sensibilidad",
+    "swelling": "inflamación",
+    "bleeding": "sangrado"
+  },
+
+  "currency": {
+    "symbol": "$",
+    "code": "MXN",
+    "name": "pesos",
+    "format": "{symbol}{amount}",
+    "decimal": ".",
+    "thousands": ",",
+    "spoken": "pesos mexicanos"
+  },
+
+  "errors": {
+    "notFound": "No encontrado",
+    "notAvailable": "No disponible",
+    "tryAgain": "Intenta de nuevo",
+    "invalidInput": "Dato inválido",
+    "systemError": "Error del sistema"
+  },
+
+  "confirmations": {
+    "areYouSure": "¿Estás seguro?",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "yes": "Sí",
+    "no": "No",
+    "correct": "Correcto",
+    "incorrect": "Incorrecto"
+  }
+}
