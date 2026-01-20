@@ -25,11 +25,11 @@ import { INITIAL_CIRCUIT_BREAKER_STATE } from './types';
 
 /**
  * Database row structure matching the migration
+ * NOTE: TIS TIS uses tenant_id only, no business_id column exists
  */
 interface CircuitBreakerRow {
   id: string;
   tenant_id: string;
-  business_id: string;
   service_name: string;
   state: CircuitBreakerState;
   failure_count: number;
@@ -128,9 +128,9 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
   /**
    * Get current state for a business
    */
-  async getState(businessId: string): Promise<CircuitBreakerStoreState> {
+  async getState(tenantId: string): Promise<CircuitBreakerStoreState> {
     // Check cache first
-    const cached = this.getFromCache(businessId);
+    const cached = this.getFromCache(tenantId);
     if (cached) {
       return cached;
     }
@@ -139,22 +139,22 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
     const { data, error } = await this.supabase
       .from(TABLE_NAME)
       .select('*')
-      .eq('business_id', businessId)
+      .eq('tenant_id', tenantId)
       .eq('service_name', this.serviceName)
       .single();
 
     if (error) {
       // If no record exists, create initial state
       if (error.code === 'PGRST116') {
-        const initialState = await this.createInitialState(businessId);
-        this.setInCache(businessId, initialState);
+        const initialState = await this.createInitialState(tenantId);
+        this.setInCache(tenantId, initialState);
         return initialState;
       }
       throw new Error(`Failed to get circuit breaker state: ${error.message}`);
     }
 
     const state = this.rowToState(data as CircuitBreakerRow);
-    this.setInCache(businessId, state);
+    this.setInCache(tenantId, state);
     return state;
   }
 
@@ -162,7 +162,7 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
    * Set state for a business
    */
   async setState(
-    businessId: string,
+    tenantId: string,
     state: CircuitBreakerStoreState
   ): Promise<void> {
     const updateData = this.stateToRow(state);
@@ -170,13 +170,13 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
     const { error } = await this.supabase
       .from(TABLE_NAME)
       .update(updateData)
-      .eq('business_id', businessId)
+      .eq('tenant_id', tenantId)
       .eq('service_name', this.serviceName);
 
     if (error) {
       // If record doesn't exist, insert it
       if (error.code === 'PGRST116' || error.message.includes('0 rows')) {
-        await this.createInitialState(businessId, state);
+        await this.createInitialState(tenantId, state);
       } else {
         throw new Error(
           `Failed to set circuit breaker state: ${error.message}`
@@ -185,17 +185,17 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
     }
 
     // Update cache
-    this.setInCache(businessId, state);
+    this.setInCache(tenantId, state);
   }
 
   /**
    * Delete state for a business (for testing/reset)
    */
-  async deleteState(businessId: string): Promise<void> {
+  async deleteState(tenantId: string): Promise<void> {
     const { error } = await this.supabase
       .from(TABLE_NAME)
       .delete()
-      .eq('business_id', businessId)
+      .eq('tenant_id', tenantId)
       .eq('service_name', this.serviceName);
 
     if (error) {
@@ -205,7 +205,7 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
     }
 
     // Remove from cache
-    this.cache.delete(this.getCacheKey(businessId));
+    this.cache.delete(this.getCacheKey(tenantId));
   }
 
   /**
@@ -225,7 +225,7 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
 
     const states = new Map<string, CircuitBreakerStoreState>();
     for (const row of data as CircuitBreakerRow[]) {
-      states.set(row.business_id, this.rowToState(row));
+      states.set(row.tenant_id, this.rowToState(row));
     }
 
     return states;
@@ -256,7 +256,7 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
    * Create initial state in database
    */
   private async createInitialState(
-    businessId: string,
+    tenantId: string,
     initialState?: CircuitBreakerStoreState
   ): Promise<CircuitBreakerStoreState> {
     const state = initialState ?? {
@@ -265,8 +265,7 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
     };
 
     const insertData = {
-      business_id: businessId,
-      tenant_id: this.tenantId || businessId, // Fallback to businessId if no tenantId
+      tenant_id: this.tenantId || tenantId, // Use config tenantId or parameter as fallback
       service_name: this.serviceName,
       state: state.state,
       failure_count: state.failureCount,
@@ -289,7 +288,7 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
     if (error) {
       // If duplicate, just fetch existing
       if (error.code === '23505') {
-        return this.getState(businessId);
+        return this.getState(tenantId);
       }
       throw new Error(
         `Failed to create initial circuit breaker state: ${error.message}`
@@ -337,15 +336,15 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
   /**
    * Get cache key for a business
    */
-  private getCacheKey(businessId: string): string {
-    return `${this.serviceName}:${businessId}`;
+  private getCacheKey(tenantId: string): string {
+    return `${this.serviceName}:${tenantId}`;
   }
 
   /**
    * Get state from cache if valid
    */
-  private getFromCache(businessId: string): CircuitBreakerStoreState | null {
-    const key = this.getCacheKey(businessId);
+  private getFromCache(tenantId: string): CircuitBreakerStoreState | null {
+    const key = this.getCacheKey(tenantId);
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -365,10 +364,10 @@ export class SupabaseCircuitBreakerStore implements CircuitBreakerStore {
    * Set state in cache
    */
   private setInCache(
-    businessId: string,
+    tenantId: string,
     state: CircuitBreakerStoreState
   ): void {
-    const key = this.getCacheKey(businessId);
+    const key = this.getCacheKey(tenantId);
     this.cache.set(key, {
       state,
       expiresAt: Date.now() + this.cacheTtlMs,
@@ -390,8 +389,8 @@ export class InMemoryCircuitBreakerStore implements CircuitBreakerStore {
     this.states = new Map();
   }
 
-  async getState(businessId: string): Promise<CircuitBreakerStoreState> {
-    const state = this.states.get(businessId);
+  async getState(tenantId: string): Promise<CircuitBreakerStoreState> {
+    const state = this.states.get(tenantId);
     if (state) {
       return { ...state };
     }
@@ -400,19 +399,19 @@ export class InMemoryCircuitBreakerStore implements CircuitBreakerStore {
       ...INITIAL_CIRCUIT_BREAKER_STATE,
       lastStateChange: new Date().toISOString(),
     };
-    this.states.set(businessId, initialState);
+    this.states.set(tenantId, initialState);
     return initialState;
   }
 
   async setState(
-    businessId: string,
+    tenantId: string,
     state: CircuitBreakerStoreState
   ): Promise<void> {
-    this.states.set(businessId, { ...state });
+    this.states.set(tenantId, { ...state });
   }
 
-  async deleteState(businessId: string): Promise<void> {
-    this.states.delete(businessId);
+  async deleteState(tenantId: string): Promise<void> {
+    this.states.delete(tenantId);
   }
 
   async getAllStates(): Promise<Map<string, CircuitBreakerStoreState>> {

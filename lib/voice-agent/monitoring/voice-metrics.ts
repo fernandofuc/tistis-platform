@@ -494,14 +494,16 @@ export function decrementActiveCalls(labels?: Record<string, string>): void {
 /**
  * Update circuit breaker state
  * @param state - 'CLOSED' | 'HALF_OPEN' | 'OPEN'
+ * @param tenantId - Optional tenant ID for labeling
  */
 export function setCircuitBreakerState(
   state: 'CLOSED' | 'HALF_OPEN' | 'OPEN',
-  businessId?: string
+  tenantId?: string
 ): void {
   const registry = getMetricsRegistry();
   const stateValue = state === 'CLOSED' ? 0 : state === 'HALF_OPEN' ? 1 : 2;
-  const labels = businessId ? { business_id: businessId } : undefined;
+  // TIS TIS uses tenant_id, not business_id
+  const labels = tenantId ? { tenant_id: tenantId } : undefined;
   registry.setGauge(VOICE_METRIC_NAMES.CIRCUIT_BREAKER_STATE, stateValue, labels);
 }
 

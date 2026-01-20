@@ -416,16 +416,17 @@ export async function getTenantVoiceStatusList(): Promise<Array<{
   const flags = await getVoiceAgentFlags();
 
   // Get all tenants with voice configs
+  // TIS TIS uses tenant_id, not business_id
   const { data: tenants } = await supabaseAdmin
     .from('voice_assistant_configs')
-    .select('business_id, businesses(id, name)')
+    .select('tenant_id, tenants(id, name)')
     .eq('is_active', true);
 
   if (!tenants) return [];
 
   return tenants.map((tenant) => {
-    const tenantId = tenant.business_id;
-    const tenantName = (tenant.businesses as { name?: string })?.name || 'Unknown';
+    const tenantId = tenant.tenant_id;
+    const tenantName = (tenant.tenants as { name?: string })?.name || 'Unknown';
 
     let enabled = flags.enabled;
     let overrideType: 'enabled' | 'disabled' | 'global' | null = 'global';

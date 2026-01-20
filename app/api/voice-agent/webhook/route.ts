@@ -55,11 +55,11 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Voice configuration from voice_assistant_configs table (DB format)
+ * NOTE: TIS TIS uses tenant_id, not business_id
  */
 interface VoiceAssistantConfigDB {
   id: string;
   tenant_id: string;
-  business_id: string;
   assistant_type_id: string;
   voice_id: string | null;
   voice_speed: number;
@@ -236,26 +236,22 @@ function createServiceClient() {
 async function getVoiceConfig(tenantId: string): Promise<VoiceAgentConfig | null> {
   const supabase = createServiceClient();
 
+  // TIS TIS uses tenant_id, not business_id
   const { data, error } = await supabase
     .from('voice_assistant_configs')
     .select('*')
-    .eq('business_id', tenantId)
+    .eq('tenant_id', tenantId)
     .eq('is_active', true)
-    .single();
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
-    // Try with tenant_id as fallback
-    const { data: fallbackData } = await supabase
-      .from('voice_assistant_configs')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .single();
-
-    if (!fallbackData) return null;
-    return mapDBConfigToVoiceAgentConfig(fallbackData as VoiceAssistantConfigDB);
+    console.error('[Voice Webhook] Error fetching config:', error);
+    return null;
   }
 
+  if (!data) return null;
   return mapDBConfigToVoiceAgentConfig(data as VoiceAssistantConfigDB);
 }
 
