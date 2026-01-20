@@ -100,15 +100,28 @@ export async function GET(request: NextRequest) {
 
     // Obtener o crear configuración
     const config = await VoiceAgentService.getOrCreateVoiceConfig(tenantId);
+
+    // Si no se pudo crear/obtener la configuración, retornar error descriptivo
+    if (!config) {
+      console.error('[Voice Agent API] Could not create/get config for tenant:', tenantId);
+      return NextResponse.json({
+        success: false,
+        error: 'No se pudo inicializar la configuración del Voice Agent. Verifica que las tablas de configuración estén correctamente inicializadas.',
+        status: 'inactive',
+        plan: accessCheck.plan,
+        data: null,
+      }, { status: 500 });
+    }
+
     const phoneNumbers = await VoiceAgentService.getPhoneNumbers(tenantId);
     const usageSummary = await VoiceAgentService.getUsageSummary(tenantId);
     const recentCalls = await VoiceAgentService.getRecentCalls(tenantId, 10);
 
     // Determinar estado
     let status: 'inactive' | 'configuring' | 'active' = 'inactive';
-    if (config?.voice_enabled && config?.voice_status === 'active') {
+    if (config.voice_enabled && config.voice_status === 'active') {
       status = 'active';
-    } else if (config?.voice_status === 'configuring') {
+    } else if (config.voice_status === 'configuring') {
       status = 'configuring';
     }
 

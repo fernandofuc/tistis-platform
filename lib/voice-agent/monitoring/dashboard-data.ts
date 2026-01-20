@@ -224,9 +224,9 @@ export class DashboardDataService {
    */
   async getTenantsOnV2Count(): Promise<{ onV2: number; total: number }> {
     try {
-      // Get total tenants
+      // Get total tenants (TIS TIS uses tenants table, not businesses)
       const { count: totalCount, error: totalError } = await this.supabase
-        .from('businesses')
+        .from('tenants')
         .select('*', { count: 'exact', head: true });
 
       if (totalError) {
@@ -237,7 +237,7 @@ export class DashboardDataService {
       const oneHourAgo = new Date(Date.now() - this.config.metricsWindowMs).toISOString();
       const { data: v2Calls, error: v2Error } = await this.supabase
         .from('voice_calls')
-        .select('business_id')
+        .select('tenant_id')
         .eq('api_version', 'v2')
         .gte('created_at', oneHourAgo);
 
@@ -245,8 +245,8 @@ export class DashboardDataService {
         throw v2Error;
       }
 
-      const typedV2Calls = v2Calls as Array<{ business_id: string }> | null;
-      const uniqueV2Tenants = new Set(typedV2Calls?.map((c) => c.business_id) ?? []);
+      const typedV2Calls = v2Calls as Array<{ tenant_id: string }> | null;
+      const uniqueV2Tenants = new Set(typedV2Calls?.map((c) => c.tenant_id) ?? []);
 
       return {
         onV2: uniqueV2Tenants.size,

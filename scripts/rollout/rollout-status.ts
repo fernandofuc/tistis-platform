@@ -60,9 +60,9 @@ async function main() {
   const disabledTenants = flag?.disabled_tenants ?? [];
   const stageStartedAt = flag?.stage_started_at;
 
-  // Get tenant counts
+  // Get tenant counts (TIS TIS uses tenants table)
   const { count: totalTenants } = await supabase
-    .from('businesses')
+    .from('tenants')
     .select('*', { count: 'exact', head: true });
 
   // Get recent metrics

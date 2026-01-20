@@ -907,9 +907,9 @@ export class RolloutService {
   }> {
     const status = await this.getStatus();
 
-    // Get total tenant count
+    // Get total tenant count (TIS TIS uses tenants table, not businesses)
     const { count: totalCount } = await this.supabase
-      .from('businesses')
+      .from('tenants')
       .select('*', { count: 'exact', head: true });
 
     const total = totalCount ?? 0;

@@ -50,9 +50,9 @@ async function main() {
   console.log(`\nTenant ID: ${options.tenantId}`);
   console.log(`Action: ${options.action}`);
 
-  // Verify tenant exists
+  // Verify tenant exists (TIS TIS uses tenants table)
   const { data: tenant, error: tenantError } = await supabase
-    .from('businesses')
+    .from('tenants')
     .select('id, name')
     .eq('id', options.tenantId)
     .single();

@@ -258,34 +258,35 @@ class MigrationValidator {
 
   /**
    * Check foreign key relationships
+   * NOTE: TIS TIS uses tenants table, not businesses
    */
   private async checkForeignKeys(): Promise<void> {
-    // Check business_id references
+    // Check tenant_id references (TIS TIS uses tenant_id, not business_id)
     const { data: v2Configs } = await this.supabase
       .from('voice_assistant_configs')
-      .select('id, business_id');
+      .select('id, tenant_id');
 
-    const { data: businesses } = await this.supabase
-      .from('businesses')
+    const { data: tenants } = await this.supabase
+      .from('tenants')
       .select('id');
 
-    const businessIds = new Set(businesses?.map((b) => b.id) || []);
+    const tenantIds = new Set(tenants?.map((t) => t.id) || []);
     const orphanedConfigs: string[] = [];
 
     for (const config of v2Configs || []) {
-      if (!businessIds.has(config.business_id)) {
+      if (!tenantIds.has(config.tenant_id)) {
         orphanedConfigs.push(config.id);
       }
     }
 
     this.checks.push({
-      name: 'Business FK Integrity',
+      name: 'Tenant FK Integrity',
       category: 'integrity',
       status: orphanedConfigs.length === 0 ? 'pass' : 'warn',
       message:
         orphanedConfigs.length === 0
-          ? 'All business references are valid'
-          : `Found ${orphanedConfigs.length} configs with invalid business_id`,
+          ? 'All tenant references are valid'
+          : `Found ${orphanedConfigs.length} configs with invalid tenant_id`,
       details: { orphanedCount: orphanedConfigs.length, orphanedIds: orphanedConfigs.slice(0, 5) },
     });
 

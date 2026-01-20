@@ -49,48 +49,81 @@ export async function getOrCreateVoiceConfig(tenantId: string): Promise<VoiceAge
   const supabase = createServerClient();
 
   // Intentar obtener config existente de voice_assistant_configs
-  const { data: existing } = await supabase
+  // Usamos maybeSingle() para manejar el caso de 0 o múltiples resultados sin error
+  const { data: existing, error: existingError } = await supabase
     .from('voice_assistant_configs')
     .select('*')
     .eq('tenant_id', tenantId)
-    .eq('is_active', true)
-    .single();
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error('[Voice Agent] Error fetching existing config:', existingError);
+  }
 
   if (existing) {
     // Mapear campos de voice_assistant_configs a VoiceAgentConfig
     return mapV2ConfigToLegacy(existing);
   }
 
-  // Buscar business_id del tenant
-  const { data: business } = await supabase
-    .from('businesses')
+  // Verificar que el tenant existe
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
     .select('id')
-    .eq('tenant_id', tenantId)
-    .single();
+    .eq('id', tenantId)
+    .maybeSingle();
 
-  if (!business) {
-    console.error('[Voice Agent] No business found for tenant:', tenantId);
+  if (tenantError) {
+    console.error('[Voice Agent] Error fetching tenant:', tenantError);
+    return null;
+  }
+
+  if (!tenant) {
+    console.error('[Voice Agent] No tenant found:', tenantId);
     return null;
   }
 
   // Buscar tipo de asistente por defecto
-  const { data: defaultType } = await supabase
+  // Primero intentamos con is_default, si no existe la columna o no hay registro,
+  // usamos el primer tipo activo ordenado por display_order
+  let defaultType: { id: string } | null = null;
+
+  // Intentar obtener por is_default (si la columna existe)
+  const { data: defaultByFlag } = await supabase
     .from('voice_assistant_types')
     .select('id')
     .eq('is_default', true)
-    .single();
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (defaultByFlag) {
+    defaultType = defaultByFlag;
+  } else {
+    // Fallback: obtener el primer tipo activo ordenado por display_order
+    const { data: firstActive } = await supabase
+      .from('voice_assistant_types')
+      .select('id')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    defaultType = firstActive;
+  }
 
   if (!defaultType) {
-    console.error('[Voice Agent] No default assistant type found');
+    console.error('[Voice Agent] No assistant type found - table may be empty');
     return null;
   }
 
   // Crear config inicial en voice_assistant_configs
+  // NOTA: voice_assistant_configs usa tenant_id directamente, no business_id
   const { data: newConfig, error } = await supabase
     .from('voice_assistant_configs')
     .insert({
       tenant_id: tenantId,
-      business_id: business.id,
       assistant_type_id: defaultType.id,
       is_active: false,
       status: 'draft',
