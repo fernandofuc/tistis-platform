@@ -43,6 +43,9 @@ import {
 import { VoiceLangGraphService } from '@/src/features/voice-agent/services/voice-langgraph.service';
 import { createClient } from '@supabase/supabase-js';
 
+// Feature flags for v2 rollout
+import { shouldUseVoiceAgentV2Cached } from '@/lib/feature-flags';
+
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
@@ -124,18 +127,44 @@ function createServiceClient() {
 
 /**
  * Get voice configuration for a tenant
+ * Uses v2 table if feature flag enabled, otherwise v1
  */
-async function getVoiceConfig(tenantId: string) {
+async function getVoiceConfig(tenantId: string, useV2: boolean = false) {
   const supabase = createServiceClient();
 
-  const { data } = await supabase
-    .from('voice_agent_config')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('voice_enabled', true)
-    .single();
+  if (useV2) {
+    // V2: Use new voice_assistant_configs table
+    const { data } = await supabase
+      .from('voice_assistant_configs')
+      .select('*')
+      .eq('business_id', tenantId)
+      .eq('is_active', true)
+      .single();
 
-  return data;
+    return data;
+  } else {
+    // V1: Use legacy voice_agent_config table
+    const { data } = await supabase
+      .from('voice_agent_config')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('voice_enabled', true)
+      .single();
+
+    return data;
+  }
+}
+
+/**
+ * Check if tenant should use Voice Agent v2
+ */
+async function checkV2Status(tenantId: string): Promise<boolean> {
+  try {
+    return await shouldUseVoiceAgentV2Cached(tenantId);
+  } catch (error) {
+    console.warn(`[Voice Webhook] Failed to check v2 status for ${tenantId}:`, error);
+    return false; // Default to v1 on error
+  }
 }
 
 /**
@@ -236,15 +265,27 @@ async function handleConversationUpdate(
     };
   }
 
-  // Get voice configuration
-  const voiceConfig = await getVoiceConfig(call.tenant_id);
+  // Check if tenant should use V2
+  const useV2 = await checkV2Status(call.tenant_id);
+  const apiVersion = useV2 ? 'v2' : 'v1';
+
+  console.log(`[Voice Webhook] Using API version ${apiVersion} for tenant ${call.tenant_id}`);
+
+  // Get voice configuration (from v1 or v2 table based on flag)
+  const voiceConfig = await getVoiceConfig(call.tenant_id, useV2);
 
   if (!voiceConfig) {
-    console.error('[Voice Webhook] Voice config not found');
+    console.error(`[Voice Webhook] Voice config not found (${apiVersion})`);
     return {
       assistantResponse: 'En este momento no puedo atenderte. Por favor llama más tarde.',
     };
   }
+
+  // Update call with API version being used
+  await supabase
+    .from('voice_calls')
+    .update({ api_version: apiVersion })
+    .eq('id', call.id);
 
   // Get conversation history
   const previousMessages = await getCallMessages(call.id);
@@ -505,14 +546,25 @@ export async function POST(request: NextRequest) {
 // =====================================================
 
 export async function GET() {
+  // Get feature flag status for health check
+  let v2FlagStatus = { enabled: false, percentage: 0 };
+  try {
+    const { getVoiceAgentV2Flags } = await import('@/lib/feature-flags');
+    const flags = await getVoiceAgentV2Flags();
+    v2FlagStatus = { enabled: flags.enabled, percentage: flags.percentage };
+  } catch {
+    // Ignore errors in health check
+  }
+
   return NextResponse.json({
     status: 'ok',
-    service: 'voice-agent-webhook-v2',
+    service: 'voice-agent-webhook',
     timestamp: new Date().toISOString(),
     features: {
       securityGate: true,
       eventRouter: true,
       serverSideResponse: true,
+      v2Rollout: v2FlagStatus,
     },
   });
 }
