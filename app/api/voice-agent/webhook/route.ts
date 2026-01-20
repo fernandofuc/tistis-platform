@@ -371,7 +371,6 @@ async function handleConversationUpdate(
   try {
     // Process with LangGraph
     // Note: voiceConfig is mapped from voice_assistant_configs (v2) to VoiceAgentConfig format
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await VoiceLangGraphService.processVoiceMessage(
       {
         tenant_id: call.tenant_id,

@@ -154,8 +154,7 @@ export class EmbeddingCacheService {
     }
 
     try {
-      // Importar dinámicamente ioredis para evitar error si no está instalado
-      // @ts-expect-error - ioredis es opcional, se maneja en el catch
+      // Importar dinámicamente ioredis
       const { Redis } = await import('ioredis');
       const client = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,

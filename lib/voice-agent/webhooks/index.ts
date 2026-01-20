@@ -246,9 +246,7 @@ export function createConfiguredEventRouter(options: {
   logEvents?: boolean;
 } = {}) {
   // Using dynamic import to avoid circular dependency
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { WebhookEventRouter: Router } = require('./event-router');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const {
     createAssistantRequestHandler,
     createFunctionCallHandler,

@@ -398,7 +398,8 @@ class EmbeddingServiceClass {
 
     try {
       // MEJORA-3.2: Usar BM25 real en lugar de ILIKE
-      const bm25Index = await getBM25Index(supabase, tenantId);
+      // Cast para evitar error de recursión de tipos
+      const bm25Index = await getBM25Index(supabase as unknown as Parameters<typeof getBM25Index>[0], tenantId);
       const query = keywords.join(' ');
       const bm25Results = bm25Index.search(query, limit * 2);
 

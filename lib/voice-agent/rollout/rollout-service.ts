@@ -15,7 +15,6 @@
  * @version 2.0.0
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type {
   RolloutStage,

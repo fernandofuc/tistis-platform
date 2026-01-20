@@ -10,10 +10,7 @@
  * @module scripts/rollout/rollout-set
  */
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { Command } = require('commander');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 require('dotenv').config({ path: '.env.local' });
 
 import { createClient } from '@supabase/supabase-js';

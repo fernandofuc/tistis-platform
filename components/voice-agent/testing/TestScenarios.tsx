@@ -110,7 +110,7 @@ function ScenarioCard({
             {/* Sample message */}
             <div className="mt-2 p-2 bg-slate-100/50 rounded-lg">
               <p className="text-xs text-slate-400 mb-0.5">Mensaje de prueba:</p>
-              <p className="text-sm text-slate-600 italic">"{scenario.sampleMessage}"</p>
+              <p className="text-sm text-slate-600 italic">&ldquo;{scenario.sampleMessage}&rdquo;</p>
             </div>
 
             {/* Expected intent */}

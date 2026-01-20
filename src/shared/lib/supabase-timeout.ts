@@ -10,7 +10,12 @@
  * - Wrapper compatible con la API de Supabase
  */
 
-import { SupabaseClient, PostgrestFilterBuilder, PostgrestBuilder } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Tipo genérico para builders de Postgrest que pueden ser awaited
+ */
+type AwaitablePostgrestBuilder<T> = PromiseLike<{ data: T | null; error: unknown }>;
 
 // ============================================
 // TIPOS
@@ -99,7 +104,7 @@ export async function rpcWithTimeout<T = unknown>(
 
   try {
     const result = await withTimeout(
-      supabase.rpc(functionName, params) as Promise<{ data: T | null; error: unknown }>,
+      supabase.rpc(functionName, params) as unknown as Promise<{ data: T | null; error: unknown }>,
       timeoutMs,
       `rpc:${functionName}`
     );
@@ -148,7 +153,7 @@ export async function rpcWithTimeout<T = unknown>(
  * Wrapper para builders de Supabase (select, insert, update, delete)
  */
 export async function queryWithTimeout<T = unknown>(
-  queryBuilder: PostgrestBuilder<T> | PostgrestFilterBuilder<unknown, unknown, T[]>,
+  queryBuilder: AwaitablePostgrestBuilder<T>,
   timeoutMs: number = DEFAULT_CONFIG.queryTimeoutMs,
   operationName: string = 'query'
 ): Promise<TimeoutResult<T>> {
@@ -204,7 +209,7 @@ export async function queryWithTimeout<T = unknown>(
  * Insert con timeout
  */
 export async function insertWithTimeout<T = unknown>(
-  queryBuilder: PostgrestBuilder<T>,
+  queryBuilder: AwaitablePostgrestBuilder<T>,
   timeoutMs: number = DEFAULT_CONFIG.insertTimeoutMs,
   operationName: string = 'insert'
 ): Promise<TimeoutResult<T>> {
@@ -215,7 +220,7 @@ export async function insertWithTimeout<T = unknown>(
  * Update con timeout
  */
 export async function updateWithTimeout<T = unknown>(
-  queryBuilder: PostgrestBuilder<T>,
+  queryBuilder: AwaitablePostgrestBuilder<T>,
   timeoutMs: number = DEFAULT_CONFIG.updateTimeoutMs,
   operationName: string = 'update'
 ): Promise<TimeoutResult<T>> {
@@ -226,7 +231,7 @@ export async function updateWithTimeout<T = unknown>(
  * Delete con timeout
  */
 export async function deleteWithTimeout<T = unknown>(
-  queryBuilder: PostgrestBuilder<T>,
+  queryBuilder: AwaitablePostgrestBuilder<T>,
   timeoutMs: number = DEFAULT_CONFIG.deleteTimeoutMs,
   operationName: string = 'delete'
 ): Promise<TimeoutResult<T>> {
@@ -446,7 +451,7 @@ class TableQueryBuilder {
     const operationName = `${this.operationType}:${this.tableName}`;
 
     return queryWithTimeout<T>(
-      this.builder as unknown as PostgrestBuilder<T>,
+      this.builder as unknown as AwaitablePostgrestBuilder<T>,
       timeout,
       operationName
     );

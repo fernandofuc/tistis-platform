@@ -18,23 +18,23 @@
 -- =====================================================
 
 -- =====================================================
--- FIX 1: Corregir CONSTRAINT unique_business_branch
+-- FIX 1: Corregir CONSTRAINT unique_tenant_branch
 -- El constraint original no maneja NULL correctamente
 -- =====================================================
 
 -- Eliminar constraint problemático
 ALTER TABLE public.voice_assistant_configs
-    DROP CONSTRAINT IF EXISTS unique_business_branch;
+    DROP CONSTRAINT IF EXISTS unique_tenant_branch;
 
 -- Crear indice unico parcial que maneja NULL correctamente
--- Un business sin branch solo puede tener UNA config
-CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_assistant_configs_business_no_branch
-    ON public.voice_assistant_configs(business_id)
+-- Un tenant sin branch solo puede tener UNA config
+CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_assistant_configs_tenant_no_branch
+    ON public.voice_assistant_configs(tenant_id)
     WHERE branch_id IS NULL;
 
--- Un business con branch especifico solo puede tener UNA config por branch
-CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_assistant_configs_business_with_branch
-    ON public.voice_assistant_configs(business_id, branch_id)
+-- Un tenant con branch especifico solo puede tener UNA config por branch
+CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_assistant_configs_tenant_with_branch
+    ON public.voice_assistant_configs(tenant_id, branch_id)
     WHERE branch_id IS NOT NULL;
 
 -- =====================================================
@@ -62,37 +62,32 @@ CREATE INDEX IF NOT EXISTS idx_voice_assistant_configs_vapi_squad
 -- =====================================================
 -- FIX 4: Reemplazar aggregate_voice_metrics con version
 -- compatible con schema real de voice_calls
+-- NOTA: En TIS TIS se usa tenant_id, no business_id
 -- =====================================================
 
+DROP FUNCTION IF EXISTS aggregate_voice_metrics(UUID, VARCHAR, TIMESTAMPTZ, TIMESTAMPTZ);
+
 CREATE OR REPLACE FUNCTION aggregate_voice_metrics(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_period_type VARCHAR,
     p_start_date TIMESTAMPTZ,
     p_end_date TIMESTAMPTZ
 )
 RETURNS UUID AS $$
 DECLARE
-    v_tenant_id UUID;
     v_config_id UUID;
     v_metric_id UUID;
     v_metrics RECORD;
 BEGIN
-    -- Obtener tenant_id y config_id
-    SELECT tenant_id, id INTO v_tenant_id, v_config_id
+    -- Obtener config_id
+    SELECT id INTO v_config_id
     FROM public.voice_assistant_configs
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
     LIMIT 1;
 
-    IF v_tenant_id IS NULL THEN
-        -- Intentar obtener de business directamente
-        SELECT tenant_id INTO v_tenant_id
-        FROM public.businesses
-        WHERE id = p_business_id;
-    END IF;
-
-    -- Si no hay tenant_id, no podemos continuar
-    IF v_tenant_id IS NULL THEN
-        RAISE EXCEPTION 'Business ID % not found', p_business_id;
+    -- Si no hay tenant_id válido, no podemos continuar
+    IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = p_tenant_id) THEN
+        RAISE EXCEPTION 'Tenant ID % not found', p_tenant_id;
     END IF;
 
     -- Calcular metricas agregadas desde voice_calls
@@ -119,16 +114,13 @@ BEGIN
         COUNT(*) FILTER (WHERE vc.status = 'escalated') as human_transfers
     INTO v_metrics
     FROM public.voice_calls vc
-    JOIN public.voice_agent_config vac ON vc.voice_agent_config_id = vac.id
-    JOIN public.businesses b ON vac.tenant_id = b.tenant_id
-    WHERE b.id = p_business_id
+    WHERE vc.tenant_id = p_tenant_id
         AND vc.started_at >= p_start_date
         AND vc.started_at < p_end_date;
 
     -- Insertar o actualizar metricas
     INSERT INTO public.voice_assistant_metrics (
         tenant_id,
-        business_id,
         config_id,
         period_type,
         period_start,
@@ -154,8 +146,7 @@ BEGIN
         aggregated_at
     )
     VALUES (
-        v_tenant_id,
-        p_business_id,
+        p_tenant_id,
         v_config_id,
         p_period_type,
         p_start_date,
@@ -180,7 +171,7 @@ BEGIN
         true,
         NOW()
     )
-    ON CONFLICT (business_id, config_id, period_type, period_start)
+    ON CONFLICT (tenant_id, config_id, period_type, period_start)
     DO UPDATE SET
         total_calls = EXCLUDED.total_calls,
         successful_calls = EXCLUDED.successful_calls,
@@ -211,10 +202,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 -- FIX 5: Reemplazar create_voice_appointment con version
 -- compatible con schema real de appointments
+-- NOTA: En TIS TIS se usa tenant_id directamente, no business_id
 -- =====================================================
 
+DROP FUNCTION IF EXISTS create_voice_appointment(UUID, UUID, VARCHAR, VARCHAR, DATE, TIME, UUID, UUID, TEXT);
+
 CREATE OR REPLACE FUNCTION create_voice_appointment(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_call_id UUID,
     p_customer_name VARCHAR,
     p_customer_phone VARCHAR,
@@ -226,7 +220,6 @@ CREATE OR REPLACE FUNCTION create_voice_appointment(
 )
 RETURNS JSONB AS $$
 DECLARE
-    v_tenant_id UUID;
     v_branch_id UUID;
     v_lead_id UUID;
     v_appointment_id UUID;
@@ -234,34 +227,26 @@ DECLARE
     v_scheduled_at TIMESTAMPTZ;
     v_name_parts TEXT[];
 BEGIN
-    -- Obtener tenant_id y branch_id del business
-    SELECT b.tenant_id, br.id INTO v_tenant_id, v_branch_id
-    FROM public.businesses b
-    LEFT JOIN public.branches br ON br.tenant_id = b.tenant_id
-    WHERE b.id = p_business_id
-    LIMIT 1;
-
-    IF v_tenant_id IS NULL THEN
+    -- Verificar que el tenant existe
+    IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = p_tenant_id) THEN
         RETURN jsonb_build_object(
             'success', false,
-            'error', 'Business not found'
+            'error', 'Tenant not found'
         );
     END IF;
 
+    -- Obtener branch_id del tenant
+    SELECT br.id INTO v_branch_id
+    FROM public.branches br
+    WHERE br.tenant_id = p_tenant_id
+    LIMIT 1;
+
     -- appointments.branch_id es NOT NULL, necesitamos un branch
     IF v_branch_id IS NULL THEN
-        -- Intentar obtener el primer branch del tenant
-        SELECT id INTO v_branch_id
-        FROM public.branches
-        WHERE tenant_id = v_tenant_id
-        LIMIT 1;
-
-        IF v_branch_id IS NULL THEN
-            RETURN jsonb_build_object(
-                'success', false,
-                'error', 'No branch found for this business. Cannot create appointment.'
-            );
-        END IF;
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'No branch found for this tenant. Cannot create appointment.'
+        );
     END IF;
 
     -- Parsear nombre en first_name y last_name
@@ -281,7 +266,7 @@ BEGIN
         status
     )
     VALUES (
-        v_tenant_id,
+        p_tenant_id,
         v_branch_id,
         p_customer_phone,
         regexp_replace(p_customer_phone, '[^0-9]', '', 'g'),
@@ -324,7 +309,7 @@ BEGIN
         booking_source
     )
     VALUES (
-        v_tenant_id,
+        p_tenant_id,
         v_branch_id,
         v_lead_id,
         p_staff_id,
@@ -358,10 +343,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- FIX 6: Reemplazar create_voice_reservation
 -- Nota: La tabla reservations puede no existir en todos
 -- los tenants. Usamos insercion condicional.
+-- NOTA: En TIS TIS se usa tenant_id directamente, no business_id
 -- =====================================================
 
+DROP FUNCTION IF EXISTS create_voice_reservation(UUID, UUID, VARCHAR, VARCHAR, DATE, TIME, INTEGER, TEXT);
+
 CREATE OR REPLACE FUNCTION create_voice_reservation(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_call_id UUID,
     p_customer_name VARCHAR,
     p_customer_phone VARCHAR,
@@ -372,7 +360,6 @@ CREATE OR REPLACE FUNCTION create_voice_reservation(
 )
 RETURNS JSONB AS $$
 DECLARE
-    v_tenant_id UUID;
     v_branch_id UUID;
     v_lead_id UUID;
     v_reservation_id UUID;
@@ -386,19 +373,19 @@ BEGIN
         AND table_name = 'reservations'
     ) INTO v_has_reservations_table;
 
-    -- Obtener tenant_id y branch_id
-    SELECT b.tenant_id, br.id INTO v_tenant_id, v_branch_id
-    FROM public.businesses b
-    LEFT JOIN public.branches br ON br.tenant_id = b.tenant_id
-    WHERE b.id = p_business_id
-    LIMIT 1;
-
-    IF v_tenant_id IS NULL THEN
+    -- Verificar que el tenant existe
+    IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = p_tenant_id) THEN
         RETURN jsonb_build_object(
             'success', false,
-            'error', 'Business not found'
+            'error', 'Tenant not found'
         );
     END IF;
+
+    -- Obtener branch_id
+    SELECT br.id INTO v_branch_id
+    FROM public.branches br
+    WHERE br.tenant_id = p_tenant_id
+    LIMIT 1;
 
     -- Parsear nombre
     v_name_parts := string_to_array(p_customer_name, ' ');
@@ -417,7 +404,7 @@ BEGIN
         status
     )
     VALUES (
-        v_tenant_id,
+        p_tenant_id,
         v_branch_id,
         p_customer_phone,
         regexp_replace(p_customer_phone, '[^0-9]', '', 'g'),
@@ -443,7 +430,7 @@ BEGIN
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id'
         )
         USING
-            v_tenant_id,
+            p_tenant_id,
             v_branch_id,
             v_lead_id,
             p_date,
@@ -490,10 +477,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- FIX 7: Reemplazar check_voice_availability
 -- Compatible con schema real de appointments
 -- NOTA: Usa ai_tenant_config para business_hours (no existe tabla business_hours)
+-- NOTA: En TIS TIS se usa tenant_id directamente, no business_id
 -- =====================================================
 
+DROP FUNCTION IF EXISTS check_voice_availability(UUID, DATE, TIME, INTEGER, UUID);
+
 CREATE OR REPLACE FUNCTION check_voice_availability(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_date DATE,
     p_time TIME,
     p_duration_minutes INTEGER DEFAULT 60,
@@ -501,7 +491,6 @@ CREATE OR REPLACE FUNCTION check_voice_availability(
 )
 RETURNS JSONB AS $$
 DECLARE
-    v_tenant_id UUID;
     v_branch_id UUID;
     v_scheduled_at TIMESTAMPTZ;
     v_end_at TIMESTAMPTZ;
@@ -514,17 +503,17 @@ DECLARE
     v_bh_end TIME;
     v_bh_days INTEGER[];
 BEGIN
-    -- Obtener tenant y branch
-    SELECT b.tenant_id, br.id INTO v_tenant_id, v_branch_id
-    FROM public.businesses b
-    LEFT JOIN public.branches br ON br.tenant_id = b.tenant_id
-    WHERE b.id = p_business_id
+    -- Verificar que el tenant existe y obtener branch
+    SELECT br.id INTO v_branch_id
+    FROM public.tenants t
+    LEFT JOIN public.branches br ON br.tenant_id = t.id
+    WHERE t.id = p_tenant_id
     LIMIT 1;
 
-    IF v_tenant_id IS NULL THEN
+    IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = p_tenant_id) THEN
         RETURN jsonb_build_object(
             'available', false,
-            'reason', 'Business not found'
+            'reason', 'Tenant not found'
         );
     END IF;
 
@@ -545,7 +534,7 @@ BEGIN
         COALESCE(atc.business_hours_days, ARRAY[1,2,3,4,5])
     INTO v_bh_start, v_bh_end, v_bh_days
     FROM public.ai_tenant_config atc
-    WHERE atc.tenant_id = v_tenant_id;
+    WHERE atc.tenant_id = p_tenant_id;
 
     -- Si no hay config, usar defaults
     IF v_bh_start IS NULL THEN
@@ -567,7 +556,7 @@ BEGIN
     -- Verificar conflictos con citas existentes (usando scheduled_at)
     IF v_is_available AND EXISTS (
         SELECT 1 FROM public.appointments a
-        WHERE a.tenant_id = v_tenant_id
+        WHERE a.tenant_id = p_tenant_id
             AND (v_branch_id IS NULL OR a.branch_id = v_branch_id)
             AND a.status NOT IN ('cancelled', 'no_show', 'rescheduled')
             AND (p_staff_id IS NULL OR a.staff_id = p_staff_id)
@@ -604,7 +593,7 @@ BEGIN
         WHERE s.slot_time > NOW()
             AND NOT EXISTS (
                 SELECT 1 FROM public.appointments a
-                WHERE a.tenant_id = v_tenant_id
+                WHERE a.tenant_id = p_tenant_id
                     AND (v_branch_id IS NULL OR a.branch_id = v_branch_id)
                     AND a.status NOT IN ('cancelled', 'no_show', 'rescheduled')
                     AND s.slot_time >= a.scheduled_at
@@ -631,24 +620,22 @@ $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 -- =====================================================
 -- FIX 8: Reemplazar get_voice_call_history
 -- Compatible con schema real de voice_calls
+-- NOTA: En TIS TIS se usa tenant_id directamente, no business_id
 -- =====================================================
 
+DROP FUNCTION IF EXISTS get_voice_call_history(UUID, VARCHAR, INTEGER);
+
 CREATE OR REPLACE FUNCTION get_voice_call_history(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_phone_number VARCHAR DEFAULT NULL,
     p_limit INTEGER DEFAULT 10
 )
 RETURNS JSONB AS $$
 DECLARE
-    v_tenant_id UUID;
     v_calls JSONB;
 BEGIN
-    -- Obtener tenant_id del business
-    SELECT tenant_id INTO v_tenant_id
-    FROM public.businesses
-    WHERE id = p_business_id;
-
-    IF v_tenant_id IS NULL THEN
+    -- Verificar que el tenant existe
+    IF NOT EXISTS (SELECT 1 FROM public.tenants WHERE id = p_tenant_id) THEN
         RETURN '[]'::jsonb;
     END IF;
 
@@ -670,7 +657,7 @@ BEGIN
     ), '[]'::jsonb)
     INTO v_calls
     FROM public.voice_calls vc
-    WHERE vc.tenant_id = v_tenant_id
+    WHERE vc.tenant_id = p_tenant_id
         AND (p_phone_number IS NULL OR vc.caller_phone = p_phone_number)
     LIMIT p_limit;
 
@@ -681,10 +668,13 @@ $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 -- =====================================================
 -- FIX 9: Agregar funcion para reset de ventana de
 -- tiempo del circuit breaker (faltante)
+-- NOTA: En TIS TIS se usa tenant_id directamente, no business_id
 -- =====================================================
 
+DROP FUNCTION IF EXISTS reset_circuit_breaker_window(UUID, VARCHAR);
+
 CREATE OR REPLACE FUNCTION reset_circuit_breaker_window(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_service_name VARCHAR DEFAULT NULL
 )
 RETURNS INTEGER AS $$
@@ -697,7 +687,7 @@ BEGIN
         window_failure_count = 0,
         window_success_count = 0,
         window_total_count = 0
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
         AND (p_service_name IS NULL OR service_name = p_service_name);
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
@@ -712,13 +702,15 @@ COMMENT ON FUNCTION reset_circuit_breaker_window IS
 -- FIX 10: Corregir get_voice_business_context
 -- Compatible con schema real
 -- NOTA: Usa ai_tenant_config para business_hours (no existe tabla business_hours)
+-- NOTA: En TIS TIS se usa tenant_id directamente, no business_id
 -- =====================================================
 
-CREATE OR REPLACE FUNCTION get_voice_business_context(p_business_id UUID)
+DROP FUNCTION IF EXISTS get_voice_business_context(UUID);
+
+CREATE OR REPLACE FUNCTION get_voice_business_context(p_tenant_id UUID)
 RETURNS JSONB AS $$
 DECLARE
     v_result JSONB;
-    v_tenant_id UUID;
     v_staff JSONB := '[]'::jsonb;
     v_services JSONB := '[]'::jsonb;
     v_hours JSONB := '{}'::jsonb;
@@ -728,27 +720,26 @@ DECLARE
     v_bh_end TIME;
     v_bh_days INTEGER[];
 BEGIN
-    -- Obtener informacion basica del negocio
+    -- Obtener informacion basica del tenant
     SELECT jsonb_build_object(
-        'business_name', b.name,
-        'phone', b.phone,
-        'email', b.email,
-        'address', b.address,
-        'city', b.city,
-        'state', b.state,
-        'country', b.country,
-        'timezone', COALESCE(b.timezone, 'America/Mexico_City'),
+        'business_name', t.name,
+        'phone', t.phone,
+        'email', t.email,
+        'address', t.address,
+        'city', t.city,
+        'state', t.state,
+        'country', t.country,
+        'timezone', COALESCE(t.timezone, 'America/Mexico_City'),
         'vertical', t.vertical,
-        'settings', b.settings
-    ), br.id, t.id
-    INTO v_result, v_branch_id, v_tenant_id
-    FROM public.businesses b
-    JOIN public.tenants t ON b.tenant_id = t.id
+        'settings', t.settings
+    ), br.id
+    INTO v_result, v_branch_id
+    FROM public.tenants t
     LEFT JOIN public.branches br ON br.tenant_id = t.id
-    WHERE b.id = p_business_id;
+    WHERE t.id = p_tenant_id;
 
     IF v_result IS NULL THEN
-        RETURN jsonb_build_object('error', 'Business not found');
+        RETURN jsonb_build_object('error', 'Tenant not found');
     END IF;
 
     -- Obtener staff activo
@@ -765,7 +756,7 @@ BEGIN
         ), '[]'::jsonb)
         INTO v_staff
         FROM public.staff s
-        WHERE s.tenant_id = v_tenant_id
+        WHERE s.tenant_id = p_tenant_id
             AND s.is_active = true
             AND (
                 v_branch_id IS NULL
@@ -795,7 +786,7 @@ BEGIN
             ), '[]'::jsonb)
             INTO v_services
             FROM public.services svc
-            WHERE svc.tenant_id = v_tenant_id
+            WHERE svc.tenant_id = p_tenant_id
                 AND svc.is_active = true;
         EXCEPTION WHEN undefined_column THEN
             v_services := '[]'::jsonb;
@@ -809,7 +800,7 @@ BEGIN
         COALESCE(atc.business_hours_days, ARRAY[1,2,3,4,5])
     INTO v_bh_start, v_bh_end, v_bh_days
     FROM public.ai_tenant_config atc
-    WHERE atc.tenant_id = v_tenant_id;
+    WHERE atc.tenant_id = p_tenant_id;
 
     -- Construir JSON de horarios
     v_hours := jsonb_build_object(
@@ -896,17 +887,20 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'VOICE AGENT v2.0 - FIXES APLICADOS';
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'FIX 1: Constraint unique_business_branch corregido';
+    RAISE NOTICE 'FIX 1: Constraint unique_tenant_branch corregido (usa tenant_id)';
     RAISE NOTICE 'FIX 2: CHECK constraint E.164 agregado';
     RAISE NOTICE 'FIX 3: Indice vapi_squad_id agregado';
-    RAISE NOTICE 'FIX 4: aggregate_voice_metrics compatible con schema real';
-    RAISE NOTICE 'FIX 5: create_voice_appointment compatible con schema real';
-    RAISE NOTICE 'FIX 6: create_voice_reservation con manejo de tabla opcional';
-    RAISE NOTICE 'FIX 7: check_voice_availability compatible con scheduled_at';
-    RAISE NOTICE 'FIX 8: get_voice_call_history compatible con schema real';
-    RAISE NOTICE 'FIX 9: reset_circuit_breaker_window agregado';
-    RAISE NOTICE 'FIX 10: get_voice_business_context con manejo de errores';
+    RAISE NOTICE 'FIX 4: aggregate_voice_metrics compatible con schema real (usa tenant_id)';
+    RAISE NOTICE 'FIX 5: create_voice_appointment compatible con schema real (usa tenant_id)';
+    RAISE NOTICE 'FIX 6: create_voice_reservation con manejo de tabla opcional (usa tenant_id)';
+    RAISE NOTICE 'FIX 7: check_voice_availability compatible con scheduled_at (usa tenant_id)';
+    RAISE NOTICE 'FIX 8: get_voice_call_history compatible con schema real (usa tenant_id)';
+    RAISE NOTICE 'FIX 9: reset_circuit_breaker_window agregado (usa tenant_id)';
+    RAISE NOTICE 'FIX 10: get_voice_business_context con manejo de errores (usa tenant_id)';
     RAISE NOTICE 'FIX 11: get_available_voices con SECURITY DEFINER';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'NOTA: Todas las funciones ahora usan tenant_id en lugar de business_id';
+    RAISE NOTICE '      para compatibilidad con el schema de TIS TIS.';
     RAISE NOTICE '========================================';
 END $$;
 

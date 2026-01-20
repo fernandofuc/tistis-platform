@@ -15,7 +15,6 @@
  * @module lib/voice-agent/rollout/checklist-service
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type {
   PreRolloutChecklist,

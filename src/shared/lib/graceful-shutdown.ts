@@ -247,7 +247,7 @@ export async function initGracefulShutdown(): Promise<void> {
   try {
     const checkpointModule = await import(
       /* webpackIgnore: true */
-      '../../../features/ai/services/checkpoint.service'
+      '../../features/ai/services/checkpoint.service'
     );
     if (checkpointModule.shutdownCheckpointService) {
       gracefulShutdown.register(

@@ -38,9 +38,8 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.voice_circuit_breaker_state (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- Relaciones
+    -- Relaciones (en TIS TIS, tenant = business)
     tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-    business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
 
     -- Identificador del servicio monitoreado
     service_name VARCHAR(100) NOT NULL CHECK (service_name IN (
@@ -88,8 +87,8 @@ CREATE TABLE IF NOT EXISTS public.voice_circuit_breaker_state (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW(),
 
-    -- Constraint: un registro por business + servicio
-    UNIQUE(business_id, service_name)
+    -- Constraint: un registro por tenant + servicio
+    UNIQUE(tenant_id, service_name)
 );
 
 -- =====================================================
@@ -99,10 +98,6 @@ CREATE TABLE IF NOT EXISTS public.voice_circuit_breaker_state (
 -- Indice por tenant
 CREATE INDEX idx_voice_circuit_breaker_tenant
     ON public.voice_circuit_breaker_state(tenant_id);
-
--- Indice por business
-CREATE INDEX idx_voice_circuit_breaker_business
-    ON public.voice_circuit_breaker_state(business_id);
 
 -- Indice por estado (para alertas y monitoreo)
 CREATE INDEX idx_voice_circuit_breaker_state
@@ -114,8 +109,8 @@ CREATE INDEX idx_voice_circuit_breaker_open
     WHERE state = 'OPEN';
 
 -- Indice compuesto para queries comunes
-CREATE INDEX idx_voice_circuit_breaker_business_service
-    ON public.voice_circuit_breaker_state(business_id, service_name);
+CREATE INDEX idx_voice_circuit_breaker_tenant_service
+    ON public.voice_circuit_breaker_state(tenant_id, service_name);
 
 -- =====================================================
 -- TRIGGER: Actualizar updated_at automaticamente
@@ -174,8 +169,11 @@ COMMENT ON COLUMN public.voice_circuit_breaker_state.timeout_seconds IS
 -- FUNCION: Registrar exito en el circuit breaker
 -- =====================================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS record_circuit_breaker_success(UUID, VARCHAR);
+
 CREATE OR REPLACE FUNCTION record_circuit_breaker_success(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_service_name VARCHAR
 )
 RETURNS voice_circuit_breaker_state_enum AS $$
@@ -186,12 +184,10 @@ DECLARE
 BEGIN
     -- Obtener o crear registro
     INSERT INTO public.voice_circuit_breaker_state (
-        tenant_id, business_id, service_name
+        tenant_id, service_name
     )
-    SELECT b.tenant_id, p_business_id, p_service_name
-    FROM public.businesses b
-    WHERE b.id = p_business_id
-    ON CONFLICT (business_id, service_name) DO NOTHING;
+    VALUES (p_tenant_id, p_service_name)
+    ON CONFLICT (tenant_id, service_name) DO NOTHING;
 
     -- Actualizar contadores
     UPDATE public.voice_circuit_breaker_state
@@ -202,7 +198,7 @@ BEGIN
         last_success_time = NOW(),
         window_success_count = window_success_count + 1,
         window_total_count = window_total_count + 1
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
         AND service_name = p_service_name
     RETURNING state, success_threshold, consecutive_successes
     INTO v_state, v_success_threshold, v_consecutive_successes;
@@ -216,7 +212,7 @@ BEGIN
             last_state_change = NOW(),
             opened_at = NULL,
             half_opened_at = NULL
-        WHERE business_id = p_business_id
+        WHERE tenant_id = p_tenant_id
             AND service_name = p_service_name;
         v_state := 'CLOSED';
     END IF;
@@ -232,8 +228,11 @@ COMMENT ON FUNCTION record_circuit_breaker_success IS
 -- FUNCION: Registrar fallo en el circuit breaker
 -- =====================================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS record_circuit_breaker_failure(UUID, VARCHAR, TEXT, VARCHAR);
+
 CREATE OR REPLACE FUNCTION record_circuit_breaker_failure(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_service_name VARCHAR,
     p_error_message TEXT DEFAULT NULL,
     p_error_code VARCHAR DEFAULT NULL
@@ -243,19 +242,13 @@ DECLARE
     v_state voice_circuit_breaker_state_enum;
     v_failure_threshold INTEGER;
     v_consecutive_failures INTEGER;
-    v_tenant_id UUID;
 BEGIN
-    -- Obtener tenant_id
-    SELECT tenant_id INTO v_tenant_id
-    FROM public.businesses
-    WHERE id = p_business_id;
-
     -- Obtener o crear registro
     INSERT INTO public.voice_circuit_breaker_state (
-        tenant_id, business_id, service_name
+        tenant_id, service_name
     )
-    VALUES (v_tenant_id, p_business_id, p_service_name)
-    ON CONFLICT (business_id, service_name) DO NOTHING;
+    VALUES (p_tenant_id, p_service_name)
+    ON CONFLICT (tenant_id, service_name) DO NOTHING;
 
     -- Actualizar contadores
     UPDATE public.voice_circuit_breaker_state
@@ -268,7 +261,7 @@ BEGIN
         last_error_code = COALESCE(p_error_code, last_error_code),
         window_failure_count = window_failure_count + 1,
         window_total_count = window_total_count + 1
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
         AND service_name = p_service_name
     RETURNING state, failure_threshold, consecutive_failures
     INTO v_state, v_failure_threshold, v_consecutive_failures;
@@ -281,7 +274,7 @@ BEGIN
             state = 'OPEN',
             last_state_change = NOW(),
             opened_at = NOW()
-        WHERE business_id = p_business_id
+        WHERE tenant_id = p_tenant_id
             AND service_name = p_service_name;
         v_state := 'OPEN';
     ELSIF v_state = 'HALF_OPEN' THEN
@@ -292,7 +285,7 @@ BEGIN
             last_state_change = NOW(),
             opened_at = NOW(),
             half_opened_at = NULL
-        WHERE business_id = p_business_id
+        WHERE tenant_id = p_tenant_id
             AND service_name = p_service_name;
         v_state := 'OPEN';
     END IF;
@@ -308,8 +301,11 @@ COMMENT ON FUNCTION record_circuit_breaker_failure IS
 -- FUNCION: Verificar si se puede hacer request
 -- =====================================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS can_make_request(UUID, VARCHAR);
+
 CREATE OR REPLACE FUNCTION can_make_request(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_service_name VARCHAR
 )
 RETURNS BOOLEAN AS $$
@@ -322,7 +318,7 @@ BEGIN
     SELECT state, opened_at, timeout_seconds
     INTO v_state, v_opened_at, v_timeout_seconds
     FROM public.voice_circuit_breaker_state
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
         AND service_name = p_service_name;
 
     -- Si no existe registro, permitir
@@ -351,7 +347,7 @@ BEGIN
                 half_opened_at = NOW(),
                 consecutive_successes = 0,
                 consecutive_failures = 0
-            WHERE business_id = p_business_id
+            WHERE tenant_id = p_tenant_id
                 AND service_name = p_service_name;
             RETURN true;
         END IF;
@@ -369,7 +365,10 @@ COMMENT ON FUNCTION can_make_request IS
 -- FUNCION: Obtener estado de todos los circuit breakers
 -- =====================================================
 
-CREATE OR REPLACE FUNCTION get_circuit_breaker_status(p_business_id UUID)
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS get_circuit_breaker_status(UUID);
+
+CREATE OR REPLACE FUNCTION get_circuit_breaker_status(p_tenant_id UUID)
 RETURNS TABLE (
     service_name VARCHAR,
     state voice_circuit_breaker_state_enum,
@@ -392,7 +391,7 @@ BEGIN
         cb.opened_at,
         (cb.state = 'CLOSED') as is_healthy
     FROM public.voice_circuit_breaker_state cb
-    WHERE cb.business_id = p_business_id
+    WHERE cb.tenant_id = p_tenant_id
     ORDER BY cb.service_name;
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
@@ -404,8 +403,11 @@ COMMENT ON FUNCTION get_circuit_breaker_status IS
 -- FUNCION: Reset manual del circuit breaker
 -- =====================================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS reset_circuit_breaker(UUID, VARCHAR);
+
 CREATE OR REPLACE FUNCTION reset_circuit_breaker(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_service_name VARCHAR
 )
 RETURNS BOOLEAN AS $$
@@ -423,7 +425,7 @@ BEGIN
         window_success_count = 0,
         window_total_count = 0,
         window_start = NOW()
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
         AND service_name = p_service_name;
 
     RETURN FOUND;

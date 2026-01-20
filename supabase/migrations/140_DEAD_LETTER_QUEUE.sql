@@ -7,8 +7,8 @@
 CREATE TABLE IF NOT EXISTS ai_dead_letter_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  conversation_id UUID REFERENCES ai_conversations(id) ON DELETE SET NULL,
-  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
+  contact_id UUID REFERENCES public.external_contacts(id) ON DELETE SET NULL,
 
   -- Mensaje original
   original_message TEXT NOT NULL,
@@ -120,6 +120,9 @@ CREATE TRIGGER update_dlq_updated_at
 -- FUNCIÓN PARA AGREGAR A DLQ (con deduplicación)
 -- =============================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS add_to_dead_letter_queue(UUID, UUID, UUID, TEXT, JSONB, TEXT, TEXT, TEXT, TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION add_to_dead_letter_queue(
   p_tenant_id UUID,
   p_conversation_id UUID,
@@ -185,6 +188,9 @@ GRANT EXECUTE ON FUNCTION add_to_dead_letter_queue(UUID, UUID, UUID, TEXT, JSONB
 -- FUNCIÓN PARA OBTENER MENSAJES PARA RETRY
 -- =============================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS get_dlq_messages_for_retry(UUID, INTEGER);
+
 CREATE OR REPLACE FUNCTION get_dlq_messages_for_retry(
   p_tenant_id UUID,
   p_limit INTEGER DEFAULT 10
@@ -210,6 +216,9 @@ GRANT EXECUTE ON FUNCTION get_dlq_messages_for_retry(UUID, INTEGER) TO service_r
 -- =============================================
 -- FUNCIÓN PARA ESTADÍSTICAS DE DLQ
 -- =============================================
+
+-- Drop function if exists to allow return type changes
+DROP FUNCTION IF EXISTS get_dlq_stats(UUID);
 
 CREATE OR REPLACE FUNCTION get_dlq_stats(p_tenant_id UUID)
 RETURNS TABLE (
@@ -239,6 +248,9 @@ GRANT EXECUTE ON FUNCTION get_dlq_stats(UUID) TO service_role;
 -- =============================================
 -- FUNCIÓN PARA ARCHIVAR MENSAJES ANTIGUOS
 -- =============================================
+
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS archive_old_dlq_messages(INTEGER, INTEGER);
 
 CREATE OR REPLACE FUNCTION archive_old_dlq_messages(
   p_days_old INTEGER DEFAULT 30,

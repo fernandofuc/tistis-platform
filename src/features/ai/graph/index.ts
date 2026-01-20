@@ -6,6 +6,8 @@ export {
   buildTISTISGraph,
   compileTISTISGraph,
   executeGraph,
+  resumeConversation,
+  hasResumableCheckpoint,
   TISTISGraph,
   type GraphExecutionInput,
   type GraphExecutionResult,

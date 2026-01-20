@@ -17,6 +17,23 @@
 // TIPOS
 // ============================================
 
+/**
+ * Tipo simplificado para cliente Supabase usado en este servicio
+ */
+interface SupabaseQueryResult {
+  data: unknown[] | null;
+}
+
+interface SupabaseLikeClient {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (col: string, val: unknown) => {
+        eq: (col: string, val: unknown) => SupabaseQueryResult;
+      };
+    };
+  };
+}
+
 export interface BM25Document {
   id: string;
   content: string;
@@ -413,8 +430,7 @@ export class BM25Service {
    * Recarga documentos desde la base de datos
    */
   async reloadFromDatabase(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    supabase: any,
+    supabase: SupabaseLikeClient,
     tenantId: string
   ): Promise<number> {
     this.clear();
@@ -557,8 +573,7 @@ function startCleanupInterval(): void {
  * Obtiene o crea el índice BM25 para un tenant
  */
 export async function getBM25Index(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseLikeClient,
   tenantId: string,
   forceReload: boolean = false
 ): Promise<BM25Service> {

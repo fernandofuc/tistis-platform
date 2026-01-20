@@ -289,23 +289,19 @@ export interface ToolDefinition<TParams = Record<string, unknown>> {
  */
 export interface IToolRegistry {
   /** Register a tool */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  register(tool: ToolDefinition<any>): void;
+  register<T>(tool: ToolDefinition<T>): void;
 
   /** Get tool by name */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get(name: string): ToolDefinition<any> | undefined;
+  get(name: string): ToolDefinition<Record<string, unknown>> | undefined;
 
   /** Check if tool exists */
   has(name: string): boolean;
 
   /** Get tools for a specific assistant type */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getForType(assistantType: string): ToolDefinition<any>[];
+  getForType(assistantType: string): ToolDefinition<Record<string, unknown>>[];
 
   /** Get tools by category */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getByCategory(category: ToolCategory): ToolDefinition<any>[];
+  getByCategory(category: ToolCategory): ToolDefinition<Record<string, unknown>>[];
 
   /** Check if tool requires confirmation */
   requiresConfirmation(name: string): boolean;

@@ -19,9 +19,8 @@
 CREATE TABLE IF NOT EXISTS public.voice_assistant_metrics (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- Relaciones
+    -- Relaciones (en TIS TIS, tenant = business)
     tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-    business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
     config_id UUID REFERENCES public.voice_assistant_configs(id) ON DELETE SET NULL,
 
     -- Periodo de agregacion
@@ -96,8 +95,8 @@ CREATE TABLE IF NOT EXISTS public.voice_assistant_metrics (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-    -- Constraint: periodo unico por business y config
-    UNIQUE(business_id, config_id, period_type, period_start)
+    -- Constraint: periodo unico por tenant y config
+    UNIQUE(tenant_id, config_id, period_type, period_start)
 );
 
 -- =====================================================
@@ -107,10 +106,6 @@ CREATE TABLE IF NOT EXISTS public.voice_assistant_metrics (
 -- Indice por tenant
 CREATE INDEX idx_voice_assistant_metrics_tenant
     ON public.voice_assistant_metrics(tenant_id);
-
--- Indice por business
-CREATE INDEX idx_voice_assistant_metrics_business
-    ON public.voice_assistant_metrics(business_id);
 
 -- Indice por periodo (para queries de dashboard)
 CREATE INDEX idx_voice_assistant_metrics_period
@@ -122,8 +117,8 @@ CREATE INDEX idx_voice_assistant_metrics_config
     WHERE config_id IS NOT NULL;
 
 -- Indice compuesto para queries comunes de dashboard
-CREATE INDEX idx_voice_assistant_metrics_business_period
-    ON public.voice_assistant_metrics(business_id, period_type, period_start DESC);
+CREATE INDEX idx_voice_assistant_metrics_tenant_period
+    ON public.voice_assistant_metrics(tenant_id, period_type, period_start DESC);
 
 -- Indice para agregacion
 CREATE INDEX idx_voice_assistant_metrics_not_aggregated
@@ -184,31 +179,26 @@ COMMENT ON COLUMN public.voice_assistant_metrics.is_aggregated IS
 -- FUNCION: Agregar metricas desde voice_calls
 -- =====================================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS aggregate_voice_metrics(UUID, VARCHAR, TIMESTAMPTZ, TIMESTAMPTZ);
+
 CREATE OR REPLACE FUNCTION aggregate_voice_metrics(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_period_type VARCHAR,
     p_start_date TIMESTAMPTZ,
     p_end_date TIMESTAMPTZ
 )
 RETURNS UUID AS $$
 DECLARE
-    v_tenant_id UUID;
     v_config_id UUID;
     v_metric_id UUID;
     v_metrics RECORD;
 BEGIN
-    -- Obtener tenant_id y config_id
-    SELECT tenant_id, id INTO v_tenant_id, v_config_id
+    -- Obtener config_id
+    SELECT id INTO v_config_id
     FROM public.voice_assistant_configs
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
     LIMIT 1;
-
-    IF v_tenant_id IS NULL THEN
-        -- Intentar obtener de business directamente
-        SELECT tenant_id INTO v_tenant_id
-        FROM public.businesses
-        WHERE id = p_business_id;
-    END IF;
 
     -- Calcular metricas agregadas desde voice_calls
     SELECT
@@ -231,14 +221,13 @@ BEGIN
         COUNT(*) FILTER (WHERE end_reason = 'transferred') as human_transfers
     INTO v_metrics
     FROM public.voice_calls
-    WHERE business_id = p_business_id
+    WHERE tenant_id = p_tenant_id
         AND started_at >= p_start_date
         AND started_at < p_end_date;
 
     -- Insertar o actualizar metricas
     INSERT INTO public.voice_assistant_metrics (
         tenant_id,
-        business_id,
         config_id,
         period_type,
         period_start,
@@ -264,8 +253,7 @@ BEGIN
         aggregated_at
     )
     VALUES (
-        v_tenant_id,
-        p_business_id,
+        p_tenant_id,
         v_config_id,
         p_period_type,
         p_start_date,
@@ -290,7 +278,7 @@ BEGIN
         true,
         NOW()
     )
-    ON CONFLICT (business_id, config_id, period_type, period_start)
+    ON CONFLICT (tenant_id, config_id, period_type, period_start)
     DO UPDATE SET
         total_calls = EXCLUDED.total_calls,
         successful_calls = EXCLUDED.successful_calls,
@@ -325,8 +313,11 @@ COMMENT ON FUNCTION aggregate_voice_metrics IS
 -- FUNCION: Obtener metricas para dashboard
 -- =====================================================
 
+-- Drop function if exists to allow signature changes
+DROP FUNCTION IF EXISTS get_voice_dashboard_metrics(UUID, VARCHAR, INTEGER);
+
 CREATE OR REPLACE FUNCTION get_voice_dashboard_metrics(
-    p_business_id UUID,
+    p_tenant_id UUID,
     p_period_type VARCHAR DEFAULT 'daily',
     p_limit INTEGER DEFAULT 30
 )
@@ -354,7 +345,7 @@ BEGIN
         m.appointments_created,
         m.human_transfers
     FROM public.voice_assistant_metrics m
-    WHERE m.business_id = p_business_id
+    WHERE m.tenant_id = p_tenant_id
         AND m.period_type = p_period_type
     ORDER BY m.period_start DESC
     LIMIT p_limit;

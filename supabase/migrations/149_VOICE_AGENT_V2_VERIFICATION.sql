@@ -256,7 +256,7 @@ END $$;
 CREATE OR REPLACE VIEW public.v_voice_agent_v2_summary AS
 SELECT
     vac.id as config_id,
-    b.name as business_name,
+    t.name as business_name,
     vat.name as assistant_type,
     vat.vertical,
     vc.display_name as voice_name,
@@ -267,7 +267,7 @@ SELECT
     vac.created_at,
     vac.updated_at
 FROM public.voice_assistant_configs vac
-JOIN public.businesses b ON vac.business_id = b.id
+JOIN public.tenants t ON vac.tenant_id = t.id
 JOIN public.voice_assistant_types vat ON vac.assistant_type_id = vat.id
 LEFT JOIN public.voice_catalog vc ON vac.voice_id = vc.id;
 

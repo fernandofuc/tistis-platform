@@ -16,6 +16,7 @@ import { HumanMessage, AIMessage, type BaseMessage } from '@langchain/core/messa
 import {
   TISTISAgentState,
   type TISTISAgentStateType,
+  type AgentTrace,
   createInitialState,
   getProcessingTimeMs,
 } from '../state';
@@ -599,19 +600,25 @@ export async function getCheckpointState(
     const safeStringArray = (val: unknown): string[] | undefined =>
       Array.isArray(val) && val.every(item => typeof item === 'string') ? val : undefined;
 
-    // Type guard para AgentTraceEntry
-    const isAgentTraceEntry = (val: unknown): val is { agent_name: string; started_at: string } =>
+    // Type guard para AgentTrace (matches AgentTrace interface)
+    const isAgentTraceEntry = (val: unknown): val is AgentTrace =>
       typeof val === 'object' &&
       val !== null &&
       'agent_name' in val &&
-      'started_at' in val &&
+      'timestamp' in val &&
+      'input_summary' in val &&
+      'output_summary' in val &&
+      'duration_ms' in val &&
       typeof (val as Record<string, unknown>).agent_name === 'string' &&
-      typeof (val as Record<string, unknown>).started_at === 'string';
+      typeof (val as Record<string, unknown>).timestamp === 'string' &&
+      typeof (val as Record<string, unknown>).input_summary === 'string' &&
+      typeof (val as Record<string, unknown>).output_summary === 'string' &&
+      typeof (val as Record<string, unknown>).duration_ms === 'number';
 
     const safeAgentTrace = (val: unknown): TISTISAgentStateType['agent_trace'] | undefined => {
       if (!Array.isArray(val)) return undefined;
       const validEntries = val.filter(isAgentTraceEntry);
-      return validEntries.length > 0 ? validEntries as TISTISAgentStateType['agent_trace'] : undefined;
+      return validEntries.length > 0 ? validEntries : undefined;
     };
 
     // Type guard para control object
@@ -636,11 +643,19 @@ export async function getCheckpointState(
     const safeSignals = (val: unknown): Array<{ signal: string; points: number }> | undefined =>
       isSignalArray(val) ? val : undefined;
 
+    // Type guard para AIIntent
+    const AI_INTENTS = ['GREETING', 'PRICE_INQUIRY', 'BOOK_APPOINTMENT', 'PAIN_URGENT', 'HUMAN_REQUEST', 'LOCATION', 'HOURS', 'FAQ', 'INVOICE_REQUEST', 'UNKNOWN'] as const;
+    type AIIntent = typeof AI_INTENTS[number];
+    const isAIIntent = (val: unknown): val is AIIntent =>
+      typeof val === 'string' && AI_INTENTS.includes(val as AIIntent);
+    const safeIntent = (val: unknown): AIIntent | undefined =>
+      isAIIntent(val) ? val : undefined;
+
     return {
       messages,
       current_message: safeString(channelValues.current_message) || '',
       final_response: safeString(channelValues.final_response),
-      detected_intent: safeString(channelValues.detected_intent),
+      detected_intent: safeIntent(channelValues.detected_intent),
       detected_signals: safeSignals(channelValues.detected_signals),
       score_change: safeNumber(channelValues.score_change),
       next_agent: safeString(channelValues.next_agent),

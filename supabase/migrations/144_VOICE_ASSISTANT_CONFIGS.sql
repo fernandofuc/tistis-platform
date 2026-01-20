@@ -20,9 +20,8 @@
 CREATE TABLE IF NOT EXISTS public.voice_assistant_configs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- Relacion con tenant/business
+    -- Relacion con tenant (en TIS TIS, tenant = business)
     tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-    business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
     branch_id UUID REFERENCES public.branches(id) ON DELETE SET NULL,
 
     -- Tipo de asistente (FK a voice_assistant_types)
@@ -138,7 +137,7 @@ CREATE TABLE IF NOT EXISTS public.voice_assistant_configs (
 
     -- Constraints
     CONSTRAINT unique_phone_number UNIQUE(phone_number),
-    CONSTRAINT unique_business_branch UNIQUE(business_id, branch_id)
+    CONSTRAINT unique_tenant_branch UNIQUE(tenant_id, branch_id)
 );
 
 -- =====================================================
@@ -148,10 +147,6 @@ CREATE TABLE IF NOT EXISTS public.voice_assistant_configs (
 -- Indice por tenant
 CREATE INDEX idx_voice_assistant_configs_tenant
     ON public.voice_assistant_configs(tenant_id);
-
--- Indice por business
-CREATE INDEX idx_voice_assistant_configs_business
-    ON public.voice_assistant_configs(business_id);
 
 -- Indice por numero de telefono (para lookup rapido en webhooks)
 CREATE INDEX idx_voice_assistant_configs_phone
@@ -304,11 +299,13 @@ COMMENT ON COLUMN public.voice_assistant_configs.compiled_prompt IS
 -- FUNCION: Obtener configuracion completa por telefono
 -- =====================================================
 
+-- Drop function if exists to allow return type changes
+DROP FUNCTION IF EXISTS get_voice_config_by_phone(VARCHAR);
+
 CREATE OR REPLACE FUNCTION get_voice_config_by_phone(p_phone_number VARCHAR)
 RETURNS TABLE (
     config_id UUID,
     tenant_id UUID,
-    business_id UUID,
     assistant_type_name VARCHAR,
     assistant_type_vertical VARCHAR,
     voice_provider VARCHAR,
@@ -329,7 +326,6 @@ BEGIN
     SELECT
         vac.id as config_id,
         vac.tenant_id,
-        vac.business_id,
         vat.name as assistant_type_name,
         vat.vertical as assistant_type_vertical,
         vc.provider as voice_provider,

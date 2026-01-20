@@ -27,8 +27,7 @@ import type {
  * Tool Registry - manages all registered tools
  */
 export class ToolRegistry implements IToolRegistry {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private tools: Map<string, ToolDefinition<any>> = new Map();
+  private tools: Map<string, ToolDefinition<Record<string, unknown>>> = new Map();
   private executionTimeout: number;
   private logExecutions: boolean;
 
@@ -44,24 +43,22 @@ export class ToolRegistry implements IToolRegistry {
   /**
    * Register a tool
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  register(tool: ToolDefinition<any>): void {
+  register<T = Record<string, unknown>>(tool: ToolDefinition<T>): void {
     if (this.tools.has(tool.name)) {
       console.warn(`[ToolRegistry] Tool '${tool.name}' already registered, overwriting`);
     }
 
     // Validate tool definition
-    this.validateToolDefinition(tool);
+    this.validateToolDefinition(tool as ToolDefinition<Record<string, unknown>>);
 
-    this.tools.set(tool.name, tool);
+    this.tools.set(tool.name, tool as ToolDefinition<Record<string, unknown>>);
     console.log(`[ToolRegistry] Registered tool: ${tool.name}`);
   }
 
   /**
    * Register multiple tools at once
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  registerMany(tools: ToolDefinition<any>[]): void {
+  registerMany<T = Record<string, unknown>>(tools: ToolDefinition<T>[]): void {
     for (const tool of tools) {
       this.register(tool);
     }
@@ -81,7 +78,7 @@ export class ToolRegistry implements IToolRegistry {
   /**
    * Get tool by name
    */
-  get(name: string): ToolDefinition | undefined {
+  get(name: string): ToolDefinition<Record<string, unknown>> | undefined {
     return this.tools.get(name);
   }
 
@@ -102,7 +99,7 @@ export class ToolRegistry implements IToolRegistry {
   /**
    * Get tools for a specific assistant type
    */
-  getForType(assistantType: string): ToolDefinition[] {
+  getForType(assistantType: string): ToolDefinition<Record<string, unknown>>[] {
     return Array.from(this.tools.values()).filter(tool =>
       tool.enabledFor.includes('*') ||
       tool.enabledFor.includes(assistantType as never)
@@ -112,7 +109,7 @@ export class ToolRegistry implements IToolRegistry {
   /**
    * Get tools by category
    */
-  getByCategory(category: ToolCategory): ToolDefinition[] {
+  getByCategory(category: ToolCategory): ToolDefinition<Record<string, unknown>>[] {
     return Array.from(this.tools.values()).filter(
       tool => tool.category === category
     );
@@ -121,7 +118,7 @@ export class ToolRegistry implements IToolRegistry {
   /**
    * Get all tools
    */
-  getAll(): ToolDefinition[] {
+  getAll(): ToolDefinition<Record<string, unknown>>[] {
     return Array.from(this.tools.values());
   }
 

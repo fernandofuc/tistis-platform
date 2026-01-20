@@ -189,12 +189,10 @@ export function buildVoiceAgentGraph(config?: VoiceAgentGraphConfig): VoiceAgent
   }));
 
   // Add entry point
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (workflow as any).addEdge(START, 'router');
+  (workflow as unknown as { addEdge: (from: string, to: string) => void }).addEdge(START, 'router');
 
   // Add conditional edges from router
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (workflow as any).addConditionalEdges('router', routerEdge, {
+  (workflow as unknown as { addConditionalEdges: (from: string, fn: typeof routerEdge, map: Record<string, string>) => void }).addConditionalEdges('router', routerEdge, {
     rag: 'rag',
     tool_executor: 'tool_executor',
     confirmation: 'confirmation',
@@ -202,26 +200,22 @@ export function buildVoiceAgentGraph(config?: VoiceAgentGraphConfig): VoiceAgent
   });
 
   // Add edge from RAG to response generator
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (workflow as any).addEdge('rag', 'response_generator');
+  (workflow as unknown as { addEdge: (from: string, to: string) => void }).addEdge('rag', 'response_generator');
 
   // Add conditional edges from tool executor
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (workflow as any).addConditionalEdges('tool_executor', toolExecutorEdge, {
+  (workflow as unknown as { addConditionalEdges: (from: string, fn: typeof toolExecutorEdge, map: Record<string, string>) => void }).addConditionalEdges('tool_executor', toolExecutorEdge, {
     confirmation: 'confirmation',
     response_generator: 'response_generator',
   });
 
   // Add conditional edges from confirmation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (workflow as any).addConditionalEdges('confirmation', confirmationEdge, {
+  (workflow as unknown as { addConditionalEdges: (from: string, fn: typeof confirmationEdge, map: Record<string, string>) => void }).addConditionalEdges('confirmation', confirmationEdge, {
     tool_executor: 'tool_executor',
     response_generator: 'response_generator',
   });
 
   // Add edge from response generator to end
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (workflow as any).addEdge('response_generator', END);
+  (workflow as unknown as { addEdge: (from: string, to: string) => void }).addEdge('response_generator', END);
 
   // Compile the graph
   const compiledGraph = workflow.compile();
@@ -237,8 +231,7 @@ export function buildVoiceAgentGraph(config?: VoiceAgentGraphConfig): VoiceAgent
         });
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await compiledGraph.invoke(input as any);
+      const result = await compiledGraph.invoke(input as unknown as Record<string, unknown>);
 
       if (graphConfig.debug) {
         console.log('[VoiceAgentGraph] Execution complete:', {
@@ -252,8 +245,7 @@ export function buildVoiceAgentGraph(config?: VoiceAgentGraphConfig): VoiceAgent
     },
 
     async *stream(input: VoiceAgentState): AsyncIterable<VoiceAgentState> {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for await (const chunk of await compiledGraph.stream(input as any)) {
+      for await (const chunk of await compiledGraph.stream(input as unknown as Record<string, unknown>)) {
         yield chunk as unknown as VoiceAgentState;
       }
     },

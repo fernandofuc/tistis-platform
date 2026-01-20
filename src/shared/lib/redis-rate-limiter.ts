@@ -194,8 +194,7 @@ export class RedisRateLimiter {
     }
 
     try {
-      // Dynamic import para evitar errores si ioredis no está instalado
-      // @ts-expect-error - ioredis es dependencia opcional
+      // Dynamic import para ioredis
       const ioredisModule = await import('ioredis').catch(() => null);
 
       if (!ioredisModule?.default) {

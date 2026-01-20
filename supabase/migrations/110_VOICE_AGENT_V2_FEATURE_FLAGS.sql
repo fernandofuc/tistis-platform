@@ -109,13 +109,16 @@ CREATE INDEX IF NOT EXISTS idx_rollback_log_executed_at ON migration_rollback_lo
 -- SECTION 5: VOICE ASSISTANT CONFIGS (V2)
 -- ===========================================
 
--- Check if table exists before creating
+-- NOTA: La tabla voice_assistant_configs se crea en la migración 144
+-- con la estructura correcta usando tenant_id.
+-- Este bloque se mantiene por compatibilidad pero no debe ejecutarse
+-- si la tabla ya existe desde 144.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'voice_assistant_configs') THEN
     CREATE TABLE voice_assistant_configs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+      tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
       assistant_type_id VARCHAR(50) NOT NULL,
       vapi_assistant_id VARCHAR(100),
       phone_number_id VARCHAR(100),
@@ -135,7 +138,7 @@ BEGIN
     );
 
     -- Indexes for voice_assistant_configs
-    CREATE INDEX idx_voice_assistant_configs_business ON voice_assistant_configs(business_id);
+    CREATE INDEX idx_voice_assistant_configs_tenant ON voice_assistant_configs(tenant_id);
     CREATE INDEX idx_voice_assistant_configs_active ON voice_assistant_configs(is_active);
     CREATE INDEX idx_voice_assistant_configs_type ON voice_assistant_configs(assistant_type_id);
   END IF;
@@ -146,9 +149,12 @@ $$;
 -- SECTION 6: VOICE ASSISTANT METRICS
 -- ===========================================
 
+-- NOTA: La tabla voice_assistant_metrics se crea en la migración 145
+-- con la estructura correcta usando tenant_id.
+-- Este bloque usa IF NOT EXISTS para compatibilidad.
 CREATE TABLE IF NOT EXISTS voice_assistant_metrics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   period_start TIMESTAMPTZ NOT NULL,
   period_end TIMESTAMPTZ NOT NULL,
   total_calls INTEGER DEFAULT 0,
@@ -165,12 +171,12 @@ CREATE TABLE IF NOT EXISTS voice_assistant_metrics (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-  -- Ensure one record per business per period
-  UNIQUE(business_id, period_start, period_end)
+  -- Ensure one record per tenant per period
+  UNIQUE(tenant_id, period_start, period_end)
 );
 
 -- Indexes for metrics queries
-CREATE INDEX IF NOT EXISTS idx_voice_metrics_business ON voice_assistant_metrics(business_id);
+CREATE INDEX IF NOT EXISTS idx_voice_metrics_tenant ON voice_assistant_metrics(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_voice_metrics_period ON voice_assistant_metrics(period_start, period_end);
 
 -- ===========================================
@@ -239,11 +245,11 @@ CREATE POLICY "service_role_voice_assistant_metrics" ON voice_assistant_metrics
 CREATE POLICY "authenticated_read_platform_feature_flags" ON platform_feature_flags
   FOR SELECT TO authenticated USING (true);
 
--- Metrics accessible to business owners
-CREATE POLICY "business_owner_voice_metrics" ON voice_assistant_metrics
+-- Metrics accessible to tenant owners
+CREATE POLICY "tenant_owner_voice_metrics" ON voice_assistant_metrics
   FOR SELECT TO authenticated
   USING (
-    business_id IN (
+    tenant_id IN (
       SELECT tenant_id FROM user_roles
       WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
     )
@@ -263,20 +269,20 @@ BEGIN
         FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 
-    -- Business owners can view and manage their voice configs
+    -- Tenant owners can view and manage their voice configs
     IF NOT EXISTS (
-      SELECT 1 FROM pg_policies WHERE tablename = 'voice_assistant_configs' AND policyname = 'business_owner_voice_configs'
+      SELECT 1 FROM pg_policies WHERE tablename = 'voice_assistant_configs' AND policyname = 'tenant_owner_voice_configs'
     ) THEN
-      CREATE POLICY "business_owner_voice_configs" ON voice_assistant_configs
+      CREATE POLICY "tenant_owner_voice_configs" ON voice_assistant_configs
         FOR ALL TO authenticated
         USING (
-          business_id IN (
+          tenant_id IN (
             SELECT tenant_id FROM user_roles
             WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
           )
         )
         WITH CHECK (
-          business_id IN (
+          tenant_id IN (
             SELECT tenant_id FROM user_roles
             WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
           )

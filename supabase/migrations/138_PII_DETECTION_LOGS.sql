@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS ai_pii_detection_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  conversation_id UUID REFERENCES ai_conversations(id) ON DELETE SET NULL,
+  conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
   pii_types TEXT[] NOT NULL DEFAULT '{}',
   detection_count INTEGER NOT NULL DEFAULT 0,
   detection_time_ms INTEGER,
