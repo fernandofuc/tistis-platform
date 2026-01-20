@@ -26,7 +26,7 @@ import { DEFAULT_TEMPLATE_ENGINE_CONFIG } from '../types';
 const createMockBusinessContext = (
   overrides: Partial<BusinessContext> = {}
 ): BusinessContext => ({
-  businessId: 'test-business-123',
+  tenantId: 'test-business-123',
   businessName: 'Restaurante Test',
   vertical: 'restaurant',
   address: 'Calle Test 123, Ciudad',
@@ -150,7 +150,7 @@ const createMockConfig = (
 const createMockDynamicContext = (
   overrides: Partial<DynamicContext> = {}
 ): DynamicContext => ({
-  businessId: 'test-business-123',
+  tenantId: 'test-business-123',
   fetchedAt: new Date(),
   unavailableItems: [],
   activePromotionIds: ['promo1'],
@@ -663,7 +663,7 @@ describe('Template Engine Integration', () => {
     it('should handle missing business context gracefully', async () => {
       const config = createMockConfig();
       const minimalBusiness: BusinessContext = {
-        businessId: 'minimal',
+        tenantId: 'minimal',
         businessName: 'Minimal Business',
         vertical: 'restaurant',
         schedule: {

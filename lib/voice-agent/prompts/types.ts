@@ -170,7 +170,7 @@ export interface FAQItem {
 export interface BusinessContext {
   // ===== Basic Info =====
   /** Business ID */
-  businessId: string;
+  tenantId: string;
   /** Business name */
   businessName: string;
   /** Business type/vertical */
@@ -242,7 +242,7 @@ export interface BusinessContext {
  */
 export interface DynamicContext {
   /** Business ID */
-  businessId: string;
+  tenantId: string;
   /** Timestamp when fetched */
   fetchedAt: Date;
   /** Current wait time */

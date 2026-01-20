@@ -17,7 +17,7 @@
  *
  * // Create store and circuit breaker
  * const store = createCircuitBreakerStore({ serviceName: 'voice_agent' });
- * const circuitBreaker = new VoiceCircuitBreaker(businessId, store);
+ * const circuitBreaker = new VoiceCircuitBreaker(tenantId, store);
  *
  * // Execute with protection
  * const result = await circuitBreaker.execute(async () => {

@@ -24,7 +24,7 @@ import type {
 const createMockBusinessContext = (
   overrides: Partial<BusinessContext> = {}
 ): BusinessContext => ({
-  businessId: 'test-business-123',
+  tenantId: 'test-business-123',
   businessName: 'Test Restaurant',
   vertical: 'restaurant',
   schedule: {
@@ -91,7 +91,7 @@ const createMockConfig = (
 const createMockDynamicContext = (
   overrides: Partial<DynamicContext> = {}
 ): DynamicContext => ({
-  businessId: 'test-business-123',
+  tenantId: 'test-business-123',
   fetchedAt: new Date(),
   unavailableItems: [],
   activePromotionIds: [],

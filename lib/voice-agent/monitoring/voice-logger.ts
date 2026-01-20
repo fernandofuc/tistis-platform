@@ -61,7 +61,6 @@ export interface VoiceLoggerConfig {
 export interface CallContext {
   callId?: string;
   tenantId?: string;
-  businessId?: string;
   assistantType?: string;
   phoneNumber?: string;
   apiVersion?: 'v1' | 'v2';
@@ -81,7 +80,7 @@ export interface ErrorContext extends CallContext {
  * Circuit breaker log context
  */
 export interface CircuitBreakerContext {
-  businessId: string;
+  tenantId: string;
   previousState: 'CLOSED' | 'HALF_OPEN' | 'OPEN';
   newState: 'CLOSED' | 'HALF_OPEN' | 'OPEN';
   failureCount?: number;
@@ -261,7 +260,7 @@ export class VoiceLogger {
       tenantId: context.tenantId,
       callId: context.callId,
       data: {
-        businessId: context.businessId,
+        tenantId: context.tenantId,
         assistantType: context.assistantType,
         apiVersion: context.apiVersion,
         direction: context.direction,
@@ -287,7 +286,7 @@ export class VoiceLogger {
       callId: context.callId,
       durationMs: context.durationSeconds * 1000,
       data: {
-        businessId: context.businessId,
+        tenantId: context.tenantId,
         assistantType: context.assistantType,
         apiVersion: context.apiVersion,
         outcome: context.outcome,
@@ -338,7 +337,7 @@ export class VoiceLogger {
         errorCode: context.errorCode,
         operation: context.operation,
         retryCount: context.retryCount,
-        businessId: context.businessId,
+        tenantId: context.tenantId,
         assistantType: context.assistantType,
         apiVersion: context.apiVersion,
       },
@@ -381,9 +380,9 @@ export class VoiceLogger {
     const level: LogLevel = context.newState === 'OPEN' ? 'warn' : 'info';
 
     this.log(level, `Circuit breaker state change: ${context.previousState} -> ${context.newState}`, {
-      tenantId: context.businessId,
+      tenantId: context.tenantId,
       data: {
-        businessId: context.businessId,
+        tenantId: context.tenantId,
         previousState: context.previousState,
         newState: context.newState,
         failureCount: context.failureCount,
@@ -396,11 +395,11 @@ export class VoiceLogger {
   /**
    * Log circuit breaker trip
    */
-  logCircuitBreakerTrip(businessId: string, reason: string, failureCount: number): void {
+  logCircuitBreakerTrip(tenantId: string, reason: string, failureCount: number): void {
     this.warn('Circuit breaker tripped to OPEN', {
-      tenantId: businessId,
+      tenantId: tenantId,
       data: {
-        businessId,
+        tenantId,
         reason,
         failureCount,
         state: 'OPEN',
@@ -411,11 +410,11 @@ export class VoiceLogger {
   /**
    * Log circuit breaker recovery
    */
-  logCircuitBreakerRecovery(businessId: string, successCount: number): void {
+  logCircuitBreakerRecovery(tenantId: string, successCount: number): void {
     this.info('Circuit breaker recovered to CLOSED', {
-      tenantId: businessId,
+      tenantId: tenantId,
       data: {
-        businessId,
+        tenantId,
         successCount,
         state: 'CLOSED',
       },
@@ -443,7 +442,7 @@ export class VoiceLogger {
         documentCount: context.documentCount,
         vectorCount: context.vectorCount,
         relevanceScore: context.relevanceScore,
-        businessId: context.businessId,
+        tenantId: context.tenantId,
         apiVersion: context.apiVersion,
       },
     });
@@ -467,7 +466,7 @@ export class VoiceLogger {
         resultsCount: context.resultsCount,
         topScore: context.topScore,
         relevanceScore: context.relevanceScore,
-        businessId: context.businessId,
+        tenantId: context.tenantId,
       },
     });
   }
@@ -491,7 +490,7 @@ export class VoiceLogger {
         toolName: context.toolName,
         toolType: context.toolType,
         result: context.result,
-        businessId: context.businessId,
+        tenantId: context.tenantId,
         apiVersion: context.apiVersion,
         // Only log non-sensitive parameters
         parameters: context.parameters ? this.sanitizeObject(context.parameters) : undefined,
@@ -519,7 +518,7 @@ export class VoiceLogger {
         operation,
         threshold,
         exceededThreshold: durationMs > threshold,
-        businessId: context?.businessId,
+        tenantId: context?.tenantId,
         apiVersion: context?.apiVersion,
       },
     });
@@ -768,7 +767,7 @@ export class ChildLogger {
       callId: this.defaultContext.callId,
       ...context,
       data: {
-        businessId: this.defaultContext.businessId,
+        tenantId: this.defaultContext.tenantId,
         assistantType: this.defaultContext.assistantType,
         apiVersion: this.defaultContext.apiVersion,
         ...context?.data,

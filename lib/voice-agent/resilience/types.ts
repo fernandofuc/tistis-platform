@@ -196,7 +196,7 @@ export type CircuitBreakerEventType =
  */
 export interface StateChangeEvent {
   type: 'state_change';
-  businessId: string;
+  tenantId: string;
   previousState: CircuitBreakerState;
   newState: CircuitBreakerState;
   reason: string;
@@ -208,7 +208,7 @@ export interface StateChangeEvent {
  */
 export interface ExecutionEvent {
   type: 'execution_success' | 'execution_failure' | 'execution_timeout';
-  businessId: string;
+  tenantId: string;
   durationMs: number;
   error?: string;
   timestamp: string;
@@ -219,7 +219,7 @@ export interface ExecutionEvent {
  */
 export interface FallbackEvent {
   type: 'fallback_served';
-  businessId: string;
+  tenantId: string;
   reason: 'circuit_open' | 'timeout' | 'error';
   language: string;
   timestamp: string;
@@ -346,20 +346,20 @@ export interface CircuitBreakerStore {
   /**
    * Get current state for a business
    */
-  getState(businessId: string): Promise<CircuitBreakerStoreState>;
+  getState(tenantId: string): Promise<CircuitBreakerStoreState>;
 
   /**
    * Set state for a business
    */
   setState(
-    businessId: string,
+    tenantId: string,
     state: CircuitBreakerStoreState
   ): Promise<void>;
 
   /**
    * Delete state for a business (for testing/reset)
    */
-  deleteState(businessId: string): Promise<void>;
+  deleteState(tenantId: string): Promise<void>;
 
   /**
    * Get all circuit breaker states (for monitoring)
@@ -378,7 +378,7 @@ export class CircuitBreakerError extends Error {
   constructor(
     message: string,
     public readonly state: CircuitBreakerState,
-    public readonly businessId: string
+    public readonly tenantId: string
   ) {
     super(message);
     this.name = 'CircuitBreakerError';
@@ -392,7 +392,7 @@ export class TimeoutError extends Error {
   constructor(
     message: string,
     public readonly timeoutMs: number,
-    public readonly businessId: string
+    public readonly tenantId: string
   ) {
     super(message);
     this.name = 'TimeoutError';

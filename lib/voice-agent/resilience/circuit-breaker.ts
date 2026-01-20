@@ -46,7 +46,7 @@ import { getFallbackResponse } from './fallback-responses';
 export class VoiceCircuitBreaker {
   private readonly config: CircuitBreakerConfig;
   private readonly store: CircuitBreakerStore;
-  private readonly businessId: string;
+  private readonly tenantId: string;
   private readonly eventHandlers: Set<CircuitBreakerEventHandler>;
   private metrics: CircuitBreakerMetrics;
   private currentState: CircuitBreakerStoreState;
@@ -55,12 +55,12 @@ export class VoiceCircuitBreaker {
   private readonly language: 'es-MX' | 'en-US';
 
   constructor(
-    businessId: string,
+    tenantId: string,
     store: CircuitBreakerStore,
     config?: Partial<CircuitBreakerConfig>,
     language: 'es-MX' | 'en-US' = 'es-MX'
   ) {
-    this.businessId = businessId;
+    this.tenantId = tenantId;
     this.store = store;
     this.config = { ...DEFAULT_CIRCUIT_BREAKER_CONFIG, ...config };
     this.language = language;
@@ -157,7 +157,7 @@ export class VoiceCircuitBreaker {
     // Emit fallback event
     this.emitEvent({
       type: 'fallback_served',
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       reason: 'circuit_open',
       language: this.language,
       timestamp: new Date().toISOString(),
@@ -172,7 +172,7 @@ export class VoiceCircuitBreaker {
       error: new CircuitBreakerError(
         fallbackResponse.message,
         'OPEN',
-        this.businessId
+        this.tenantId
       ),
       outcome: 'circuit_open',
       durationMs,
@@ -192,7 +192,7 @@ export class VoiceCircuitBreaker {
     // Emit half-open test event
     this.emitEvent({
       type: 'execution_success', // Reusing type, but it's a test
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       durationMs: 0,
       timestamp: new Date().toISOString(),
     });
@@ -240,7 +240,7 @@ export class VoiceCircuitBreaker {
     // Emit event
     this.emitEvent({
       type: isTimeout ? 'execution_timeout' : 'execution_failure',
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       durationMs,
       error: err.message,
       timestamp: new Date().toISOString(),
@@ -281,7 +281,7 @@ export class VoiceCircuitBreaker {
             new TimeoutError(
               `Operation timed out after ${this.config.timeout}ms`,
               this.config.timeout,
-              this.businessId
+              this.tenantId
             )
           );
         }
@@ -315,7 +315,7 @@ export class VoiceCircuitBreaker {
    */
   private async loadState(): Promise<void> {
     try {
-      this.currentState = await this.store.getState(this.businessId);
+      this.currentState = await this.store.getState(this.tenantId);
       this.stateLoaded = true;
       this.metrics.currentState = this.currentState.state;
       this.metrics.lastStateChange = this.currentState.lastStateChange;
@@ -332,7 +332,7 @@ export class VoiceCircuitBreaker {
    */
   private async saveState(): Promise<void> {
     try {
-      await this.store.setState(this.businessId, this.currentState);
+      await this.store.setState(this.tenantId, this.currentState);
     } catch (error) {
       console.error('Failed to save circuit breaker state:', error);
     }
@@ -378,7 +378,7 @@ export class VoiceCircuitBreaker {
     // Emit success event
     this.emitEvent({
       type: 'execution_success',
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       durationMs,
       timestamp: new Date().toISOString(),
     });
@@ -411,7 +411,7 @@ export class VoiceCircuitBreaker {
     // Emit success event
     this.emitEvent({
       type: 'execution_success',
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       durationMs,
       timestamp: new Date().toISOString(),
     });
@@ -475,7 +475,7 @@ export class VoiceCircuitBreaker {
     // Emit state change event
     this.emitEvent({
       type: 'state_change',
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       previousState,
       newState: 'OPEN',
       reason: `Failure threshold reached: ${reason}`,
@@ -484,7 +484,7 @@ export class VoiceCircuitBreaker {
 
     // Log warning
     console.warn(
-      `[CircuitBreaker] Circuit OPENED for business ${this.businessId}:`,
+      `[CircuitBreaker] Circuit OPENED for tenant ${this.tenantId}:`,
       {
         failureCount: this.currentState.failureCount,
         reason,
@@ -513,7 +513,7 @@ export class VoiceCircuitBreaker {
     // Emit state change event
     this.emitEvent({
       type: 'state_change',
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       previousState,
       newState: 'HALF_OPEN',
       reason: 'Recovery timeout elapsed',
@@ -521,7 +521,7 @@ export class VoiceCircuitBreaker {
     });
 
     console.info(
-      `[CircuitBreaker] Circuit HALF_OPEN for business ${this.businessId}:`,
+      `[CircuitBreaker] Circuit HALF_OPEN for tenant ${this.tenantId}:`,
       'Testing recovery...'
     );
   }
@@ -547,7 +547,7 @@ export class VoiceCircuitBreaker {
     // Emit state change event
     this.emitEvent({
       type: 'state_change',
-      businessId: this.businessId,
+      tenantId: this.tenantId,
       previousState,
       newState: 'CLOSED',
       reason: 'Success threshold reached in HALF_OPEN',
@@ -555,7 +555,7 @@ export class VoiceCircuitBreaker {
     });
 
     console.info(
-      `[CircuitBreaker] Circuit CLOSED for business ${this.businessId}:`,
+      `[CircuitBreaker] Circuit CLOSED for tenant ${this.tenantId}:`,
       'Service recovered!'
     );
   }
@@ -721,24 +721,24 @@ export class VoiceCircuitBreaker {
  * Create a voice circuit breaker instance
  */
 export function createVoiceCircuitBreaker(
-  businessId: string,
+  tenantId: string,
   store: CircuitBreakerStore,
   config?: Partial<CircuitBreakerConfig>,
   language: 'es-MX' | 'en-US' = 'es-MX'
 ): VoiceCircuitBreaker {
-  return new VoiceCircuitBreaker(businessId, store, config, language);
+  return new VoiceCircuitBreaker(tenantId, store, config, language);
 }
 
 /**
  * Create a circuit breaker with default configuration for voice
  */
 export function createDefaultVoiceCircuitBreaker(
-  businessId: string,
+  tenantId: string,
   store: CircuitBreakerStore,
   language: 'es-MX' | 'en-US' = 'es-MX'
 ): VoiceCircuitBreaker {
   return new VoiceCircuitBreaker(
-    businessId,
+    tenantId,
     store,
     {
       // Voice-optimized defaults
