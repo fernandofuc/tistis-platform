@@ -1,35 +1,120 @@
-// =====================================================
-// TIS TIS PLATFORM - Voice Agent VAPI Webhook
-// Server-Side Response Mode: TIS TIS genera TODAS las respuestas
-// VAPI solo hace STT (transcripción) y TTS (síntesis de voz)
-// =====================================================
+/**
+ * TIS TIS Platform - Voice Agent v2.0
+ * VAPI Webhook Endpoint
+ *
+ * Main entry point for all VAPI webhook events.
+ * Implements:
+ * - 5-layer Security Gate validation
+ * - Event routing to specialized handlers
+ * - Consistent error handling
+ * - Request/response logging
+ *
+ * Supports Server-Side Response Mode where TIS TIS generates
+ * all responses using LangGraph (Fase 07).
+ */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { timingSafeEqual } from 'crypto';
+
+// Security Gate
+import {
+  createSecurityGate,
+  createDevSecurityGate,
+} from '@/lib/voice-agent/security';
+
+// Webhook system
+import {
+  WebhookEventRouter,
+  createAssistantRequestHandler,
+  createFunctionCallHandler,
+  createToolCallsHandler,
+  createEndOfCallHandler,
+  createTranscriptHandler,
+  createStatusUpdateHandler,
+  createSpeechUpdateHandler,
+  handleWebhookError,
+  formatAckResponse,
+  formatErrorResponse,
+  isValidVapiEventType,
+  type VapiWebhookPayload,
+  type WebhookHandlerContext,
+} from '@/lib/voice-agent/webhooks';
+
+// Legacy imports for conversation-update (will be refactored in Fase 07)
 import { VoiceLangGraphService } from '@/src/features/voice-agent/services/voice-langgraph.service';
-import type { VoiceAgentConfig, VoiceCallMessage } from '@/src/features/voice-agent/types';
+import { createClient } from '@supabase/supabase-js';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-// Timing-safe comparison for webhook secret
-function verifyWebhookSecret(authHeader: string | null, webhookSecret: string): boolean {
-  if (!authHeader) return false;
+// =====================================================
+// SECURITY GATE INSTANCE
+// =====================================================
 
-  try {
-    const authBuffer = Buffer.from(authHeader);
-    const secretBuffer = Buffer.from(webhookSecret);
-    if (authBuffer.length !== secretBuffer.length) {
-      return false;
-    }
-    return timingSafeEqual(authBuffer, secretBuffer);
-  } catch {
-    return false;
+const securityGate = process.env.NODE_ENV === 'development'
+  ? createDevSecurityGate()
+  : createSecurityGate();
+
+// =====================================================
+// EVENT ROUTER INSTANCE
+// =====================================================
+
+const serverUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/voice-agent/webhook`;
+const serverUrlSecret = process.env.VAPI_WEBHOOK_SECRET;
+
+const eventRouter = new WebhookEventRouter(
+  {
+    'assistant-request': createAssistantRequestHandler({
+      serverUrl,
+      serverUrlSecret,
+      useServerSideResponse: true,
+    }),
+    'function-call': createFunctionCallHandler(),
+    'tool-calls': createToolCallsHandler(),
+    'end-of-call-report': createEndOfCallHandler(),
+    'transcript': createTranscriptHandler({ logFinal: true, logPartial: false }),
+    'status-update': createStatusUpdateHandler(),
+    'speech-update': createSpeechUpdateHandler(),
+    // conversation-update handled separately (legacy integration with LangGraph)
+  },
+  {
+    logEvents: true,
+    allowUnknownEvents: true,
   }
+);
+
+// =====================================================
+// HELPER FUNCTIONS
+// =====================================================
+
+/**
+ * Generate unique request ID
+ */
+function generateRequestId(): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 10);
+  return `vapi-${timestamp}-${random}`;
 }
 
-// Create service client
+/**
+ * Extract client IP from request
+ */
+function extractClientIP(request: NextRequest): string {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp.trim();
+  }
+
+  return '0.0.0.0';
+}
+
+/**
+ * Create Supabase service client
+ */
 function createServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,111 +122,10 @@ function createServiceClient() {
   );
 }
 
-// ======================
-// VAPI EVENT TYPES
-// ======================
-
-interface VAPIAssistantRequest {
-  type: 'assistant-request';
-  call: {
-    id: string;
-    phoneNumber: {
-      number: string;
-    };
-    customer: {
-      number: string;
-    };
-  };
-}
-
-interface VAPITranscript {
-  type: 'transcript';
-  transcript: {
-    text: string;
-    user: string;
-    role: 'user' | 'assistant';
-    isFinal: boolean;
-  };
-  call: {
-    id: string;
-  };
-}
-
-// NUEVO: Conversation Update - VAPI nos envía el turno del usuario y espera nuestra respuesta
-interface VAPIConversationUpdate {
-  type: 'conversation-update';
-  call: {
-    id: string;
-  };
-  messages: Array<{
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-  }>;
-}
-
-interface VAPIFunctionCall {
-  type: 'function-call';
-  functionCall: {
-    name: string;
-    parameters: Record<string, unknown>;
-  };
-  call: {
-    id: string;
-  };
-}
-
-interface VAPIEndOfCallReport {
-  type: 'end-of-call-report';
-  call: {
-    id: string;
-  };
-  endedReason: string;
-  transcript: string;
-  summary?: string;
-  recordingUrl?: string;
-  durationSeconds?: number;
-}
-
-interface VAPIStatusUpdate {
-  type: 'status-update';
-  status: string;
-  call: {
-    id: string;
-  };
-}
-
-type VAPIWebhookEvent =
-  | VAPIAssistantRequest
-  | VAPITranscript
-  | VAPIConversationUpdate
-  | VAPIFunctionCall
-  | VAPIEndOfCallReport
-  | VAPIStatusUpdate;
-
-// ======================
-// HELPER FUNCTIONS
-// ======================
-
 /**
- * Obtiene el tenant_id a partir del número de teléfono llamado
+ * Get voice configuration for a tenant
  */
-async function getTenantFromPhoneNumber(phoneNumber: string): Promise<string | null> {
-  const supabase = createServiceClient();
-
-  const { data } = await supabase
-    .from('voice_phone_numbers')
-    .select('tenant_id')
-    .eq('phone_number', phoneNumber)
-    .eq('status', 'active')
-    .single();
-
-  return data?.tenant_id || null;
-}
-
-/**
- * Obtiene la configuración de voz del tenant
- */
-async function getVoiceConfig(tenantId: string): Promise<VoiceAgentConfig | null> {
+async function getVoiceConfig(tenantId: string) {
   const supabase = createServiceClient();
 
   const { data } = await supabase
@@ -155,71 +139,9 @@ async function getVoiceConfig(tenantId: string): Promise<VoiceAgentConfig | null
 }
 
 /**
- * Crea o actualiza un registro de llamada
+ * Get call messages for conversation history
  */
-async function createOrUpdateCall(
-  vapiCallId: string,
-  tenantId: string,
-  callerPhone: string,
-  calledPhone: string
-): Promise<string> {
-  const supabase = createServiceClient();
-
-  // Buscar llamada existente
-  const { data: existingCall } = await supabase
-    .from('voice_calls')
-    .select('id')
-    .eq('vapi_call_id', vapiCallId)
-    .single();
-
-  if (existingCall) {
-    return existingCall.id;
-  }
-
-  // Obtener voice_agent_config_id para asociar la llamada
-  const { data: voiceConfig } = await supabase
-    .from('voice_agent_config')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .single();
-
-  // Obtener phone_number_id si existe
-  const { data: phoneNumber } = await supabase
-    .from('voice_phone_numbers')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('phone_number', calledPhone)
-    .single();
-
-  // Crear nueva llamada
-  const { data: newCall, error } = await supabase
-    .from('voice_calls')
-    .insert({
-      tenant_id: tenantId,
-      vapi_call_id: vapiCallId,
-      caller_phone: callerPhone,
-      called_phone: calledPhone,
-      call_direction: 'inbound',
-      status: 'initiated',
-      started_at: new Date().toISOString(),
-      voice_agent_config_id: voiceConfig?.id || null,
-      phone_number_id: phoneNumber?.id || null,
-    })
-    .select('id')
-    .single();
-
-  if (error) {
-    console.error('[Voice Webhook] Error creating call:', error);
-    throw new Error('Failed to create call record');
-  }
-
-  return newCall.id;
-}
-
-/**
- * Obtiene los mensajes previos de la llamada
- */
-async function getCallMessages(callId: string): Promise<VoiceCallMessage[]> {
+async function getCallMessages(callId: string) {
   const supabase = createServiceClient();
 
   const { data } = await supabase
@@ -232,7 +154,7 @@ async function getCallMessages(callId: string): Promise<VoiceCallMessage[]> {
 }
 
 /**
- * Cuenta los mensajes de una llamada
+ * Get message count for a call
  */
 async function getMessageCount(callId: string): Promise<number> {
   const supabase = createServiceClient();
@@ -245,164 +167,34 @@ async function getMessageCount(callId: string): Promise<number> {
   return count || 0;
 }
 
-// ======================
-// EVENT HANDLERS
-// ======================
+// =====================================================
+// CONVERSATION UPDATE HANDLER (LEGACY - WILL BE REFACTORED)
+// =====================================================
 
 /**
- * Maneja assistant-request: VAPI pide el asistente a usar
+ * Handle conversation-update event (Server-Side Response Mode)
+ * This is the heart of the voice agent - generates AI responses
  *
- * SERVER-SIDE RESPONSE MODE:
- * - NO enviamos "model" a VAPI (VAPI no genera respuestas)
- * - Configuramos serverUrl para que VAPI envíe cada turno a nuestro backend
- * - TIS TIS LangGraph genera TODAS las respuestas de IA
+ * Note: This will be refactored in Fase 07 to use the new modular system
+ * with full LangGraph integration.
  */
-async function handleAssistantRequest(event: VAPIAssistantRequest) {
-  const calledNumber = event.call.phoneNumber.number;
-  const callerNumber = event.call.customer.number;
-
-  console.log(`[Voice Webhook] Assistant request received, call_id: ${event.call.id}`);
-  console.log(`[Voice Webhook] MODE: Server-Side Response (TIS TIS LangGraph genera respuestas)`);
-
-  // Obtener tenant del número llamado
-  const tenantId = await getTenantFromPhoneNumber(calledNumber);
-
-  if (!tenantId) {
-    console.error('[Voice Webhook] No tenant found for called number, call_id:', event.call.id);
-    return {
-      error: 'No assistant configured for this number',
-    };
-  }
-
-  // Obtener configuración de voz
-  const voiceConfig = await getVoiceConfig(tenantId);
-
-  if (!voiceConfig) {
-    console.error('[Voice Webhook] Voice agent not enabled for tenant:', tenantId);
-    return {
-      error: 'Voice agent not enabled',
-    };
-  }
-
-  // Crear registro de llamada
-  const callId = await createOrUpdateCall(event.call.id, tenantId, callerNumber, calledNumber);
-  console.log(`[Voice Webhook] Call created/found: ${callId}`);
-
-  // SERVER-SIDE RESPONSE MODE:
-  // NO enviamos "model" - VAPI no generará respuestas
-  // En su lugar, configuramos serverUrl para recibir cada turno de conversación
-  // y responder con el texto generado por LangGraph
-
-  const serverUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/voice-agent/webhook`;
-
-  return {
-    assistant: {
-      name: voiceConfig.assistant_name,
-
-      // Primer mensaje del asistente
-      firstMessage: voiceConfig.first_message,
-      firstMessageMode: voiceConfig.first_message_mode === 'assistant_speaks_first'
-        ? 'assistant-speaks-first'
-        : 'assistant-waits-for-user',
-
-      // ═══════════════════════════════════════════════════════════════
-      // SERVER-SIDE RESPONSE: NO enviamos "model" a VAPI
-      // VAPI enviará cada turno a serverUrl y esperará nuestra respuesta
-      // ═══════════════════════════════════════════════════════════════
-
-      // Configuración de voz (ElevenLabs) - VAPI maneja STT/TTS
-      voice: {
-        voiceId: voiceConfig.voice_id || 'LegCbmbXKbT5PUp3QFWv', // Javier (default)
-        provider: voiceConfig.voice_provider || 'elevenlabs',
-        model: voiceConfig.voice_model || 'eleven_multilingual_v2',
-        stability: Number(voiceConfig.voice_stability) || 0.5,
-        similarityBoost: Number(voiceConfig.voice_similarity_boost) || 0.75,
-      },
-
-      // Configuración de transcripción
-      transcriber: {
-        model: voiceConfig.transcription_model || 'nova-2',
-        language: voiceConfig.transcription_language || 'es',
-        provider: voiceConfig.transcription_provider || 'deepgram',
-      },
-
-      // Timing de respuesta
-      startSpeakingPlan: {
-        waitSeconds: Number(voiceConfig.wait_seconds) || 0.6,
-        onPunctuationSeconds: Number(voiceConfig.on_punctuation_seconds) || 0.2,
-        onNoPunctuationSeconds: Number(voiceConfig.on_no_punctuation_seconds) || 1.2,
-      },
-
-      // Frases de fin de llamada
-      endCallPhrases: voiceConfig.end_call_phrases || [
-        'adiós',
-        'hasta luego',
-        'bye',
-        'chao',
-        'eso es todo',
-        'gracias, eso es todo',
-      ],
-
-      // Grabación y privacidad
-      recordingEnabled: voiceConfig.recording_enabled ?? true,
-      hipaaEnabled: voiceConfig.hipaa_enabled ?? false,
-
-      // ═══════════════════════════════════════════════════════════════
-      // SERVER URL: Aquí VAPI enviará cada turno de conversación
-      // Nuestro backend procesará con LangGraph y retornará la respuesta
-      // ═══════════════════════════════════════════════════════════════
-      serverUrl: serverUrl,
-      serverUrlSecret: process.env.VAPI_WEBHOOK_SECRET,
-    },
-
-    // Metadatos para rastreo (se envían en cada webhook)
-    metadata: {
-      tenant_id: tenantId,
-      voice_config_id: voiceConfig.id,
-      call_id: callId,
-      mode: 'server-side-response',
-    },
-  };
-}
-
-/**
- * Maneja transcript: Cada mensaje transcrito
- *
- * NOTA: En Server-Side Response Mode, los mensajes se guardan en handleConversationUpdate
- * Este handler solo hace logging para debugging. NO guardamos aquí para evitar duplicados.
- */
-async function handleTranscript(event: VAPITranscript) {
-  if (!event.transcript.isFinal) {
-    // Ignorar transcripciones parciales
-    return { status: 'ok' };
-  }
-
-  // Solo logging - el guardado se hace en handleConversationUpdate
-  const textPreview = event.transcript.text.length > 50
-    ? `${event.transcript.text.substring(0, 50)}...`
-    : event.transcript.text;
-
-  console.log(`[Voice Webhook] Transcript (${event.transcript.role}): "${textPreview}"`);
-
-  return { status: 'ok' };
-}
-
-/**
- * ═══════════════════════════════════════════════════════════════════════════
- * NUEVO: Maneja conversation-update - EL CORAZÓN DEL SERVER-SIDE RESPONSE MODE
- * ═══════════════════════════════════════════════════════════════════════════
- *
- * VAPI nos envía el mensaje del usuario y ESPERA nuestra respuesta.
- * Aquí procesamos con LangGraph y retornamos el texto que VAPI convertirá a audio.
- */
-async function handleConversationUpdate(event: VAPIConversationUpdate) {
-  const startTime = Date.now();
+async function handleConversationUpdate(
+  payload: VapiWebhookPayload,
+  context: WebhookHandlerContext
+) {
   const supabase = createServiceClient();
+  const startTime = Date.now();
+
+  // Type assertion for conversation-update payload
+  const event = payload as {
+    type: 'conversation-update';
+    call: { id: string };
+    messages: Array<{ role: string; content: string }>;
+  };
 
   console.log(`[Voice Webhook] Conversation update for call: ${event.call.id}`);
-  console.log(`[Voice Webhook] Messages count: ${event.messages.length}`);
 
-  // Obtener el último mensaje del usuario
+  // Get the last user message
   const lastUserMessage = [...event.messages]
     .reverse()
     .find(m => m.role === 'user');
@@ -412,7 +204,7 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
     return { status: 'ok' };
   }
 
-  // V3 FIX: Validate transcription is not empty or corrupted
+  // Validate transcription
   const transcription = lastUserMessage.content?.trim();
   if (!transcription || transcription.length < 2) {
     console.warn('[Voice Webhook] Empty or invalid transcription received');
@@ -421,18 +213,16 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
     };
   }
 
-  // V3 FIX: Detect potentially corrupted transcription (all special chars, etc)
+  // Detect corrupted transcription
   const validTextRatio = (transcription.match(/[a-záéíóúüñA-ZÁÉÍÓÚÜÑ0-9\s]/g) || []).length / transcription.length;
   if (validTextRatio < 0.5) {
-    console.warn('[Voice Webhook] Potentially corrupted transcription:', transcription.substring(0, 50));
+    console.warn('[Voice Webhook] Potentially corrupted transcription');
     return {
       assistantResponse: 'Disculpa, hubo interferencia. ¿Podrías repetir?',
     };
   }
 
-  console.log(`[Voice Webhook] User message: "${transcription.substring(0, 100)}..."`);
-
-  // Obtener la llamada
+  // Get call from database
   const { data: call } = await supabase
     .from('voice_calls')
     .select('id, tenant_id, voice_agent_config_id, caller_phone')
@@ -440,29 +230,27 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
     .single();
 
   if (!call) {
-    console.error('[Voice Webhook] Call not found for conversation update:', event.call.id);
+    console.error('[Voice Webhook] Call not found:', event.call.id);
     return {
       assistantResponse: 'Disculpa, hubo un problema técnico. ¿Podrías repetir?',
     };
   }
 
-  // Obtener configuración de voz
+  // Get voice configuration
   const voiceConfig = await getVoiceConfig(call.tenant_id);
 
   if (!voiceConfig) {
-    console.error('[Voice Webhook] Voice config not found for tenant:', call.tenant_id);
+    console.error('[Voice Webhook] Voice config not found');
     return {
       assistantResponse: 'En este momento no puedo atenderte. Por favor llama más tarde.',
     };
   }
 
-  // Obtener historial de mensajes previos de BD
+  // Get conversation history
   const previousMessages = await getCallMessages(call.id);
 
   try {
-    // ═══════════════════════════════════════════════════════════════
-    // PROCESAR CON LANGGRAPH - GENERA LA RESPUESTA DE IA
-    // ═══════════════════════════════════════════════════════════════
+    // Process with LangGraph
     const result = await VoiceLangGraphService.processVoiceMessage(
       {
         tenant_id: call.tenant_id,
@@ -471,39 +259,47 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
         caller_phone: call.caller_phone || '',
         conversation_history: previousMessages,
       },
-      transcription // V3 FIX: Use validated transcription
+      transcription
     );
 
     const processingTime = Date.now() - startTime;
-    console.log(`[Voice Webhook] LangGraph response generated in ${processingTime}ms`);
-    console.log(`[Voice Webhook] Intent: ${result.intent}, Escalate: ${result.should_escalate}`);
-    console.log(`[Voice Webhook] Response: "${result.response.substring(0, 100)}..."`);
+    console.log(
+      `[Voice Webhook] LangGraph response in ${processingTime}ms`,
+      JSON.stringify({
+        intent: result.intent,
+        escalate: result.should_escalate,
+        responseLength: result.response.length,
+      })
+    );
 
-    // Guardar mensaje del usuario en BD
-    const userMsgCount = await getMessageCount(call.id);
+    // Get message count for sequence numbers
+    const msgCount = await getMessageCount(call.id);
+    const userSeq = msgCount + 1;
+    const assistantSeq = userSeq + 1;
+
+    // Save user message
     await VoiceLangGraphService.saveVoiceMessage(
       call.id,
       'user',
-      transcription, // V3 FIX: Use validated transcription
+      transcription,
       {
-        sequence_number: userMsgCount + 1,
+        sequence_number: userSeq,
         detected_intent: result.intent,
       }
     );
 
-    // Guardar respuesta del asistente en BD
-    const assistantMsgCount = await getMessageCount(call.id);
+    // Save assistant response
     await VoiceLangGraphService.saveVoiceMessage(
       call.id,
       'assistant',
       result.response,
       {
-        sequence_number: assistantMsgCount + 1,
+        sequence_number: assistantSeq,
         response_latency_ms: processingTime,
       }
     );
 
-    // Actualizar estado de la llamada si hay eventos especiales
+    // Update call state if needed
     if (result.should_escalate) {
       await supabase
         .from('voice_calls')
@@ -527,208 +323,196 @@ async function handleConversationUpdate(event: VAPIConversationUpdate) {
         .eq('id', call.id);
     }
 
-    // Actualizar latencia promedio
+    // Update call metrics
     await supabase
       .from('voice_calls')
       .update({
         latency_avg_ms: processingTime,
-        turns_count: userMsgCount + 1,
+        turns_count: userSeq,
         updated_at: new Date().toISOString(),
       })
       .eq('id', call.id);
 
-    // ═══════════════════════════════════════════════════════════════
-    // RETORNAR RESPUESTA A VAPI - VAPI convertirá esto a audio
-    // ═══════════════════════════════════════════════════════════════
     return {
       assistantResponse: result.response,
     };
-
   } catch (error) {
-    console.error('[Voice Webhook] Error processing with LangGraph:', error);
-
-    // Respuesta de fallback en caso de error
+    console.error('[Voice Webhook] LangGraph error:', error);
     return {
       assistantResponse: 'Disculpa, tuve un problema técnico. ¿Podrías repetir lo que dijiste?',
     };
   }
 }
 
-/**
- * Maneja end-of-call-report: Cuando termina la llamada
- */
-async function handleEndOfCallReport(event: VAPIEndOfCallReport) {
-  const supabase = createServiceClient();
-
-  console.log(`[Voice Webhook] Call ended: ${event.call.id}, reason: ${event.endedReason}`);
-
-  // Obtener la llamada
-  const { data: call } = await supabase
-    .from('voice_calls')
-    .select('id, tenant_id')
-    .eq('vapi_call_id', event.call.id)
-    .single();
-
-  if (!call) {
-    console.warn('[Voice Webhook] Call not found for end report:', event.call.id);
-    return { status: 'ok' };
-  }
-
-  // Analizar conversación completa
-  const analysis = await VoiceLangGraphService.analyzeCallConversation(call.id);
-
-  // Determinar outcome si no está establecido
-  let outcome = 'completed_other';
-  if (analysis.appointment_requested) {
-    outcome = 'information_given'; // Se ajustará si hubo booking exitoso
-  }
-
-  // Actualizar llamada con datos finales
-  await supabase
-    .from('voice_calls')
-    .update({
-      status: 'completed',
-      ended_at: new Date().toISOString(),
-      duration_seconds: event.durationSeconds || 0,
-      recording_url: event.recordingUrl,
-      transcription: event.transcript,
-      analysis,
-      outcome,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', call.id);
-
-  // Registrar uso
-  if (event.durationSeconds && event.durationSeconds > 0) {
-    await supabase.from('voice_usage_logs').insert({
-      tenant_id: call.tenant_id,
-      call_id: call.id,
-      usage_type: 'call_minutes',
-      quantity: Math.ceil(event.durationSeconds / 60),
-      unit: 'minutes',
-      unit_cost_usd: 0.05, // Placeholder - ajustar según pricing real
-      total_cost_usd: Math.ceil(event.durationSeconds / 60) * 0.05,
-      provider: 'vapi',
-    });
-  }
-
-  return { status: 'ok' };
-}
-
-/**
- * Maneja status-update: Cambios de estado de la llamada
- */
-async function handleStatusUpdate(event: VAPIStatusUpdate) {
-  const supabase = createServiceClient();
-
-  console.log(`[Voice Webhook] Status update: ${event.call.id} -> ${event.status}`);
-
-  // Mapear status de VAPI a nuestro schema
-  const statusMap: Record<string, string> = {
-    'queued': 'initiated',
-    'ringing': 'ringing',
-    'in-progress': 'in_progress',
-    'completed': 'completed',
-    'busy': 'busy',
-    'failed': 'failed',
-    'no-answer': 'no_answer',
-    'canceled': 'canceled',
-  };
-
-  const ourStatus = statusMap[event.status] || event.status;
-
-  await supabase
-    .from('voice_calls')
-    .update({
-      status: ourStatus,
-      answered_at: event.status === 'in-progress' ? new Date().toISOString() : undefined,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('vapi_call_id', event.call.id);
-
-  return { status: 'ok' };
-}
-
-// ======================
-// MAIN HANDLER
-// ======================
+// =====================================================
+// MAIN POST HANDLER
+// =====================================================
 
 export async function POST(request: NextRequest) {
-  try {
-    // Verify webhook secret (timing-safe)
-    const webhookSecret = process.env.VAPI_WEBHOOK_SECRET;
-    const authHeader = request.headers.get('x-vapi-secret');
+  const startTime = Date.now();
+  const requestId = generateRequestId();
+  const clientIp = extractClientIP(request);
 
-    if (webhookSecret) {
-      if (!verifyWebhookSecret(authHeader, webhookSecret)) {
-        console.warn('[Voice Webhook] Invalid webhook secret');
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    // ===================================================
+    // STEP 1: Security Gate Validation
+    // ===================================================
+
+    // Clone the request to read body for validation
+    const bodyText = await request.text();
+
+    const validation = await securityGate.validate(request, bodyText);
+
+    if (!validation.valid) {
+      console.warn(
+        `[Voice Webhook] Security validation failed`,
+        JSON.stringify({
+          requestId,
+          clientIp,
+          failedAt: validation.failedAt,
+          reason: validation.reason,
+        })
+      );
+
+      return NextResponse.json(
+        formatErrorResponse('Unauthorized', validation.failedAt, {
+          reason: validation.reason,
+        }),
+        { status: 401 }
+      );
+    }
+
+    // ===================================================
+    // STEP 2: Parse Request Body
+    // ===================================================
+
+    let body: VapiWebhookPayload;
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      console.error('[Voice Webhook] Invalid JSON in request body');
+      return NextResponse.json(
+        formatErrorResponse('Invalid JSON'),
+        { status: 400 }
+      );
+    }
+
+    // Extract event type - handle both flat and nested formats
+    const eventType = body.type || (body as { message?: { type: string } }).message?.type;
+
+    if (!eventType) {
+      console.error('[Voice Webhook] Missing event type');
+      return NextResponse.json(
+        formatErrorResponse('Missing event type'),
+        { status: 400 }
+      );
+    }
+
+    // Normalize payload to flat format if nested
+    if (!body.type && (body as { message?: { type: string } }).message?.type) {
+      body = {
+        ...(body as { message: Record<string, unknown> }).message,
+        type: eventType,
+      } as VapiWebhookPayload;
+    }
+
+    console.log(
+      `[Voice Webhook] Received event: ${eventType}`,
+      JSON.stringify({
+        requestId,
+        callId: body.call?.id,
+        processingTimeMs: Date.now() - startTime,
+      })
+    );
+
+    // ===================================================
+    // STEP 3: Create Handler Context
+    // ===================================================
+
+    const context: WebhookHandlerContext = {
+      requestId,
+      clientIp,
+      startTime,
+      tenantId: (validation.metadata as Record<string, unknown> | undefined)?.tenantId as string | undefined,
+      callId: body.call?.id,
+    };
+
+    // ===================================================
+    // STEP 4: Route Event to Handler
+    // ===================================================
+
+    let response: unknown;
+
+    // Handle conversation-update separately (legacy LangGraph integration)
+    if (eventType === 'conversation-update') {
+      response = await handleConversationUpdate(body, context);
+    } else if (isValidVapiEventType(eventType)) {
+      // Route through the event router
+      const result = await eventRouter.route(body, context);
+      response = result.response;
+
+      // Log if needed
+      if (result.shouldLog) {
+        console.log(
+          `[Voice Webhook] Event processed: ${eventType}`,
+          JSON.stringify({
+            requestId,
+            statusCode: result.statusCode,
+            processingTimeMs: Date.now() - startTime,
+            metadata: result.metadata,
+          })
+        );
       }
     } else {
-      // In production, require webhook secret
-      if (process.env.NODE_ENV === 'production') {
-        console.error('[Voice Webhook] VAPI_WEBHOOK_SECRET not configured in production');
-        return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
-      }
-      console.warn('[Voice Webhook] VAPI_WEBHOOK_SECRET not set - skipping verification in development');
-    }
-
-    let body: VAPIWebhookEvent;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-    }
-
-    console.log(`[Voice Webhook] Received event: ${body.type}`);
-
-    let response;
-
-    switch (body.type) {
-      case 'assistant-request':
-        response = await handleAssistantRequest(body);
-        break;
-
-      case 'transcript':
-        response = await handleTranscript(body);
-        break;
-
-      // ═══════════════════════════════════════════════════════════════
-      // CONVERSATION-UPDATE: El evento más importante en Server-Side Mode
-      // VAPI envía el mensaje del usuario y ESPERA nuestra respuesta
-      // ═══════════════════════════════════════════════════════════════
-      case 'conversation-update':
-        response = await handleConversationUpdate(body);
-        break;
-
-      case 'end-of-call-report':
-        response = await handleEndOfCallReport(body);
-        break;
-
-      case 'status-update':
-        response = await handleStatusUpdate(body);
-        break;
-
-      default:
-        console.log(`[Voice Webhook] Unknown event type: ${(body as { type: string }).type}`);
-        response = { status: 'ok' };
+      // Unknown event type - log and acknowledge
+      console.log(`[Voice Webhook] Unknown event type: ${eventType}`);
+      response = formatAckResponse();
     }
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('[Voice Webhook] Error:', error);
+    // ===================================================
+    // STEP 5: Error Handling
+    // ===================================================
+
+    const context: WebhookHandlerContext = {
+      requestId,
+      clientIp,
+      startTime,
+    };
+
+    const errorResult = handleWebhookError(error, context);
+
+    console.error(
+      `[Voice Webhook] Error processing request`,
+      JSON.stringify({
+        requestId,
+        error: error instanceof Error ? error.message : 'unknown',
+        statusCode: errorResult.statusCode,
+        processingTimeMs: Date.now() - startTime,
+      })
+    );
+
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      errorResult.response,
+      { status: errorResult.statusCode }
     );
   }
 }
 
-// También soportar GET para health checks
+// =====================================================
+// HEALTH CHECK (GET)
+// =====================================================
+
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
-    service: 'voice-agent-webhook',
+    service: 'voice-agent-webhook-v2',
     timestamp: new Date().toISOString(),
+    features: {
+      securityGate: true,
+      eventRouter: true,
+      serverSideResponse: true,
+    },
   });
 }

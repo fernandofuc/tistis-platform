@@ -4,6 +4,25 @@
 
 import '@testing-library/jest-dom';
 
+// TextEncoder/TextDecoder for LangChain/LangGraph
+import { TextEncoder, TextDecoder } from 'util';
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
+
+// ReadableStream polyfill for LangChain
+import { ReadableStream, TransformStream, WritableStream } from 'stream/web';
+global.ReadableStream = ReadableStream;
+global.TransformStream = TransformStream;
+global.WritableStream = WritableStream;
+
+// Fetch polyfill for Node < 18 (if needed)
+if (!global.fetch) {
+  global.fetch = jest.fn();
+  global.Headers = jest.fn();
+  global.Request = jest.fn();
+  global.Response = jest.fn();
+}
+
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
   useRouter() {
