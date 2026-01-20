@@ -136,6 +136,9 @@ interface UseAudioPlayerOptions {
 }
 
 function useAudioPlayer(options: UseAudioPlayerOptions = {}) {
+  // Extract callbacks to avoid dependency issues
+  const { onEnded, onError } = options;
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -178,7 +181,7 @@ function useAudioPlayer(options: UseAudioPlayerOptions = {}) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
         }
-        options.onEnded?.();
+        onEnded?.();
       };
 
       audio.onerror = () => {
@@ -186,7 +189,7 @@ function useAudioPlayer(options: UseAudioPlayerOptions = {}) {
         setError(err.message);
         setIsPlaying(false);
         setIsLoading(false);
-        options.onError?.(err);
+        onError?.(err);
       };
 
       audio.oncanplaythrough = async () => {
@@ -217,7 +220,7 @@ function useAudioPlayer(options: UseAudioPlayerOptions = {}) {
       setError('Error cargando audio');
       setIsLoading(false);
     }
-  }, [cleanup, options.onEnded, options.onError]);
+  }, [cleanup, onEnded, onError]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
@@ -611,6 +614,14 @@ export function StepSelectVoice({
 
   const audioPlayer = useAudioPlayer(audioPlayerOptions);
 
+  // Extract audioPlayer functions to avoid dependency warnings
+  const {
+    isPlaying: audioIsPlaying,
+    pause: audioPause,
+    play: audioPlay,
+    setPlaybackRate: audioSetPlaybackRate,
+  } = audioPlayer;
+
   // Fetch voices from API (with fallback to static list)
   useEffect(() => {
     const fetchVoices = async () => {
@@ -656,8 +667,8 @@ export function StepSelectVoice({
   const playPreview = useCallback(
     async (voice: AvailableVoice) => {
       // If same voice is playing, pause it
-      if (currentPlayingId === voice.id && audioPlayer.isPlaying) {
-        audioPlayer.pause();
+      if (currentPlayingId === voice.id && audioIsPlaying) {
+        audioPause();
         return;
       }
 
@@ -665,7 +676,7 @@ export function StepSelectVoice({
 
       // If voice has a preview_url, use it directly
       if (voice.preview_url) {
-        audioPlayer.play(voice.preview_url, config.voiceSpeed);
+        audioPlay(voice.preview_url, config.voiceSpeed);
         return;
       }
 
@@ -691,7 +702,7 @@ export function StepSelectVoice({
         const data = await response.json();
 
         if (data.audio_url) {
-          audioPlayer.play(data.audio_url, config.voiceSpeed);
+          audioPlay(data.audio_url, config.voiceSpeed);
         } else {
           // No audio URL returned, reset state
           setCurrentPlayingId(null);
@@ -703,7 +714,7 @@ export function StepSelectVoice({
         setCurrentPlayingId(null);
       }
     },
-    [currentPlayingId, audioPlayer.isPlaying, audioPlayer.pause, audioPlayer.play, config.voiceSpeed, accessToken]
+    [currentPlayingId, audioIsPlaying, audioPause, audioPlay, config.voiceSpeed, accessToken]
   );
 
   const handleSelectVoice = useCallback((voiceId: string) => {
@@ -712,8 +723,8 @@ export function StepSelectVoice({
 
   const handleSpeedChange = useCallback((speed: number) => {
     onUpdateConfig({ voiceSpeed: speed });
-    audioPlayer.setPlaybackRate(speed);
-  }, [onUpdateConfig, audioPlayer.setPlaybackRate]);
+    audioSetPlaybackRate(speed);
+  }, [onUpdateConfig, audioSetPlaybackRate]);
 
   // Memoize sorted voices (default first, then alphabetical)
   const sortedVoices = useMemo(() => {

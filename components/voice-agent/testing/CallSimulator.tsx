@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PhoneCallIcon,
@@ -338,15 +338,15 @@ export function CallSimulator({
     };
   }, [callState]);
 
-  // Calculate metrics
-  const metrics: SimulatorMetrics = {
+  // Calculate metrics with useMemo to prevent unnecessary re-renders
+  const metrics: SimulatorMetrics = useMemo(() => ({
     duration: callDuration,
     messageCount: messages.filter((m) => m.role !== 'system').length,
     avgLatency:
       messages.filter((m) => m.latencyMs).reduce((sum, m) => sum + (m.latencyMs || 0), 0) /
         (messages.filter((m) => m.latencyMs).length || 1),
     maxLatency: Math.max(...messages.map((m) => m.latencyMs || 0), 0),
-  };
+  }), [callDuration, messages]);
 
   // Start call
   const handleStartCall = useCallback(async () => {
