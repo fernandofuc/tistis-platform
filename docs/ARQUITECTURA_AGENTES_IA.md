@@ -1,8 +1,23 @@
 # Arquitectura de Agentes de IA - TIS TIS Platform
 
-> **Documento de Referencia v1.0**
-> Fecha: 2026-01-13
+> **Documento de Referencia v3.0**
+> Fecha: 2026-01-20
 > Autor: Sistema de Desarrollo TIS TIS
+
+---
+
+## ⚠️ NOTA IMPORTANTE - Voice Agent v3.0
+
+Para la arquitectura actualizada de Voice Agent v3.0 y Messaging Agent v2.0, consultar:
+
+- **[ARQUITECTURA-AGENTES-V3.md](../.claude/docs/ARQUITECTURA-AGENTES-V3.md)** - Arquitectura completa v3.0
+- **[HYBRID_PROMPT_SYSTEM.md](../.claude/docs/HYBRID_PROMPT_SYSTEM.md)** - Sistema de prompts híbridos
+- **[CHANGELOG-MEJORAS-ENERO-2026.md](../.claude/docs/CHANGELOG-MEJORAS-ENERO-2026.md)** - Cambios detallados
+
+### Cambios principales en v3.0:
+- **Voice Agent v3.0:** Security Gate (5 capas), Circuit Breaker, 32 tools, 17 capabilities
+- **Messaging Agent v2.0:** Prompts híbridos (Template + Gemini KB), diferenciación por canal
+- **API Settings Tab:** Gestión de API Keys, scopes, rate limiting
 
 ---
 
@@ -333,5 +348,6 @@ Cambios:
 
 ---
 
-**Última actualización**: 2026-01-13
+**Última actualización**: 2026-01-20
+**Versión:** 3.0.0 (Voice Agent v3 + Messaging Agent v2)
 **Próxima revisión**: Después de completar migración de UI

@@ -1,7 +1,7 @@
 # Indice de Documentacion - TIS TIS Platform
 
-**Ultima actualizacion:** 29 de Diciembre, 2025
-**Version:** 4.6.0
+**Ultima actualizacion:** 20 de Enero, 2026
+**Version:** 5.0.0
 
 Este documento centraliza toda la documentacion del proyecto para facilitar su navegacion.
 
@@ -13,12 +13,12 @@ Este documento centraliza toda la documentacion del proyecto para facilitar su n
 
 | Archivo | Descripción | Última Actualización |
 |---------|-------------|----------------------|
-| **README.md** | Overview del proyecto, Quick Start, Tech Stack | 29 Dic 2025 |
-| **CHANGELOG.md** | Historial completo de cambios por versión | 29 Dic 2025 |
-| **STATUS_PROYECTO.md** | Estado detallado del desarrollo | 29 Dic 2025 |
+| **README.md** | Overview del proyecto, Quick Start, Tech Stack | 20 Ene 2026 |
+| **CHANGELOG.md** | Historial completo de cambios por versión | 20 Ene 2026 |
+| **STATUS_PROYECTO.md** | Estado detallado del desarrollo | 20 Ene 2026 |
 | **CLAUDE.md** | Instrucciones para Claude Code (AI assistant) | 29 Dic 2025 |
 | **MIGRATION_011_SUMMARY.md** | Resumen ejecutivo de migración crítica | 10 Dic 2025 |
-| **DOCUMENTATION_INDEX.md** | Este archivo - Índice de toda la documentación | 29 Dic 2025 |
+| **DOCUMENTATION_INDEX.md** | Este archivo - Índice de toda la documentación | 20 Ene 2026 |
 
 ---
 
@@ -193,6 +193,62 @@ tistis-platform/
 - Variables de entorno requeridas:
   - `WHATSAPP_PHONE_NUMBER_ID`
   - `WHATSAPP_ACCESS_TOKEN`
+
+### Voice Agent v3.0 (NUEVO - Enero 2026)
+
+**Arquitectura:**
+- Security Gate con 5 capas de validacion (IP, HMAC, timestamp, rate limit, content-type)
+- Circuit Breaker con timeout 8s, 5 failures → open, 30s reset
+- LangGraph Voice: Router → Tool Executor → RAG → Response Generator
+
+| Componente | Descripcion |
+|------------|-------------|
+| `lib/voice-agent/webhooks/security-gate.ts` | 5 capas de validacion |
+| `lib/voice-agent/webhooks/circuit-breaker.ts` | Patron circuit breaker |
+| `lib/voice-agent/langgraph/graph.ts` | Grafo principal Voice |
+| `lib/voice-agent/tools/` | 32 tools (5 common, 14 restaurant, 13 dental) |
+| `lib/voice-agent/types/` | Capability (17), Tool types |
+
+**Tools por Vertical:**
+- **Common (5):** get_business_hours, get_business_info, transfer_to_human, request_invoice, end_call
+- **Restaurant (14):** check_availability, create/modify/cancel_reservation, get_menu, search_menu, etc.
+- **Dental (13):** check_appointment_availability, create/modify/cancel_appointment, get_doctors, etc.
+
+**Capabilities (17 total):**
+- Shared: business_hours, business_info, human_transfer, faq, invoicing
+- Restaurant: reservations, menu_info, recommendations, orders, order_status, promotions
+- Dental: appointments, services_info, doctor_info, insurance_info, appointment_management, emergencies
+
+---
+
+### Messaging Agent v2.0 (NUEVO - Enero 2026)
+
+**Sistema de Prompts Hibridos:**
+- Template Handlebars genera prompt estructurado
+- Gemini 3.0 Flash enriquece con Knowledge Base
+
+| Componente | Descripcion |
+|------------|-------------|
+| `src/features/ai/services/prompt-generator.service.ts` | Generador hibrido |
+| `templates/prompts/restaurant/*.hbs` | Templates restaurant |
+| `templates/prompts/dental/*.hbs` | Templates dental |
+
+---
+
+### API Settings Tab (NUEVO - Enero 2026)
+
+**Ubicacion:** `/src/features/api-settings/`
+
+| Componente | Descripcion |
+|------------|-------------|
+| `APIKeysSection.tsx` | Componente principal (tabs + lista + modales) |
+| `APIDocumentation.tsx` | Documentacion interactiva inline |
+| `APISandbox.tsx` | Sandbox para probar endpoints |
+| `useAPIKeys.ts` | Hook para CRUD de API Keys |
+
+**Scopes disponibles:** leads, reservations, appointments, voice, webhooks (read/write/delete/manage)
+
+---
 
 ### Sistema de AI Multi-Agente (LangGraph)
 
@@ -483,9 +539,10 @@ npm run test             # Tests (cuando estén disponibles)
 | 2.0 | 21 Dic 2025 | Actualizacion: Remover n8n, documentar sistema nativo de AI, anadir nuevos endpoints |
 | 3.0 | 21 Dic 2025 | Actualizacion: Documentar sistema LangGraph multi-agente, nuevos agentes especializados |
 | 4.0 | 29 Dic 2025 | Actualizacion: Sistema de terminología dinámica multi-vertical, nuevos hooks y helpers |
+| 5.0 | 20 Ene 2026 | Actualizacion: Voice Agent v3.0, Messaging Agent v2.0, API Settings Tab, 32 tools, 17 capabilities |
 
 ---
 
-**Ultima actualizacion:** 29 de Diciembre, 2025
+**Ultima actualizacion:** 20 de Enero, 2026
 **Mantenido por:** Claude Code
-**Version del proyecto:** 4.6.0
+**Version del proyecto:** 5.0.0

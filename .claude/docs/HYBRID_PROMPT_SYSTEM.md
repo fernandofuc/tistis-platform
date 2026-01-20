@@ -1,8 +1,9 @@
-# Plan: Integración de Prompts Híbridos (Template + Gemini) para Voice Agent
+# Sistema de Prompts Híbridos (Template + Gemini) - Voice & Messaging Agents
 
 **Fecha:** 2026-01-20
-**Versión:** 1.0
-**Estado:** COMPLETADO
+**Versión:** 2.0
+**Estado:** IMPLEMENTADO Y VALIDADO
+**Ultima Actualizacion:** Commit `de92953`
 
 ## Implementación Completada
 
@@ -545,3 +546,87 @@ Expected: Respuesta con horarios del KB, tono natural de voz
 - Los templates existentes en `/templates/` pueden servir como base pero necesitan adaptarse al nuevo formato
 - El VoiceTemplateEngine existente se reutilizará para el renderizado de Handlebars
 - El sistema mantiene compatibilidad hacia atrás con prompts cacheados existentes
+
+---
+
+## MEJORAS ENERO 2026
+
+### Fixes Criticos Aplicados
+
+1. **Sincronización de Capabilities**
+   - `ToolCapability` en `tools/types.ts` ahora está sincronizado con `Capability` en `types/types.ts`
+   - Eliminados capabilities fantasma que causaban errores de TypeScript
+
+2. **requiredCapabilities Corregidos**
+   - `transfer-to-human.ts`: `'transfers'` → `'human_transfer'`
+   - `get-doctors.ts`: `'doctors'` → `'doctor_info'`
+   - `get-insurance-info.ts`: `'insurance'` → `'insurance_info'`
+   - `get-menu.ts`: `'menu'` → `'menu_info'`
+
+3. **Nuevas Capabilities y Tools**
+   ```typescript
+   // Capability agregada
+   'invoicing' // Para facturación CFDI mexicana
+
+   // Tools agregados
+   'request_invoice' // Solicitar factura fiscal
+   'end_call'        // Finalizar llamada programáticamente
+   ```
+
+4. **Descripciones Actualizadas**
+   ```typescript
+   CAPABILITY_DESCRIPTIONS['invoicing'] = 'Solicitar y gestionar facturas'
+   TOOL_DESCRIPTIONS['request_invoice'] = 'Solicitar factura fiscal'
+   TOOL_DESCRIPTIONS['end_call'] = 'Finalizar la llamada'
+   ```
+
+### Sistema de Capabilities Completo
+
+```typescript
+// 17 Capabilities totales
+Capability =
+  // Shared (5)
+  | 'business_hours' | 'business_info' | 'human_transfer' | 'faq' | 'invoicing'
+  // Restaurant (6)
+  | 'reservations' | 'menu_info' | 'recommendations' | 'orders' | 'order_status' | 'promotions'
+  // Dental (6)
+  | 'appointments' | 'services_info' | 'doctor_info' | 'insurance_info' | 'appointment_management' | 'emergencies'
+```
+
+### Sistema de Tools Completo
+
+```typescript
+// 32 Tools totales
+Tool =
+  // Common (5)
+  | 'get_business_hours' | 'get_business_info' | 'transfer_to_human' | 'request_invoice' | 'end_call'
+  // Restaurant (14)
+  | 'check_availability' | 'create_reservation' | 'modify_reservation' | 'cancel_reservation'
+  | 'get_menu' | 'get_menu_item' | 'search_menu' | 'get_recommendations'
+  | 'create_order' | 'modify_order' | 'cancel_order' | 'get_order_status' | 'calculate_delivery_time' | 'get_promotions'
+  // Dental (13)
+  | 'check_appointment_availability' | 'create_appointment' | 'modify_appointment' | 'cancel_appointment'
+  | 'get_services' | 'get_service_info' | 'get_service_prices'
+  | 'get_doctors' | 'get_doctor_info'
+  | 'get_insurance_info' | 'check_insurance_coverage'
+  | 'handle_emergency' | 'send_reminder'
+```
+
+### Verificación TypeScript
+
+```bash
+# Todos los archivos del voice-agent compilan sin errores
+npx tsc --noEmit
+# ✓ lib/voice-agent/types/types.ts
+# ✓ lib/voice-agent/types/capability-definitions.ts
+# ✓ lib/voice-agent/tools/types.ts
+# ✓ lib/voice-agent/tools/*/\*.ts
+```
+
+---
+
+## Documentación Relacionada
+
+- [ARQUITECTURA-AGENTES-V3.md](./ARQUITECTURA-AGENTES-V3.md) - Arquitectura completa de ambos agentes
+- [voice-agent-v2/04-ARQUITECTURA-PROPUESTA.md](./voice-agent-v2/04-ARQUITECTURA-PROPUESTA.md) - Arquitectura Voice Agent v2
+- [voice-agent-v2/08-TOOL-CALLING.md](./voice-agent-v2/08-TOOL-CALLING.md) - Sistema de Tool Calling

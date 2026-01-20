@@ -1,8 +1,8 @@
 # Estado del Proyecto TIS TIS Platform
 
-**Ultima actualizacion:** 15 de Enero, 2026
-**Version:** 5.5.0
-**Fase actual:** Produccion - Sistema Completo con Tool Calling + RAG + LangGraph + AI Learning + Loyalty AI Integration + Integration Hub + Multi-Vertical Terminology + Mobile Responsiveness Premium
+**Ultima actualizacion:** 20 de Enero, 2026
+**Version:** 5.0.0
+**Fase actual:** Produccion - Voice Agent v3 + Messaging Agent + API Settings + Tool Calling + RAG + LangGraph + AI Learning + Loyalty AI Integration + Integration Hub + Multi-Vertical Terminology + Mobile Responsiveness Premium
 
 ---
 
@@ -23,9 +23,12 @@
 | **API Endpoints** | 30+ endpoints activos |
 | **Webhooks Multi-Canal** | 4 plataformas integradas |
 | **AI Multi-Agente** | LangGraph con 14 agentes + Tool Calling + RAG |
+| **Voice Agent v3.0** | Security Gate + Circuit Breaker + 32 Tools + 17 Capabilities - NUEVO |
+| **Messaging Agent v2.0** | Prompts hibridos + Diferenciacion por canal - NUEVO |
 | **AI Learning** | Sistema de aprendizaje automatico |
 | **AI por Canal** | Configuracion personalizada por canal |
-| **Tool Calling** | 20+ tools de consulta y accion (incluye 4 Loyalty tools) |
+| **Tool Calling** | 32 tools de consulta y accion (5 common, 14 restaurant, 13 dental) |
+| **API Settings** | Gestion de API Keys, scopes, rate limiting, documentacion - NUEVO |
 | **RAG (pgvector)** | Busqueda semantica en Knowledge Base - NUEVO |
 | **Integration Hub** | CRM, POS, software dental, calendarios |
 | **Multi-Vertical Terminology** | 6 verticales con terminologia dinamica |
@@ -296,7 +299,108 @@ flex items-center justify-center active:scale-95 transition-all
 
 ---
 
-### 10. Sistema de IA Multi-Agente con LangGraph (100%)
+### 10. Voice Agent v3.0 (100%) - NUEVO Enero 2026
+
+**Arquitectura:**
+- Security Gate con 5 capas de validacion (IP whitelist, HMAC verify, timestamp, rate limit, content-type)
+- Circuit Breaker con timeout de 8s y fallback automatico (5 failures → open)
+- LangGraph Voice con Router → Tool Executor → RAG → Response Generator
+- Sistema de prompts hibridos (Template Handlebars + Gemini KB enrichment)
+
+**Tools Implementados (32 total):**
+- **Common (5):** get_business_hours, get_business_info, transfer_to_human, request_invoice, end_call
+- **Restaurant (14):** check_availability, create/modify/cancel_reservation, get_menu, get_menu_item, search_menu, get_recommendations, create/modify/cancel_order, get_order_status, calculate_delivery_time, get_promotions
+- **Dental (13):** check_appointment_availability, create/modify/cancel_appointment, get_services, get_service_info, get_service_prices, get_doctors, get_doctor_info, get_insurance_info, check_insurance_coverage, handle_emergency, send_reminder
+
+**Capabilities (17 total):**
+- **Shared (5):** business_hours, business_info, human_transfer, faq, invoicing
+- **Restaurant (6):** reservations, menu_info, recommendations, orders, order_status, promotions
+- **Dental (6):** appointments, services_info, doctor_info, insurance_info, appointment_management, emergencies
+
+**Tipos de Asistente (6 total):**
+- Restaurant: rest_basic, rest_standard, rest_complete
+- Dental: dental_basic, dental_standard, dental_complete
+
+**Templates de Personalidad (4):**
+- professional, friendly, energetic, calm
+
+**Archivos Principales:**
+```
+lib/voice-agent/
+├── webhooks/handlers/        # assistant-request, conversation-update, end-of-call
+├── langgraph/
+│   ├── state.ts             # VoiceAgentState
+│   ├── graph.ts             # Grafo principal
+│   └── nodes/               # router, tool-executor, rag, response-generator
+├── tools/                   # 32 tools implementados
+├── types/                   # Capability, Tool, ToolCapability types
+└── services/                # Template compiler, prompt generator
+```
+
+**Verificacion TypeScript:**
+- Todos los archivos compilan sin errores (`npx tsc --noEmit`)
+- Sincronizacion completa entre ToolCapability y Capability types
+
+---
+
+### 10.1 Messaging Agent v2.0 (100%) - NUEVO Enero 2026
+
+**Sistema de Prompts Hibridos:**
+- Template base con Handlebars renderiza estructura del prompt
+- Gemini 3.0 Flash enriquece con Knowledge Base dinamico
+- Diferenciacion por canal (emojis para WhatsApp, sin emojis para voz)
+
+**Caracteristicas:**
+- RAG con 4000 tokens de contexto maximo
+- Respuestas hasta 2000 caracteres
+- Integracion con Meta (WhatsApp, Instagram, Facebook)
+- Soporte para botones y quick replies
+
+**Archivos:**
+```
+src/features/ai/
+├── services/prompt-generator.service.ts
+└── templates/
+    ├── restaurant/rest_*.hbs
+    └── dental/dental_*.hbs
+```
+
+---
+
+### 10.2 API Settings Tab (100%) - NUEVO Enero 2026
+
+**Ubicacion:** `/src/features/api-settings/`
+
+**Funcionalidades:**
+- Gestion de API Keys (crear, ver, revocar, rotar)
+- Scopes granulares por endpoint
+- Rate limiting configurable (por minuto y diario)
+- IP whitelist opcional
+- Documentacion interactiva inline
+- Sandbox para pruebas de endpoints
+- Historial de auditoria
+
+**Endpoints API:**
+| Metodo | Endpoint | Scope | Descripcion |
+|--------|----------|-------|-------------|
+| GET | `/api/v1/leads` | leads:read | Lista leads |
+| POST | `/api/v1/leads` | leads:write | Crear lead |
+| GET | `/api/v1/reservations` | reservations:read | Lista reservaciones |
+| POST | `/api/v1/reservations` | reservations:write | Crear reservacion |
+| GET | `/api/v1/appointments` | appointments:read | Lista citas |
+| POST | `/api/v1/appointments` | appointments:write | Crear cita |
+| GET | `/api/v1/voice/calls` | voice:read | Lista llamadas |
+
+**Rate Limits por Plan:**
+| Plan | RPM | Daily | Max Keys |
+|------|-----|-------|----------|
+| Starter | 60 | 1,000 | 2 |
+| Professional | 120 | 10,000 | 5 |
+| Enterprise | 300 | 100,000 | 20 |
+
+---
+
+### 11. Sistema de IA Multi-Agente con LangGraph (100%)
 
 **Arquitectura LangGraph:**
 - Sistema multi-agente que reemplaza el enfoque de "cerebro unico"
@@ -1474,7 +1578,7 @@ La configuracion de agentes AI se reorganizo en paginas dedicadas:
 
 ---
 
-**Ultima actualizacion:** 15 de Enero, 2026
+**Ultima actualizacion:** 20 de Enero, 2026
 **Responsable:** Claude Code
 **Version:** 5.0.0
-**Estado:** Produccion - Tool Calling + RAG + LangGraph + AI Learning + Integration Hub
+**Estado:** Produccion - Voice Agent v3 + Messaging Agent + API Settings + Tool Calling + RAG + LangGraph

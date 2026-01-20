@@ -2,9 +2,9 @@
 
 Sistema completo de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API y automatizacion de procesos multi-canal.
 
-**Version:** 4.6.0
-**Estado:** Produccion - Multi-Vertical Terminology + Integration Hub
-**Ultima actualizacion:** 29 de Diciembre, 2025
+**Version:** 5.0.0
+**Estado:** Produccion - Voice Agent v3 + Messaging Agent + API Settings
+**Ultima actualizacion:** 20 de Enero, 2026
 
 ---
 
@@ -261,11 +261,11 @@ El Voice Agent permite a los negocios tener un **agente de IA que contesta llama
 - **TTS (Text-to-Speech)**: ElevenLabs para voz natural
 - **Server-Side Response Mode**: TIS TIS genera las respuestas del AI
 
-### Arquitectura del Voice Agent
+### Arquitectura del Voice Agent v3.0
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     VOICE AGENT ARCHITECTURE                        │
+│                   VOICE AGENT v3.0 ARCHITECTURE                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │   ┌─────────────┐                                                   │
@@ -276,34 +276,58 @@ El Voice Agent permite a los negocios tener un **agente de IA que contesta llama
 │          ▼                                                          │
 │   ┌─────────────────────────────────────────────────────────────┐   │
 │   │                    VAPI PLATFORM                            │   │
-│   │  ───────────────────────────────────────────────────────    │   │
-│   │  • Recibe llamada via numero telefonico                     │   │
-│   │  • STT: Deepgram transcribe voz → texto                     │   │
-│   │  • Envia transcript a TIS TIS webhook                       │   │
+│   │  • STT: Deepgram nova-2  • TTS: ElevenLabs multilingual_v2  │   │
 │   └────────────────────────┬────────────────────────────────────┘   │
 │                            │                                        │
 │                            ▼                                        │
 │   ┌─────────────────────────────────────────────────────────────┐   │
-│   │            TIS TIS VOICE WEBHOOK                            │   │
-│   │            /api/voice-agent/webhook                         │   │
+│   │              WEBHOOK HANDLER v3.0                           │   │
 │   │  ───────────────────────────────────────────────────────    │   │
-│   │  1. Extrae phone_number del caller                          │   │
-│   │  2. Busca/crea lead asociado al numero                      │   │
-│   │  3. Carga BusinessContext via get_tenant_ai_context()       │   │
-│   │  4. Invoca LangGraph con el transcript                      │   │
-│   │  5. Retorna respuesta en formato VAPI                       │   │
+│   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │   │
+│   │  │Security Gate │──│Circuit Breaker│──│ Event Router │      │   │
+│   │  │• IP Whitelist│  │• 8s timeout  │  │• assistant-req│      │   │
+│   │  │• HMAC Verify │  │• 5 failures  │  │• conv-update │      │   │
+│   │  │• Rate Limit  │  │• Fallback    │  │• end-of-call │      │   │
+│   │  └──────────────┘  └──────────────┘  └──────────────┘      │   │
+│   └────────────────────────┬────────────────────────────────────┘   │
+│                            │                                        │
+│                            ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                  LANGGRAPH VOICE                            │   │
+│   │  ───────────────────────────────────────────────────────    │   │
+│   │  Router → Tool Executor → RAG → Response Generator          │   │
+│   │  • 32 tools (5 common, 14 restaurant, 13 dental)           │   │
+│   │  • 17 capabilities con validacion en tiempo real            │   │
+│   │  • Prompts hibridos (Template + Gemini KB)                  │   │
 │   └────────────────────────┬────────────────────────────────────┘   │
 │                            │                                        │
 │                            ▼                                        │
 │   ┌─────────────────────────────────────────────────────────────┐   │
 │   │                    VAPI TTS                                 │   │
-│   │  ───────────────────────────────────────────────────────    │   │
-│   │  • ElevenLabs convierte texto → voz                         │   │
-│   │  • Reproduce respuesta al llamante                          │   │
+│   │  • ElevenLabs convierte texto → voz natural                 │   │
 │   └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Sistema de Capabilities (v3.0)
+
+El Voice Agent v3.0 introduce un sistema robusto de capabilities por vertical y nivel:
+
+| Vertical | Tipo | Capabilities |
+|----------|------|--------------|
+| **Restaurant** | basic | reservations, business_hours, business_info, human_transfer |
+| **Restaurant** | standard | + menu_info, recommendations, faq |
+| **Restaurant** | complete | + orders, order_status, promotions |
+| **Dental** | basic | appointments, business_hours, business_info, human_transfer |
+| **Dental** | standard | + services_info, doctor_info, faq |
+| **Dental** | complete | + insurance_info, appointment_management, emergencies |
+
+### Tools Disponibles (32 total)
+
+- **Common (5)**: get_business_hours, get_business_info, transfer_to_human, request_invoice, end_call
+- **Restaurant (14)**: check_availability, create_reservation, modify/cancel_reservation, get_menu, get_menu_item, search_menu, get_recommendations, create/modify/cancel_order, get_order_status, calculate_delivery_time, get_promotions
+- **Dental (13)**: check_appointment_availability, create/modify/cancel_appointment, get_services, get_service_info, get_service_prices, get_doctors, get_doctor_info, get_insurance_info, check_insurance_coverage, handle_emergency, send_reminder
 
 ### Server-Side Response Mode
 
@@ -1176,14 +1200,38 @@ npm run typecheck         # TypeScript check
 
 ## 📊 Estado del Proyecto
 
-### Version 4.6.0 - Multi-Vertical Terminology + Integration Hub
+### Version 5.0.0 - Voice Agent v3 + Messaging Agent + API Settings (Enero 2026)
 
-**Sistema de Terminologia Dinamica (NUEVO v4.6.0):**
+**Voice Agent v3.0 (NUEVO):**
+- ✅ Security Gate con 5 capas de validacion (IP, HMAC, timestamp, rate limit, content-type)
+- ✅ Circuit Breaker con timeout de 8s y fallback automatico
+- ✅ 32 tools implementados (5 common, 14 restaurant, 13 dental)
+- ✅ 17 capabilities con matriz por vertical y nivel
+- ✅ Sistema de prompts hibridos (Template Handlebars + Gemini KB enrichment)
+- ✅ Tipos de asistente: 6 tipos (3 por vertical)
+- ✅ Templates por personalidad: professional, friendly, energetic, calm
+- ✅ Sincronizacion de ToolCapability con Capability types
+
+**Messaging Agent v2.0 (MEJORADO):**
+- ✅ Sistema de prompts hibridos compartido con Voice
+- ✅ Diferenciacion por canal (emojis, markdown, botones para WhatsApp)
+- ✅ RAG con 4000 tokens de contexto
+- ✅ Respuestas hasta 2000 caracteres
+- ✅ Integracion con Meta (WhatsApp, Instagram, Facebook)
+
+**API Settings Tab (NUEVO):**
+- ✅ Gestion completa de API Keys (crear, ver, revocar, rotar)
+- ✅ Scopes granulares por endpoint
+- ✅ Rate limiting configurable (por minuto y diario)
+- ✅ IP whitelist opcional
+- ✅ Documentacion interactiva inline
+- ✅ Sandbox para pruebas de endpoints
+- ✅ Historial de auditoria
+
+**Sistema de Terminologia Dinamica (v4.6.0):**
 - ✅ Hook `useVerticalTerminology` con 6 verticales soportados
 - ✅ 35+ campos de terminologia por vertical
 - ✅ Factory functions para constantes dinamicas (`terminologyHelpers.ts`)
-- ✅ Dashboard, Calendario, Pacientes, Lealtad, AI Agent Voz actualizados
-- ✅ Flujo completo Discovery → Checkout → Tenant → UI
 - ✅ Verticales activos: dental, restaurant
 - ✅ Verticales preparados: clinic, gym, beauty, veterinary
 
@@ -1192,9 +1240,6 @@ npm run typecheck         # TypeScript check
 - ✅ 7 tablas nuevas para manejo de datos externos
 - ✅ Deduplicacion inteligente de contactos (phone/email matching)
 - ✅ Sincronizacion bidireccional configurable
-- ✅ API endpoints completos para CRUD de integraciones
-- ✅ UI en dashboard (Configuracion > Integraciones)
-- ✅ Integracion con contexto del AI (external_data en BusinessContext)
 
 **Seguridad (v4.3.0):**
 - ✅ 6 Auditorias de seguridad completadas (#11-#16)
@@ -1207,8 +1252,9 @@ npm run typecheck         # TypeScript check
 **Sistemas de IA Implementados:**
 - ✅ LangGraph Multi-Agente (100%)
 - ✅ Business IA / Knowledge Base (100%)
-- ✅ AI Agent Voz con VAPI (100%)
+- ✅ AI Agent Voz con VAPI v3.0 (100%)
 - ✅ AI Learning automatico (100%)
+- ✅ Messaging Agent v2.0 (100%)
 
 **Core Features:**
 - ✅ Modulo de pacientes (100%)
@@ -1216,7 +1262,7 @@ npm run typecheck         # TypeScript check
 - ✅ Sistema de notificaciones (100%)
 - ✅ Modulo de cotizaciones - DB (100%)
 - ✅ Seguridad multi-tenant (100%)
-- ✅ API Routes (100%)
+- ✅ API Routes + API Settings (100%)
 - ✅ Mensajeria multi-canal (100%)
 - ✅ Integration Hub - CRM, POS, External Systems (100%)
 - ✅ Sistema de Terminologia Dinamica Multi-Vertical (100%)
@@ -1226,11 +1272,13 @@ npm run typecheck         # TypeScript check
 - ✅ DashboardSkeleton para carga instantanea
 - ✅ Optimizaciones de performance
 - ✅ Sidebar colapsable con animaciones
+- ✅ Pestana API en Configuracion
 
 **Pendiente:**
 - ⏸️ Modulo de cotizaciones - API/UI
 - ⏸️ Testing automatizado
-- ⏸️ Documentacion de API (OpenAPI)
+- ⏸️ Implementar request_invoice tool (facturacion CFDI)
+- ⏸️ Implementar end_call tool
 
 Ver detalles completos en `STATUS_PROYECTO.md`
 

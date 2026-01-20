@@ -1,12 +1,63 @@
 # TIS TIS Platform - Voice Agent System
 
-**Versión:** 1.0.0
-**Última actualización:** Diciembre 22, 2024
-**Estado:** Implementado y funcional
+**Versión:** 3.0.0
+**Última actualización:** 20 de Enero, 2026
+**Estado:** Voice Agent v3.0 - Production Ready
 
 ---
 
-## Descripción General
+## ⚠️ NOTA IMPORTANTE
+
+Este documento describe la arquitectura original del Voice Agent v1.0. Para la arquitectura actual v3.0, consultar:
+
+- **[ARQUITECTURA-AGENTES-V3.md](../.claude/docs/ARQUITECTURA-AGENTES-V3.md)** - Arquitectura completa v3.0
+- **[HYBRID_PROMPT_SYSTEM.md](../.claude/docs/HYBRID_PROMPT_SYSTEM.md)** - Sistema de prompts híbridos
+
+---
+
+## Novedades Voice Agent v3.0 (Enero 2026)
+
+### Security Gate (5 Capas)
+1. IP Whitelist validation
+2. HMAC Signature verification
+3. Timestamp freshness check
+4. Rate Limit enforcement
+5. Content-Type validation
+
+### Circuit Breaker
+- Timeout: 8 segundos
+- Failure threshold: 5 fallos consecutivos
+- Reset timeout: 30 segundos
+
+### Tools Implementados (32 total)
+- **Common (5):** get_business_hours, get_business_info, transfer_to_human, request_invoice, end_call
+- **Restaurant (14):** check_availability, create/modify/cancel_reservation, get_menu, search_menu, etc.
+- **Dental (13):** check_appointment_availability, create/modify/cancel_appointment, get_doctors, etc.
+
+### Capabilities (17 total)
+- **Shared:** business_hours, business_info, human_transfer, faq, invoicing
+- **Restaurant:** reservations, menu_info, recommendations, orders, order_status, promotions
+- **Dental:** appointments, services_info, doctor_info, insurance_info, appointment_management, emergencies
+
+### Archivos Principales v3.0
+```
+lib/voice-agent/
+├── webhooks/
+│   ├── security-gate.ts           # 5 capas de validación
+│   ├── circuit-breaker.ts         # Patrón circuit breaker
+│   └── handlers/                  # assistant-request, conversation-update, end-of-call
+├── langgraph/
+│   ├── state.ts                   # VoiceAgentState
+│   ├── graph.ts                   # Grafo principal
+│   └── nodes/                     # router, tool-executor, rag, response-generator
+├── tools/                         # 32 tools implementados
+├── types/                         # Capability, Tool types
+└── services/                      # Template compiler, prompt generator
+```
+
+---
+
+## Descripción General (v1.0 - Referencia Histórica)
 
 El **Voice Agent System** de TIS TIS Platform es un sistema completo de atención al cliente por voz que permite:
 

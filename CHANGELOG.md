@@ -7,11 +7,255 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
-## [5.0.0] - 2026-01-15
+## [5.0.0] - 2026-01-20
 
 ### Resumen
 
-**MAJOR RELEASE: Arquitectura Tool Calling + RAG** - Migración completa del sistema de IA desde "Context Stuffing" hacia una arquitectura moderna basada en Tool Calling con RAG (Retrieval-Augmented Generation). Reducción del 87% en costos y mejora del 70% en latencia.
+**MAJOR RELEASE: Voice Agent v3 + Messaging Agent v2 + API Settings** - Implementacion completa del Voice Agent v3.0 con Security Gate, Circuit Breaker, 32 tools y 17 capabilities. Nuevo sistema de prompts hibridos (Template + Gemini KB) y tab de configuracion de API Keys.
+
+---
+
+### 1. Voice Agent v3.0 (Nueva Arquitectura)
+
+#### 1.1 Security Gate (5 Capas)
+
+| Capa | Validacion | Accion si Falla |
+|------|------------|-----------------|
+| 1 | IP Whitelist | 403 Forbidden |
+| 2 | HMAC Signature | 401 Unauthorized |
+| 3 | Timestamp freshness | 408 Request Timeout |
+| 4 | Rate Limit | 429 Too Many Requests |
+| 5 | Content-Type | 415 Unsupported Media |
+
+#### 1.2 Circuit Breaker
+
+```typescript
+// Configuracion
+timeout: 8000,        // 8 segundos
+failureThreshold: 5,  // 5 fallos consecutivos
+resetTimeout: 30000,  // 30 segundos para reset
+```
+
+#### 1.3 Tools Implementados (32 total)
+
+**Common (5):**
+- `get_business_hours` - Horarios de atencion
+- `get_business_info` - Informacion del negocio
+- `transfer_to_human` - Transferir a humano
+- `request_invoice` - Solicitar factura CFDI
+- `end_call` - Finalizar llamada
+
+**Restaurant (14):**
+- check_availability, create/modify/cancel_reservation
+- get_menu, get_menu_item, search_menu, get_recommendations
+- create/modify/cancel_order, get_order_status
+- calculate_delivery_time, get_promotions
+
+**Dental (13):**
+- check_appointment_availability, create/modify/cancel_appointment
+- get_services, get_service_info, get_service_prices
+- get_doctors, get_doctor_info
+- get_insurance_info, check_insurance_coverage
+- handle_emergency, send_reminder
+
+#### 1.4 Capabilities (17 total)
+
+**Matriz por Vertical y Nivel:**
+
+| Vertical | basic | standard | complete |
+|----------|-------|----------|----------|
+| **Restaurant** | reservations, business_hours, business_info, human_transfer | + menu_info, recommendations, faq | + orders, order_status, promotions |
+| **Dental** | appointments, business_hours, business_info, human_transfer | + services_info, doctor_info, faq | + insurance_info, appointment_management, emergencies |
+
+#### 1.5 Archivos Nuevos
+
+```
+lib/voice-agent/
+├── webhooks/
+│   ├── security-gate.ts           # 5 capas de validacion
+│   ├── circuit-breaker.ts         # Patron circuit breaker
+│   └── handlers/
+│       ├── assistant-request.handler.ts
+│       ├── conversation-update.handler.ts
+│       └── end-of-call.handler.ts
+├── langgraph/
+│   ├── state.ts                   # VoiceAgentState
+│   ├── graph.ts                   # Grafo principal
+│   └── nodes/
+│       ├── router.ts              # Detecta intencion
+│       ├── tool-executor.ts       # Ejecuta tools
+│       ├── rag.ts                 # Busqueda semantica
+│       └── response-generator.ts  # Genera respuesta
+├── tools/
+│   ├── types.ts                   # ToolCapability, Tool types
+│   ├── common/*.ts                # 5 tools comunes
+│   ├── restaurant/*.ts            # 14 tools restaurant
+│   └── dental/*.ts                # 13 tools dental
+├── types/
+│   ├── types.ts                   # Capability type
+│   └── capability-definitions.ts  # Descripciones
+└── services/
+    └── template-prompt-compiler.service.ts
+```
+
+---
+
+### 2. Messaging Agent v2.0 (Sistema Hibrido)
+
+#### 2.1 Flujo de Prompts Hibridos
+
+```
+1. Template Handlebars (rest_basic.hbs, dental_standard.hbs, etc.)
+   └── Genera prompt estructurado con formato de voz
+       │
+       ▼
+2. Gemini 3.0 Flash
+   └── Enriquece con Knowledge Base dinamico
+       │
+       ▼
+3. Cache de Prompt
+   └── Almacena prompt compilado por tenant
+```
+
+#### 2.2 Diferenciacion por Canal
+
+| Canal | Emojis | Markdown | Botones | Max Chars |
+|-------|--------|----------|---------|-----------|
+| WhatsApp | ✅ Si | ✅ Si | ✅ Si | 2000 |
+| Voice | ❌ No | ❌ No | ❌ No | 500 |
+| Instagram | ✅ Si | ❌ No | ✅ Si | 1000 |
+
+#### 2.3 Archivos Modificados
+
+| Archivo | Cambios |
+|---------|---------|
+| `prompt-generator.service.ts` | + generateHybridVoicePrompt() |
+| `templates/restaurant/rest_*.hbs` | Templates por tipo |
+| `templates/dental/dental_*.hbs` | Templates por tipo |
+
+---
+
+### 3. API Settings Tab (Nueva Feature)
+
+#### 3.1 Componentes
+
+```
+src/features/api-settings/
+├── components/
+│   ├── APIKeysSection.tsx       # Componente principal
+│   ├── APIKeyCard.tsx           # Card de API Key
+│   ├── CreateAPIKeyModal.tsx    # Modal de creacion
+│   ├── APIKeyDetailModal.tsx    # Modal de detalles
+│   ├── APIKeySecretDisplay.tsx  # Muestra secret (1 vez)
+│   ├── ScopeSelector.tsx        # Selector de permisos
+│   ├── APIDocumentation.tsx     # Docs interactivos
+│   └── APISandbox.tsx           # Sandbox de pruebas
+├── hooks/
+│   └── useAPIKeys.ts            # CRUD de API Keys
+└── types/
+    └── apiKey.types.ts          # Tipos principales
+```
+
+#### 3.2 Scopes Disponibles
+
+```typescript
+type APIScope =
+  // Leads
+  | 'leads:read' | 'leads:write' | 'leads:delete'
+  // Reservations
+  | 'reservations:read' | 'reservations:write' | 'reservations:delete'
+  // Appointments
+  | 'appointments:read' | 'appointments:write' | 'appointments:delete'
+  // Voice
+  | 'voice:read' | 'voice:manage'
+  // Webhooks
+  | 'webhooks:manage';
+```
+
+#### 3.3 Rate Limits por Plan
+
+| Plan | RPM | Daily | Max Keys |
+|------|-----|-------|----------|
+| Starter | 60 | 1,000 | 2 |
+| Professional | 120 | 10,000 | 5 |
+| Enterprise | 300 | 100,000 | 20 |
+
+---
+
+### 4. Fixes Criticos de TypeScript
+
+#### 4.1 Sincronizacion ToolCapability ↔ Capability
+
+**Problema:** `ToolCapability` en `tools/types.ts` no estaba sincronizado con `Capability` en `types/types.ts`
+
+**Solucion:**
+```typescript
+// tools/types.ts - ANTES
+type ToolCapability = 'reservations' | 'menu' | 'transfers' | ...
+
+// tools/types.ts - DESPUES
+type ToolCapability = 'reservations' | 'menu_info' | 'human_transfer' | ...
+```
+
+#### 4.2 requiredCapabilities Corregidos
+
+| Archivo | Antes | Despues |
+|---------|-------|---------|
+| `transfer-to-human.ts` | `'transfers'` | `'human_transfer'` |
+| `get-doctors.ts` | `'doctors'` | `'doctor_info'` |
+| `get-insurance-info.ts` | `'insurance'` | `'insurance_info'` |
+| `get-menu.ts` | `'menu'` | `'menu_info'` |
+
+#### 4.3 Nuevos Tools y Capabilities
+
+```typescript
+// Nueva capability
+'invoicing'  // Para facturacion CFDI mexicana
+
+// Nuevos tools
+'request_invoice'  // Solicitar factura fiscal
+'end_call'         // Finalizar llamada
+```
+
+---
+
+### 5. Documentacion Actualizada
+
+| Documento | Descripcion |
+|-----------|-------------|
+| `ARQUITECTURA-AGENTES-V3.md` | Arquitectura completa Voice + Messaging |
+| `HYBRID_PROMPT_SYSTEM.md` | Sistema de prompts hibridos actualizado |
+| `API_CONFIGURATION_TAB.md` | Documentacion del tab API Settings |
+| `CHANGELOG-MEJORAS-ENERO-2026.md` | Changelog detallado before/after |
+| `README.md` | Actualizado a v5.0.0 |
+
+---
+
+### 6. Estadisticas de Cambios
+
+```
+50+ archivos modificados/creados
++8,000 lineas de codigo
+32 tools implementados
+17 capabilities definidas
+6 tipos de asistente
+4 templates de personalidad
+0 errores de TypeScript
+```
+
+---
+
+### 7. Commits Relacionados
+
+- `de92953` - feat(voice): implement Voice Agent v3.0 with Security Gate and Circuit Breaker
+
+---
+
+## [5.0.0-alpha] - 2026-01-15
+
+### Resumen
+
+**Arquitectura Tool Calling + RAG** - Migración completa del sistema de IA desde "Context Stuffing" hacia una arquitectura moderna basada en Tool Calling con RAG (Retrieval-Augmented Generation). Reducción del 87% en costos y mejora del 70% en latencia.
 
 ---
 
@@ -1853,4 +2097,4 @@ UPDATE ai_tenant_config SET use_langgraph = false WHERE tenant_id = 'xxx';
 
 ---
 
-**Ultima actualizacion:** 15 de Enero, 2026
+**Ultima actualizacion:** 20 de Enero, 2026
