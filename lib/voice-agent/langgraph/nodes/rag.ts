@@ -11,14 +11,15 @@
  * - Policies
  * - FAQs
  *
- * Integrates with existing RAG infrastructure in the platform.
+ * Now integrates with VoiceRAG for optimized voice responses.
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import type { VoiceAgentState, RAGResult } from '../state';
 import { recordLatency, addError } from '../state';
+import { VoiceRAG, createVoiceRAG, type VoiceRAGConfig, type RAGContext } from '../../rag';
 
 // =====================================================
 // TYPES
@@ -42,6 +43,12 @@ export interface RAGConfig {
 
   /** Custom Supabase client (for testing) */
   supabaseClient?: SupabaseClient;
+
+  /** Use VoiceRAG for optimized voice responses */
+  useVoiceRAG?: boolean;
+
+  /** VoiceRAG configuration */
+  voiceRAGConfig?: VoiceRAGConfig;
 }
 
 /**
@@ -63,14 +70,35 @@ interface RetrievedDocument {
 // RAG NODE
 // =====================================================
 
+/** VoiceRAG singleton instance */
+let voiceRAGInstance: VoiceRAG | null = null;
+
+/**
+ * Get or create VoiceRAG instance
+ */
+function getVoiceRAGInstance(config?: VoiceRAGConfig): VoiceRAG {
+  if (!voiceRAGInstance) {
+    voiceRAGInstance = createVoiceRAG(config);
+  }
+  return voiceRAGInstance;
+}
+
 /**
  * RAG node - retrieves context from knowledge base
+ * Supports both legacy mode and VoiceRAG mode
  */
 export async function ragNode(
   state: VoiceAgentState,
   config?: RAGConfig
 ): Promise<Partial<VoiceAgentState>> {
   const startTime = Date.now();
+
+  // Use VoiceRAG if enabled
+  if (config?.useVoiceRAG) {
+    return ragNodeWithVoiceRAG(state, config, startTime);
+  }
+
+  // Legacy mode
   const nodeConfig = {
     maxResults: config?.maxResults ?? 3,
     minScore: config?.minScore ?? 0.7,
@@ -444,6 +472,94 @@ export async function getLocationInfo(
 }
 
 // =====================================================
+// VOICE RAG INTEGRATION
+// =====================================================
+
+/**
+ * RAG node using VoiceRAG for optimized voice responses
+ */
+async function ragNodeWithVoiceRAG(
+  state: VoiceAgentState,
+  config: RAGConfig,
+  startTime: number
+): Promise<Partial<VoiceAgentState>> {
+  try {
+    const query = state.normalizedInput || state.currentInput;
+    const voiceRAG = getVoiceRAGInstance(config.voiceRAGConfig);
+
+    console.log(
+      `[RAG/VoiceRAG] Processing query for tenant: ${state.tenantId}`,
+      { query: query.substring(0, 50), subIntent: state.subIntent }
+    );
+
+    // Build context
+    const context: RAGContext = {
+      tenantId: state.tenantId,
+      locale: state.locale,
+      assistantType: state.assistantType,
+      callId: state.callId,
+      subIntent: state.subIntent,
+      entities: state.entities,
+    };
+
+    // Execute VoiceRAG query
+    const result = await voiceRAG.query(query, context);
+
+    // Convert VoiceRAG result to RAGResult
+    const ragResult: RAGResult = {
+      context: result.response,
+      sources: result.sources.map(s => ({
+        id: s.id,
+        text: s.text,
+        score: s.score,
+        metadata: { category: s.category },
+      })),
+      success: result.success,
+      latencyMs: result.latencyMs,
+    };
+
+    console.log(
+      `[RAG/VoiceRAG] Retrieved ${ragResult.sources.length} documents`,
+      {
+        latencyMs: ragResult.latencyMs,
+        fromCache: result.fromCache,
+        intent: result.queryOptimization?.intent,
+      }
+    );
+
+    return {
+      ...recordLatency(state, 'rag', startTime),
+      currentNode: 'rag',
+      usedRag: true,
+      ragResult,
+    };
+
+  } catch (error) {
+    console.error('[RAG/VoiceRAG] Error:', error);
+
+    return {
+      ...addError(state, 'rag', error instanceof Error ? error.message : 'Unknown error', true),
+      ...recordLatency(state, 'rag', startTime),
+      currentNode: 'rag',
+      usedRag: true,
+      ragResult: {
+        context: '',
+        sources: [],
+        success: false,
+        latencyMs: Date.now() - startTime,
+      },
+    };
+  }
+}
+
+/**
+ * Reset VoiceRAG instance (for testing)
+ */
+export function resetVoiceRAGInstance(): void {
+  voiceRAGInstance = null;
+}
+
+// =====================================================
 // FACTORY FUNCTION
 // =====================================================
 
@@ -452,4 +568,14 @@ export async function getLocationInfo(
  */
 export function createRAGNode(config?: RAGConfig) {
   return (state: VoiceAgentState) => ragNode(state, config);
+}
+
+/**
+ * Create RAG node with VoiceRAG enabled
+ */
+export function createVoiceOptimizedRAGNode(config?: Omit<RAGConfig, 'useVoiceRAG'>) {
+  return createRAGNode({
+    ...config,
+    useVoiceRAG: true,
+  });
 }

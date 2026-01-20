@@ -16,6 +16,8 @@ export {
 export {
   ragNode,
   createRAGNode,
+  createVoiceOptimizedRAGNode,
+  resetVoiceRAGInstance,
   getBusinessHours,
   getMenuOrServices,
   getLocationInfo,

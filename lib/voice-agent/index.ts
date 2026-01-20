@@ -231,3 +231,75 @@ export type {
   AssistantTypeComparison,
   AssistantTypeRow,
 } from './types';
+
+// =====================================================
+// VOICE RAG MODULE
+// =====================================================
+
+export {
+  // Core
+  VoiceRAG,
+  createVoiceRAG,
+  getVoiceRAG,
+  resetVoiceRAG,
+
+  // Query Optimizer
+  QueryOptimizer,
+  createQueryOptimizer,
+  getQueryOptimizer,
+  resetQueryOptimizer,
+
+  // Cache
+  VoiceRAGCache,
+  AutoCleanupCache,
+  createCache,
+  createAutoCleanupCache,
+  getCache,
+  resetCache,
+  hashQuery,
+  normalizeQueryForCache,
+
+  // Response Formatter
+  ResponseFormatter,
+  createResponseFormatter,
+  getResponseFormatter,
+  resetResponseFormatter,
+  formatMenuForVoice,
+  formatHoursForVoice,
+  formatLocationForVoice,
+} from './rag';
+
+// VoiceRAG types
+export type {
+  // Query types
+  QueryIntent,
+  QueryUrgency,
+  OptimizedQuery,
+  QueryOptimizerConfig,
+
+  // Cache types
+  CacheConfig,
+  CacheEntry,
+  CacheMetrics,
+
+  // Retrieval types
+  RetrievedDocument,
+  RetrievalConfig,
+
+  // Response types
+  FormattedResponse,
+  ResponseFormatterConfig,
+
+  // VoiceRAG types
+  RAGContext,
+  VoiceRAGResult,
+  VoiceRAGConfig,
+  VoiceRAGMetrics,
+
+  // Dictionary types
+  SynonymDictionary,
+  AbbreviationDictionary,
+
+  // Locale type
+  SupportedLocale,
+} from './rag';
