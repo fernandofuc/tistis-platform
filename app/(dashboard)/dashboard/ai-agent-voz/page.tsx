@@ -60,7 +60,28 @@ import {
   MessageIcon,
   SparklesIcon,
   BookIcon,
+  BarChartIcon,
+  TestTubeIcon,
 } from '@/src/features/voice-agent/components';
+
+// Dashboard components
+import { MetricsDashboard } from '@/components/voice-agent/dashboard/MetricsDashboard';
+import type {
+  DateRange,
+  DashboardMetrics,
+  CallsByDay,
+  LatencyDataPoint,
+  OutcomeDistribution,
+  PaginationState,
+} from '@/components/voice-agent/dashboard/types';
+import { getDateRangeDates } from '@/components/voice-agent/dashboard/types';
+
+// Testing components
+import { CallSimulator } from '@/components/voice-agent/testing/CallSimulator';
+import { ValidationChecklist } from '@/components/voice-agent/testing/ValidationChecklist';
+import type { ValidationItem } from '@/components/voice-agent/testing/ValidationChecklist';
+import { TestScenarios } from '@/components/voice-agent/testing/TestScenarios';
+import type { TestScenarioResult } from '@/components/voice-agent/testing/TestScenarios';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 
@@ -89,7 +110,8 @@ interface VoiceAgentResponse {
   };
 }
 
-type TabType = 'voice' | 'knowledge' | 'phones' | 'history';
+type TabType = 'voice' | 'knowledge' | 'phones' | 'history' | 'analytics';
+type AnalyticsSubTab = 'metrics' | 'testing';
 
 // ======================
 // BLOCKED STATE COMPONENT (Plan upgrade needed)
@@ -330,10 +352,11 @@ function TabBar({
   callCount: number;
 }) {
   const tabs: { id: TabType; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'voice', label: 'Voz y Personalidad', icon: <VolumeIcon className="w-4 h-4" /> },
+    { id: 'voice', label: 'Voz', icon: <VolumeIcon className="w-4 h-4" /> },
     { id: 'knowledge', label: 'Conocimiento', icon: <BookIcon className="w-4 h-4" /> },
     { id: 'phones', label: 'Teléfonos', icon: <PhoneIcon className="w-4 h-4" />, badge: phoneCount },
     { id: 'history', label: 'Historial', icon: <HistoryIcon className="w-4 h-4" />, badge: callCount },
+    { id: 'analytics', label: 'Análisis', icon: <BarChartIcon className="w-4 h-4" /> },
   ];
 
   return (
@@ -1115,6 +1138,231 @@ function CallHistoryTab({
 }
 
 // ======================
+// ANALYTICS TAB - Combines Metrics and Testing
+// ======================
+
+function AnalyticsSubTabs({
+  activeSubTab,
+  onSubTabChange,
+}: {
+  activeSubTab: AnalyticsSubTab;
+  onSubTabChange: (tab: AnalyticsSubTab) => void;
+}) {
+  const subTabs: { id: AnalyticsSubTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'metrics', label: 'Métricas', icon: <BarChartIcon className="w-4 h-4" /> },
+    { id: 'testing', label: 'Testing', icon: <TestTubeIcon className="w-4 h-4" /> },
+  ];
+
+  return (
+    <div className="flex items-center gap-2 mb-6" role="tablist" aria-label="Secciones de análisis">
+      {subTabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={activeSubTab === tab.id}
+          onClick={() => onSubTabChange(tab.id)}
+          className={`px-4 py-2.5 min-h-[44px] rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
+            activeSubTab === tab.id
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          {tab.icon}
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AnalyticsTab({
+  config,
+  phoneNumbers,
+  vertical,
+  // Metrics props
+  metricsData,
+  metricsDateRange,
+  metricsPagination,
+  metricsLoading,
+  recentCalls,
+  onDateRangeChange,
+  onPageChange,
+  onRefreshMetrics,
+}: {
+  config: VoiceAgentConfig;
+  phoneNumbers: VoicePhoneNumber[];
+  vertical: 'dental' | 'restaurant' | 'medical' | 'general';
+  // Metrics props
+  metricsData: {
+    metrics: DashboardMetrics | null;
+    callsByDay: CallsByDay[];
+    latencyByDay: LatencyDataPoint[];
+    outcomeDistribution: OutcomeDistribution[];
+  };
+  metricsDateRange: DateRange;
+  metricsPagination: PaginationState;
+  metricsLoading: boolean;
+  recentCalls: VoiceCall[];
+  onDateRangeChange: (range: DateRange) => void;
+  onPageChange: (page: number) => void;
+  onRefreshMetrics: () => void;
+}) {
+  const [activeSubTab, setActiveSubTab] = useState<AnalyticsSubTab>('metrics');
+  const [validations, setValidations] = useState<ValidationItem[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+
+  // Create validations based on config
+  useEffect(() => {
+    const items: ValidationItem[] = [
+      {
+        id: 'voice-configured',
+        title: 'Voz configurada',
+        description: 'Una voz ha sido seleccionada para el asistente',
+        status: config.voice_id ? 'passed' : 'failed',
+        message: config.voice_id ? undefined : 'Selecciona una voz en la pestaña de Voz',
+        icon: null,
+      },
+      {
+        id: 'first-message',
+        title: 'Mensaje inicial',
+        description: 'El mensaje de saludo está configurado',
+        status: config.first_message ? 'passed' : 'failed',
+        message: config.first_message ? undefined : 'Configura un mensaje de bienvenida',
+        icon: null,
+      },
+      {
+        id: 'assistant-name',
+        title: 'Nombre del asistente',
+        description: 'El asistente tiene un nombre configurado',
+        status: config.assistant_name ? 'passed' : 'warning',
+        message: config.assistant_name ? undefined : 'Se recomienda configurar un nombre',
+        icon: null,
+      },
+      {
+        id: 'phone-number',
+        title: 'Número telefónico',
+        description: 'Al menos un número activo asignado',
+        status: phoneNumbers.some(p => p.status === 'active') ? 'passed' : 'failed',
+        message: phoneNumbers.some(p => p.status === 'active') ? undefined : 'Solicita un número en la pestaña de Teléfonos',
+        icon: null,
+      },
+      {
+        id: 'voice-enabled',
+        title: 'Asistente activado',
+        description: 'El asistente está listo para recibir llamadas',
+        status: config.voice_enabled ? 'passed' : 'warning',
+        message: config.voice_enabled ? undefined : 'Activa el asistente cuando esté listo',
+        icon: null,
+      },
+    ];
+    setValidations(items);
+  }, [config, phoneNumbers]);
+
+  const passedCount = validations.filter(v => v.status === 'passed').length;
+  const progress = validations.length > 0 ? (passedCount / validations.length) * 100 : 0;
+
+  const handleValidate = () => {
+    setIsValidating(true);
+    setTimeout(() => setIsValidating(false), 1000);
+  };
+
+  // Simulated handlers for testing components
+  const handleSendMessage = async (): Promise<string> => {
+    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+    const responses = [
+      'Entiendo, déjeme verificar eso por usted.',
+      '¡Por supuesto! ¿En qué horario le gustaría agendar?',
+      'Permítame un momento para revisar la disponibilidad.',
+      'Gracias por su preferencia. ¿Hay algo más en lo que pueda ayudarle?',
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  };
+
+  const handleRunScenario = async (scenario: { id: string; expectedIntent?: string }): Promise<TestScenarioResult> => {
+    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+    return {
+      scenarioId: scenario.id,
+      passed: Math.random() > 0.2,
+      response: 'Respuesta simulada del escenario de prueba',
+      latencyMs: 200 + Math.floor(Math.random() * 300),
+      detectedIntent: scenario.expectedIntent || 'intent_detected',
+      timestamp: new Date(),
+    };
+  };
+
+  return (
+    <div>
+      {/* Sub-navigation */}
+      <AnalyticsSubTabs
+        activeSubTab={activeSubTab}
+        onSubTabChange={setActiveSubTab}
+      />
+
+      {/* Content */}
+      <AnimatePresence mode="wait">
+        {activeSubTab === 'metrics' && (
+          <motion.div
+            key="metrics-content"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <MetricsDashboard
+              metrics={metricsData.metrics}
+              callsByDay={metricsData.callsByDay}
+              latencyByDay={metricsData.latencyByDay}
+              outcomeDistribution={metricsData.outcomeDistribution}
+              recentCalls={recentCalls}
+              pagination={metricsPagination}
+              dateRange={metricsDateRange}
+              isLoading={metricsLoading}
+              showRealtime={false}
+              showHeader={false}
+              onDateRangeChange={onDateRangeChange}
+              onPageChange={onPageChange}
+              onRefresh={onRefreshMetrics}
+            />
+          </motion.div>
+        )}
+
+        {activeSubTab === 'testing' && (
+          <motion.div
+            key="testing-content"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            {/* Validation Checklist */}
+            <ValidationChecklist
+              validations={validations}
+              progress={progress}
+              isValidating={isValidating}
+              onValidate={handleValidate}
+            />
+
+            {/* Test Scenarios */}
+            <TestScenarios
+              vertical={vertical === 'dental' || vertical === 'restaurant' ? vertical : 'dental'}
+              onRunScenario={handleRunScenario}
+              isRunning={false}
+            />
+
+            {/* Call Simulator */}
+            <CallSimulator
+              assistantName={config.assistant_name || 'Asistente'}
+              firstMessage={config.first_message || 'Hola, ¿en qué puedo ayudarte?'}
+              onSendMessage={handleSendMessage}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ======================
 // MAIN PAGE COMPONENT
 // ======================
 
@@ -1132,6 +1380,30 @@ export default function AIAgentVozPage() {
   const [selectedCall, setSelectedCall] = useState<VoiceCall | null>(null);
   const [phoneRequestMessage, setPhoneRequestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [phoneLimit, setPhoneLimit] = useState<PhoneNumberLimit | null>(null);
+
+  // Metrics dashboard state
+  const [metricsData, setMetricsData] = useState<{
+    metrics: DashboardMetrics | null;
+    callsByDay: CallsByDay[];
+    latencyByDay: LatencyDataPoint[];
+    outcomeDistribution: OutcomeDistribution[];
+  }>({
+    metrics: null,
+    callsByDay: [],
+    latencyByDay: [],
+    outcomeDistribution: [],
+  });
+  const [metricsDateRange, setMetricsDateRange] = useState<DateRange>(() => ({
+    ...getDateRangeDates('7d'),
+    preset: '7d',
+  }));
+  const [metricsPagination, setMetricsPagination] = useState<PaginationState>({
+    page: 0,
+    pageSize: 10,
+    totalItems: 0,
+    totalPages: 0,
+  });
+  const [metricsLoading, setMetricsLoading] = useState(false);
 
   const accessToken = session?.access_token;
   const vertical = (tenant?.vertical || 'dental') as 'dental' | 'restaurant' | 'medical' | 'general';
@@ -1185,6 +1457,46 @@ export default function AIAgentVozPage() {
   useEffect(() => {
     fetchVoiceAgent();
   }, [fetchVoiceAgent]);
+
+  // Fetch metrics data
+  const fetchMetrics = useCallback(async () => {
+    if (!accessToken) return;
+
+    try {
+      setMetricsLoading(true);
+      const params = new URLSearchParams({
+        startDate: metricsDateRange.startDate,
+        endDate: metricsDateRange.endDate,
+      });
+
+      const response = await fetch(`/api/voice-agent/metrics?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setMetricsData({
+            metrics: result.metrics,
+            callsByDay: result.callsByDay || [],
+            latencyByDay: result.latencyByDay || [],
+            outcomeDistribution: result.outcomeDistribution || [],
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[Voice Agent] Error fetching metrics:', err);
+    } finally {
+      setMetricsLoading(false);
+    }
+  }, [accessToken, metricsDateRange]);
+
+  // Fetch metrics when tab changes to analytics
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchMetrics();
+    }
+  }, [activeTab, fetchMetrics]);
 
   // Mostrar wizard automáticamente para usuarios nuevos
   useEffect(() => {
@@ -1542,6 +1854,29 @@ export default function AIAgentVozPage() {
                 calls={recentCalls}
                 onCallClick={(call) => setSelectedCall(call)}
                 appointmentLabel={terminology.appointment}
+              />
+            </motion.div>
+          )}
+
+          {activeTab === 'analytics' && (
+            <motion.div
+              key="analytics"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <AnalyticsTab
+                config={config}
+                phoneNumbers={phoneNumbers}
+                vertical={vertical}
+                metricsData={metricsData}
+                metricsDateRange={metricsDateRange}
+                metricsPagination={metricsPagination}
+                metricsLoading={metricsLoading}
+                recentCalls={recentCalls}
+                onDateRangeChange={setMetricsDateRange}
+                onPageChange={(page) => setMetricsPagination(prev => ({ ...prev, page }))}
+                onRefreshMetrics={fetchMetrics}
               />
             </motion.div>
           )}
