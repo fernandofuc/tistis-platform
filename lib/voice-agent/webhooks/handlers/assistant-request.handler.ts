@@ -5,6 +5,8 @@
  * THE MOST CRITICAL HANDLER - Called when a call starts.
  * VAPI sends this event to get the assistant configuration.
  *
+ * Arquitectura simplificada - Solo v2 (voice_assistant_configs)
+ *
  * Responsibilities:
  * 1. Extract phone number from the call
  * 2. Find tenant/business configuration
@@ -268,6 +270,7 @@ async function getTenantFromPhoneNumber(
 
 /**
  * Get voice agent configuration for tenant
+ * Usa la tabla voice_assistant_configs (v2)
  */
 async function getVoiceConfig(
   supabase: SupabaseClient,
@@ -275,10 +278,10 @@ async function getVoiceConfig(
 ): Promise<VoiceAgentConfig | null> {
   try {
     const { data, error } = await supabase
-      .from('voice_agent_config')
+      .from('voice_assistant_configs')
       .select('*')
       .eq('tenant_id', tenantId)
-      .eq('voice_enabled', true)
+      .eq('is_active', true)
       .single();
 
     if (error) {
@@ -288,7 +291,53 @@ async function getVoiceConfig(
       return null;
     }
 
-    return data;
+    // Get first_message: Use compiled prompt's first_message if available
+    // The hybrid system stores first_message when generating the prompt
+    let firstMessage = data.first_message;
+
+    // If no custom first_message, generate one based on assistant name and tenant name
+    if (!firstMessage || firstMessage.trim() === '') {
+      // Try to get tenant name for a better first message
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('name, vertical')
+        .eq('id', tenantId)
+        .single();
+
+      const businessType = tenant?.vertical === 'restaurant' ? 'restaurante' :
+                          tenant?.vertical === 'dental' ? 'consultorio dental' : 'negocio';
+      const businessName = tenant?.name || 'nuestro negocio';
+
+      firstMessage = `Hola, soy ${data.assistant_name || 'el asistente'} del ${businessType} ${businessName}. ¿Cómo puedo ayudarte el día de hoy?`;
+    }
+
+    // Mapear campos de voice_assistant_configs a VoiceAgentConfig
+    return {
+      id: data.id,
+      tenant_id: data.tenant_id,
+      assistant_name: data.assistant_name || 'Asistente',
+      assistant_type: data.assistant_type_id,
+      first_message: firstMessage,
+      first_message_mode: data.first_message_mode || 'assistant_speaks_first',
+      voice_enabled: data.is_active,
+      voice_id: data.voice_id,
+      voice_provider: 'elevenlabs',
+      voice_model: 'eleven_multilingual_v2',
+      voice_stability: 0.5,
+      voice_similarity_boost: 0.75,
+      transcription_provider: 'deepgram',
+      transcription_model: 'nova-2',
+      transcription_language: 'es',
+      wait_seconds: 0.6,
+      on_punctuation_seconds: 0.2,
+      on_no_punctuation_seconds: 1.2,
+      end_call_phrases: data.end_call_phrases || ['adiós', 'hasta luego', 'bye'],
+      end_call_message: '',
+      recording_enabled: data.recording_enabled ?? true,
+      hipaa_enabled: data.hipaa_enabled ?? false,
+      silence_timeout_seconds: data.silence_timeout_seconds || 30,
+      max_duration_seconds: data.max_call_duration_seconds || 600,
+    } as VoiceAgentConfig;
   } catch (error) {
     console.error('[Assistant Request] Exception fetching voice config:', error);
     throw databaseError('getVoiceConfig', error instanceof Error ? error : undefined);

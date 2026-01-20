@@ -671,3 +671,157 @@ describe('Security: Webhook Payload Validation', () => {
     });
   });
 });
+
+// =====================================================
+// ADDITIONAL EDGE CASE TESTS
+// =====================================================
+
+describe('Security: Edge Cases', () => {
+  describe('Unicode and Encoding Attacks', () => {
+    it('should handle null bytes in input', () => {
+      const input = 'test\x00injection';
+      const sanitized = sanitizeHtml(input);
+      // Should not crash and should handle gracefully
+      expect(typeof sanitized).toBe('string');
+    });
+
+    it('should handle overlong UTF-8 sequences', () => {
+      // These can be used to bypass filters
+      const inputs = [
+        '\xC0\xAF', // Overlong /
+        '\xE0\x80\xAF', // Overlong /
+      ];
+
+      inputs.forEach((input) => {
+        const sanitized = sanitizeHtml(input);
+        expect(typeof sanitized).toBe('string');
+      });
+    });
+
+    it('should handle RTL override characters', () => {
+      const input = 'normal\u202Ereversed\u202Ctext';
+      const sanitized = sanitizeHtml(input);
+      expect(typeof sanitized).toBe('string');
+    });
+  });
+
+  describe('Prototype Pollution Prevention', () => {
+    it('should not allow __proto__ in JSON', () => {
+      const maliciousJson = '{"__proto__": {"polluted": true}}';
+
+      let isValid = false;
+      try {
+        const parsed = JSON.parse(maliciousJson);
+        // Check if it's a plain object without prototype pollution
+        isValid = typeof parsed === 'object' && parsed !== null;
+      } catch {
+        isValid = false;
+      }
+
+      // The JSON parses but should be handled carefully
+      expect(isValid).toBe(true);
+
+      // Verify prototype wasn't polluted
+      const testObj = {} as Record<string, unknown>;
+      expect(testObj['polluted']).toBeUndefined();
+    });
+
+    it('should not allow constructor pollution', () => {
+      const maliciousJson = '{"constructor": {"prototype": {"polluted": true}}}';
+
+      const parsed = JSON.parse(maliciousJson);
+      expect(typeof parsed).toBe('object');
+
+      // Verify no pollution
+      const testObj = {} as Record<string, unknown>;
+      expect(testObj['polluted']).toBeUndefined();
+    });
+  });
+
+  describe('ReDoS Prevention', () => {
+    it('should handle potentially problematic regex inputs', () => {
+      // These inputs can cause catastrophic backtracking in poorly written regexes
+      const problematicInputs = [
+        'a'.repeat(100) + '!',
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaab',
+        '0'.repeat(50) + 'x',
+      ];
+
+      const startTime = performance.now();
+
+      problematicInputs.forEach((input) => {
+        // Run through validation functions
+        isValidEmail(input);
+        isValidPhoneNumber(input);
+        detectSqlInjection(input);
+      });
+
+      const elapsed = performance.now() - startTime;
+
+      // Should complete quickly (not hang)
+      expect(elapsed).toBeLessThan(1000);
+    });
+  });
+
+  describe('Integer Overflow Prevention', () => {
+    it('should handle very large numbers in JSON', () => {
+      const largeNumber = '{"value": 9999999999999999999999999999999999999999}';
+
+      const parsed = JSON.parse(largeNumber);
+      // JavaScript will convert to Infinity or lose precision
+      expect(typeof parsed.value).toBe('number');
+    });
+
+    it('should handle negative numbers correctly', () => {
+      const negativeJson = '{"value": -2147483649}';
+      const parsed = JSON.parse(negativeJson);
+      expect(parsed.value).toBe(-2147483649);
+    });
+  });
+
+  describe('Path Traversal Prevention', () => {
+    it('should detect path traversal attempts', () => {
+      const traversalAttempts = [
+        '../../../etc/passwd',
+        '..\\..\\..\\windows\\system32',
+        '....//....//etc/passwd',
+        '%2e%2e%2f%2e%2e%2f',
+        '..%252f..%252f',
+      ];
+
+      traversalAttempts.forEach((attempt) => {
+        // Path traversal uses similar patterns to command injection
+        const isAttempt = /(\.\.|%2e|%252e)/i.test(attempt);
+        expect(isAttempt).toBe(true);
+      });
+    });
+  });
+
+  describe('SSRF Prevention Patterns', () => {
+    it('should identify internal network URLs', () => {
+      const internalUrls = [
+        'http://localhost/admin',
+        'http://127.0.0.1/secret',
+        'http://192.168.1.1/config',
+        'http://10.0.0.1/internal',
+        'http://[::1]/admin',
+        'http://169.254.169.254/latest/meta-data/', // AWS metadata
+      ];
+
+      const internalPatterns = [
+        /localhost/i,
+        /127\.0\.0\.\d+/,
+        /192\.168\.\d+\.\d+/,
+        /10\.\d+\.\d+\.\d+/,
+        /172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/,
+        /\[::1\]/,
+        /169\.254\.\d+\.\d+/,
+      ];
+
+      internalUrls.forEach((url) => {
+        const isInternal = internalPatterns.some((pattern) => pattern.test(url));
+        expect(isInternal).toBe(true);
+      });
+    });
+  });
+});

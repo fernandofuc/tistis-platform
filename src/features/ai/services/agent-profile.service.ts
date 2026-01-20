@@ -1,6 +1,7 @@
 // =====================================================
-// TIS TIS PLATFORM - Agent Profile Service
+// TIS TIS PLATFORM - Agent Profile Service v2.0
 // Servicio para gestión de perfiles de agentes de IA
+// Arquitectura simplificada - Solo v2 (voice_assistant_configs)
 // =====================================================
 
 import { createClient } from '@supabase/supabase-js';
@@ -66,7 +67,7 @@ function createServerClient() {
 /**
  * Obtiene todos los perfiles de un tenant
  * RESILIENTE: Funciona incluso si la tabla agent_profiles no existe
- * En ese caso, construye un perfil virtual basado en ai_agents y voice_agent_config
+ * En ese caso, construye un perfil virtual basado en ai_agents y voice_assistant_configs
  */
 export async function getAgentProfiles(tenantId: string): Promise<{
   business: AgentProfileWithChannels | null;
@@ -102,9 +103,10 @@ export async function getAgentProfiles(tenantId: string): Promise<{
       .select('id, channel, account_name, account_number, status, profile_id, is_personal_brand')
       .eq('tenant_id', tenantId),
     supabase
-      .from('voice_agent_config')
-      .select('voice_enabled, assistant_name, selected_voice_id, profile_id, is_active')
+      .from('voice_assistant_configs')
+      .select('is_active, assistant_name, voice_id, status')
       .eq('tenant_id', tenantId)
+      .eq('is_active', true)
       .single(),
     supabase
       .from('voice_phone_numbers')
@@ -223,14 +225,14 @@ export async function getAgentProfiles(tenantId: string): Promise<{
         profile_id: a.profile_id,
       }));
 
-    // Voice config solo para business
+    // Voice config solo para business (usando voice_assistant_configs v2)
     let voice: VoiceConfigSummary | undefined;
     if (type === 'business' && voiceConfig) {
       voice = {
-        enabled: voiceConfig.voice_enabled || false,
+        enabled: voiceConfig.is_active || false,
         phone_number: voicePhone?.phone_number,
-        voice_id: voiceConfig.selected_voice_id,
-        voice_name: voiceConfig.selected_voice_id, // TODO: mapear a nombre
+        voice_id: voiceConfig.voice_id,
+        voice_name: voiceConfig.voice_id, // TODO: mapear a nombre desde voice_catalog
         assistant_name: voiceConfig.assistant_name,
       };
     }

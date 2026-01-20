@@ -31,6 +31,7 @@ export const CAPABILITY_DESCRIPTIONS: Record<Capability, string> = {
   business_info: 'Proporcionar información general del negocio',
   human_transfer: 'Transferir a un agente humano',
   faq: 'Responder preguntas frecuentes',
+  invoicing: 'Solicitar y gestionar facturas',
 
   // Restaurant
   reservations: 'Gestionar reservaciones de mesa',
@@ -61,6 +62,8 @@ export const TOOL_DESCRIPTIONS: Record<Tool, string> = {
   get_business_hours: 'Obtener horarios de atención',
   get_business_info: 'Obtener información del negocio',
   transfer_to_human: 'Transferir llamada a humano',
+  request_invoice: 'Solicitar factura fiscal',
+  end_call: 'Finalizar la llamada',
 
   // Restaurant - Reservations
   check_availability: 'Verificar disponibilidad de mesa',
@@ -291,6 +294,7 @@ export const CAPABILITY_TOOLS: Record<Capability, Tool[]> = {
   business_info: ['get_business_info'],
   human_transfer: ['transfer_to_human'],
   faq: [], // FAQ is handled by the prompt, no specific tool
+  invoicing: ['request_invoice'],
 
   // Restaurant
   reservations: [

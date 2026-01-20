@@ -39,6 +39,7 @@ export type Capability =
   | 'business_info'
   | 'human_transfer'
   | 'faq'
+  | 'invoicing' // Para facturación (request_invoice tool)
   // Restaurant capabilities
   | 'reservations'
   | 'menu_info'
@@ -62,6 +63,7 @@ export type RestaurantCapability =
   | 'business_info'
   | 'human_transfer'
   | 'faq'
+  | 'invoicing'
   | 'reservations'
   | 'menu_info'
   | 'recommendations'
@@ -77,6 +79,7 @@ export type DentalCapability =
   | 'business_info'
   | 'human_transfer'
   | 'faq'
+  | 'invoicing'
   | 'appointments'
   | 'services_info'
   | 'doctor_info'
@@ -96,6 +99,8 @@ export type Tool =
   | 'get_business_hours'
   | 'get_business_info'
   | 'transfer_to_human'
+  | 'request_invoice'
+  | 'end_call'
   // Restaurant tools
   | 'check_availability'
   | 'create_reservation'
@@ -135,6 +140,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   'business_info',
   'human_transfer',
   'faq',
+  'invoicing',
   // Restaurant
   'reservations',
   'menu_info',
@@ -159,6 +165,8 @@ export const ALL_TOOLS: Tool[] = [
   'get_business_hours',
   'get_business_info',
   'transfer_to_human',
+  'request_invoice',
+  'end_call',
   // Restaurant
   'check_availability',
   'create_reservation',

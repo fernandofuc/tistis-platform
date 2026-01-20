@@ -38,19 +38,29 @@ export interface JSONSchema {
 
 /**
  * Tool capabilities that can be enabled/disabled per assistant type
+ * Must match the Capability type in types.ts
  */
 export type ToolCapability =
-  | 'reservations'
-  | 'appointments'
-  | 'orders'
-  | 'menu'
-  | 'services'
-  | 'hours'
-  | 'location'
-  | 'pricing'
+  // Shared capabilities
+  | 'business_hours'
+  | 'business_info'
   | 'human_transfer'
-  | 'transfers'
-  | 'order_status';
+  | 'faq'
+  | 'invoicing'
+  // Restaurant capabilities
+  | 'reservations'
+  | 'menu_info'
+  | 'recommendations'
+  | 'orders'
+  | 'order_status'
+  | 'promotions'
+  // Dental capabilities
+  | 'appointments'
+  | 'services_info'
+  | 'doctor_info'
+  | 'insurance_info'
+  | 'appointment_management'
+  | 'emergencies';
 
 /**
  * Tool categories for organization
@@ -63,7 +73,9 @@ export type ToolCategory =
   | 'escalation'
   | 'transfer'
   | 'call'
-  | 'utility';
+  | 'utility'
+  | 'billing'
+  | 'promotion';
 
 /**
  * Assistant types that a tool can be enabled for
@@ -659,3 +671,165 @@ export type ParameterValidator = (
   params: Record<string, unknown>,
   schema: JSONSchema
 ) => ValidationResult;
+
+// =====================================================
+// NEW TOOL PARAMETER TYPES
+// =====================================================
+
+/**
+ * Parameters for request_invoice tool (Facturación)
+ */
+export interface RequestInvoiceParams {
+  /** RFC del cliente */
+  rfc: string;
+  /** Razón social */
+  businessName: string;
+  /** Uso del CFDI */
+  cfdiUse: 'G01' | 'G02' | 'G03' | 'P01' | 'D01' | 'D02' | 'D03' | 'D04' | 'D05' | 'D06' | 'D07' | 'D08' | 'D09' | 'D10' | 'I01' | 'I02' | 'I03' | 'I04' | 'I05' | 'I06' | 'I07' | 'I08' | 'CP01' | 'CN01' | 'S01';
+  /** Email para enviar la factura */
+  email: string;
+  /** Código postal fiscal */
+  fiscalPostalCode?: string;
+  /** Régimen fiscal */
+  fiscalRegime?: string;
+  /** Número de ticket/folio de la compra */
+  ticketNumber?: string;
+  /** Fecha de la compra */
+  purchaseDate?: string;
+  /** Monto total */
+  totalAmount?: number;
+}
+
+/**
+ * Result for invoice requests
+ */
+export interface InvoiceResult extends ToolResult {
+  data?: {
+    invoiceRequestId?: string;
+    status?: 'pending' | 'processing' | 'completed' | 'failed';
+    estimatedTime?: string;
+    ticketNumber?: string;
+  };
+}
+
+/**
+ * Parameters for get_promotions tool
+ */
+export interface GetPromotionsParams {
+  /** Filter by category */
+  category?: string;
+  /** Filter active only (default true) */
+  activeOnly?: boolean;
+  /** Include expired (for reference) */
+  includeExpired?: boolean;
+  /** Limit results */
+  limit?: number;
+}
+
+/**
+ * Result for promotions query
+ */
+export interface PromotionsResult extends ToolResult {
+  data?: {
+    promotions?: Array<{
+      id: string;
+      name: string;
+      description: string;
+      discount?: string;
+      validUntil?: string;
+      conditions?: string;
+      code?: string;
+    }>;
+    totalActive?: number;
+  };
+}
+
+/**
+ * Parameters for get_order_status tool
+ */
+export interface GetOrderStatusParams {
+  /** Order number or ID */
+  orderNumber?: string;
+  /** Customer phone for lookup */
+  customerPhone?: string;
+  /** Order ID (internal) */
+  orderId?: string;
+}
+
+/**
+ * Result for order status query
+ */
+export interface OrderStatusResult extends ToolResult {
+  data?: {
+    orderId?: string;
+    orderNumber?: string;
+    status?: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
+    statusDisplay?: string;
+    estimatedTime?: string;
+    items?: Array<{ name: string; quantity: number }>;
+    total?: number;
+    deliveryAddress?: string;
+    createdAt?: string;
+  };
+}
+
+/**
+ * Parameters for get_doctors tool
+ */
+export interface GetDoctorsParams {
+  /** Filter by specialty */
+  specialty?: string;
+  /** Filter by availability on specific date */
+  availableDate?: string;
+  /** Include schedule information */
+  includeSchedule?: boolean;
+  /** Specific doctor ID for details */
+  doctorId?: string;
+}
+
+/**
+ * Result for doctors query
+ */
+export interface DoctorsResult extends ToolResult {
+  data?: {
+    doctors?: Array<{
+      id: string;
+      name: string;
+      title?: string;
+      specialty?: string;
+      bio?: string;
+      availableDays?: string[];
+      schedule?: Record<string, { start: string; end: string }>;
+    }>;
+    specialties?: string[];
+  };
+}
+
+/**
+ * Parameters for get_insurance_info tool
+ */
+export interface GetInsuranceInfoParams {
+  /** Specific insurance name to query */
+  insuranceName?: string;
+  /** Check if specific insurance is accepted */
+  checkAccepted?: boolean;
+  /** Include coverage details */
+  includeCoverage?: boolean;
+}
+
+/**
+ * Result for insurance info query
+ */
+export interface InsuranceInfoResult extends ToolResult {
+  data?: {
+    insurances?: Array<{
+      id: string;
+      name: string;
+      accepted: boolean;
+      coverageTypes?: string[];
+      notes?: string;
+      contactPhone?: string;
+    }>;
+    totalAccepted?: number;
+  };
+}

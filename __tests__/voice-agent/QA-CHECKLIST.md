@@ -109,17 +109,32 @@
 
 ```
 Test Suites: 41 passed
-Tests:       1420 passed
+Tests:       1436 passed
 Snapshots:   0
-Time:        ~95s
+Time:        ~103s
 ```
 
 ### Por Categoría:
 - Unitarios: ~800 tests
 - Integración: ~200 tests
 - E2E: ~150 tests
-- Performance: ~100 tests
-- Seguridad: ~170 tests
+- Performance: ~116 tests (incluyendo stress y stability tests)
+- Seguridad: ~186 tests (incluyendo edge cases avanzados)
+
+### Tests de Seguridad Avanzados (Añadidos):
+- Unicode y Encoding Attacks
+- Prototype Pollution Prevention
+- ReDoS Prevention
+- Integer Overflow Prevention
+- Path Traversal Prevention
+- SSRF Prevention Patterns
+
+### Tests de Performance Avanzados (Añadidos):
+- Stress Testing (burst requests)
+- Accuracy Under Load
+- Outlier Tracking
+- Stability Over Time
+- Standard Deviation Calculations
 
 ---
 
@@ -131,6 +146,8 @@ Time:        ~95s
 | 2 | Header duplicado en MetricsDashboard | Baja | ✅ Fixed |
 | 3 | Falta accesibilidad en sub-tabs | Media | ✅ Fixed |
 | 4 | Performance variability en tests | Baja | ✅ Adjusted |
+| 5 | Edge cases de seguridad faltantes | Media | ✅ Added |
+| 6 | Tests de stress performance faltantes | Media | ✅ Added |
 
 ---
 

@@ -1,7 +1,9 @@
 /**
- * TIS TIS Platform - Voice Agent v2 Feature Flags Admin API
+ * TIS TIS Platform - Voice Agent Feature Flags Admin API v2.0
  *
- * Admin endpoint for managing Voice Agent v2 feature flags.
+ * Admin endpoint for managing Voice Agent feature flags.
+ * Arquitectura simplificada - Solo v2 (on/off toggle)
+ *
  * Requires admin role authentication.
  *
  * @module app/api/admin/feature-flags/voice-agent-v2
@@ -10,18 +12,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
-  getVoiceAgentV2Flags,
-  getRolloutStatus,
-  updateRolloutPercentage,
-  enableVoiceAgentV2,
-  disableVoiceAgentV2,
-  enableTenantForV2,
-  disableTenantForV2,
-  resetTenantOverride,
-  getVoiceAgentV2AuditLog,
-  getTenantV2StatusList,
-  batchUpdateTenantV2Status,
-  clearV2StatusCache,
+  getVoiceAgentFlags,
+  enableVoiceAgent,
+  disableVoiceAgent,
+  enableTenantVoiceAgent,
+  disableTenantVoiceAgent,
+  resetTenantVoiceOverride,
+  getVoiceAgentAuditLog,
+  getTenantVoiceStatusList,
+  clearVoiceStatusCache,
 } from '@/lib/feature-flags';
 
 // Force dynamic rendering
@@ -95,25 +94,27 @@ export async function GET(request: NextRequest) {
     const includeAudit = url.searchParams.get('includeAudit') === 'true';
     const includeTenants = url.searchParams.get('includeTenants') === 'true';
 
-    // Get flag status and rollout metrics
-    const [flags, status] = await Promise.all([
-      getVoiceAgentV2Flags(),
-      getRolloutStatus(),
-    ]);
+    // Get flag status (simplified v2-only architecture)
+    const flags = await getVoiceAgentFlags();
 
     const response: Record<string, unknown> = {
       flags,
-      status,
+      // In v2-only architecture, status is simply enabled/disabled
+      status: {
+        enabled: flags.enabled,
+        enabledTenantsCount: flags.enabledTenants.length,
+        disabledTenantsCount: flags.disabledTenants.length,
+      },
     };
 
     // Optionally include audit log
     if (includeAudit) {
-      response.auditLog = await getVoiceAgentV2AuditLog(20);
+      response.auditLog = await getVoiceAgentAuditLog(20);
     }
 
     // Optionally include tenant list
     if (includeTenants) {
-      response.tenants = await getTenantV2StatusList();
+      response.tenants = await getTenantVoiceStatusList();
     }
 
     return NextResponse.json(response);
@@ -151,21 +152,11 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'enable':
-        await enableVoiceAgentV2(updatedBy);
+        await enableVoiceAgent(updatedBy);
         break;
 
       case 'disable':
-        await disableVoiceAgentV2(updatedBy);
-        break;
-
-      case 'updatePercentage':
-        if (typeof params.percentage !== 'number') {
-          return NextResponse.json(
-            { error: 'Missing percentage parameter' },
-            { status: 400 }
-          );
-        }
-        await updateRolloutPercentage(params.percentage, updatedBy);
+        await disableVoiceAgent(updatedBy);
         break;
 
       case 'enableTenant':
@@ -175,14 +166,13 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        // Validate tenantId format (UUID or non-empty string)
         if (typeof params.tenantId !== 'string' || params.tenantId.trim() === '') {
           return NextResponse.json(
             { error: 'Invalid tenantId format' },
             { status: 400 }
           );
         }
-        await enableTenantForV2(params.tenantId, updatedBy);
+        await enableTenantVoiceAgent(params.tenantId, updatedBy);
         break;
 
       case 'disableTenant':
@@ -198,7 +188,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        await disableTenantForV2(params.tenantId, updatedBy);
+        await disableTenantVoiceAgent(params.tenantId, updatedBy);
         break;
 
       case 'resetTenant':
@@ -214,27 +204,11 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        await resetTenantOverride(params.tenantId, updatedBy);
-        break;
-
-      case 'batchUpdate':
-        if (!Array.isArray(params.updates)) {
-          return NextResponse.json(
-            { error: 'Missing updates array' },
-            { status: 400 }
-          );
-        }
-        const result = await batchUpdateTenantV2Status(params.updates, updatedBy);
-        if (!result.success) {
-          return NextResponse.json(
-            { error: 'Some updates failed', errors: result.errors },
-            { status: 207 } // Multi-Status
-          );
-        }
+        await resetTenantVoiceOverride(params.tenantId, updatedBy);
         break;
 
       case 'clearCache':
-        clearV2StatusCache();
+        clearVoiceStatusCache();
         break;
 
       default:
@@ -245,16 +219,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Return updated status
-    const [flags, status] = await Promise.all([
-      getVoiceAgentV2Flags(),
-      getRolloutStatus(),
-    ]);
+    const flags = await getVoiceAgentFlags();
 
     return NextResponse.json({
       success: true,
       action,
       flags,
-      status,
+      status: {
+        enabled: flags.enabled,
+        enabledTenantsCount: flags.enabledTenants.length,
+        disabledTenantsCount: flags.disabledTenants.length,
+      },
     });
   } catch (error) {
     console.error('[Admin API] Failed to update feature flags:', error);

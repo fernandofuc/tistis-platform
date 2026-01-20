@@ -41,6 +41,8 @@ export {
   cancelReservation,
   getMenu,
   createOrder,
+  getOrderStatus,
+  getPromotions,
 } from './restaurant';
 
 // =====================================================
@@ -53,6 +55,8 @@ export {
   modifyAppointment,
   cancelAppointment,
   getServices,
+  getDoctors,
+  getInsuranceInfo,
 } from './dental';
 
 // =====================================================
@@ -63,6 +67,7 @@ export {
   transferToHuman,
   getBusinessHours,
   endCall,
+  requestInvoice,
 } from './common';
 
 // =====================================================
@@ -79,6 +84,8 @@ import {
   cancelReservation,
   getMenu,
   createOrder,
+  getOrderStatus,
+  getPromotions,
 } from './restaurant';
 
 // Dental tools
@@ -88,6 +95,8 @@ import {
   modifyAppointment,
   cancelAppointment,
   getServices,
+  getDoctors,
+  getInsuranceInfo,
 } from './dental';
 
 // Common tools
@@ -95,6 +104,7 @@ import {
   transferToHuman,
   getBusinessHours,
   endCall,
+  requestInvoice,
 } from './common';
 
 /**
@@ -118,6 +128,8 @@ export function initializeTools(): void {
   toolRegistry.register(cancelReservation);
   toolRegistry.register(getMenu);
   toolRegistry.register(createOrder);
+  toolRegistry.register(getOrderStatus);
+  toolRegistry.register(getPromotions);
 
   // For dental assistant types, register dental-specific check_availability
   // We need to register as a different tool or handle via context
@@ -131,11 +143,14 @@ export function initializeTools(): void {
   toolRegistry.register(modifyAppointment);
   toolRegistry.register(cancelAppointment);
   toolRegistry.register(getServices);
+  toolRegistry.register(getDoctors);
+  toolRegistry.register(getInsuranceInfo);
 
   // Register common tools (available for all types)
   toolRegistry.register(transferToHuman);
   toolRegistry.register(getBusinessHours);
   toolRegistry.register(endCall);
+  toolRegistry.register(requestInvoice);
 
   console.log(`[Tools] Initialized ${toolRegistry.getToolNames().length} tools`);
 }

@@ -1,6 +1,7 @@
 // =====================================================
-// TIS TIS PLATFORM - Voice Agent Prompt Generation API
+// TIS TIS PLATFORM - Voice Agent Prompt Generation API v2.0
 // Genera y cachea prompts profesionales para voz
+// Arquitectura simplificada - Solo v2 (voice_assistant_configs)
 // =====================================================
 // Este endpoint genera prompts UNA VEZ y los cachea.
 // Los prompts solo se regeneran cuando cambian los datos
@@ -128,12 +129,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // También guardar en voice_agent_config para compatibilidad
+    // Guardar en voice_assistant_configs (v2)
     await serviceSupabase
-      .from('voice_agent_config')
+      .from('voice_assistant_configs')
       .update({
-        system_prompt: result.prompt,
-        system_prompt_generated_at: result.generatedAt,
+        compiled_prompt: result.prompt,
+        compiled_prompt_at: result.generatedAt,
         updated_at: new Date().toISOString(),
       })
       .eq('tenant_id', tenantId);
@@ -185,11 +186,12 @@ export async function GET(request: NextRequest) {
     const tenantId = context.userRole.tenant_id;
     const serviceSupabase = createServiceClient();
 
-    // Obtener configuración actual de voice_agent_config
+    // Obtener configuración actual de voice_assistant_configs (v2)
     const { data: config } = await serviceSupabase
-      .from('voice_agent_config')
-      .select('system_prompt, system_prompt_generated_at, custom_instructions')
+      .from('voice_assistant_configs')
+      .select('compiled_prompt, compiled_prompt_at, special_instructions')
       .eq('tenant_id', tenantId)
+      .eq('is_active', true)
       .single();
 
     // Obtener tenant info
@@ -227,9 +229,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      current_prompt: config?.system_prompt || null,
-      current_prompt_generated_at: config?.system_prompt_generated_at || null,
-      custom_instructions: config?.custom_instructions || null,
+      current_prompt: config?.compiled_prompt || null,
+      current_prompt_generated_at: config?.compiled_prompt_at || null,
+      custom_instructions: config?.special_instructions || null,
       // Información del caché
       cache_status: {
         channel: 'voice',

@@ -10,7 +10,10 @@
  * - Request/response logging
  *
  * Supports Server-Side Response Mode where TIS TIS generates
- * all responses using LangGraph (Fase 07).
+ * all responses using LangGraph.
+ *
+ * @module app/api/voice-agent/webhook
+ * @version 2.0.0
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -39,15 +42,116 @@ import {
   type WebhookHandlerContext,
 } from '@/lib/voice-agent/webhooks';
 
-// Legacy imports for conversation-update (will be refactored in Fase 07)
+// LangGraph integration
 import { VoiceLangGraphService } from '@/src/features/voice-agent/services/voice-langgraph.service';
 import { createClient } from '@supabase/supabase-js';
 
-// Feature flags for v2 rollout
-import { shouldUseVoiceAgentV2Cached } from '@/lib/feature-flags';
-
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
+
+// =====================================================
+// TYPES
+// =====================================================
+
+/**
+ * Voice configuration from voice_assistant_configs table (DB format)
+ */
+interface VoiceAssistantConfigDB {
+  id: string;
+  tenant_id: string;
+  business_id: string;
+  assistant_type_id: string;
+  voice_id: string | null;
+  voice_speed: number;
+  personality_type: string;
+  assistant_name: string;
+  special_instructions: string | null;
+  max_call_duration_seconds: number;
+  first_message: string | null;
+  compiled_prompt: string | null;
+  is_active: boolean;
+  recording_enabled?: boolean;
+  hipaa_enabled?: boolean;
+  silence_timeout_seconds?: number;
+  use_filler_phrases?: boolean;
+  filler_phrases?: string[];
+  end_call_phrases?: string[];
+  escalation_enabled?: boolean;
+  escalation_phone?: string | null;
+  goodbye_message?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Voice configuration type expected by LangGraph service
+ */
+interface VoiceAgentConfig {
+  id: string;
+  tenant_id: string;
+  voice_enabled: boolean;
+  voice_status: string;
+  assistant_name: string;
+  assistant_personality: string;
+  first_message: string;
+  first_message_mode: string;
+  voice_provider: string;
+  voice_id: string;
+  voice_model: string;
+  voice_stability: number;
+  voice_similarity_boost: number;
+  transcription_provider: string;
+  transcription_model: string;
+  transcription_language: string;
+  max_call_duration_seconds: number;
+  silence_timeout_seconds: number;
+  recording_enabled: boolean;
+  hipaa_enabled: boolean;
+  use_filler_phrases: boolean;
+  filler_phrases: string[];
+  end_call_phrases: string[];
+  goodbye_message: string | null;
+  escalation_enabled: boolean;
+  escalation_phone: string | null;
+  system_prompt: string | null;
+  custom_instructions: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Maps DB config to the format expected by LangGraph service
+ */
+function mapDBConfigToVoiceAgentConfig(dbConfig: VoiceAssistantConfigDB): VoiceAgentConfig {
+  return {
+    id: dbConfig.id,
+    tenant_id: dbConfig.tenant_id,
+    voice_enabled: dbConfig.is_active,
+    voice_status: dbConfig.is_active ? 'active' : 'inactive',
+    assistant_name: dbConfig.assistant_name || 'Asistente',
+    assistant_personality: dbConfig.personality_type || 'professional_friendly',
+    first_message: dbConfig.first_message || '¡Hola! ¿En qué puedo ayudarte?',
+    first_message_mode: 'assistant_speaks_first',
+    voice_provider: 'elevenlabs',
+    voice_id: dbConfig.voice_id || 'coral',
+    voice_model: 'eleven_multilingual_v2',
+    voice_stability: 0.5,
+    voice_similarity_boost: 0.75,
+    transcription_provider: 'deepgram',
+    transcription_model: 'nova-2',
+    transcription_language: 'es',
+    max_call_duration_seconds: dbConfig.max_call_duration_seconds || 600,
+    silence_timeout_seconds: dbConfig.silence_timeout_seconds || 30,
+    recording_enabled: dbConfig.recording_enabled ?? true,
+    hipaa_enabled: dbConfig.hipaa_enabled ?? false,
+    use_filler_phrases: dbConfig.use_filler_phrases ?? true,
+    filler_phrases: dbConfig.filler_phrases || [],
+    end_call_phrases: dbConfig.end_call_phrases || ['adiós', 'hasta luego', 'bye'],
+    goodbye_message: dbConfig.goodbye_message || null,
+    escalation_enabled: dbConfig.escalation_enabled ?? false,
+    escalation_phone: dbConfig.escalation_phone || null,
+    system_prompt: dbConfig.compiled_prompt || null,
+    custom_instructions: dbConfig.special_instructions || null,
+  };
+}
 
 // =====================================================
 // SECURITY GATE INSTANCE
@@ -77,7 +181,6 @@ const eventRouter = new WebhookEventRouter(
     'transcript': createTranscriptHandler({ logFinal: true, logPartial: false }),
     'status-update': createStatusUpdateHandler(),
     'speech-update': createSpeechUpdateHandler(),
-    // conversation-update handled separately (legacy integration with LangGraph)
   },
   {
     logEvents: true,
@@ -90,7 +193,7 @@ const eventRouter = new WebhookEventRouter(
 // =====================================================
 
 /**
- * Generate unique request ID
+ * Generate unique request ID for tracing
  */
 function generateRequestId(): string {
   const timestamp = Date.now().toString(36);
@@ -99,7 +202,7 @@ function generateRequestId(): string {
 }
 
 /**
- * Extract client IP from request
+ * Extract client IP from request headers
  */
 function extractClientIP(request: NextRequest): string {
   const forwardedFor = request.headers.get('x-forwarded-for');
@@ -116,7 +219,7 @@ function extractClientIP(request: NextRequest): string {
 }
 
 /**
- * Create Supabase service client
+ * Create Supabase service client with admin privileges
  */
 function createServiceClient() {
   return createClient(
@@ -126,45 +229,34 @@ function createServiceClient() {
 }
 
 /**
- * Get voice configuration for a tenant
- * Uses v2 table if feature flag enabled, otherwise v1
+ * Get voice configuration for a tenant/business
+ * Uses the v2 voice_assistant_configs table exclusively
+ * Returns the config mapped to VoiceAgentConfig format for LangGraph compatibility
  */
-async function getVoiceConfig(tenantId: string, useV2: boolean = false) {
+async function getVoiceConfig(tenantId: string): Promise<VoiceAgentConfig | null> {
   const supabase = createServiceClient();
 
-  if (useV2) {
-    // V2: Use new voice_assistant_configs table
-    const { data } = await supabase
+  const { data, error } = await supabase
+    .from('voice_assistant_configs')
+    .select('*')
+    .eq('business_id', tenantId)
+    .eq('is_active', true)
+    .single();
+
+  if (error) {
+    // Try with tenant_id as fallback
+    const { data: fallbackData } = await supabase
       .from('voice_assistant_configs')
       .select('*')
-      .eq('business_id', tenantId)
+      .eq('tenant_id', tenantId)
       .eq('is_active', true)
       .single();
 
-    return data;
-  } else {
-    // V1: Use legacy voice_agent_config table
-    const { data } = await supabase
-      .from('voice_agent_config')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('voice_enabled', true)
-      .single();
-
-    return data;
+    if (!fallbackData) return null;
+    return mapDBConfigToVoiceAgentConfig(fallbackData as VoiceAssistantConfigDB);
   }
-}
 
-/**
- * Check if tenant should use Voice Agent v2
- */
-async function checkV2Status(tenantId: string): Promise<boolean> {
-  try {
-    return await shouldUseVoiceAgentV2Cached(tenantId);
-  } catch (error) {
-    console.warn(`[Voice Webhook] Failed to check v2 status for ${tenantId}:`, error);
-    return false; // Default to v1 on error
-  }
+  return mapDBConfigToVoiceAgentConfig(data as VoiceAssistantConfigDB);
 }
 
 /**
@@ -197,15 +289,13 @@ async function getMessageCount(callId: string): Promise<number> {
 }
 
 // =====================================================
-// CONVERSATION UPDATE HANDLER (LEGACY - WILL BE REFACTORED)
+// CONVERSATION UPDATE HANDLER
 // =====================================================
 
 /**
  * Handle conversation-update event (Server-Side Response Mode)
  * This is the heart of the voice agent - generates AI responses
- *
- * Note: This will be refactored in Fase 07 to use the new modular system
- * with full LangGraph integration.
+ * using LangGraph for intelligent conversation flow.
  */
 async function handleConversationUpdate(
   payload: VapiWebhookPayload,
@@ -242,7 +332,7 @@ async function handleConversationUpdate(
     };
   }
 
-  // Detect corrupted transcription
+  // Detect corrupted transcription (more than 50% invalid characters)
   const validTextRatio = (transcription.match(/[a-záéíóúüñA-ZÁÉÍÓÚÜÑ0-9\s]/g) || []).length / transcription.length;
   if (validTextRatio < 0.5) {
     console.warn('[Voice Webhook] Potentially corrupted transcription');
@@ -254,7 +344,7 @@ async function handleConversationUpdate(
   // Get call from database
   const { data: call } = await supabase
     .from('voice_calls')
-    .select('id, tenant_id, voice_agent_config_id, caller_phone')
+    .select('id, tenant_id, caller_phone')
     .eq('vapi_call_id', event.call.id)
     .single();
 
@@ -265,37 +355,27 @@ async function handleConversationUpdate(
     };
   }
 
-  // Check if tenant should use V2
-  const useV2 = await checkV2Status(call.tenant_id);
-  const apiVersion = useV2 ? 'v2' : 'v1';
-
-  console.log(`[Voice Webhook] Using API version ${apiVersion} for tenant ${call.tenant_id}`);
-
-  // Get voice configuration (from v1 or v2 table based on flag)
-  const voiceConfig = await getVoiceConfig(call.tenant_id, useV2);
+  // Get voice configuration (v2 only)
+  const voiceConfig = await getVoiceConfig(call.tenant_id);
 
   if (!voiceConfig) {
-    console.error(`[Voice Webhook] Voice config not found (${apiVersion})`);
+    console.error('[Voice Webhook] Voice config not found for tenant:', call.tenant_id);
     return {
       assistantResponse: 'En este momento no puedo atenderte. Por favor llama más tarde.',
     };
   }
-
-  // Update call with API version being used
-  await supabase
-    .from('voice_calls')
-    .update({ api_version: apiVersion })
-    .eq('id', call.id);
 
   // Get conversation history
   const previousMessages = await getCallMessages(call.id);
 
   try {
     // Process with LangGraph
+    // Note: voiceConfig is mapped from voice_assistant_configs (v2) to VoiceAgentConfig format
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await VoiceLangGraphService.processVoiceMessage(
       {
         tenant_id: call.tenant_id,
-        voice_config: voiceConfig,
+        voice_config: voiceConfig as any, // Type compatible with LangGraph VoiceAgentConfig
         call_id: call.id,
         caller_phone: call.caller_phone || '',
         conversation_history: previousMessages,
@@ -340,7 +420,7 @@ async function handleConversationUpdate(
       }
     );
 
-    // Update call state if needed
+    // Update call state if escalation needed
     if (result.should_escalate) {
       await supabase
         .from('voice_calls')
@@ -353,6 +433,7 @@ async function handleConversationUpdate(
         .eq('id', call.id);
     }
 
+    // Update call if appointment was booked
     if (result.booking_result?.success) {
       await supabase
         .from('voice_calls')
@@ -399,9 +480,7 @@ export async function POST(request: NextRequest) {
     // STEP 1: Security Gate Validation
     // ===================================================
 
-    // Clone the request to read body for validation
     const bodyText = await request.text();
-
     const validation = await securityGate.validate(request, bodyText);
 
     if (!validation.valid) {
@@ -484,15 +563,12 @@ export async function POST(request: NextRequest) {
 
     let response: unknown;
 
-    // Handle conversation-update separately (legacy LangGraph integration)
     if (eventType === 'conversation-update') {
       response = await handleConversationUpdate(body, context);
     } else if (isValidVapiEventType(eventType)) {
-      // Route through the event router
       const result = await eventRouter.route(body, context);
       response = result.response;
 
-      // Log if needed
       if (result.shouldLog) {
         console.log(
           `[Voice Webhook] Event processed: ${eventType}`,
@@ -505,7 +581,6 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      // Unknown event type - log and acknowledge
       console.log(`[Voice Webhook] Unknown event type: ${eventType}`);
       response = formatAckResponse();
     }
@@ -546,25 +621,16 @@ export async function POST(request: NextRequest) {
 // =====================================================
 
 export async function GET() {
-  // Get feature flag status for health check
-  let v2FlagStatus = { enabled: false, percentage: 0 };
-  try {
-    const { getVoiceAgentV2Flags } = await import('@/lib/feature-flags');
-    const flags = await getVoiceAgentV2Flags();
-    v2FlagStatus = { enabled: flags.enabled, percentage: flags.percentage };
-  } catch {
-    // Ignore errors in health check
-  }
-
   return NextResponse.json({
     status: 'ok',
     service: 'voice-agent-webhook',
+    version: '2.0.0',
     timestamp: new Date().toISOString(),
     features: {
       securityGate: true,
       eventRouter: true,
       serverSideResponse: true,
-      v2Rollout: v2FlagStatus,
+      langGraph: true,
     },
   });
 }

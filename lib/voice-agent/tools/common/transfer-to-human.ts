@@ -46,12 +46,14 @@ export const transferToHuman: ToolDefinition<TransferToHumanParams> = {
     required: ['reason'],
   },
 
-  requiredCapabilities: ['transfers'],
+  requiredCapabilities: ['human_transfer'],
   requiresConfirmation: true,
   enabledFor: [
     'rest_basic',
+    'rest_standard',
     'rest_complete',
     'dental_basic',
+    'dental_standard',
     'dental_complete',
   ],
   timeout: 5000,

@@ -1,6 +1,7 @@
 // =====================================================
-// TIS TIS PLATFORM - Voice Agent Service
+// TIS TIS PLATFORM - Voice Agent Service v2.0
 // Servicio principal para gestión de Voice Agent
+// Arquitectura simplificada - Solo v2 (voice_assistant_configs)
 // =====================================================
 
 import { createClient } from '@supabase/supabase-js';
@@ -12,6 +13,12 @@ import type {
   VoiceAgentContextResponse,
   VoiceUsageSummary,
   VAPIAssistantConfig,
+  VoiceStatus,
+  VoicePersonality,
+  FirstMessageMode,
+  VoiceProvider,
+  TranscriptionProvider,
+  AIModel,
 } from '../types';
 import { VAPIApiService } from './vapi-api.service';
 
@@ -36,28 +43,57 @@ function createServerClient() {
 
 /**
  * Obtener o crear configuración de Voice Agent
+ * Usa la tabla voice_assistant_configs (v2)
  */
 export async function getOrCreateVoiceConfig(tenantId: string): Promise<VoiceAgentConfig | null> {
   const supabase = createServerClient();
 
-  // Intentar obtener config existente
+  // Intentar obtener config existente de voice_assistant_configs
   const { data: existing } = await supabase
-    .from('voice_agent_config')
+    .from('voice_assistant_configs')
     .select('*')
     .eq('tenant_id', tenantId)
+    .eq('is_active', true)
     .single();
 
   if (existing) {
-    return existing as VoiceAgentConfig;
+    // Mapear campos de voice_assistant_configs a VoiceAgentConfig
+    return mapV2ConfigToLegacy(existing);
   }
 
-  // Crear config inicial
+  // Buscar business_id del tenant
+  const { data: business } = await supabase
+    .from('businesses')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (!business) {
+    console.error('[Voice Agent] No business found for tenant:', tenantId);
+    return null;
+  }
+
+  // Buscar tipo de asistente por defecto
+  const { data: defaultType } = await supabase
+    .from('voice_assistant_types')
+    .select('id')
+    .eq('is_default', true)
+    .single();
+
+  if (!defaultType) {
+    console.error('[Voice Agent] No default assistant type found');
+    return null;
+  }
+
+  // Crear config inicial en voice_assistant_configs
   const { data: newConfig, error } = await supabase
-    .from('voice_agent_config')
+    .from('voice_assistant_configs')
     .insert({
       tenant_id: tenantId,
-      voice_enabled: false,
-      voice_status: 'inactive',
+      business_id: business.id,
+      assistant_type_id: defaultType.id,
+      is_active: false,
+      status: 'draft',
     })
     .select()
     .single();
@@ -67,11 +103,96 @@ export async function getOrCreateVoiceConfig(tenantId: string): Promise<VoiceAge
     return null;
   }
 
-  return newConfig as VoiceAgentConfig;
+  return mapV2ConfigToLegacy(newConfig);
+}
+
+/**
+ * Mapea la configuración v2 (voice_assistant_configs) al tipo legacy VoiceAgentConfig
+ * Esto permite compatibilidad mientras se actualiza el resto del código
+ */
+function mapV2ConfigToLegacy(v2Config: Record<string, unknown>): VoiceAgentConfig {
+  return {
+    id: v2Config.id as string,
+    tenant_id: v2Config.tenant_id as string,
+
+    // Estado
+    voice_enabled: (v2Config.is_active as boolean) ?? false,
+    voice_status: (v2Config.status as VoiceStatus) || 'inactive',
+
+    // Asistente
+    assistant_name: (v2Config.assistant_name as string) || 'Asistente',
+    assistant_personality: (v2Config.personality_type as VoicePersonality) || 'professional_friendly',
+
+    // Primer mensaje
+    first_message: (v2Config.first_message as string) || '¡Hola! ¿En qué puedo ayudarte?',
+    first_message_mode: (v2Config.first_message_mode as FirstMessageMode) || 'assistant_speaks_first',
+
+    // Voz (ElevenLabs)
+    voice_provider: 'elevenlabs' as VoiceProvider,
+    voice_id: (v2Config.voice_id as string) || 'coral',
+    voice_model: 'eleven_multilingual_v2',
+    voice_stability: (v2Config.voice_stability as number) ?? 0.5,
+    voice_similarity_boost: (v2Config.voice_similarity_boost as number) ?? 0.75,
+    voice_style: 0,
+    voice_use_speaker_boost: true,
+
+    // Transcripción (Deepgram)
+    transcription_provider: 'deepgram' as TranscriptionProvider,
+    transcription_model: 'nova-2',
+    transcription_language: 'es',
+    transcription_confidence_threshold: 0.7,
+
+    // IA
+    ai_model: 'gpt-4o-mini' as AIModel,
+    ai_temperature: 0.7,
+    ai_max_tokens: 500,
+
+    // Start Speaking Plan
+    wait_seconds: (v2Config.wait_seconds as number) ?? 0.6,
+    on_punctuation_seconds: (v2Config.on_punctuation_seconds as number) ?? 0.2,
+    on_no_punctuation_seconds: (v2Config.on_no_punctuation_seconds as number) ?? 1.2,
+
+    // Llamada
+    max_call_duration_seconds: (v2Config.max_call_duration_seconds as number) || 600,
+    silence_timeout_seconds: (v2Config.silence_timeout_seconds as number) || 30,
+    response_delay_seconds: 0.4,
+    interruption_threshold: 100,
+
+    // Privacidad
+    recording_enabled: (v2Config.recording_enabled as boolean) ?? true,
+    transcription_stored: true,
+    hipaa_enabled: (v2Config.hipaa_enabled as boolean) ?? false,
+    pci_enabled: false,
+
+    // Frases
+    filler_phrases: (v2Config.filler_phrases as string[]) || [],
+    use_filler_phrases: (v2Config.use_filler_phrases as boolean) ?? true,
+    end_call_phrases: (v2Config.end_call_phrases as string[]) || ['adiós', 'hasta luego', 'bye'],
+    goodbye_message: (v2Config.goodbye_message as string) || null,
+
+    // Escalación
+    escalation_enabled: (v2Config.escalation_enabled as boolean) ?? false,
+    escalation_phone: (v2Config.escalation_phone as string) || null,
+
+    // Prompt
+    system_prompt: (v2Config.compiled_prompt as string) || null,
+    system_prompt_generated_at: (v2Config.compiled_prompt_at as string) || null,
+    custom_instructions: (v2Config.special_instructions as string) || null,
+
+    // Metadata
+    last_configured_at: (v2Config.last_configured_at as string) || null,
+    last_configured_by: (v2Config.last_configured_by as string) || null,
+    configuration_version: (v2Config.configuration_version as number) || 1,
+
+    // Timestamps
+    created_at: v2Config.created_at as string,
+    updated_at: v2Config.updated_at as string,
+  };
 }
 
 /**
  * Actualizar configuración de Voice Agent
+ * Usa la tabla voice_assistant_configs (v2)
  */
 export async function updateVoiceConfig(
   tenantId: string,
@@ -86,31 +207,38 @@ export async function updateVoiceConfig(
     staffId,
   });
 
-  // Primero obtenemos la versión actual para incrementarla
-  const { data: currentConfig, error: versionError } = await supabase
-    .from('voice_agent_config')
-    .select('configuration_version')
-    .eq('tenant_id', tenantId)
-    .single();
+  // Mapear campos de VoiceAgentConfigInput a campos v2 (voice_assistant_configs)
+  // Solo usamos campos que existen en el tipo VoiceAgentConfigInput
+  const v2Updates: Record<string, unknown> = {};
 
-  if (versionError) {
-    console.error('[Voice Agent Service] Error getting version:', versionError);
-  }
+  if (updates.assistant_name !== undefined) v2Updates.assistant_name = updates.assistant_name;
+  if (updates.assistant_personality !== undefined) v2Updates.personality_type = updates.assistant_personality;
+  if (updates.first_message !== undefined) v2Updates.first_message = updates.first_message;
+  if (updates.first_message_mode !== undefined) v2Updates.first_message_mode = updates.first_message_mode;
+  if (updates.voice_id !== undefined) v2Updates.voice_id = updates.voice_id;
+  if (updates.voice_stability !== undefined) v2Updates.voice_stability = updates.voice_stability;
+  if (updates.voice_similarity_boost !== undefined) v2Updates.voice_similarity_boost = updates.voice_similarity_boost;
+  if (updates.recording_enabled !== undefined) v2Updates.recording_enabled = updates.recording_enabled;
+  if (updates.max_call_duration_seconds !== undefined) v2Updates.max_call_duration_seconds = updates.max_call_duration_seconds;
+  if (updates.custom_instructions !== undefined) v2Updates.special_instructions = updates.custom_instructions;
+  if (updates.use_filler_phrases !== undefined) v2Updates.use_filler_phrases = updates.use_filler_phrases;
+  if (updates.escalation_enabled !== undefined) v2Updates.escalation_enabled = updates.escalation_enabled;
+  if (updates.escalation_phone !== undefined) v2Updates.escalation_phone = updates.escalation_phone;
+  if (updates.goodbye_message !== undefined) v2Updates.goodbye_message = updates.goodbye_message;
+  // Timing settings
+  if (updates.wait_seconds !== undefined) v2Updates.wait_seconds = updates.wait_seconds;
+  if (updates.on_punctuation_seconds !== undefined) v2Updates.on_punctuation_seconds = updates.on_punctuation_seconds;
+  if (updates.on_no_punctuation_seconds !== undefined) v2Updates.on_no_punctuation_seconds = updates.on_no_punctuation_seconds;
 
-  const nextVersion = (currentConfig?.configuration_version || 0) + 1;
+  // Agregar metadata de configuración
+  v2Updates.last_configured_at = new Date().toISOString();
+  if (staffId) v2Updates.last_configured_by = staffId;
 
-  const updatePayload = {
-    ...updates,
-    last_configured_at: new Date().toISOString(),
-    last_configured_by: staffId || null,
-    configuration_version: nextVersion,
-  };
-
-  console.log('[Voice Agent Service] Update payload:', updatePayload);
+  console.log('[Voice Agent Service] V2 Update payload:', v2Updates);
 
   const { data, error } = await supabase
-    .from('voice_agent_config')
-    .update(updatePayload)
+    .from('voice_assistant_configs')
+    .update(v2Updates)
     .eq('tenant_id', tenantId)
     .select()
     .single();
@@ -120,13 +248,14 @@ export async function updateVoiceConfig(
     return null;
   }
 
-  console.log('[Voice Agent Service] Update successful, custom_instructions:', data?.custom_instructions?.substring(0, 100));
+  console.log('[Voice Agent Service] Update successful');
 
-  return data as VoiceAgentConfig;
+  return mapV2ConfigToLegacy(data);
 }
 
 /**
  * Activar/Desactivar Voice Agent
+ * Usa la tabla voice_assistant_configs (v2)
  */
 export async function toggleVoiceAgent(
   tenantId: string,
@@ -152,10 +281,10 @@ export async function toggleVoiceAgent(
   }
 
   const { error } = await supabase
-    .from('voice_agent_config')
+    .from('voice_assistant_configs')
     .update({
-      voice_enabled: enabled,
-      voice_status: enabled ? 'active' : 'inactive',
+      is_active: enabled,
+      status: enabled ? 'active' : 'draft',
     })
     .eq('tenant_id', tenantId);
 
@@ -187,13 +316,13 @@ export async function generatePrompt(tenantId: string): Promise<string | null> {
     return null;
   }
 
-  // Guardar prompt generado en config
+  // Guardar prompt generado en config (voice_assistant_configs v2)
   if (data) {
     await supabase
-      .from('voice_agent_config')
+      .from('voice_assistant_configs')
       .update({
-        system_prompt: data,
-        system_prompt_generated_at: new Date().toISOString(),
+        compiled_prompt: data,
+        compiled_prompt_at: new Date().toISOString(),
       })
       .eq('tenant_id', tenantId);
   }
@@ -373,9 +502,9 @@ export async function requestPhoneNumber(
     };
   }
 
-  // 3. Obtener configuración de voz del tenant
+  // 3. Obtener configuración de voz del tenant (voice_assistant_configs v2)
   const { data: voiceConfig } = await supabase
-    .from('voice_agent_config')
+    .from('voice_assistant_configs')
     .select('*')
     .eq('tenant_id', tenantId)
     .single();

@@ -3,7 +3,7 @@
 // =====================================================
 
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Button } from '@/shared/components/ui/Button';
+import { Button } from '../../src/shared/components/ui/Button';
 
 describe('Button', () => {
   it('renders children correctly', () => {

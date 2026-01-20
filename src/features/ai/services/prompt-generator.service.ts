@@ -294,20 +294,23 @@ async function collectBusinessContextFallback(
     let fillerPhrases: string[] = [];
 
     if (promptType === 'voice') {
+      // Usar voice_assistant_configs (v2)
       const { data: voiceConfig } = await supabase
-        .from('voice_agent_config')
-        .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message, use_filler_phrases, filler_phrases')
+        .from('voice_assistant_configs')
+        .select('assistant_name, personality_type, special_instructions, use_filler_phrases, filler_phrases, end_call_phrases')
         .eq('tenant_id', tenantId)
+        .eq('is_active', true)
         .single();
 
       if (voiceConfig) {
         assistantName = voiceConfig.assistant_name || assistantName;
-        assistantPersonality = voiceConfig.assistant_personality || assistantPersonality;
-        customInstructions = voiceConfig.custom_instructions || '';
-        escalationEnabled = voiceConfig.escalation_enabled || false;
-        escalationPhone = voiceConfig.escalation_phone || '';
-        goodbyeMessage = voiceConfig.goodbye_message || '';
-        useFillerPhrases = voiceConfig.use_filler_phrases ?? true;  // Default true si no existe
+        assistantPersonality = voiceConfig.personality_type || assistantPersonality;
+        customInstructions = voiceConfig.special_instructions || '';
+        // Escalation se maneja a nivel de tenant config, no en voice config v2
+        escalationEnabled = false;
+        escalationPhone = '';
+        goodbyeMessage = '';
+        useFillerPhrases = voiceConfig.use_filler_phrases ?? true;
         fillerPhrases = voiceConfig.filler_phrases || [];
       }
     }
@@ -532,21 +535,23 @@ export async function collectBusinessContext(
     let agentTemplateKey = agentProfile?.agent_template || undefined;
 
     if (promptType === 'voice') {
-      // Para voice, obtener config específica de voice_agent_config
+      // Para voice, obtener config de voice_assistant_configs (v2)
       const { data: voiceConfig } = await supabase
-        .from('voice_agent_config')
-        .select('assistant_name, assistant_personality, custom_instructions, escalation_enabled, escalation_phone, goodbye_message, use_filler_phrases, filler_phrases')
+        .from('voice_assistant_configs')
+        .select('assistant_name, personality_type, special_instructions, use_filler_phrases, filler_phrases')
         .eq('tenant_id', tenantId)
+        .eq('is_active', true)
         .single();
 
       if (voiceConfig) {
         assistantName = voiceConfig.assistant_name || assistantName;
-        assistantPersonality = voiceConfig.assistant_personality || assistantPersonality;
-        customInstructions = voiceConfig.custom_instructions || customInstructions;
-        escalationEnabled = voiceConfig.escalation_enabled || false;
-        escalationPhone = voiceConfig.escalation_phone || '';
-        goodbyeMessage = voiceConfig.goodbye_message || '';
-        useFillerPhrases = voiceConfig.use_filler_phrases ?? true;  // Default true si no existe
+        assistantPersonality = voiceConfig.personality_type || assistantPersonality;
+        customInstructions = voiceConfig.special_instructions || customInstructions;
+        // Escalation se maneja a nivel de ai_tenant_config, no en voice config v2
+        escalationEnabled = false;
+        escalationPhone = '';
+        goodbyeMessage = '';
+        useFillerPhrases = voiceConfig.use_filler_phrases ?? true;
         fillerPhrases = voiceConfig.filler_phrases || [];
       }
     }
@@ -1635,12 +1640,12 @@ export async function generateVoiceAgentPrompt(tenantId: string): Promise<Prompt
     return result;
   }
 
-  // Guardar en la base de datos
+  // Guardar en la base de datos (voice_assistant_configs v2)
   const { error: updateError } = await supabase
-    .from('voice_agent_config')
+    .from('voice_assistant_configs')
     .update({
-      system_prompt: result.prompt,
-      system_prompt_generated_at: result.generatedAt,
+      compiled_prompt: result.prompt,
+      compiled_prompt_at: result.generatedAt,
       updated_at: new Date().toISOString(),
     })
     .eq('tenant_id', tenantId);
@@ -1679,8 +1684,18 @@ export async function generateMessagingAgentPrompt(tenantId: string): Promise<Pr
     };
   }
 
-  // Generar prompt con IA
-  const result = await generatePromptWithAI(context, 'messaging');
+  // HYBRID SYSTEM: Use template + KB enrichment for messaging
+  const { generateHybridMessagingPrompt } = await import('./hybrid-messaging-prompt.service');
+  const hybridResult = await generateHybridMessagingPrompt(tenantId, undefined, context);
+
+  const result: PromptGenerationResult = {
+    success: hybridResult.success,
+    prompt: hybridResult.prompt,
+    error: hybridResult.error,
+    generatedAt: hybridResult.generatedAt,
+    model: hybridResult.model,
+    processingTimeMs: hybridResult.processingTimeMs,
+  };
 
   if (!result.success) {
     return result;
@@ -1991,8 +2006,62 @@ export async function generateAndCachePrompt(
       };
     }
 
-    // 5. Generar nuevo prompt con Gemini
-    const result = await generatePromptWithAI(context, promptType);
+    // 5. Generar nuevo prompt
+    // HYBRID SYSTEM: Para voice, usar sistema híbrido (template + KB enrichment)
+    let result: PromptGenerationResult;
+
+    if (channel === 'voice') {
+      // Use hybrid system for voice: Template base + Gemini KB enrichment
+      const { generateHybridVoicePrompt } = await import('./hybrid-voice-prompt.service');
+      const hybridResult = await generateHybridVoicePrompt(tenantId, undefined, context);
+
+      result = {
+        success: hybridResult.success,
+        prompt: hybridResult.prompt,
+        error: hybridResult.error,
+        generatedAt: hybridResult.generatedAt,
+        model: hybridResult.model,
+        processingTimeMs: hybridResult.processingTimeMs,
+      };
+
+      // If hybrid generation succeeded, also save first_message and metadata
+      if (hybridResult.success && hybridResult.firstMessage) {
+        console.log(`[PromptCache] Hybrid voice prompt generated with first_message: "${hybridResult.firstMessage.substring(0, 50)}..."`);
+
+        // Update voice_assistant_configs with first_message
+        try {
+          await supabase
+            .from('voice_assistant_configs')
+            .update({
+              first_message: hybridResult.firstMessage,
+              compiled_prompt: hybridResult.prompt,
+              compiled_prompt_at: new Date().toISOString(),
+            })
+            .eq('tenant_id', tenantId)
+            .eq('is_active', true);
+        } catch (updateErr) {
+          console.warn('[PromptCache] Could not update voice_assistant_configs:', updateErr);
+        }
+      }
+    } else {
+      // HYBRID SYSTEM: For messaging channels, use template + KB enrichment (like voice)
+      const { generateHybridMessagingPrompt } = await import('./hybrid-messaging-prompt.service');
+      const hybridResult = await generateHybridMessagingPrompt(tenantId, undefined, context);
+
+      result = {
+        success: hybridResult.success,
+        prompt: hybridResult.prompt,
+        error: hybridResult.error,
+        generatedAt: hybridResult.generatedAt,
+        model: hybridResult.model,
+        processingTimeMs: hybridResult.processingTimeMs,
+      };
+
+      // Log successful hybrid messaging prompt generation
+      if (hybridResult.success && hybridResult.greetingMessage) {
+        console.log(`[PromptCache] Hybrid messaging prompt generated with greeting: "${hybridResult.greetingMessage.substring(0, 50)}..."`);
+      }
+    }
 
     if (!result.success) {
       return result;

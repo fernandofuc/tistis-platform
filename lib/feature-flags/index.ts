@@ -2,40 +2,43 @@
  * TIS TIS Platform - Feature Flags Module
  *
  * Central module for managing feature flags across the platform.
+ * Simplified for v2-only architecture.
  *
  * @module lib/feature-flags
+ * @version 2.0.0
  */
 
-// Voice Agent v2 Feature Flags
+// Voice Agent Feature Flags
 export {
   // Types
-  type VoiceAgentV2Flags,
-  type RolloutStatus,
-  type VersionMetrics,
+  type VoiceAgentFlags,
+  type TenantVoiceStatus,
   type FlagAuditEntry,
 
   // Core operations
-  getVoiceAgentV2Flags,
-  shouldUseVoiceAgentV2,
-  shouldUseVoiceAgentV2Cached,
-  clearV2StatusCache,
+  getVoiceAgentFlags,
+  isVoiceAgentEnabled,
+  isVoiceAgentEnabledCached,
+  getTenantVoiceStatus,
+  clearVoiceStatusCache,
 
-  // Rollout management
-  updateRolloutPercentage,
-  enableVoiceAgentV2,
-  disableVoiceAgentV2,
+  // Global management
+  enableVoiceAgent,
+  disableVoiceAgent,
 
   // Tenant-specific
-  enableTenantForV2,
-  disableTenantForV2,
-  resetTenantOverride,
+  enableTenantVoiceAgent,
+  disableTenantVoiceAgent,
+  resetTenantVoiceOverride,
 
-  // Status and monitoring
-  getRolloutStatus,
-  initializeVoiceAgentV2Flag,
+  // Admin and monitoring
+  getVoiceAgentAuditLog,
+  getTenantVoiceStatusList,
+  initializeVoiceAgentFlag,
 
-  // Audit and admin
-  getVoiceAgentV2AuditLog,
-  getTenantV2StatusList,
-  batchUpdateTenantV2Status,
+  // Backwards compatibility (deprecated)
+  shouldUseVoiceAgentV2,
+  shouldUseVoiceAgentV2Cached,
+  getVoiceAgentV2Flags,
+  clearV2StatusCache,
 } from './voice-agent-v2';

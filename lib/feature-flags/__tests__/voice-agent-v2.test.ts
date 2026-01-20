@@ -2,19 +2,22 @@
  * TIS TIS Platform - Voice Agent v2.0
  * Feature Flags Tests
  *
- * Tests for the feature flag system used in Voice Agent v2 gradual rollout.
+ * Tests for the simplified voice agent feature flag system.
+ * v2-only architecture - no percentage-based rollout.
+ *
  * Covers:
- * - Percentage-based rollout
+ * - Simple on/off toggle
  * - Tenant-specific overrides
  * - Cache behavior
- * - Instant rollback functionality
+ * - Audit logging
+ *
+ * @version 2.0.0
  */
 
 // Global mock state container - this pattern works with Jest hoisting
 const mockState = {
   data: null as unknown,
   error: null as unknown,
-  rpcError: null as unknown, // Separate state for RPC calls
 };
 
 // Create mock chain methods with closure over mockState
@@ -42,7 +45,6 @@ jest.mock('@/lib/supabase', () => {
     insert: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
     limit: jest.fn().mockImplementation(() => {
-      // Access the outer mockState via closure
       const state = require('../__tests__/voice-agent-v2.test').mockState;
       return Promise.resolve({ data: state?.data, error: state?.error });
     }),
@@ -56,16 +58,6 @@ jest.mock('@/lib/supabase', () => {
   return {
     supabaseAdmin: {
       from: jest.fn(() => mockChainMethods),
-      // Mock RPC for atomic tenant updates
-      rpc: jest.fn().mockImplementation(() => {
-        const state = require('../__tests__/voice-agent-v2.test').mockState;
-        // By default, simulate RPC doesn't exist (fallback to non-atomic)
-        // This tests the fallback path. Set rpcError = null to test RPC path.
-        return Promise.resolve({
-          data: null,
-          error: state?.rpcError ?? { code: '42883' }, // 'function does not exist' by default
-        });
-      }),
     },
   };
 });
@@ -74,19 +66,22 @@ jest.mock('@/lib/supabase', () => {
 export { mockState };
 
 import {
-  getVoiceAgentV2Flags,
+  getVoiceAgentFlags,
+  isVoiceAgentEnabled,
+  isVoiceAgentEnabledCached,
+  clearVoiceStatusCache,
+  enableVoiceAgent,
+  disableVoiceAgent,
+  enableTenantVoiceAgent,
+  disableTenantVoiceAgent,
+  resetTenantVoiceOverride,
+  initializeVoiceAgentFlag,
+  getVoiceAgentAuditLog,
+  // Deprecated exports for backwards compatibility
   shouldUseVoiceAgentV2,
   shouldUseVoiceAgentV2Cached,
+  getVoiceAgentV2Flags,
   clearV2StatusCache,
-  updateRolloutPercentage,
-  enableVoiceAgentV2,
-  disableVoiceAgentV2,
-  enableTenantForV2,
-  disableTenantForV2,
-  resetTenantOverride,
-  initializeVoiceAgentV2Flag,
-  getVoiceAgentV2AuditLog,
-  batchUpdateTenantV2Status,
 } from '../voice-agent-v2';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -106,16 +101,7 @@ function setMockError(error: unknown) {
 function resetMocks() {
   mockState.data = null;
   mockState.error = null;
-  mockState.rpcError = null;
   jest.clearAllMocks();
-}
-
-function setRpcSuccess() {
-  mockState.rpcError = null;
-}
-
-function setRpcNotExists() {
-  mockState.rpcError = { code: '42883' }; // function does not exist
 }
 
 // =====================================================
@@ -124,16 +110,14 @@ function setRpcNotExists() {
 
 const createMockFlags = (overrides: Partial<{
   enabled: boolean;
-  percentage: number;
   enabled_tenants: string[];
   disabled_tenants: string[];
   updated_at: string;
   updated_by: string | null;
 }> = {}) => ({
   id: 'test-flag-id',
-  name: 'voice_agent_v2',
+  name: 'voice_agent',
   enabled: false,
-  percentage: 0,
   enabled_tenants: [],
   disabled_tenants: [],
   updated_at: new Date().toISOString(),
@@ -145,29 +129,27 @@ const createMockFlags = (overrides: Partial<{
 // TEST SUITES
 // =====================================================
 
-describe('Feature Flags - Voice Agent v2', () => {
+describe('Feature Flags - Voice Agent (Simplified v2)', () => {
   beforeEach(() => {
     resetMocks();
-    clearV2StatusCache();
+    clearVoiceStatusCache();
   });
 
   // -------------------------------------------------
-  // getVoiceAgentV2Flags
+  // getVoiceAgentFlags
   // -------------------------------------------------
-  describe('getVoiceAgentV2Flags', () => {
+  describe('getVoiceAgentFlags', () => {
     it('should return flags from database', async () => {
       const flags = createMockFlags({
         enabled: true,
-        percentage: 25,
         enabled_tenants: ['tenant-1', 'tenant-2'],
       });
 
       setMockData(flags);
 
-      const result = await getVoiceAgentV2Flags();
+      const result = await getVoiceAgentFlags();
 
       expect(result.enabled).toBe(true);
-      expect(result.percentage).toBe(25);
       expect(result.enabledTenants).toEqual(['tenant-1', 'tenant-2']);
     });
 
@@ -175,19 +157,17 @@ describe('Feature Flags - Voice Agent v2', () => {
       setMockData(null);
       setMockError({ code: 'PGRST116' });
 
-      const result = await getVoiceAgentV2Flags();
+      const result = await getVoiceAgentFlags();
 
       expect(result.enabled).toBe(false);
-      expect(result.percentage).toBe(0);
       expect(result.enabledTenants).toEqual([]);
     });
 
     it('should handle null values gracefully', async () => {
       const flags = {
         id: 'test-id',
-        name: 'voice_agent_v2',
+        name: 'voice_agent',
         enabled: null,
-        percentage: null,
         enabled_tenants: null,
         disabled_tenants: null,
         updated_at: null,
@@ -196,91 +176,67 @@ describe('Feature Flags - Voice Agent v2', () => {
 
       setMockData(flags);
 
-      const result = await getVoiceAgentV2Flags();
+      const result = await getVoiceAgentFlags();
 
       expect(result.enabled).toBe(false);
-      expect(result.percentage).toBe(0);
       expect(result.enabledTenants).toEqual([]);
       expect(result.disabledTenants).toEqual([]);
     });
   });
 
   // -------------------------------------------------
-  // shouldUseVoiceAgentV2 (percentage-based)
+  // isVoiceAgentEnabled (simple on/off)
   // -------------------------------------------------
-  describe('shouldUseVoiceAgentV2 - Percentage', () => {
+  describe('isVoiceAgentEnabled - Simple Toggle', () => {
     it('should return false when globally disabled', async () => {
-      setMockData(createMockFlags({ enabled: false, percentage: 100 }));
+      setMockData(createMockFlags({ enabled: false }));
 
-      const result = await shouldUseVoiceAgentV2('any-tenant');
+      const result = await isVoiceAgentEnabled('any-tenant');
 
       expect(result).toBe(false);
     });
 
-    it('should use consistent hashing for percentage decisions', async () => {
-      const flags = createMockFlags({ enabled: true, percentage: 50 });
-      setMockData(flags);
+    it('should return true when globally enabled', async () => {
+      setMockData(createMockFlags({ enabled: true }));
 
-      // Test with multiple tenants - should be deterministic
-      const testTenants = ['tenant-alpha', 'tenant-beta', 'tenant-gamma'];
-      const results: boolean[] = [];
-
-      for (const tenantId of testTenants) {
-        const result = await shouldUseVoiceAgentV2(tenantId);
-        results.push(result);
-      }
-
-      // Verify same tenant always gets same result (consistency)
-      for (let i = 0; i < testTenants.length; i++) {
-        const secondResult = await shouldUseVoiceAgentV2(testTenants[i]);
-        expect(secondResult).toBe(results[i]);
-      }
-    });
-
-    it('should respect percentage thresholds', async () => {
-      // With 0% - no one should get v2
-      setMockData(createMockFlags({ enabled: true, percentage: 0 }));
-      expect(await shouldUseVoiceAgentV2('test-tenant')).toBe(false);
-
-      // With 100% - everyone should get v2
-      setMockData(createMockFlags({ enabled: true, percentage: 100 }));
-      expect(await shouldUseVoiceAgentV2('test-tenant')).toBe(true);
-    });
-
-    it('should return false for invalid tenant IDs', async () => {
-      expect(await shouldUseVoiceAgentV2('')).toBe(false);
-      expect(await shouldUseVoiceAgentV2('   ')).toBe(false);
-      // @ts-expect-error Testing invalid input
-      expect(await shouldUseVoiceAgentV2(null)).toBe(false);
-      // @ts-expect-error Testing invalid input
-      expect(await shouldUseVoiceAgentV2(undefined)).toBe(false);
-    });
-  });
-
-  // -------------------------------------------------
-  // shouldUseVoiceAgentV2 (tenant overrides)
-  // -------------------------------------------------
-  describe('shouldUseVoiceAgentV2 - Tenant Overrides', () => {
-    it('should return true for explicitly enabled tenant', async () => {
-      setMockData(createMockFlags({
-        enabled: true,
-        percentage: 0,
-        enabled_tenants: ['special-tenant'],
-      }));
-
-      const result = await shouldUseVoiceAgentV2('special-tenant');
+      const result = await isVoiceAgentEnabled('any-tenant');
 
       expect(result).toBe(true);
     });
 
-    it('should return false for explicitly disabled tenant', async () => {
+    it('should return false for invalid tenant IDs', async () => {
+      expect(await isVoiceAgentEnabled('')).toBe(false);
+      expect(await isVoiceAgentEnabled('   ')).toBe(false);
+      // @ts-expect-error Testing invalid input
+      expect(await isVoiceAgentEnabled(null)).toBe(false);
+      // @ts-expect-error Testing invalid input
+      expect(await isVoiceAgentEnabled(undefined)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------
+  // isVoiceAgentEnabled (tenant overrides)
+  // -------------------------------------------------
+  describe('isVoiceAgentEnabled - Tenant Overrides', () => {
+    it('should return true for explicitly enabled tenant when global is disabled', async () => {
+      setMockData(createMockFlags({
+        enabled: false,
+        enabled_tenants: ['special-tenant'],
+      }));
+
+      const result = await isVoiceAgentEnabled('special-tenant');
+
+      // Enabled tenant overrides global disabled
+      expect(result).toBe(true);
+    });
+
+    it('should return false for explicitly disabled tenant when global is enabled', async () => {
       setMockData(createMockFlags({
         enabled: true,
-        percentage: 100,
         disabled_tenants: ['blocked-tenant'],
       }));
 
-      const result = await shouldUseVoiceAgentV2('blocked-tenant');
+      const result = await isVoiceAgentEnabled('blocked-tenant');
 
       expect(result).toBe(false);
     });
@@ -288,43 +244,30 @@ describe('Feature Flags - Voice Agent v2', () => {
     it('should prioritize disabled over enabled', async () => {
       setMockData(createMockFlags({
         enabled: true,
-        percentage: 100,
         enabled_tenants: ['confused-tenant'],
         disabled_tenants: ['confused-tenant'],
       }));
 
       // Disabled should take priority (safer default)
-      const result = await shouldUseVoiceAgentV2('confused-tenant');
+      const result = await isVoiceAgentEnabled('confused-tenant');
 
-      expect(result).toBe(false);
-    });
-
-    it('should return false for enabled tenant when globally disabled', async () => {
-      setMockData(createMockFlags({
-        enabled: false,
-        enabled_tenants: ['vip-tenant'],
-      }));
-
-      const result = await shouldUseVoiceAgentV2('vip-tenant');
-
-      // Global disable wins
       expect(result).toBe(false);
     });
   });
 
   // -------------------------------------------------
-  // shouldUseVoiceAgentV2Cached
+  // isVoiceAgentEnabledCached
   // -------------------------------------------------
-  describe('shouldUseVoiceAgentV2Cached', () => {
+  describe('isVoiceAgentEnabledCached', () => {
     it('should cache results for performance', async () => {
-      setMockData(createMockFlags({ enabled: true, percentage: 100 }));
+      setMockData(createMockFlags({ enabled: true }));
 
       // First call - should hit database
-      await shouldUseVoiceAgentV2Cached('cache-test-tenant');
+      await isVoiceAgentEnabledCached('cache-test-tenant');
       const callsAfterFirst = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
       // Second call - should use cache
-      await shouldUseVoiceAgentV2Cached('cache-test-tenant');
+      await isVoiceAgentEnabledCached('cache-test-tenant');
       const callsAfterSecond = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
       // Should not have made additional calls due to caching
@@ -332,29 +275,24 @@ describe('Feature Flags - Voice Agent v2', () => {
     });
 
     it('should return false for empty tenant ID', async () => {
-      const result = await shouldUseVoiceAgentV2Cached('');
-      expect(result).toBe(false);
-    });
-
-    it('should return false for whitespace tenant ID', async () => {
-      const result = await shouldUseVoiceAgentV2Cached('   ');
+      const result = await isVoiceAgentEnabledCached('');
       expect(result).toBe(false);
     });
 
     it('should respect cache TTL', async () => {
       jest.useFakeTimers();
 
-      setMockData(createMockFlags({ enabled: true, percentage: 100 }));
+      setMockData(createMockFlags({ enabled: true }));
 
       // First call
-      await shouldUseVoiceAgentV2Cached('ttl-test-tenant');
+      await isVoiceAgentEnabledCached('ttl-test-tenant');
       const callsAfterFirst = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
       // Advance time past TTL (60 seconds)
       jest.advanceTimersByTime(61000);
 
       // Should query again after TTL expires
-      await shouldUseVoiceAgentV2Cached('ttl-test-tenant');
+      await isVoiceAgentEnabledCached('ttl-test-tenant');
       const callsAfterSecond = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
       expect(callsAfterSecond).toBeGreaterThan(callsAfterFirst);
@@ -364,21 +302,21 @@ describe('Feature Flags - Voice Agent v2', () => {
   });
 
   // -------------------------------------------------
-  // clearV2StatusCache
+  // clearVoiceStatusCache
   // -------------------------------------------------
-  describe('clearV2StatusCache', () => {
+  describe('clearVoiceStatusCache', () => {
     it('should clear the cache', async () => {
-      setMockData(createMockFlags({ enabled: true, percentage: 100 }));
+      setMockData(createMockFlags({ enabled: true }));
 
       // First call - caches result
-      await shouldUseVoiceAgentV2Cached('clear-test-tenant');
+      await isVoiceAgentEnabledCached('clear-test-tenant');
       const callsAfterFirst = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
       // Clear cache
-      clearV2StatusCache();
+      clearVoiceStatusCache();
 
       // Should query again after cache clear
-      await shouldUseVoiceAgentV2Cached('clear-test-tenant');
+      await isVoiceAgentEnabledCached('clear-test-tenant');
       const callsAfterClear = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
       expect(callsAfterClear).toBeGreaterThan(callsAfterFirst);
@@ -386,34 +324,12 @@ describe('Feature Flags - Voice Agent v2', () => {
   });
 
   // -------------------------------------------------
-  // Rollout Management
+  // Enable/Disable Operations
   // -------------------------------------------------
-  describe('Rollout Management', () => {
-    describe('updateRolloutPercentage', () => {
-      it('should call supabase with correct table', async () => {
-        await updateRolloutPercentage(50, 'admin@test.com');
-
-        expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
-      });
-
-      it('should throw error for invalid percentage', async () => {
-        await expect(updateRolloutPercentage(-10)).rejects.toThrow(
-          'Percentage must be between 0 and 100'
-        );
-        await expect(updateRolloutPercentage(150)).rejects.toThrow(
-          'Percentage must be between 0 and 100'
-        );
-      });
-
-      it('should accept boundary values', async () => {
-        await expect(updateRolloutPercentage(0)).resolves.not.toThrow();
-        await expect(updateRolloutPercentage(100)).resolves.not.toThrow();
-      });
-    });
-
-    describe('enableVoiceAgentV2', () => {
-      it('should enable v2 globally', async () => {
-        await enableVoiceAgentV2('admin@test.com');
+  describe('Enable/Disable Operations', () => {
+    describe('enableVoiceAgent', () => {
+      it('should enable voice agent globally', async () => {
+        await enableVoiceAgent('admin@test.com');
 
         expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
       });
@@ -422,23 +338,23 @@ describe('Feature Flags - Voice Agent v2', () => {
         setMockData(createMockFlags({ enabled: false }));
 
         // Cache a result
-        await shouldUseVoiceAgentV2Cached('enable-test-tenant');
+        await isVoiceAgentEnabledCached('enable-test-tenant');
         const callsAfterCache = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
-        // Enable v2 (which clears cache)
-        await enableVoiceAgentV2();
+        // Enable (which clears cache)
+        await enableVoiceAgent();
 
         // Next call should hit DB again
-        await shouldUseVoiceAgentV2Cached('enable-test-tenant');
+        await isVoiceAgentEnabledCached('enable-test-tenant');
         const callsAfterEnable = (supabaseAdmin.from as jest.Mock).mock.calls.length;
 
         expect(callsAfterEnable).toBeGreaterThan(callsAfterCache);
       });
     });
 
-    describe('disableVoiceAgentV2', () => {
-      it('should disable v2 and reset percentage to 0', async () => {
-        await disableVoiceAgentV2('admin@test.com');
+    describe('disableVoiceAgent', () => {
+      it('should disable voice agent', async () => {
+        await disableVoiceAgent('admin@test.com');
 
         expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
       });
@@ -449,62 +365,40 @@ describe('Feature Flags - Voice Agent v2', () => {
   // Tenant-Specific Overrides
   // -------------------------------------------------
   describe('Tenant-Specific Overrides', () => {
-    describe('enableTenantForV2', () => {
+    describe('enableTenantVoiceAgent', () => {
       it('should add tenant to enabled list', async () => {
         setMockData(createMockFlags({
           enabled_tenants: ['existing-tenant'],
           disabled_tenants: [],
         }));
 
-        await enableTenantForV2('new-tenant', 'admin@test.com');
+        await enableTenantVoiceAgent('new-tenant', 'admin@test.com');
 
         expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
       });
-
-      it('should remove tenant from disabled list when enabling', async () => {
-        setMockData(createMockFlags({
-          enabled_tenants: [],
-          disabled_tenants: ['blocked-tenant'],
-        }));
-
-        await enableTenantForV2('blocked-tenant', 'admin@test.com');
-
-        expect(supabaseAdmin.from).toHaveBeenCalled();
-      });
     });
 
-    describe('disableTenantForV2', () => {
+    describe('disableTenantVoiceAgent', () => {
       it('should add tenant to disabled list', async () => {
         setMockData(createMockFlags({
           enabled_tenants: [],
           disabled_tenants: [],
         }));
 
-        await disableTenantForV2('problem-tenant', 'admin@test.com');
+        await disableTenantVoiceAgent('problem-tenant', 'admin@test.com');
 
         expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
       });
-
-      it('should remove tenant from enabled list when disabling', async () => {
-        setMockData(createMockFlags({
-          enabled_tenants: ['vip-tenant'],
-          disabled_tenants: [],
-        }));
-
-        await disableTenantForV2('vip-tenant');
-
-        expect(supabaseAdmin.from).toHaveBeenCalled();
-      });
     });
 
-    describe('resetTenantOverride', () => {
+    describe('resetTenantVoiceOverride', () => {
       it('should remove tenant from both lists', async () => {
         setMockData(createMockFlags({
           enabled_tenants: ['tenant-in-enabled'],
           disabled_tenants: ['tenant-in-disabled'],
         }));
 
-        await resetTenantOverride('tenant-in-enabled');
+        await resetTenantVoiceOverride('tenant-in-enabled');
 
         expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
       });
@@ -512,70 +406,67 @@ describe('Feature Flags - Voice Agent v2', () => {
   });
 
   // -------------------------------------------------
-  // Instant Rollback
+  // Emergency Disable (formerly Instant Rollback)
   // -------------------------------------------------
-  describe('Instant Rollback', () => {
-    it('should rollback a tenant immediately via disableTenantForV2', async () => {
-      // Initially tenant is on v2 (100% rollout)
+  describe('Emergency Disable', () => {
+    it('should disable a tenant immediately via disableTenantVoiceAgent', async () => {
+      // Initially tenant is enabled (global enabled)
       setMockData(createMockFlags({
         enabled: true,
-        percentage: 100,
       }));
 
-      const beforeRollback = await shouldUseVoiceAgentV2('rollback-tenant');
-      expect(beforeRollback).toBe(true);
+      const beforeDisable = await isVoiceAgentEnabled('emergency-tenant');
+      expect(beforeDisable).toBe(true);
 
       // Clear cache before disabling
-      clearV2StatusCache();
+      clearVoiceStatusCache();
 
       // Disable tenant
       setMockData(createMockFlags({
         enabled: true,
-        percentage: 100,
         disabled_tenants: [],
       }));
-      await disableTenantForV2('rollback-tenant');
+      await disableTenantVoiceAgent('emergency-tenant');
 
-      // After rollback - tenant should be disabled
+      // After disable - tenant should be disabled
       setMockData(createMockFlags({
         enabled: true,
-        percentage: 100,
-        disabled_tenants: ['rollback-tenant'],
+        disabled_tenants: ['emergency-tenant'],
       }));
 
-      const afterRollback = await shouldUseVoiceAgentV2('rollback-tenant');
-      expect(afterRollback).toBe(false);
+      const afterDisable = await isVoiceAgentEnabled('emergency-tenant');
+      expect(afterDisable).toBe(false);
     });
 
-    it('should rollback globally via disableVoiceAgentV2', async () => {
+    it('should disable globally via disableVoiceAgent', async () => {
       // Before global disable
-      setMockData(createMockFlags({ enabled: true, percentage: 100 }));
+      setMockData(createMockFlags({ enabled: true }));
 
-      const beforeDisable = await shouldUseVoiceAgentV2('any-tenant');
+      const beforeDisable = await isVoiceAgentEnabled('any-tenant');
       expect(beforeDisable).toBe(true);
 
       // Global disable
-      await disableVoiceAgentV2();
+      await disableVoiceAgent();
 
       // Clear cache
-      clearV2StatusCache();
+      clearVoiceStatusCache();
 
       // After global disable
-      setMockData(createMockFlags({ enabled: false, percentage: 0 }));
+      setMockData(createMockFlags({ enabled: false }));
 
-      const afterDisable = await shouldUseVoiceAgentV2('any-tenant');
+      const afterDisable = await isVoiceAgentEnabled('any-tenant');
       expect(afterDisable).toBe(false);
     });
   });
 
   // -------------------------------------------------
-  // initializeVoiceAgentV2Flag
+  // initializeVoiceAgentFlag
   // -------------------------------------------------
-  describe('initializeVoiceAgentV2Flag', () => {
+  describe('initializeVoiceAgentFlag', () => {
     it('should not create flag if it already exists', async () => {
       setMockData({ id: 'existing-flag-id' });
 
-      await initializeVoiceAgentV2Flag();
+      await initializeVoiceAgentFlag();
 
       expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
     });
@@ -583,7 +474,7 @@ describe('Feature Flags - Voice Agent v2', () => {
     it('should create flag if it does not exist', async () => {
       setMockData(null);
 
-      await initializeVoiceAgentV2Flag();
+      await initializeVoiceAgentFlag();
 
       expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
     });
@@ -592,12 +483,12 @@ describe('Feature Flags - Voice Agent v2', () => {
   // -------------------------------------------------
   // Audit Log
   // -------------------------------------------------
-  describe('getVoiceAgentV2AuditLog', () => {
+  describe('getVoiceAgentAuditLog', () => {
     it('should return audit entries', async () => {
       const auditData = [
         {
           id: 'audit-1',
-          flag_name: 'voice_agent_v2',
+          flag_name: 'voice_agent',
           action: 'enabled',
           old_value: { enabled: false },
           new_value: { enabled: true },
@@ -609,10 +500,10 @@ describe('Feature Flags - Voice Agent v2', () => {
 
       setMockData(auditData);
 
-      const result = await getVoiceAgentV2AuditLog(10);
+      const result = await getVoiceAgentAuditLog(10);
 
       expect(result).toHaveLength(1);
-      expect(result[0].flagName).toBe('voice_agent_v2');
+      expect(result[0].flagName).toBe('voice_agent');
       expect(result[0].action).toBe('enabled');
     });
 
@@ -620,36 +511,58 @@ describe('Feature Flags - Voice Agent v2', () => {
       setMockData(null);
       setMockError({ message: 'Database error' });
 
-      const result = await getVoiceAgentV2AuditLog();
+      const result = await getVoiceAgentAuditLog();
 
       expect(result).toEqual([]);
     });
   });
 
   // -------------------------------------------------
-  // Batch Operations
+  // Backwards Compatibility (Deprecated Exports)
   // -------------------------------------------------
-  describe('batchUpdateTenantV2Status', () => {
-    it('should process multiple tenant updates', async () => {
-      setMockData(createMockFlags());
+  describe('Backwards Compatibility', () => {
+    it('shouldUseVoiceAgentV2 should work like isVoiceAgentEnabled', async () => {
+      setMockData(createMockFlags({ enabled: true }));
 
-      const updates = [
-        { tenantId: 'tenant-1', action: 'enable' as const },
-        { tenantId: 'tenant-2', action: 'disable' as const },
-        { tenantId: 'tenant-3', action: 'reset' as const },
-      ];
+      const result = await shouldUseVoiceAgentV2('test-tenant');
 
-      const result = await batchUpdateTenantV2Status(updates, 'admin@test.com');
-
-      expect(result.success).toBe(true);
-      expect(result.errors).toHaveLength(0);
+      expect(result).toBe(true);
     });
 
-    it('should handle empty updates array', async () => {
-      const result = await batchUpdateTenantV2Status([], 'admin@test.com');
+    it('shouldUseVoiceAgentV2Cached should work like isVoiceAgentEnabledCached', async () => {
+      setMockData(createMockFlags({ enabled: true }));
 
-      expect(result.success).toBe(true);
-      expect(result.errors).toHaveLength(0);
+      const result = await shouldUseVoiceAgentV2Cached('test-tenant');
+
+      expect(result).toBe(true);
+    });
+
+    it('getVoiceAgentV2Flags should return flags with percentage=100 when enabled', async () => {
+      setMockData(createMockFlags({ enabled: true }));
+
+      const result = await getVoiceAgentV2Flags();
+
+      expect(result.enabled).toBe(true);
+      expect(result.percentage).toBe(100);
+    });
+
+    it('getVoiceAgentV2Flags should return flags with percentage=0 when disabled', async () => {
+      setMockData(createMockFlags({ enabled: false }));
+
+      const result = await getVoiceAgentV2Flags();
+
+      expect(result.enabled).toBe(false);
+      expect(result.percentage).toBe(0);
+    });
+
+    it('clearV2StatusCache should work like clearVoiceStatusCache', async () => {
+      setMockData(createMockFlags({ enabled: true }));
+
+      await isVoiceAgentEnabledCached('clear-v2-test');
+      clearV2StatusCache();
+
+      // Should be able to call without errors
+      expect(true).toBe(true);
     });
   });
 
@@ -660,18 +573,17 @@ describe('Feature Flags - Voice Agent v2', () => {
     it('should handle empty tenant lists', async () => {
       setMockData(createMockFlags({
         enabled: true,
-        percentage: 50,
         enabled_tenants: [],
         disabled_tenants: [],
       }));
 
       // Should work without throwing
-      const result = await shouldUseVoiceAgentV2('test-tenant');
+      const result = await isVoiceAgentEnabled('test-tenant');
       expect(typeof result).toBe('boolean');
     });
 
     it('should handle special characters in tenant IDs', async () => {
-      setMockData(createMockFlags({ enabled: true, percentage: 50 }));
+      setMockData(createMockFlags({ enabled: true }));
 
       const specialTenantIds = [
         'tenant-with-dashes',
@@ -684,110 +596,23 @@ describe('Feature Flags - Voice Agent v2', () => {
 
       for (const tenantId of specialTenantIds) {
         // Should not throw
-        const result = await shouldUseVoiceAgentV2(tenantId);
+        const result = await isVoiceAgentEnabled(tenantId);
         expect(typeof result).toBe('boolean');
       }
     });
 
     it('should handle concurrent cache operations', async () => {
-      setMockData(createMockFlags({ enabled: true, percentage: 100 }));
+      setMockData(createMockFlags({ enabled: true }));
 
       // Simulate concurrent calls
       const promises = Array(100)
         .fill(null)
-        .map((_, i) => shouldUseVoiceAgentV2Cached(`concurrent-tenant-${i}`));
+        .map((_, i) => isVoiceAgentEnabledCached(`concurrent-tenant-${i}`));
 
       await Promise.all(promises);
 
       // Should complete without errors
       expect(true).toBe(true);
-    });
-
-    it('should maintain percentage consistency across calls', async () => {
-      // Test that the same tenant always gets the same result
-      // with the same percentage setting
-      setMockData(createMockFlags({ enabled: true, percentage: 50 }));
-
-      const testTenant = 'consistency-test-tenant';
-      const results: boolean[] = [];
-
-      // Make 10 calls
-      for (let i = 0; i < 10; i++) {
-        clearV2StatusCache(); // Clear cache to force recalculation
-        const result = await shouldUseVoiceAgentV2(testTenant);
-        results.push(result);
-      }
-
-      // All results should be the same (consistent hashing)
-      const allSame = results.every(r => r === results[0]);
-      expect(allSame).toBe(true);
-    });
-  });
-
-  // -------------------------------------------------
-  // Atomic RPC Operations
-  // -------------------------------------------------
-  describe('Atomic RPC Operations', () => {
-    it('should use RPC for atomic tenant enable when available', async () => {
-      setMockData(createMockFlags());
-      setRpcSuccess(); // RPC succeeds
-
-      await enableTenantForV2('tenant-1', 'admin@test.com');
-
-      // Should have called RPC
-      expect(supabaseAdmin.rpc).toHaveBeenCalledWith('update_tenant_v2_status', {
-        p_tenant_id: 'tenant-1',
-        p_action: 'enable',
-        p_updated_by: 'admin@test.com',
-      });
-    });
-
-    it('should fallback to non-atomic when RPC does not exist', async () => {
-      setMockData(createMockFlags({
-        enabled_tenants: [],
-        disabled_tenants: [],
-      }));
-      setRpcNotExists(); // RPC not available
-
-      await enableTenantForV2('tenant-1', 'admin@test.com');
-
-      // Should have called from() as fallback
-      expect(supabaseAdmin.from).toHaveBeenCalledWith('platform_feature_flags');
-    });
-
-    it('should use RPC for atomic tenant disable when available', async () => {
-      setMockData(createMockFlags());
-      setRpcSuccess();
-
-      await disableTenantForV2('tenant-1', 'admin@test.com');
-
-      expect(supabaseAdmin.rpc).toHaveBeenCalledWith('update_tenant_v2_status', {
-        p_tenant_id: 'tenant-1',
-        p_action: 'disable',
-        p_updated_by: 'admin@test.com',
-      });
-    });
-
-    it('should use RPC for atomic tenant reset when available', async () => {
-      setMockData(createMockFlags());
-      setRpcSuccess();
-
-      await resetTenantOverride('tenant-1', 'admin@test.com');
-
-      expect(supabaseAdmin.rpc).toHaveBeenCalledWith('update_tenant_v2_status', {
-        p_tenant_id: 'tenant-1',
-        p_action: 'reset',
-        p_updated_by: 'admin@test.com',
-      });
-    });
-
-    it('should handle RPC errors other than function not found', async () => {
-      setMockData(createMockFlags());
-      mockState.rpcError = { code: '23505', message: 'Unique violation' }; // Different error
-
-      await expect(enableTenantForV2('tenant-1')).rejects.toThrow(
-        'Failed to enable tenant'
-      );
     });
   });
 });

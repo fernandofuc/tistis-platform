@@ -537,3 +537,157 @@ describe('Performance: Memory Usage', () => {
     expect(report).toBeNull();
   });
 });
+
+// =====================================================
+// PERFORMANCE TESTS: STRESS
+// =====================================================
+
+describe('Performance: Stress Testing', () => {
+  let collector: PerformanceCollector;
+
+  beforeEach(() => {
+    collector = new PerformanceCollector();
+  });
+
+  afterEach(() => {
+    collector.clear();
+  });
+
+  it('should handle burst of rapid requests', async () => {
+    const burstSize = 20;
+    const requests: Promise<void>[] = [];
+
+    const startTime = performance.now();
+
+    for (let i = 0; i < burstSize; i++) {
+      requests.push(
+        collector.measure(`burst_${i}`, async () => {
+          await simulateWebhookProcessing(0.2);
+        })
+      );
+    }
+
+    await Promise.all(requests);
+
+    const totalTime = performance.now() - startTime;
+
+    // All requests should complete
+    for (let i = 0; i < burstSize; i++) {
+      const report = collector.getReport(`burst_${i}`);
+      expect(report).not.toBeNull();
+    }
+
+    // Parallel execution should be faster than sequential
+    // 20 requests at ~100ms each = 2000ms sequential, but parallel should be much less
+    expect(totalTime).toBeLessThan(1500);
+  }, 30000);
+
+  it('should maintain accuracy under load', async () => {
+    const iterations = 30;
+    const expectedMinDuration = 30; // Minimum expected duration
+
+    for (let i = 0; i < iterations; i++) {
+      await collector.measure('accuracy_test', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+    }
+
+    const report = collector.getReport('accuracy_test');
+    expect(report).not.toBeNull();
+
+    // All measurements should be at least the expected minimum
+    expect(report!.min).toBeGreaterThanOrEqual(expectedMinDuration);
+
+    // Average should be close to 50ms (within reasonable tolerance)
+    expect(report!.avg).toBeGreaterThanOrEqual(45);
+    expect(report!.avg).toBeLessThan(150);
+  }, 30000);
+
+  it('should track outliers correctly', async () => {
+    // Add normal measurements
+    for (let i = 0; i < 9; i++) {
+      collector.record('outlier_test', 100 + Math.random() * 20);
+    }
+
+    // Add an outlier
+    collector.record('outlier_test', 1000);
+
+    const report = collector.getReport('outlier_test');
+    expect(report).not.toBeNull();
+
+    // Max should be the outlier
+    expect(report!.max).toBe(1000);
+
+    // p99 should capture the outlier
+    expect(report!.p99).toBe(1000);
+
+    // Average should be affected by outlier
+    expect(report!.avg).toBeGreaterThan(150);
+  });
+});
+
+// =====================================================
+// PERFORMANCE TESTS: STABILITY
+// =====================================================
+
+describe('Performance: Stability Over Time', () => {
+  let collector: PerformanceCollector;
+
+  beforeEach(() => {
+    collector = new PerformanceCollector();
+  });
+
+  afterEach(() => {
+    collector.clear();
+  });
+
+  it('should show stable performance across batches', async () => {
+    const batchSize = 10;
+    const numBatches = 3;
+    const batchAverages: number[] = [];
+
+    for (let batch = 0; batch < numBatches; batch++) {
+      for (let i = 0; i < batchSize; i++) {
+        await collector.measure(`batch_${batch}`, async () => {
+          await simulateWebhookProcessing(0.3);
+        });
+      }
+
+      const report = collector.getReport(`batch_${batch}`);
+      if (report) {
+        batchAverages.push(report.avg);
+      }
+    }
+
+    // All batches should have similar averages (within 50% of each other)
+    const maxAvg = Math.max(...batchAverages);
+    const minAvg = Math.min(...batchAverages);
+    const variance = (maxAvg - minAvg) / minAvg;
+
+    expect(variance).toBeLessThan(0.5);
+  }, 60000);
+
+  it('should calculate correct standard deviation', () => {
+    // Add measurements with known values
+    const values = [10, 20, 30, 40, 50];
+    values.forEach((v) => collector.record('stddev_test', v));
+
+    const report = collector.getReport('stddev_test');
+    expect(report).not.toBeNull();
+
+    // Expected: avg = 30, stddev = sqrt(200) ≈ 14.14
+    expect(report!.avg).toBe(30);
+    expect(report!.stdDev).toBeCloseTo(14.14, 1);
+  });
+
+  it('should handle zero-length operations', () => {
+    // Record very fast operations
+    for (let i = 0; i < 10; i++) {
+      collector.record('fast_op', 0.001 + Math.random() * 0.01);
+    }
+
+    const report = collector.getReport('fast_op');
+    expect(report).not.toBeNull();
+    expect(report!.min).toBeGreaterThanOrEqual(0);
+  });
+});

@@ -55,7 +55,7 @@ export const getMenu: ToolDefinition<GetMenuParams> = {
     required: [],
   },
 
-  requiredCapabilities: ['menu'],
+  requiredCapabilities: ['menu_info'],
   requiresConfirmation: false,
   enabledFor: ['rest_standard', 'rest_complete'],
   timeout: 10000,

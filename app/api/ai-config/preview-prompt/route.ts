@@ -1,6 +1,7 @@
 // =====================================================
-// TIS TIS PLATFORM - Preview Prompt API
+// TIS TIS PLATFORM - Preview Prompt API v2.0
 // Generate preview of system prompts for each profile
+// Arquitectura simplificada - Solo v2 (voice_assistant_configs)
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -53,16 +54,17 @@ export async function GET(request: NextRequest) {
     let profileName: string;
 
     if (profileType === 'voice') {
-      // Get voice agent prompt
+      // Get voice agent prompt from voice_assistant_configs (v2)
       const { data: voiceConfig } = await supabase
-        .from('voice_agent_config')
-        .select('system_prompt, system_prompt_generated_at')
+        .from('voice_assistant_configs')
+        .select('compiled_prompt, compiled_prompt_at, assistant_name')
         .eq('tenant_id', userRole.tenant_id)
+        .eq('is_active', true)
         .single();
 
-      prompt = voiceConfig?.system_prompt || 'Prompt de voz no generado. Configura tu agente de voz para generar el prompt.';
-      generatedAt = voiceConfig?.system_prompt_generated_at || null;
-      profileName = 'Agente de Voz';
+      prompt = voiceConfig?.compiled_prompt || 'Prompt de voz no generado. Configura tu agente de voz para generar el prompt.';
+      generatedAt = voiceConfig?.compiled_prompt_at || null;
+      profileName = voiceConfig?.assistant_name || 'Agente de Voz';
     } else {
       // Get messaging agent prompt from ai_generated_prompts
       // Use 'whatsapp' as the default channel for business profile preview
