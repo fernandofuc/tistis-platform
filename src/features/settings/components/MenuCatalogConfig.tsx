@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, Button, Badge } from '@/src/shared/components/ui';
+import { Button, Badge } from '@/src/shared/components/ui';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
 import Link from 'next/link';
@@ -82,7 +82,14 @@ const icons = {
   ),
   utensils: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
+    </svg>
+  ),
+  plate: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <circle cx="12" cy="12" r="5" strokeWidth={1.5} />
+      <circle cx="12" cy="12" r="2" strokeWidth={1} />
     </svg>
   ),
   check: (
@@ -288,7 +295,7 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
     return (
       <div className={cn('', className)}>
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-8 text-center">
-          <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
             {icons.menu}
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -343,8 +350,8 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
             className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                <span className="text-amber-600">{icons.utensils}</span>
+              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center" aria-hidden="true">
+                <span className="text-amber-600">{icons.plate}</span>
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{stats.total_items}</p>
@@ -361,7 +368,7 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
             className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center" aria-hidden="true">
                 <span className="text-purple-600">{icons.menu}</span>
               </div>
               <div>
@@ -379,7 +386,7 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
             className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center" aria-hidden="true">
                 <span className="text-green-600">{icons.check}</span>
               </div>
               <div>
@@ -397,7 +404,7 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
             className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center" aria-hidden="true">
                 <span className="text-blue-600 font-bold text-sm">$</span>
               </div>
               <div>
@@ -410,6 +417,22 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
           </motion.div>
         </div>
       )}
+
+      {/* Info Box */}
+      <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+            {icons.menu}
+          </div>
+          <div className="flex-1">
+            <h4 className="font-medium text-amber-900 mb-1">Información para el Asistente IA</h4>
+            <p className="text-sm text-amber-700">
+              El asistente de voz utilizará esta información del menú para responder preguntas de los clientes
+              sobre platillos, precios y disponibilidad.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Dietary Info Banner */}
       {stats && (stats.dietary_counts.vegetarian > 0 || stats.dietary_counts.vegan > 0 || stats.dietary_counts.gluten_free > 0) && (
@@ -463,6 +486,8 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
                 {/* Category Header */}
                 <button
                   onClick={() => toggleCategory(category.id)}
+                  aria-expanded={isExpanded}
+                  aria-label={`${isExpanded ? 'Colapsar' : 'Expandir'} categoría ${category.name}`}
                   className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
@@ -479,7 +504,7 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400">
+                    <span className="text-gray-400" aria-hidden="true">
                       {isExpanded ? icons.chevronUp : icons.chevronDown}
                     </span>
                   </div>
@@ -533,12 +558,12 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
                                     {item.name}
                                   </h5>
                                   {item.is_featured && (
-                                    <span className="text-amber-500" title="Destacado">
+                                    <span className="text-amber-500" title="Destacado" aria-label="Destacado">
                                       {icons.star}
                                     </span>
                                   )}
                                   {item.is_vegetarian && (
-                                    <span className="text-green-500" title="Vegetariano">
+                                    <span className="text-green-500" title="Vegetariano" aria-label="Vegetariano">
                                       {icons.leaf}
                                     </span>
                                   )}
