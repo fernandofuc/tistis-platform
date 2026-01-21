@@ -7,9 +7,14 @@
 //
 // DISEÑO: Componente "controlado" - el padre maneja el estado pendiente
 // El selector NO tiene estado interno, solo muestra lo que le pasan
+//
+// FEATURES:
+// - Muestra capacidades expandibles por tipo
+// - Comparación visual entre niveles
+// - Animaciones suaves con Framer Motion
 // =====================================================
 
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckIcon,
@@ -18,7 +23,13 @@ import {
 import {
   getActiveTypesForVertical,
 } from '@/lib/voice-agent/types/assistant-types';
-import type { AssistantType } from '@/lib/voice-agent/types';
+import {
+  getCapabilitiesForTypeId,
+  getToolsForTypeId,
+} from '@/lib/voice-agent/types/capability-definitions';
+import type { AssistantType, AssistantTypeId, Capability } from '@/lib/voice-agent/types';
+import { CapabilitiesGrid } from './CapabilitiesGrid';
+import { ChevronDown, ChevronUp, Wrench, Zap } from 'lucide-react';
 
 // =====================================================
 // ICON MAPPING
@@ -77,20 +88,23 @@ interface AssistantTypeSelectorProps {
   disabled?: boolean;
   compact?: boolean;
   showFeatures?: boolean;
+  /** Mostrar botón para expandir capacidades */
+  showCapabilitiesExpander?: boolean;
 }
 
 interface TypeCardProps {
   type: AssistantType;
-  /** Está seleccionado visualmente (pendiente o confirmado) */
   isSelected: boolean;
-  /** Es el tipo actualmente guardado en BD */
   isCurrent: boolean;
-  /** Hay un cambio pendiente de confirmación */
   hasPendingChange: boolean;
   onSelect: () => void;
   disabled?: boolean;
   compact?: boolean;
   showFeatures?: boolean;
+  showCapabilitiesExpander?: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  vertical: 'restaurant' | 'dental';
 }
 
 // =====================================================
@@ -106,7 +120,20 @@ function TypeCard({
   disabled,
   compact,
   showFeatures = true,
+  showCapabilitiesExpander = true,
+  isExpanded,
+  onToggleExpand,
+  vertical,
 }: TypeCardProps) {
+  // Get capabilities and tools for this type
+  const capabilities = useMemo(() => {
+    return getCapabilitiesForTypeId(type.id as AssistantTypeId) || [];
+  }, [type.id]);
+
+  const tools = useMemo(() => {
+    return getToolsForTypeId(type.id as AssistantTypeId) || [];
+  }, [type.id]);
+
   const gradientClasses = {
     basic: 'from-slate-500 to-slate-600',
     standard: 'from-tis-coral to-tis-pink',
@@ -118,115 +145,211 @@ function TypeCard({
   // Determinar el estilo del borde según el estado
   const getBorderClass = () => {
     if (isSelected && hasPendingChange) {
-      // Seleccionado con cambio pendiente - borde coral con ring
       return 'border-tis-coral bg-white shadow-lg ring-2 ring-tis-coral/20';
     }
     if (isCurrent && !hasPendingChange) {
-      // Es el actual y no hay cambio pendiente - borde verde
       return 'border-tis-green/50 bg-tis-green/5';
     }
     if (isCurrent && hasPendingChange) {
-      // Es el actual pero hay otro seleccionado - borde verde sutil
       return 'border-tis-green/30 bg-white';
     }
-    // No seleccionado, no actual
     return 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md';
   };
 
+  const handleExpandClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleExpand();
+  };
+
   return (
-    <motion.button
-      type="button"
-      onClick={onSelect}
-      disabled={disabled}
-      className={`
-        relative w-full text-left rounded-xl border-2
-        transition-all duration-300 group
-        ${compact ? 'p-3' : 'p-4'}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-        ${getBorderClass()}
-      `}
-      whileHover={!disabled ? { y: -2 } : undefined}
-      whileTap={!disabled ? { scale: 0.98 } : undefined}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        {/* Icon */}
-        <div
+    <div className="flex flex-col">
+      {/* Main Card */}
+      <motion.button
+        type="button"
+        onClick={onSelect}
+        disabled={disabled}
+        className={`
+          relative w-full text-left rounded-xl border-2
+          transition-all duration-300 group
+          ${compact ? 'p-3' : 'p-4'}
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+          ${getBorderClass()}
+          ${isExpanded ? 'rounded-b-none border-b-0' : ''}
+        `}
+        whileHover={!disabled ? { y: -2 } : undefined}
+        whileTap={!disabled ? { scale: 0.98 } : undefined}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div
+            className={`
+              ${compact ? 'w-9 h-9' : 'w-10 h-10'} rounded-lg flex items-center justify-center text-white
+              bg-gradient-to-br ${gradientClass}
+              shadow-md
+            `}
+          >
+            {getIconForType(type.iconName)}
+          </div>
+
+          <div className="flex flex-col gap-1 items-end">
+            {type.isRecommended && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-amber-700 bg-amber-100 rounded-full">
+                <SparklesIcon className="w-3 h-3" />
+                Recomendado
+              </span>
+            )}
+            {isCurrent && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-tis-green bg-tis-green/10 rounded-full">
+                <CheckIcon className="w-3 h-3" />
+                Actual
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Title & Description */}
+        <h4 className={`font-bold text-slate-900 ${compact ? 'text-sm' : 'text-base'}`}>
+          {type.displayName}
+        </h4>
+        <p className={`text-slate-500 mt-0.5 line-clamp-2 ${compact ? 'text-xs' : 'text-sm'}`}>
+          {type.description}
+        </p>
+
+        {/* Features list */}
+        {showFeatures && !compact && type.features.length > 0 && (
+          <ul className="mt-3 space-y-1.5">
+            {type.features.slice(0, 4).map((feature, index) => (
+              <li key={index} className="flex items-start gap-2 text-xs">
+                <CheckIcon
+                  className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
+                    isSelected ? 'text-tis-coral' : 'text-tis-green'
+                  }`}
+                />
+                <span className="text-slate-600">{feature}</span>
+              </li>
+            ))}
+            {type.features.length > 4 && (
+              <li className="text-xs text-slate-400 pl-5">
+                +{type.features.length - 4} más...
+              </li>
+            )}
+          </ul>
+        )}
+
+        {/* Selection indicator */}
+        <AnimatePresence>
+          {isSelected && hasPendingChange && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              className="absolute top-2 right-2 w-5 h-5 rounded-full bg-tis-coral flex items-center justify-center"
+            >
+              <CheckIcon className="w-3 h-3 text-white" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Footer with stats and expand button */}
+        <div className={`mt-3 pt-2 border-t border-slate-100 flex items-center justify-between`}>
+          <div className="flex items-center gap-3 text-xs text-slate-400">
+            <span className="capitalize">{type.level}</span>
+            <span>{type.maxCallDurationSeconds / 60} min</span>
+          </div>
+
+          {/* Capabilities/Tools count badges */}
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 bg-slate-100 rounded">
+              <Zap className="w-3 h-3" />
+              {capabilities.length}
+            </span>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 bg-slate-100 rounded">
+              <Wrench className="w-3 h-3" />
+              {tools.length}
+            </span>
+          </div>
+        </div>
+      </motion.button>
+
+      {/* Expand/Collapse Button */}
+      {showCapabilitiesExpander && !compact && (
+        <button
+          type="button"
+          onClick={handleExpandClick}
           className={`
-            ${compact ? 'w-9 h-9' : 'w-10 h-10'} rounded-lg flex items-center justify-center text-white
-            bg-gradient-to-br ${gradientClass}
-            shadow-md
+            w-full flex items-center justify-center gap-2 py-2 text-xs font-medium
+            transition-all duration-200
+            ${isExpanded
+              ? 'bg-slate-100 text-slate-700 rounded-b-xl border-2 border-t-0 border-slate-200'
+              : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded-b-xl border-2 border-t-0 border-slate-200'
+            }
           `}
         >
-          {getIconForType(type.iconName)}
-        </div>
-
-        {/* Badges */}
-        <div className="flex flex-col gap-1 items-end">
-          {type.isRecommended && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-amber-700 bg-amber-100 rounded-full">
-              <SparklesIcon className="w-3 h-3" />
-              Recomendado
-            </span>
+          {isExpanded ? (
+            <>
+              <ChevronUp className="w-4 h-4" />
+              Ocultar capacidades
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-4 h-4" />
+              Ver capacidades ({capabilities.length})
+            </>
           )}
-          {isCurrent && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-tis-green bg-tis-green/10 rounded-full">
-              <CheckIcon className="w-3 h-3" />
-              Actual
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Title & Description */}
-      <h4 className={`font-bold text-slate-900 ${compact ? 'text-sm' : 'text-base'}`}>
-        {type.displayName}
-      </h4>
-      <p className={`text-slate-500 mt-0.5 line-clamp-2 ${compact ? 'text-xs' : 'text-sm'}`}>
-        {type.description}
-      </p>
-
-      {/* Features list (only if not compact and showFeatures is true) */}
-      {showFeatures && !compact && type.features.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
-          {type.features.slice(0, 4).map((feature, index) => (
-            <li key={index} className="flex items-start gap-2 text-xs">
-              <CheckIcon
-                className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
-                  isSelected ? 'text-tis-coral' : 'text-tis-green'
-                }`}
-              />
-              <span className="text-slate-600">{feature}</span>
-            </li>
-          ))}
-          {type.features.length > 4 && (
-            <li className="text-xs text-slate-400 pl-5">
-              +{type.features.length - 4} más...
-            </li>
-          )}
-        </ul>
+        </button>
       )}
 
-      {/* Selection indicator - solo si está seleccionado Y hay cambio pendiente */}
+      {/* Expandable Capabilities Panel */}
       <AnimatePresence>
-        {isSelected && hasPendingChange && (
+        {isExpanded && !compact && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            className="absolute top-2 right-2 w-5 h-5 rounded-full bg-tis-coral flex items-center justify-center"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="overflow-hidden"
           >
-            <CheckIcon className="w-3 h-3 text-white" />
+            <div className="p-4 bg-slate-50 border-2 border-t-0 border-slate-200 rounded-b-xl">
+              {/* Capabilities Section */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-4 h-4 text-tis-coral" />
+                  <span className="text-sm font-semibold text-slate-700">
+                    Capacidades ({capabilities.length})
+                  </span>
+                </div>
+                <CapabilitiesGrid
+                  vertical={vertical}
+                  includedCapabilities={capabilities}
+                  showCategories={true}
+                  compact={true}
+                />
+              </div>
+
+              {/* Tools Section */}
+              <div className="pt-3 border-t border-slate-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wrench className="w-4 h-4 text-violet-500" />
+                  <span className="text-sm font-semibold text-slate-700">
+                    Herramientas ({tools.length})
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {tools.map((tool) => (
+                    <span
+                      key={tool}
+                      className="inline-flex items-center px-2 py-1 text-[11px] font-mono text-slate-600 bg-white border border-slate-200 rounded"
+                    >
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Level indicator */}
-      <div className={`mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs`}>
-        <span className="text-slate-400 capitalize">{type.level}</span>
-        <span className="text-slate-400">{type.maxCallDurationSeconds / 60} min máx</span>
-      </div>
-    </motion.button>
+    </div>
   );
 }
 
@@ -242,7 +365,11 @@ export function AssistantTypeSelector({
   disabled = false,
   compact = false,
   showFeatures = true,
+  showCapabilitiesExpander = true,
 }: AssistantTypeSelectorProps) {
+  // State for expanded panel
+  const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null);
+
   // Get available types for this vertical
   const assistantTypes = useMemo(() => {
     return getActiveTypesForVertical(vertical);
@@ -254,18 +381,20 @@ export function AssistantTypeSelector({
   // El tipo visualmente "seleccionado" es el pendiente si existe, sino el actual
   const visuallySelectedTypeId = hasPendingChange ? pendingTypeId : currentTypeId;
 
-  const handleSelectType = (typeId: string) => {
+  const handleSelectType = useCallback((typeId: string) => {
     if (disabled) return;
-    // No hacer nada si selecciona el mismo que ya está seleccionado
     if (typeId === visuallySelectedTypeId) return;
-    // Notificar al padre del cambio
     onTypeChange(typeId);
-  };
+  }, [disabled, visuallySelectedTypeId, onTypeChange]);
+
+  const handleToggleExpand = useCallback((typeId: string) => {
+    setExpandedTypeId((prev) => (prev === typeId ? null : typeId));
+  }, []);
 
   return (
     <div className="space-y-4">
       {/* Type cards grid */}
-      <div className={`grid gap-3 ${compact ? 'grid-cols-3' : 'md:grid-cols-3'}`}>
+      <div className={`grid gap-4 ${compact ? 'grid-cols-3' : 'md:grid-cols-3'}`}>
         {assistantTypes.map((type) => (
           <TypeCard
             key={type.id}
@@ -277,9 +406,27 @@ export function AssistantTypeSelector({
             disabled={disabled}
             compact={compact}
             showFeatures={showFeatures}
+            showCapabilitiesExpander={showCapabilitiesExpander}
+            isExpanded={expandedTypeId === type.id}
+            onToggleExpand={() => handleToggleExpand(type.id)}
+            vertical={vertical}
           />
         ))}
       </div>
+
+      {/* Legend */}
+      {!compact && (
+        <div className="flex items-center justify-center gap-4 pt-2 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-tis-coral" />
+            <span>Capacidades</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Wrench className="w-3.5 h-3.5 text-violet-500" />
+            <span>Herramientas</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

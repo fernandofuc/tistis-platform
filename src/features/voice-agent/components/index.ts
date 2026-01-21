@@ -19,5 +19,10 @@ export { VoiceAgentWizard } from './VoiceAgentWizard';
 export { CallDetailModal } from './CallDetailModal';
 export { AssistantTypeSelector } from './AssistantTypeSelector';
 
+// Capability Components
+export { CapabilityBadge, CapabilityBadgeCompact } from './CapabilityBadge';
+export { CapabilitiesGrid, CapabilitiesComparison } from './CapabilitiesGrid';
+export { TypeComparisonModal } from './TypeComparisonModal';
+
 // Icons
 export * from './VoiceAgentIcons';
