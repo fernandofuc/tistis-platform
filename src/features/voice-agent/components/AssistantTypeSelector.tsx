@@ -4,9 +4,12 @@
 // TIS TIS PLATFORM - Assistant Type Selector
 // Componente para seleccionar/cambiar el tipo de asistente de voz
 // Basado en StepSelectType del wizard, adaptado para uso standalone
+//
+// DISEÑO: Componente "controlado" - el padre maneja el estado pendiente
+// El selector NO tiene estado interno, solo muestra lo que le pasan
 // =====================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckIcon,
@@ -14,7 +17,6 @@ import {
 } from './VoiceAgentIcons';
 import {
   getActiveTypesForVertical,
-  getAssistantTypeById,
 } from '@/lib/voice-agent/types/assistant-types';
 import type { AssistantType } from '@/lib/voice-agent/types';
 
@@ -66,7 +68,11 @@ function getIconForType(iconName?: string) {
 
 interface AssistantTypeSelectorProps {
   vertical: 'restaurant' | 'dental';
+  /** ID del tipo actualmente guardado en BD */
   currentTypeId: string | null;
+  /** ID del tipo pendiente de confirmación (para resaltar visualmente) */
+  pendingTypeId?: string | null;
+  /** Callback cuando el usuario selecciona un tipo diferente */
   onTypeChange: (typeId: string) => void;
   disabled?: boolean;
   compact?: boolean;
@@ -75,8 +81,12 @@ interface AssistantTypeSelectorProps {
 
 interface TypeCardProps {
   type: AssistantType;
+  /** Está seleccionado visualmente (pendiente o confirmado) */
   isSelected: boolean;
+  /** Es el tipo actualmente guardado en BD */
   isCurrent: boolean;
+  /** Hay un cambio pendiente de confirmación */
+  hasPendingChange: boolean;
   onSelect: () => void;
   disabled?: boolean;
   compact?: boolean;
@@ -91,6 +101,7 @@ function TypeCard({
   type,
   isSelected,
   isCurrent,
+  hasPendingChange,
   onSelect,
   disabled,
   compact,
@@ -104,6 +115,24 @@ function TypeCard({
 
   const gradientClass = gradientClasses[type.level] || gradientClasses.standard;
 
+  // Determinar el estilo del borde según el estado
+  const getBorderClass = () => {
+    if (isSelected && hasPendingChange) {
+      // Seleccionado con cambio pendiente - borde coral con ring
+      return 'border-tis-coral bg-white shadow-lg ring-2 ring-tis-coral/20';
+    }
+    if (isCurrent && !hasPendingChange) {
+      // Es el actual y no hay cambio pendiente - borde verde
+      return 'border-tis-green/50 bg-tis-green/5';
+    }
+    if (isCurrent && hasPendingChange) {
+      // Es el actual pero hay otro seleccionado - borde verde sutil
+      return 'border-tis-green/30 bg-white';
+    }
+    // No seleccionado, no actual
+    return 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md';
+  };
+
   return (
     <motion.button
       type="button"
@@ -114,12 +143,7 @@ function TypeCard({
         transition-all duration-300 group
         ${compact ? 'p-3' : 'p-4'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-        ${isSelected
-          ? 'border-tis-coral bg-white shadow-lg ring-2 ring-tis-coral/20'
-          : isCurrent
-            ? 'border-tis-green/50 bg-tis-green/5'
-            : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
-        }
+        ${getBorderClass()}
       `}
       whileHover={!disabled ? { y: -2 } : undefined}
       whileTap={!disabled ? { scale: 0.98 } : undefined}
@@ -145,7 +169,7 @@ function TypeCard({
               Recomendado
             </span>
           )}
-          {isCurrent && !isSelected && (
+          {isCurrent && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-tis-green bg-tis-green/10 rounded-full">
               <CheckIcon className="w-3 h-3" />
               Actual
@@ -183,9 +207,9 @@ function TypeCard({
         </ul>
       )}
 
-      {/* Selection indicator */}
+      {/* Selection indicator - solo si está seleccionado Y hay cambio pendiente */}
       <AnimatePresence>
-        {isSelected && (
+        {isSelected && hasPendingChange && (
           <motion.div
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -198,7 +222,7 @@ function TypeCard({
       </AnimatePresence>
 
       {/* Level indicator */}
-      <div className={`mt-3 pt-2 border-t border-slate-100 flex items-center justify-between ${compact ? 'text-xs' : 'text-xs'}`}>
+      <div className={`mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs`}>
         <span className="text-slate-400 capitalize">{type.level}</span>
         <span className="text-slate-400">{type.maxCallDurationSeconds / 60} min máx</span>
       </div>
@@ -213,38 +237,30 @@ function TypeCard({
 export function AssistantTypeSelector({
   vertical,
   currentTypeId,
+  pendingTypeId,
   onTypeChange,
   disabled = false,
   compact = false,
   showFeatures = true,
 }: AssistantTypeSelectorProps) {
-  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
-
   // Get available types for this vertical
   const assistantTypes = useMemo(() => {
     return getActiveTypesForVertical(vertical);
   }, [vertical]);
 
-  // Get current type info
-  const currentType = useMemo(() => {
-    return currentTypeId ? getAssistantTypeById(currentTypeId as any) : null;
-  }, [currentTypeId]);
+  // Determinar si hay un cambio pendiente
+  const hasPendingChange = pendingTypeId !== null && pendingTypeId !== undefined && pendingTypeId !== currentTypeId;
 
-  // Initialize selected with current
-  useEffect(() => {
-    if (currentTypeId && !selectedTypeId) {
-      setSelectedTypeId(currentTypeId);
-    }
-  }, [currentTypeId, selectedTypeId]);
+  // El tipo visualmente "seleccionado" es el pendiente si existe, sino el actual
+  const visuallySelectedTypeId = hasPendingChange ? pendingTypeId : currentTypeId;
 
   const handleSelectType = (typeId: string) => {
     if (disabled) return;
-    setSelectedTypeId(typeId);
+    // No hacer nada si selecciona el mismo que ya está seleccionado
+    if (typeId === visuallySelectedTypeId) return;
+    // Notificar al padre del cambio
     onTypeChange(typeId);
   };
-
-  // Check if selection has changed from current
-  const hasChanges = selectedTypeId !== currentTypeId;
 
   return (
     <div className="space-y-4">
@@ -254,8 +270,9 @@ export function AssistantTypeSelector({
           <TypeCard
             key={type.id}
             type={type}
-            isSelected={selectedTypeId === type.id}
+            isSelected={visuallySelectedTypeId === type.id}
             isCurrent={currentTypeId === type.id}
+            hasPendingChange={hasPendingChange}
             onSelect={() => handleSelectType(type.id)}
             disabled={disabled}
             compact={compact}
@@ -263,23 +280,6 @@ export function AssistantTypeSelector({
           />
         ))}
       </div>
-
-      {/* Change indicator */}
-      <AnimatePresence>
-        {hasChanges && selectedTypeId && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="p-3 bg-amber-50 border border-amber-200 rounded-xl"
-          >
-            <p className="text-sm text-amber-700">
-              <strong>Nota:</strong> Al cambiar el tipo de asistente, el prompt se regenerará automáticamente
-              con las nuevas capacidades de &quot;{getAssistantTypeById(selectedTypeId as any)?.displayName}&quot;.
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

@@ -78,6 +78,7 @@ import { getDateRangeDates } from '@/components/voice-agent/dashboard/types';
 
 import { useTenant } from '@/src/hooks/useTenant';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
+import { getAssistantTypeById } from '@/lib/voice-agent/types/assistant-types';
 
 // ======================
 // TYPES
@@ -429,15 +430,28 @@ function VoicePersonalityTab({
 
   const confirmTypeChange = async () => {
     if (!pendingTypeId) return;
-    await onSave({ assistant_type_id: pendingTypeId });
+    const success = await onSave({ assistant_type_id: pendingTypeId });
+    if (success) {
+      setShowTypeChangeWarning(false);
+      setPendingTypeId(null);
+    }
+  };
+
+  const cancelTypeChange = () => {
     setShowTypeChangeWarning(false);
     setPendingTypeId(null);
   };
 
-  const selectedVoice = AVAILABLE_VOICES.find(v => v.id === formData.voice_id);
-
   // Determine the effective vertical for the selector (only restaurant and dental are supported)
   const effectiveVertical = vertical === 'restaurant' || vertical === 'dental' ? vertical : 'restaurant';
+
+  // Get type info for modal display
+  const currentTypeInfo = config.assistant_type_id
+    ? getAssistantTypeById(config.assistant_type_id as any)
+    : null;
+  const pendingTypeInfo = pendingTypeId
+    ? getAssistantTypeById(pendingTypeId as any)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -456,6 +470,7 @@ function VoicePersonalityTab({
         <AssistantTypeSelector
           vertical={effectiveVertical}
           currentTypeId={config.assistant_type_id}
+          pendingTypeId={pendingTypeId}
           onTypeChange={handleTypeChange}
           disabled={saving}
           compact={true}
@@ -465,13 +480,13 @@ function VoicePersonalityTab({
 
       {/* Type Change Warning Modal */}
       <AnimatePresence>
-        {showTypeChangeWarning && (
+        {showTypeChangeWarning && pendingTypeInfo && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={() => setShowTypeChangeWarning(false)}
+            onClick={cancelTypeChange}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -489,9 +504,22 @@ function VoicePersonalityTab({
                 </div>
               </div>
 
+              {/* Type change info */}
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl mb-4">
+                <div className="flex-1">
+                  <p className="text-xs text-slate-500 mb-1">Tipo actual</p>
+                  <p className="font-medium text-slate-700">{currentTypeInfo?.displayName || 'Sin configurar'}</p>
+                </div>
+                <ChevronRightIcon className="w-5 h-5 text-slate-400" />
+                <div className="flex-1">
+                  <p className="text-xs text-slate-500 mb-1">Nuevo tipo</p>
+                  <p className="font-medium text-tis-coral">{pendingTypeInfo.displayName}</p>
+                </div>
+              </div>
+
               <p className="text-sm text-slate-600 mb-4">
-                Al cambiar el tipo de asistente, las capacidades y herramientas disponibles se actualizarán.
-                El prompt se regenerará automáticamente para reflejar los nuevos cambios.
+                Al cambiar a <strong>{pendingTypeInfo.displayName}</strong>, las capacidades y herramientas disponibles se actualizarán.
+                El prompt se regenerará automáticamente.
               </p>
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4">
@@ -502,7 +530,7 @@ function VoicePersonalityTab({
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowTypeChangeWarning(false)}
+                  onClick={cancelTypeChange}
                   className="flex-1 px-4 py-2.5 min-h-[44px] text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors"
                 >
                   Cancelar

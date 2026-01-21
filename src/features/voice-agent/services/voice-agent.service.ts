@@ -248,11 +248,20 @@ export async function updateVoiceConfig(
   const v2Updates: Record<string, unknown> = {};
 
   // Tipo de asistente - si cambia, invalidar prompt para regeneración
+  // y actualizar max_call_duration_seconds según el tipo
   if (updates.assistant_type_id !== undefined) {
     v2Updates.assistant_type_id = updates.assistant_type_id;
     // Invalidar prompt para que se regenere con el nuevo tipo
     v2Updates.compiled_prompt = null;
     v2Updates.compiled_prompt_at = null;
+
+    // Actualizar max_call_duration según el tipo de asistente
+    // basic = 300s (5min), standard = 420s (7min), complete = 600s (10min)
+    const typeLevel = updates.assistant_type_id.includes('basic') ? 'basic'
+      : updates.assistant_type_id.includes('complete') ? 'complete'
+      : 'standard';
+    const durationByLevel = { basic: 300, standard: 420, complete: 600 };
+    v2Updates.max_call_duration_seconds = durationByLevel[typeLevel];
   }
 
   if (updates.assistant_name !== undefined) v2Updates.assistant_name = updates.assistant_name;
