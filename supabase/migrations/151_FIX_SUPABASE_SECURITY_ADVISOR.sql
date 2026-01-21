@@ -109,7 +109,8 @@ CREATE POLICY "langgraph_checkpoints_service_only" ON public.langgraph_checkpoin
   );
 
 -- 5. channel_rate_limits
--- Rate limits should be accessible by tenant users
+-- Rate limits accessible by tenant users through channel_connections relationship
+-- Note: This table has channel_connection_id, not direct tenant_id
 ALTER TABLE IF EXISTS public.channel_rate_limits ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "channel_rate_limits_tenant_isolation" ON public.channel_rate_limits;
@@ -118,9 +119,13 @@ CREATE POLICY "channel_rate_limits_tenant_isolation" ON public.channel_rate_limi
   USING (
     current_setting('role', true) = 'service_role'
     OR current_setting('request.jwt.claims', true)::json->>'role' = 'service_role'
-    OR tenant_id IN (
-      SELECT tenant_id FROM public.user_roles
-      WHERE user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM public.channel_connections cc
+      WHERE cc.id = channel_rate_limits.channel_connection_id
+      AND cc.tenant_id IN (
+        SELECT tenant_id FROM public.user_roles
+        WHERE user_id = auth.uid()
+      )
     )
   );
 
