@@ -10,7 +10,6 @@ import { motion } from 'framer-motion';
 import {
   CheckCircleIcon,
   VolumeIcon,
-  FileTextIcon,
   BuildingIcon,
   PhoneIcon,
 } from './VoiceAgentIcons';
@@ -50,37 +49,31 @@ export function VoiceAgentSetupProgress({
   onStepClick,
 }: VoiceAgentSetupProgressProps) {
   // Calculate setup steps
+  // Nuevo orden: Conocimiento → Configuración → Número
+  // (Se eliminó el paso "Instrucciones" - ahora se genera automáticamente)
   const steps = useMemo((): SetupStep[] => {
     const voiceConfigured = !!(config?.voice_id && config?.assistant_name);
-    const instructionsConfigured = !!(config?.custom_instructions || config?.system_prompt);
     const phoneConfigured = phoneNumbers.some(p => p.status === 'active');
 
     return [
       {
-        id: 'voice',
-        label: 'Voz',
-        description: 'Elige la voz de tu asistente',
-        icon: <VolumeIcon className="w-4 h-4" />,
-        isComplete: voiceConfigured,
-      },
-      {
-        id: 'instructions',
-        label: 'Instrucciones',
-        description: 'Configura cómo responde',
-        icon: <FileTextIcon className="w-4 h-4" />,
-        isComplete: instructionsConfigured,
-      },
-      {
         id: 'knowledge',
         label: 'Conocimiento',
-        description: 'Tu negocio y servicios',
+        description: 'Información de tu negocio',
         icon: <BuildingIcon className="w-4 h-4" />,
         isComplete: hasKnowledge,
       },
       {
+        id: 'voice',
+        label: 'Configuración',
+        description: 'Voz y personalidad',
+        icon: <VolumeIcon className="w-4 h-4" />,
+        isComplete: voiceConfigured,
+      },
+      {
         id: 'phone',
         label: 'Número',
-        description: 'Asigna un número telefónico',
+        description: 'Asigna línea telefónica',
         icon: <PhoneIcon className="w-4 h-4" />,
         isComplete: phoneConfigured,
       },
@@ -157,7 +150,7 @@ export function VoiceAgentSetupProgress({
         </div>
 
         {/* Steps */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           {steps.map((step, index) => (
             <button
               key={step.id}

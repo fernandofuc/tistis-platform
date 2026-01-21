@@ -28,7 +28,7 @@ import {
   MEXICO_AREA_CODES,
 } from '@/src/features/voice-agent/types';
 import {
-  TalkToAssistant,
+  VoiceTestModal,
   BusinessKnowledgeSection,
   GuidedInstructionsSection,
   AdvancedSettingsSection,
@@ -61,7 +61,6 @@ import {
   SparklesIcon,
   BookIcon,
   BarChartIcon,
-  TestTubeIcon,
 } from '@/src/features/voice-agent/components';
 
 // Dashboard components
@@ -76,12 +75,6 @@ import type {
 } from '@/components/voice-agent/dashboard/types';
 import { getDateRangeDates } from '@/components/voice-agent/dashboard/types';
 
-// Testing components
-import { CallSimulator } from '@/components/voice-agent/testing/CallSimulator';
-import { ValidationChecklist } from '@/components/voice-agent/testing/ValidationChecklist';
-import type { ValidationItem } from '@/components/voice-agent/testing/ValidationChecklist';
-import { TestScenarios } from '@/components/voice-agent/testing/TestScenarios';
-import type { TestScenarioResult } from '@/components/voice-agent/testing/TestScenarios';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 
@@ -111,7 +104,6 @@ interface VoiceAgentResponse {
 }
 
 type TabType = 'voice' | 'knowledge' | 'phones' | 'history' | 'analytics';
-type AnalyticsSubTab = 'metrics' | 'testing';
 
 // ======================
 // BLOCKED STATE COMPONENT (Plan upgrade needed)
@@ -352,11 +344,11 @@ function TabBar({
   callCount: number;
 }) {
   const tabs: { id: TabType; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'voice', label: 'Voz', icon: <VolumeIcon className="w-4 h-4" /> },
+    { id: 'voice', label: 'Configuración', icon: <VolumeIcon className="w-4 h-4" /> },
     { id: 'knowledge', label: 'Conocimiento', icon: <BookIcon className="w-4 h-4" /> },
     { id: 'phones', label: 'Teléfonos', icon: <PhoneIcon className="w-4 h-4" />, badge: phoneCount },
-    { id: 'history', label: 'Historial', icon: <HistoryIcon className="w-4 h-4" />, badge: callCount },
-    { id: 'analytics', label: 'Análisis', icon: <BarChartIcon className="w-4 h-4" /> },
+    { id: 'history', label: 'Llamadas', icon: <HistoryIcon className="w-4 h-4" />, badge: callCount },
+    { id: 'analytics', label: 'Métricas', icon: <BarChartIcon className="w-4 h-4" /> },
   ];
 
   return (
@@ -427,7 +419,25 @@ function VoicePersonalityTab({
   const selectedVoice = AVAILABLE_VOICES.find(v => v.id === formData.voice_id);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div className="space-y-6">
+      {/* Smart Prompt Banner */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 rounded-2xl p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <SparklesIcon className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-blue-900">Prompt Inteligente</h4>
+            <p className="text-sm text-blue-700 mt-1 leading-relaxed">
+              El prompt de tu asistente se genera automáticamente usando la información
+              de tu negocio en la pestaña de <strong>Conocimiento</strong> y la configuración
+              de personalidad aquí. No necesitas escribir instrucciones manualmente.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* Left Column: Voice Selection */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -608,6 +618,7 @@ function VoicePersonalityTab({
           onSave={() => {}}
           saving={saving}
         />
+      </div>
       </div>
     </div>
   );
@@ -1138,49 +1149,10 @@ function CallHistoryTab({
 }
 
 // ======================
-// ANALYTICS TAB - Combines Metrics and Testing
+// ANALYTICS TAB - Metrics Dashboard
 // ======================
 
-function AnalyticsSubTabs({
-  activeSubTab,
-  onSubTabChange,
-}: {
-  activeSubTab: AnalyticsSubTab;
-  onSubTabChange: (tab: AnalyticsSubTab) => void;
-}) {
-  const subTabs: { id: AnalyticsSubTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'metrics', label: 'Métricas', icon: <BarChartIcon className="w-4 h-4" /> },
-    { id: 'testing', label: 'Testing', icon: <TestTubeIcon className="w-4 h-4" /> },
-  ];
-
-  return (
-    <div className="flex items-center gap-2 mb-6" role="tablist" aria-label="Secciones de análisis">
-      {subTabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          role="tab"
-          aria-selected={activeSubTab === tab.id}
-          onClick={() => onSubTabChange(tab.id)}
-          className={`px-4 py-2.5 min-h-[44px] rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
-            activeSubTab === tab.id
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          {tab.icon}
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function AnalyticsTab({
-  config,
-  phoneNumbers,
-  vertical,
-  // Metrics props
   metricsData,
   metricsDateRange,
   metricsPagination,
@@ -1190,10 +1162,6 @@ function AnalyticsTab({
   onPageChange,
   onRefreshMetrics,
 }: {
-  config: VoiceAgentConfig;
-  phoneNumbers: VoicePhoneNumber[];
-  vertical: 'dental' | 'restaurant' | 'medical' | 'general';
-  // Metrics props
   metricsData: {
     metrics: DashboardMetrics | null;
     callsByDay: CallsByDay[];
@@ -1208,156 +1176,23 @@ function AnalyticsTab({
   onPageChange: (page: number) => void;
   onRefreshMetrics: () => void;
 }) {
-  const [activeSubTab, setActiveSubTab] = useState<AnalyticsSubTab>('metrics');
-  const [validations, setValidations] = useState<ValidationItem[]>([]);
-  const [isValidating, setIsValidating] = useState(false);
-
-  // Create validations based on config
-  useEffect(() => {
-    const items: ValidationItem[] = [
-      {
-        id: 'voice-configured',
-        title: 'Voz configurada',
-        description: 'Una voz ha sido seleccionada para el asistente',
-        status: config.voice_id ? 'passed' : 'failed',
-        message: config.voice_id ? undefined : 'Selecciona una voz en la pestaña de Voz',
-        icon: null,
-      },
-      {
-        id: 'first-message',
-        title: 'Mensaje inicial',
-        description: 'El mensaje de saludo está configurado',
-        status: config.first_message ? 'passed' : 'failed',
-        message: config.first_message ? undefined : 'Configura un mensaje de bienvenida',
-        icon: null,
-      },
-      {
-        id: 'assistant-name',
-        title: 'Nombre del asistente',
-        description: 'El asistente tiene un nombre configurado',
-        status: config.assistant_name ? 'passed' : 'warning',
-        message: config.assistant_name ? undefined : 'Se recomienda configurar un nombre',
-        icon: null,
-      },
-      {
-        id: 'phone-number',
-        title: 'Número telefónico',
-        description: 'Al menos un número activo asignado',
-        status: phoneNumbers.some(p => p.status === 'active') ? 'passed' : 'failed',
-        message: phoneNumbers.some(p => p.status === 'active') ? undefined : 'Solicita un número en la pestaña de Teléfonos',
-        icon: null,
-      },
-      {
-        id: 'voice-enabled',
-        title: 'Asistente activado',
-        description: 'El asistente está listo para recibir llamadas',
-        status: config.voice_enabled ? 'passed' : 'warning',
-        message: config.voice_enabled ? undefined : 'Activa el asistente cuando esté listo',
-        icon: null,
-      },
-    ];
-    setValidations(items);
-  }, [config, phoneNumbers]);
-
-  const passedCount = validations.filter(v => v.status === 'passed').length;
-  const progress = validations.length > 0 ? (passedCount / validations.length) * 100 : 0;
-
-  const handleValidate = () => {
-    setIsValidating(true);
-    setTimeout(() => setIsValidating(false), 1000);
-  };
-
-  // Simulated handlers for testing components
-  const handleSendMessage = async (): Promise<string> => {
-    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
-    const responses = [
-      'Entiendo, déjeme verificar eso por usted.',
-      '¡Por supuesto! ¿En qué horario le gustaría agendar?',
-      'Permítame un momento para revisar la disponibilidad.',
-      'Gracias por su preferencia. ¿Hay algo más en lo que pueda ayudarle?',
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
-
-  const handleRunScenario = async (scenario: { id: string; expectedIntent?: string }): Promise<TestScenarioResult> => {
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-    return {
-      scenarioId: scenario.id,
-      passed: Math.random() > 0.2,
-      response: 'Respuesta simulada del escenario de prueba',
-      latencyMs: 200 + Math.floor(Math.random() * 300),
-      detectedIntent: scenario.expectedIntent || 'intent_detected',
-      timestamp: new Date(),
-    };
-  };
-
   return (
     <div>
-      {/* Sub-navigation */}
-      <AnalyticsSubTabs
-        activeSubTab={activeSubTab}
-        onSubTabChange={setActiveSubTab}
+      <MetricsDashboard
+        metrics={metricsData.metrics}
+        callsByDay={metricsData.callsByDay}
+        latencyByDay={metricsData.latencyByDay}
+        outcomeDistribution={metricsData.outcomeDistribution}
+        recentCalls={recentCalls}
+        pagination={metricsPagination}
+        dateRange={metricsDateRange}
+        isLoading={metricsLoading}
+        showRealtime={false}
+        showHeader={false}
+        onDateRangeChange={onDateRangeChange}
+        onPageChange={onPageChange}
+        onRefresh={onRefreshMetrics}
       />
-
-      {/* Content */}
-      <AnimatePresence mode="wait">
-        {activeSubTab === 'metrics' && (
-          <motion.div
-            key="metrics-content"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <MetricsDashboard
-              metrics={metricsData.metrics}
-              callsByDay={metricsData.callsByDay}
-              latencyByDay={metricsData.latencyByDay}
-              outcomeDistribution={metricsData.outcomeDistribution}
-              recentCalls={recentCalls}
-              pagination={metricsPagination}
-              dateRange={metricsDateRange}
-              isLoading={metricsLoading}
-              showRealtime={false}
-              showHeader={false}
-              onDateRangeChange={onDateRangeChange}
-              onPageChange={onPageChange}
-              onRefresh={onRefreshMetrics}
-            />
-          </motion.div>
-        )}
-
-        {activeSubTab === 'testing' && (
-          <motion.div
-            key="testing-content"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="space-y-6"
-          >
-            {/* Validation Checklist */}
-            <ValidationChecklist
-              validations={validations}
-              progress={progress}
-              isValidating={isValidating}
-              onValidate={handleValidate}
-            />
-
-            {/* Test Scenarios */}
-            <TestScenarios
-              vertical={vertical === 'dental' || vertical === 'restaurant' ? vertical : 'dental'}
-              onRunScenario={handleRunScenario}
-              isRunning={false}
-            />
-
-            {/* Call Simulator */}
-            <CallSimulator
-              assistantName={config.assistant_name || 'Asistente'}
-              firstMessage={config.first_message || 'Hola, ¿en qué puedo ayudarte?'}
-              onSendMessage={handleSendMessage}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -1769,12 +1604,16 @@ export default function AIAgentVozPage() {
           <VoiceAgentSetupProgress
             config={config}
             phoneNumbers={phoneNumbers}
+            // TODO: Con arquitectura híbrida, hasKnowledge debería verificar
+            // si hay entries en business_knowledge table, no custom_instructions.
+            // Deuda técnica: implementar endpoint para verificar knowledge entries.
             hasKnowledge={!!(config.custom_instructions || config.system_prompt)}
             variant="horizontal"
             onStepClick={(stepId) => {
               // Navegar al tab correspondiente
+              // Mapeo: knowledge → knowledge, voice → voice, phone → phones
+              if (stepId === 'knowledge') setActiveTab('knowledge');
               if (stepId === 'voice') setActiveTab('voice');
-              if (stepId === 'instructions' || stepId === 'knowledge') setActiveTab('knowledge');
               if (stepId === 'phone') setActiveTab('phones');
             }}
           />
@@ -1866,9 +1705,6 @@ export default function AIAgentVozPage() {
               exit={{ opacity: 0, y: -10 }}
             >
               <AnalyticsTab
-                config={config}
-                phoneNumbers={phoneNumbers}
-                vertical={vertical}
                 metricsData={metricsData}
                 metricsDateRange={metricsDateRange}
                 metricsPagination={metricsPagination}
@@ -1882,12 +1718,11 @@ export default function AIAgentVozPage() {
           )}
         </AnimatePresence>
 
-        {/* Talk to Assistant Modal */}
-        <TalkToAssistant
+        {/* Voice Test Modal */}
+        <VoiceTestModal
           isOpen={showTalkToAssistant}
           onClose={() => setShowTalkToAssistant(false)}
           config={config}
-          accessToken={accessToken}
         />
 
         {/* Setup Wizard for new users */}

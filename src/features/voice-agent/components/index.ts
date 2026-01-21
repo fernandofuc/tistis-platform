@@ -4,6 +4,7 @@
 
 // Configuration Sections
 export { TalkToAssistant } from './TalkToAssistant';
+export { VoiceTestModal } from './VoiceTestModal';
 export { BusinessKnowledgeSection } from './BusinessKnowledgeSection';
 export { CustomInstructionsSection } from './CustomInstructionsSection';
 export { GuidedInstructionsSection } from './GuidedInstructionsSection';
