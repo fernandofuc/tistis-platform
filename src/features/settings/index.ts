@@ -11,6 +11,8 @@ export { BranchManagement } from './components/BranchManagement';
 export { SecuritySection } from './components/SecuritySection';
 export { PaymentsSection } from './components/PaymentsSection';
 export { BillingSection } from './components/BillingSection';
+export { MenuCatalogConfig } from './components/MenuCatalogConfig';
+export { ServiceCatalogConfig } from './components/ServiceCatalogConfig';
 
 // Hooks
 export { useChannels, useChannelAIConfig, useChannel } from './hooks/useChannels';
