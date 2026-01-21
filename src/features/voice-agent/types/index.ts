@@ -23,6 +23,9 @@ export interface VoiceAgentConfig {
   voice_enabled: boolean;
   voice_status: VoiceStatus;
 
+  // Tipo de Asistente (determina capacidades y tools disponibles)
+  assistant_type_id: string | null;
+
   // Asistente
   assistant_name: string;
   assistant_personality: VoicePersonality;
@@ -94,6 +97,8 @@ export interface VoiceAgentConfig {
 }
 
 export interface VoiceAgentConfigInput {
+  // Tipo de asistente (cambia capacidades y regenera prompt)
+  assistant_type_id?: string;
   assistant_name?: string;
   assistant_personality?: VoicePersonality;
   first_message?: string;

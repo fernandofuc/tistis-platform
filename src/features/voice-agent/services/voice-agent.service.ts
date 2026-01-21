@@ -152,6 +152,9 @@ function mapV2ConfigToLegacy(v2Config: Record<string, unknown>): VoiceAgentConfi
     voice_enabled: (v2Config.is_active as boolean) ?? false,
     voice_status: (v2Config.status as VoiceStatus) || 'inactive',
 
+    // Tipo de Asistente
+    assistant_type_id: (v2Config.assistant_type_id as string) || null,
+
     // Asistente
     assistant_name: (v2Config.assistant_name as string) || 'Asistente',
     assistant_personality: (v2Config.personality_type as VoicePersonality) || 'professional_friendly',
@@ -243,6 +246,14 @@ export async function updateVoiceConfig(
   // Mapear campos de VoiceAgentConfigInput a campos v2 (voice_assistant_configs)
   // Solo usamos campos que existen en el tipo VoiceAgentConfigInput
   const v2Updates: Record<string, unknown> = {};
+
+  // Tipo de asistente - si cambia, invalidar prompt para regeneración
+  if (updates.assistant_type_id !== undefined) {
+    v2Updates.assistant_type_id = updates.assistant_type_id;
+    // Invalidar prompt para que se regenere con el nuevo tipo
+    v2Updates.compiled_prompt = null;
+    v2Updates.compiled_prompt_at = null;
+  }
 
   if (updates.assistant_name !== undefined) v2Updates.assistant_name = updates.assistant_name;
   if (updates.assistant_personality !== undefined) v2Updates.personality_type = updates.assistant_personality;

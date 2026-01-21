@@ -37,6 +37,7 @@ import {
   VoiceAgentSetupProgress,
   VoiceAgentWizard,
   CallDetailModal,
+  AssistantTypeSelector,
   // Centralized icons
   PhoneIcon,
   PhoneCallIcon,
@@ -389,11 +390,13 @@ function VoicePersonalityTab({
   onSave,
   saving,
   accessToken,
+  vertical,
 }: {
   config: VoiceAgentConfig;
   onSave: (updates: Partial<VoiceAgentConfig>) => Promise<boolean>;
   saving: boolean;
   accessToken: string;
+  vertical: 'dental' | 'restaurant' | 'medical' | 'general';
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -401,6 +404,8 @@ function VoicePersonalityTab({
     first_message: config.first_message,
     voice_id: config.voice_id,
   });
+  const [showTypeChangeWarning, setShowTypeChangeWarning] = useState(false);
+  const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
 
   // Sync with config
   useEffect(() => {
@@ -416,10 +421,105 @@ function VoicePersonalityTab({
     if (success) setIsEditing(false);
   };
 
+  const handleTypeChange = (typeId: string) => {
+    if (typeId === config.assistant_type_id) return;
+    setPendingTypeId(typeId);
+    setShowTypeChangeWarning(true);
+  };
+
+  const confirmTypeChange = async () => {
+    if (!pendingTypeId) return;
+    await onSave({ assistant_type_id: pendingTypeId });
+    setShowTypeChangeWarning(false);
+    setPendingTypeId(null);
+  };
+
   const selectedVoice = AVAILABLE_VOICES.find(v => v.id === formData.voice_id);
+
+  // Determine the effective vertical for the selector (only restaurant and dental are supported)
+  const effectiveVertical = vertical === 'restaurant' || vertical === 'dental' ? vertical : 'restaurant';
 
   return (
     <div className="space-y-6">
+      {/* Assistant Type Selector */}
+      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-tis-purple to-indigo-600 flex items-center justify-center">
+            <SparklesIcon className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-900">Tipo de Asistente</h3>
+            <p className="text-xs text-slate-500">Define las capacidades y herramientas de tu asistente</p>
+          </div>
+        </div>
+
+        <AssistantTypeSelector
+          vertical={effectiveVertical}
+          currentTypeId={config.assistant_type_id}
+          onTypeChange={handleTypeChange}
+          disabled={saving}
+          compact={true}
+          showFeatures={false}
+        />
+      </div>
+
+      {/* Type Change Warning Modal */}
+      <AnimatePresence>
+        {showTypeChangeWarning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowTypeChangeWarning(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                  <AlertIcon className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">¿Cambiar tipo de asistente?</h3>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-600 mb-4">
+                Al cambiar el tipo de asistente, las capacidades y herramientas disponibles se actualizarán.
+                El prompt se regenerará automáticamente para reflejar los nuevos cambios.
+              </p>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+                <p className="text-sm text-amber-700">
+                  <strong>Nota:</strong> Si el asistente está activo, la configuración de VAPI se actualizará automáticamente.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowTypeChangeWarning(false)}
+                  className="flex-1 px-4 py-2.5 min-h-[44px] text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmTypeChange}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2.5 min-h-[44px] text-white bg-tis-coral hover:bg-tis-coral/90 rounded-xl font-medium transition-colors disabled:opacity-50"
+                >
+                  {saving ? 'Guardando...' : 'Confirmar cambio'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Smart Prompt Banner */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 rounded-2xl p-5">
         <div className="flex items-start gap-4">
@@ -1641,6 +1741,7 @@ export default function AIAgentVozPage() {
                 onSave={handleSaveConfig}
                 saving={saving}
                 accessToken={accessToken}
+                vertical={vertical}
               />
             </motion.div>
           )}

@@ -17,6 +17,7 @@ export { VoicePreviewCard } from './VoicePreviewCard';
 export { VoiceAgentSetupProgress } from './VoiceAgentSetupProgress';
 export { VoiceAgentWizard } from './VoiceAgentWizard';
 export { CallDetailModal } from './CallDetailModal';
+export { AssistantTypeSelector } from './AssistantTypeSelector';
 
 // Icons
 export * from './VoiceAgentIcons';
