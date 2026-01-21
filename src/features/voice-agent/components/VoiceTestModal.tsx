@@ -4,6 +4,7 @@
 // TIS TIS PLATFORM - Voice Test Modal Component
 // Modal premium para probar el asistente de voz
 // Combina UI de TalkToAssistant + funcionalidad de CallSimulator
+// FASE 4: UI Final con componentes mejorados
 // =====================================================
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -25,8 +26,16 @@ import {
   MessageSquare,
   Zap,
   Send,
+  PhoneCall,
+  MessageCircle,
 } from 'lucide-react';
 import type { VoiceAgentConfig } from '../types';
+import { useVapiWebClient, type VapiCallStatus, type VapiTranscript } from '../hooks/useVapiWebClient';
+import { useMicrophonePermission } from '../hooks/useMicrophonePermission';
+import { StatusIndicator } from './StatusIndicator';
+import { AudioVisualizer } from './AudioVisualizer';
+import { MicrophonePermissionBanner } from './MicrophonePermissionBanner';
+import { CallSummary } from './CallSummary';
 
 // ======================
 // TYPES
@@ -36,7 +45,37 @@ interface VoiceTestModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: VoiceAgentConfig;
-  onSendMessage?: (message: string) => Promise<string>;
+  /** Vertical del tenant para adaptar quick responses y fallbacks */
+  vertical: 'restaurant' | 'dental';
+  /** Token de acceso para autenticación con el API */
+  accessToken: string;
+  /** Modo de prueba inicial: 'text' = chat, 'call' = VAPI Web */
+  initialMode?: 'text' | 'call';
+}
+
+/** Respuesta del API /api/voice-agent/test/assistant */
+interface AssistantApiResponse {
+  success: boolean;
+  assistantId?: string;
+  assistantName?: string;
+  firstMessage?: string;
+  error?: string;
+}
+
+/** Respuesta del API /api/voice-agent/test */
+interface TestApiResponse {
+  success: boolean;
+  response?: string;
+  latencyMs: number;
+  toolsUsed?: string[];
+  ragContext?: string;
+  error?: string;
+}
+
+/** Configuración de Quick Responses */
+interface QuickResponseConfig {
+  text: string;
+  category?: 'greeting' | 'booking' | 'info' | 'farewell';
 }
 
 type CallState = 'idle' | 'connecting' | 'active' | 'ended' | 'error';
@@ -57,58 +96,69 @@ interface CallMetrics {
   maxLatency: number;
 }
 
-// ======================
-// ANIMATED WAVE COMPONENT
-// ======================
-
-function VoiceWave({ isActive }: { isActive: boolean }) {
-  return (
-    <div className="flex items-center justify-center gap-1 h-6">
-      {[...Array(5)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="w-1 rounded-full"
-          style={{ backgroundColor: 'rgb(223, 115, 115)' }}
-          animate={isActive ? {
-            height: [6, 20, 6],
-          } : {
-            height: 6,
-          }}
-          transition={{
-            duration: 0.5,
-            repeat: isActive ? Infinity : 0,
-            delay: i * 0.1,
-            ease: "easeInOut"
-          }}
-        />
-      ))}
-    </div>
-  );
-}
+// Note: VoiceWave has been replaced by AudioVisualizer component
 
 // ======================
-// QUICK RESPONSES
+// QUICK RESPONSES POR VERTICAL
 // ======================
 
-const QUICK_RESPONSES = [
-  'Hola',
-  'Quiero una cita',
-  '¿Cuál es el horario?',
-  '¿Cuáles son los precios?',
-  'Gracias',
-];
-
-// ======================
-// DEFAULT SIMULATED RESPONSES
-// ======================
-
-const DEFAULT_RESPONSES: Record<string, string> = {
-  'hola': '¡Hola! Bienvenido. ¿En qué puedo ayudarte hoy?',
-  'cita': 'Con gusto te ayudo a agendar una cita. ¿Qué día te gustaría venir?',
-  'precio': 'Los precios varían según el servicio. ¿Qué procedimiento te interesa conocer?',
-  'horario': 'Nuestro horario es de lunes a viernes de 9:00 a 18:00 y sábados de 9:00 a 14:00.',
-  'gracias': '¡De nada! ¿Hay algo más en lo que pueda ayudarte?',
+const QUICK_RESPONSES_BY_VERTICAL: Record<'restaurant' | 'dental', QuickResponseConfig[]> = {
+  restaurant: [
+    { text: 'Hola', category: 'greeting' },
+    { text: 'Quiero hacer una reservación', category: 'booking' },
+    { text: '¿Tienen mesas disponibles?', category: 'booking' },
+    { text: '¿Cuál es el menú?', category: 'info' },
+    { text: '¿Cuál es el horario?', category: 'info' },
+    { text: '¿Tienen servicio a domicilio?', category: 'info' },
+    { text: 'Gracias', category: 'farewell' },
+  ],
+  dental: [
+    { text: 'Hola', category: 'greeting' },
+    { text: 'Quiero agendar una cita', category: 'booking' },
+    { text: '¿Tienen citas disponibles?', category: 'booking' },
+    { text: '¿Qué servicios ofrecen?', category: 'info' },
+    { text: '¿Cuál es el horario?', category: 'info' },
+    { text: '¿Cuáles son los precios?', category: 'info' },
+    { text: 'Gracias', category: 'farewell' },
+  ],
 };
+
+// ======================
+// FALLBACK RESPONSES POR VERTICAL
+// (Solo se usan si API falla)
+// ======================
+
+const FALLBACK_RESPONSES_BY_VERTICAL: Record<'restaurant' | 'dental', Record<string, string>> = {
+  restaurant: {
+    hola: '¡Hola! Bienvenido a nuestro restaurante. ¿En qué puedo ayudarte?',
+    reserv: 'Con gusto te ayudo con una reservación. ¿Para qué día y cuántas personas?',
+    mesa: 'Permíteme verificar disponibilidad. ¿Para qué día y hora te gustaría?',
+    menu: 'Tenemos una variedad de platillos. ¿Te gustaría conocer nuestras especialidades?',
+    horario: 'Nuestro horario está disponible en nuestra configuración. ¿Hay algo más en que pueda ayudarte?',
+    domicilio: 'Sí, contamos con servicio a domicilio. ¿Te gustaría hacer un pedido?',
+    gracias: '¡De nada! Fue un placer atenderte. ¡Esperamos verte pronto!',
+  },
+  dental: {
+    hola: '¡Hola! Bienvenido a nuestra clínica dental. ¿En qué puedo ayudarte?',
+    cita: 'Con gusto te ayudo a agendar una cita. ¿Qué día te gustaría venir?',
+    disponib: 'Permíteme verificar nuestra agenda. ¿Tienes preferencia de horario?',
+    servicio: 'Ofrecemos diversos tratamientos dentales. ¿Hay algo específico que necesites?',
+    horario: 'Nuestro horario de atención está en nuestra configuración. ¿Puedo ayudarte en algo más?',
+    precio: 'Los precios varían según el tratamiento. ¿Qué procedimiento te interesa?',
+    gracias: '¡De nada! Gracias por contactarnos. ¡Cuida tu sonrisa!',
+  },
+};
+
+/**
+ * Obtiene respuesta de fallback si API falla
+ */
+function getFallbackResponse(message: string, vertical: 'restaurant' | 'dental'): string {
+  const responses = FALLBACK_RESPONSES_BY_VERTICAL[vertical];
+  const lowerMessage = message.toLowerCase();
+
+  const key = Object.keys(responses).find((k) => lowerMessage.includes(k));
+  return key ? responses[key] : 'Entendido. ¿Hay algo más en lo que pueda ayudarte?';
+}
 
 // ======================
 // COMPONENT
@@ -118,8 +168,14 @@ export function VoiceTestModal({
   isOpen,
   onClose,
   config,
-  onSendMessage,
+  vertical,
+  accessToken,
+  initialMode = 'text',
 }: VoiceTestModalProps) {
+  // ======================
+  // STATE - COMMON
+  // ======================
+  const [mode, setMode] = useState<'text' | 'call'>(initialMode);
   const [callState, setCallState] = useState<CallState>('idle');
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
@@ -130,12 +186,105 @@ export function VoiceTestModal({
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  // ======================
+  // STATE - VAPI (Call Mode)
+  // ======================
+  const [testAssistantId, setTestAssistantId] = useState<string | null>(null);
+  const [isCreatingAssistant, setIsCreatingAssistant] = useState(false);
+  // Ref para evitar race conditions en cleanup
+  const isCleaningUpRef = useRef(false);
+
+  // ======================
+  // REFS
+  // ======================
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs para limpiar timeouts de conexión y evitar memory leaks
+  const connectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const firstMessageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ======================
+  // MICROPHONE PERMISSION HOOK
+  // ======================
+  const {
+    permissionState: micPermission,
+    isChecking: isMicChecking,
+    requestPermission: requestMicPermission,
+  } = useMicrophonePermission();
+
+  // ======================
+  // VAPI WEB CLIENT HOOK
+  // ======================
+  const vapiPublicKey = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY || '';
+
+  const handleVapiTranscript = useCallback((vapiTranscript: VapiTranscript) => {
+    if (vapiTranscript.isFinal) {
+      const id = `vapi-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      setTranscript((prev) => [
+        ...prev,
+        {
+          id,
+          role: vapiTranscript.role,
+          content: vapiTranscript.text,
+          timestamp: vapiTranscript.timestamp,
+        },
+      ]);
+    }
+  }, []);
+
+  const handleVapiStatusChange = useCallback((vapiStatus: VapiCallStatus) => {
+    // Mapear status de VAPI a CallState del modal
+    switch (vapiStatus) {
+      case 'connecting':
+        setCallState('connecting');
+        break;
+      case 'connected':
+      case 'listening':
+      case 'speaking':
+        setCallState('active');
+        setIsListening(vapiStatus === 'listening');
+        break;
+      case 'ended':
+        setCallState('ended');
+        setIsListening(false);
+        break;
+      case 'error':
+        setCallState('error');
+        break;
+      default:
+        // idle - no change
+        break;
+    }
+  }, []);
+
+  const handleVapiError = useCallback((err: Error) => {
+    console.error('[VoiceTestModal] VAPI error:', err);
+    setError(err.message);
+  }, []);
+
+  const {
+    status: vapiStatus,
+    durationSeconds: vapiDuration,
+    isMuted: vapiIsMuted,
+    error: vapiError,
+    startCall: vapiStartCall,
+    endCall: vapiEndCall,
+    toggleMute: vapiToggleMute,
+  } = useVapiWebClient({
+    publicKey: vapiPublicKey,
+    onTranscript: handleVapiTranscript,
+    onStatusChange: handleVapiStatusChange,
+    onError: handleVapiError,
+  });
+
+  // Quick responses dinámicas según vertical
+  const quickResponses = useMemo(
+    () => QUICK_RESPONSES_BY_VERTICAL[vertical].map((qr) => qr.text),
+    [vertical]
+  );
 
   // Calculate metrics
   const metrics: CallMetrics = useMemo(() => {
@@ -155,9 +304,11 @@ export function VoiceTestModal({
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcript]);
 
-  // Call duration timer
+  // Call duration timer - Solo para modo texto
+  // En modo call, usamos vapiDuration del hook
   useEffect(() => {
-    if (callState === 'active') {
+    // Solo iniciar timer en modo texto
+    if (callState === 'active' && mode === 'text') {
       timerRef.current = setInterval(() => {
         setCallDuration((prev) => prev + 1);
       }, 1000);
@@ -173,7 +324,7 @@ export function VoiceTestModal({
         clearInterval(timerRef.current);
       }
     };
-  }, [callState]);
+  }, [callState, mode]);
 
   // Format duration as MM:SS
   const formatDuration = (seconds: number) => {
@@ -195,27 +346,202 @@ export function VoiceTestModal({
     ]);
   }, []);
 
-  // Start test call
-  const startCall = async () => {
+  // ======================
+  // VAPI ASSISTANT MANAGEMENT
+  // ======================
+
+  /**
+   * Crea un assistant temporal en VAPI para la llamada de prueba
+   */
+  const createTestAssistant = useCallback(async (): Promise<string | null> => {
+    // Evitar crear si hay un cleanup en progreso
+    if (isCleaningUpRef.current) {
+      console.log('[VoiceTestModal] Skipping assistant creation - cleanup in progress');
+      return null;
+    }
+
+    setIsCreatingAssistant(true);
+    try {
+      const response = await fetch('/api/voice-agent/test/assistant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      // Verificar de nuevo después del fetch async
+      if (isCleaningUpRef.current) {
+        console.log('[VoiceTestModal] Cleanup started during creation - aborting');
+        return null;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const data: AssistantApiResponse = await response.json();
+
+      if (!data.success || !data.assistantId) {
+        throw new Error(data.error || 'No se pudo crear el assistant');
+      }
+
+      console.log('[VoiceTestModal] Test assistant created:', data.assistantId.substring(0, 8) + '...');
+      setTestAssistantId(data.assistantId);
+      return data.assistantId;
+
+    } catch (err) {
+      console.error('[VoiceTestModal] Error creating test assistant:', err);
+      setError(err instanceof Error ? err.message : 'Error creando assistant');
+      return null;
+    } finally {
+      setIsCreatingAssistant(false);
+    }
+  }, [accessToken]);
+
+  /**
+   * Elimina el assistant temporal de VAPI
+   */
+  const deleteTestAssistant = useCallback(async (assistantId: string) => {
+    // Marcar que estamos en proceso de limpieza
+    isCleaningUpRef.current = true;
+
+    try {
+      await fetch(`/api/voice-agent/test/assistant?id=${assistantId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      console.log('[VoiceTestModal] Test assistant deleted');
+    } catch (err) {
+      // No bloqueante - solo log
+      console.warn('[VoiceTestModal] Error deleting test assistant:', err);
+    } finally {
+      setTestAssistantId(null);
+      // Liberar el flag de cleanup
+      isCleaningUpRef.current = false;
+    }
+  }, [accessToken]);
+
+  // ======================
+  // VAPI CALL FUNCTIONS
+  // ======================
+
+  /**
+   * Inicia una llamada con VAPI Web SDK
+   */
+  const startVapiCall = useCallback(async () => {
+    let createdAssistantId: string | null = null;
+
     try {
       setCallState('connecting');
       setError(null);
       setCallDuration(0);
       setTranscript([]);
 
-      // Request microphone permission
+      // 1. Verificar que tenemos public key
+      if (!vapiPublicKey) {
+        throw new Error('VAPI Public Key no configurada');
+      }
+
+      // 2. Crear assistant temporal
+      createdAssistantId = await createTestAssistant();
+      if (!createdAssistantId) {
+        throw new Error('No se pudo crear el assistant temporal');
+      }
+
+      // 3. Agregar mensaje de sistema
+      addMessage('system', 'Conectando llamada de voz...');
+
+      // 4. Iniciar llamada con VAPI
+      await vapiStartCall(createdAssistantId);
+
+      // 5. Agregar first message
+      addMessage('system', 'Llamada conectada - Habla con tu asistente');
+
+    } catch (err) {
+      console.error('[VoiceTestModal] Error starting VAPI call:', err);
+      setError(err instanceof Error ? err.message : 'Error al iniciar llamada');
+      setCallState('error');
+
+      // CRÍTICO: Limpiar assistant huérfano si la llamada falló después de crearlo
+      if (createdAssistantId) {
+        console.log('[VoiceTestModal] Cleaning up orphaned assistant after call error');
+        deleteTestAssistant(createdAssistantId);
+      }
+    }
+  }, [vapiPublicKey, createTestAssistant, addMessage, vapiStartCall, deleteTestAssistant]);
+
+  /**
+   * Termina la llamada VAPI y limpia recursos
+   */
+  const endVapiCall = useCallback(() => {
+    // 1. Terminar llamada VAPI
+    vapiEndCall();
+
+    // 2. Eliminar assistant temporal
+    if (testAssistantId) {
+      deleteTestAssistant(testAssistantId);
+    }
+
+    // 3. Agregar mensaje de sistema
+    addMessage('system', 'Llamada finalizada');
+
+  }, [vapiEndCall, testAssistantId, deleteTestAssistant, addMessage]);
+
+  // Sincronizar duración de VAPI con el state local en modo call
+  useEffect(() => {
+    if (mode === 'call' && vapiStatus !== 'idle') {
+      setCallDuration(vapiDuration);
+    }
+  }, [mode, vapiStatus, vapiDuration]);
+
+  // Sincronizar mute de VAPI con el state local en modo call
+  useEffect(() => {
+    if (mode === 'call') {
+      setIsMuted(vapiIsMuted);
+    }
+  }, [mode, vapiIsMuted]);
+
+  // Mostrar error de VAPI
+  useEffect(() => {
+    if (vapiError) {
+      setError(vapiError.message);
+    }
+  }, [vapiError]);
+
+  // Start test call - Dispatcher según modo
+  const startCall = async () => {
+    if (mode === 'call') {
+      await startVapiCall();
+    } else {
+      await startTextCall();
+    }
+  };
+
+  // Start text mode call (simulada)
+  const startTextCall = async () => {
+    try {
+      setCallState('connecting');
+      setError(null);
+      setCallDuration(0);
+      setTranscript([]);
+
+      // Request microphone permission (para UI de mute aunque no se use en texto)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       audioContextRef.current = new AudioContext();
 
-      // Simulate connection delay
-      setTimeout(() => {
+      // Simulate connection delay (con cleanup para evitar memory leaks)
+      connectTimeoutRef.current = setTimeout(() => {
         setCallState('active');
         setIsListening(true);
         addMessage('system', 'Llamada conectada');
 
         // Add first message from assistant
-        setTimeout(() => {
+        firstMessageTimeoutRef.current = setTimeout(() => {
           addMessage('assistant', config.first_message || 'Hola, ¿en qué puedo ayudarte?', 0);
           inputRef.current?.focus();
         }, 500);
@@ -228,8 +554,18 @@ export function VoiceTestModal({
     }
   };
 
-  // End test call
-  const endCall = useCallback(() => {
+  // End text mode call
+  const endTextCall = useCallback(() => {
+    // Limpiar timeouts pendientes para evitar memory leaks
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+    if (firstMessageTimeoutRef.current) {
+      clearTimeout(firstMessageTimeoutRef.current);
+      firstMessageTimeoutRef.current = null;
+    }
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -240,15 +576,19 @@ export function VoiceTestModal({
       audioContextRef.current = null;
     }
 
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
-    }
-
     addMessage('system', 'Llamada finalizada');
     setCallState('ended');
     setIsListening(false);
   }, [addMessage]);
+
+  // End test call - Dispatcher según modo
+  const endCall = useCallback(() => {
+    if (mode === 'call') {
+      endVapiCall();
+    } else {
+      endTextCall();
+    }
+  }, [mode, endVapiCall, endTextCall]);
 
   // Cleanup on unmount or close
   useEffect(() => {
@@ -256,6 +596,32 @@ export function VoiceTestModal({
       endCall();
     }
   }, [isOpen, callState, endCall]);
+
+  // Cleanup assistant temporal when modal closes - separate effect to avoid circular deps
+  useEffect(() => {
+    // Solo limpiar si el modal se cerró Y hay un assistant temporal
+    if (!isOpen && testAssistantId) {
+      // Usar ref para evitar re-renders
+      const assistantToDelete = testAssistantId;
+      deleteTestAssistant(assistantToDelete);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]); // Solo depende de isOpen, deleteTestAssistant es estable
+
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+      }
+      if (firstMessageTimeoutRef.current) {
+        clearTimeout(firstMessageTimeoutRef.current);
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -267,50 +633,109 @@ export function VoiceTestModal({
     }
   }, [isOpen, callState]);
 
-  // Send message (uses backend if available, otherwise simulates)
-  const handleSendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isSending || callState !== 'active') return;
+  // Handle Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
 
-    const messageText = text.trim();
-    setInputValue('');
-    setIsSending(true);
-    setIsListening(false);
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
 
-    // Add user message
-    addMessage('user', messageText);
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isOpen, onClose]);
 
-    const startTime = Date.now();
+  /**
+   * Envía mensaje al backend API y obtiene respuesta
+   * Si el API falla, usa respuesta de fallback según vertical
+   */
+  const sendMessageToBackend = useCallback(
+    async (
+      message: string,
+      history: TranscriptMessage[]
+    ): Promise<{ response: string; latencyMs: number }> => {
+      // Construir historial de conversación (excluyendo mensajes del sistema)
+      const conversationHistory = history
+        .filter((m) => m.role !== 'system')
+        .map((m) => ({ role: m.role, content: m.content }));
 
-    try {
-      let response: string;
+      try {
+        const response = await fetch('/api/voice-agent/test', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            message,
+            conversation_history: conversationHistory,
+          }),
+        });
 
-      if (onSendMessage) {
-        // Use backend
-        response = await onSendMessage(messageText);
-      } else {
-        // Simulate response
-        await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200));
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
 
-        const key = Object.keys(DEFAULT_RESPONSES).find((k) =>
-          messageText.toLowerCase().includes(k)
+        const data: TestApiResponse = await response.json();
+
+        if (!data.success && !data.response) {
+          throw new Error(data.error || 'Unknown error');
+        }
+
+        return {
+          response: data.response || getFallbackResponse(message, vertical),
+          latencyMs: data.latencyMs,
+        };
+      } catch (err) {
+        console.error('[VoiceTestModal] API error, using fallback:', err);
+
+        // Usar fallback si API falla
+        return {
+          response: getFallbackResponse(message, vertical),
+          latencyMs: 0,
+        };
+      }
+    },
+    [accessToken, vertical]
+  );
+
+  // Send message usando el API backend
+  const handleSendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isSending || callState !== 'active') return;
+
+      const messageText = text.trim();
+      setInputValue('');
+      setIsSending(true);
+      setIsListening(false);
+
+      // Add user message
+      addMessage('user', messageText);
+
+      try {
+        // Llamar al backend
+        const { response, latencyMs } = await sendMessageToBackend(
+          messageText,
+          transcript
         );
-        response = key
-          ? DEFAULT_RESPONSES[key]
-          : 'Entendido. ¿Hay algo más en lo que pueda asistirte?';
+
+        // Add assistant response
+        addMessage('assistant', response, latencyMs);
+      } catch (err) {
+        console.error('[VoiceTestModal] Error:', err);
+        addMessage('system', 'Error al procesar mensaje');
       }
 
-      const latencyMs = Date.now() - startTime;
-      addMessage('assistant', response, latencyMs);
-
-    } catch (err) {
-      console.error('Error sending message:', err);
-      addMessage('system', 'Error al procesar mensaje');
-    }
-
-    setIsSending(false);
-    setIsListening(true);
-    inputRef.current?.focus();
-  }, [isSending, callState, onSendMessage, addMessage]);
+      setIsSending(false);
+      setIsListening(true);
+      inputRef.current?.focus();
+    },
+    [isSending, callState, transcript, sendMessageToBackend, addMessage]
+  );
 
   // Handle key down
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -320,21 +745,31 @@ export function VoiceTestModal({
     }
   };
 
-  // Toggle microphone
+  // Toggle microphone - Dispatcher según modo
   const toggleMute = () => {
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = isMuted;
-      });
+    if (mode === 'call') {
+      vapiToggleMute();
+    } else {
+      // Modo texto - toggle local
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = isMuted;
+        });
+      }
+      setIsMuted(!isMuted);
     }
-    setIsMuted(!isMuted);
   };
 
   // Reset and start new call
   const handleNewCall = () => {
+    // Limpiar assistant temporal si existe
+    if (testAssistantId) {
+      deleteTestAssistant(testAssistantId);
+    }
     setCallState('idle');
     setTranscript([]);
     setCallDuration(0);
+    setError(null);
   };
 
   if (!isOpen) return null;
@@ -353,6 +788,9 @@ export function VoiceTestModal({
 
         {/* Modal Container */}
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="voice-test-modal-title"
           initial={{ scale: 0.95, opacity: 0, y: 10 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 10 }}
@@ -369,16 +807,19 @@ export function VoiceTestModal({
                 <Phone className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                <h2 id="voice-test-modal-title" className="text-base font-bold text-slate-900 tracking-tight">
                   Probar Asistente de Voz
                 </h2>
                 <p className="text-xs text-slate-500">
-                  {callState === 'active' ? `En llamada • ${formatDuration(callDuration)}` : 'Modo de prueba'}
+                  {callState === 'active'
+                    ? `${mode === 'call' ? 'Llamada de voz' : 'Chat de texto'} • ${formatDuration(callDuration)}`
+                    : 'Modo de prueba'}
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
+              aria-label="Cerrar modal"
               className="absolute top-4 right-4 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
             >
               <X className="w-5 h-5" />
@@ -390,6 +831,15 @@ export function VoiceTestModal({
             {/* IDLE STATE */}
             {callState === 'idle' && (
               <div className="text-center">
+                {/* Microphone Permission Banner - Solo mostrar en modo llamada */}
+                {mode === 'call' && (
+                  <MicrophonePermissionBanner
+                    status={micPermission}
+                    onRequestPermission={requestMicPermission}
+                    isChecking={isMicChecking}
+                  />
+                )}
+
                 <div className="flex justify-center mb-5">
                   <div className="relative">
                     <div
@@ -407,8 +857,43 @@ export function VoiceTestModal({
                 <h3 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">
                   Prueba tu Asistente
                 </h3>
-                <p className="text-sm text-slate-500 mb-6 max-w-xs mx-auto leading-relaxed">
-                  Inicia una llamada de prueba para verificar cómo responde tu asistente antes de activarlo.
+                <p className="text-sm text-slate-500 mb-4 max-w-xs mx-auto leading-relaxed">
+                  Verifica cómo responde tu asistente antes de activarlo.
+                </p>
+
+                {/* Mode Selector */}
+                <div className="flex items-center justify-center gap-2 mb-5">
+                  <button
+                    onClick={() => setMode('text')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      mode === 'text'
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Modo Texto</span>
+                  </button>
+                  <button
+                    onClick={() => setMode('call')}
+                    disabled={!vapiPublicKey}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      mode === 'call'
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title={!vapiPublicKey ? 'VAPI Public Key no configurada' : 'Llamada de voz real'}
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                    <span>Modo Llamada</span>
+                  </button>
+                </div>
+
+                {/* Mode description */}
+                <p className="text-xs text-slate-400 mb-5">
+                  {mode === 'text'
+                    ? 'Chat de texto con respuestas del backend'
+                    : 'Llamada de voz real con audio bidireccional'}
                 </p>
 
                 {/* First message preview */}
@@ -434,14 +919,24 @@ export function VoiceTestModal({
                 {/* CTA Button */}
                 <button
                   onClick={startCall}
-                  className="w-full py-3.5 px-6 text-white font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
+                  disabled={isCreatingAssistant}
+                  className="w-full py-3.5 px-6 text-white font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-70"
                   style={{
                     background: 'linear-gradient(135deg, rgb(223, 115, 115) 0%, rgb(194, 51, 80) 100%)',
                     boxShadow: '0 4px 14px -2px rgba(223, 115, 115, 0.4)'
                   }}
                 >
-                  <Play className="w-5 h-5" />
-                  <span>Iniciar Llamada de Prueba</span>
+                  {isCreatingAssistant ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Preparando...</span>
+                    </>
+                  ) : (
+                    <>
+                      {mode === 'call' ? <PhoneCall className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                      <span>{mode === 'call' ? 'Iniciar Llamada' : 'Iniciar Chat de Prueba'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -512,9 +1007,12 @@ export function VoiceTestModal({
                   <p className="text-slate-400 text-sm">
                     {callState === 'active' ? formatDuration(callDuration) : 'Llamada finalizada'}
                   </p>
-                  {callState === 'active' && isListening && !isSending && (
+                  {callState === 'active' && (
                     <div className="mt-2">
-                      <VoiceWave isActive={true} />
+                      <AudioVisualizer
+                        isActive={isListening || vapiStatus === 'speaking'}
+                        isSpeaking={vapiStatus === 'speaking'}
+                      />
                     </div>
                   )}
                 </div>
@@ -603,8 +1101,8 @@ export function VoiceTestModal({
                   <div ref={transcriptEndRef} />
                 </div>
 
-                {/* Input and Quick responses */}
-                {callState === 'active' && (
+                {/* Input and Quick responses - Solo en modo texto */}
+                {callState === 'active' && mode === 'text' && (
                   <div className="mt-3 space-y-3">
                     {/* Text input */}
                     <div className="flex items-center gap-2">
@@ -621,6 +1119,7 @@ export function VoiceTestModal({
                       <button
                         onClick={() => handleSendMessage(inputValue)}
                         disabled={!inputValue.trim() || isSending}
+                        aria-label="Enviar mensaje"
                         className="p-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                           background: inputValue.trim() && !isSending
@@ -632,9 +1131,9 @@ export function VoiceTestModal({
                       </button>
                     </div>
 
-                    {/* Quick responses */}
+                    {/* Quick responses dinámicas por vertical */}
                     <div className="flex flex-wrap gap-2">
-                      {QUICK_RESPONSES.map((text) => (
+                      {quickResponses.map((text) => (
                         <button
                           key={text}
                           onClick={() => handleSendMessage(text)}
@@ -648,59 +1147,61 @@ export function VoiceTestModal({
                   </div>
                 )}
 
-                {/* Call controls */}
-                <div className="mt-4 flex items-center justify-center gap-3">
-                  {callState === 'active' ? (
-                    <>
-                      <button
-                        onClick={toggleMute}
-                        className={`p-3.5 rounded-xl transition-all ${
-                          isMuted
-                            ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                      </button>
-
-                      <button
-                        onClick={endCall}
-                        className="p-4 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all shadow-lg"
-                        style={{ boxShadow: '0 4px 14px -2px rgba(239, 68, 68, 0.4)' }}
-                      >
-                        <PhoneOff className="w-6 h-6" />
-                      </button>
-
-                      <button
-                        onClick={() => setIsSpeakerMuted(!isSpeakerMuted)}
-                        className={`p-3.5 rounded-xl transition-all ${
-                          isSpeakerMuted
-                            ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        {isSpeakerMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                      </button>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <button
-                        onClick={handleNewCall}
-                        className="px-6 py-2.5 text-white rounded-xl transition-colors font-medium text-sm flex items-center gap-2"
-                        style={{ background: 'linear-gradient(135deg, rgb(223, 115, 115) 0%, rgb(194, 51, 80) 100%)' }}
-                      >
-                        <Phone className="w-4 h-4" />
-                        Nueva Llamada
-                      </button>
-                      <button
-                        onClick={onClose}
-                        className="text-slate-500 hover:text-slate-700 text-sm font-medium"
-                      >
-                        Cerrar
-                      </button>
+                {/* Audio indicator - Solo en modo llamada */}
+                {callState === 'active' && mode === 'call' && (
+                  <div className="mt-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center justify-center">
+                      <StatusIndicator
+                        status={vapiStatus}
+                        mode="call"
+                        size="md"
+                      />
                     </div>
-                  )}
-                </div>
+                    <p className="text-xs text-slate-400 text-center mt-2">
+                      Habla directamente con tu asistente
+                    </p>
+                  </div>
+                )}
+
+                {/* Call controls - Solo mostrar durante llamada activa */}
+                {callState === 'active' && (
+                  <div className="mt-4 flex items-center justify-center gap-3">
+                    <button
+                      onClick={toggleMute}
+                      aria-label={isMuted ? 'Activar micrófono' : 'Silenciar micrófono'}
+                      aria-pressed={isMuted}
+                      className={`p-3.5 rounded-xl transition-all ${
+                        isMuted
+                          ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    </button>
+
+                    <button
+                      onClick={endCall}
+                      aria-label="Finalizar llamada"
+                      className="p-4 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all shadow-lg"
+                      style={{ boxShadow: '0 4px 14px -2px rgba(239, 68, 68, 0.4)' }}
+                    >
+                      <PhoneOff className="w-6 h-6" />
+                    </button>
+
+                    <button
+                      onClick={() => setIsSpeakerMuted(!isSpeakerMuted)}
+                      aria-label={isSpeakerMuted ? 'Activar altavoz' : 'Silenciar altavoz'}
+                      aria-pressed={isSpeakerMuted}
+                      className={`p-3.5 rounded-xl transition-all ${
+                        isSpeakerMuted
+                          ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {isSpeakerMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -734,27 +1235,13 @@ export function VoiceTestModal({
           )}
 
           {callState === 'ended' && (
-            <div className="px-5 py-4 bg-slate-50 border-t border-slate-100">
-              <div className="text-center mb-3">
-                <p className="text-xs text-slate-500">Resumen de la llamada</p>
-              </div>
-              <div className="flex items-center justify-center gap-6">
-                <div className="text-center">
-                  <p className="text-lg font-bold text-slate-900">{formatDuration(metrics.duration)}</p>
-                  <p className="text-xs text-slate-500">Duración</p>
-                </div>
-                <div className="w-px h-8 bg-slate-200" />
-                <div className="text-center">
-                  <p className="text-lg font-bold text-slate-900">{metrics.messageCount}</p>
-                  <p className="text-xs text-slate-500">Mensajes</p>
-                </div>
-                <div className="w-px h-8 bg-slate-200" />
-                <div className="text-center">
-                  <p className="text-lg font-bold text-slate-900">{Math.round(metrics.avgLatency)}ms</p>
-                  <p className="text-xs text-slate-500">Latencia</p>
-                </div>
-              </div>
-            </div>
+            <CallSummary
+              metrics={metrics}
+              mode={mode}
+              transcript={transcript}
+              onNewTest={handleNewCall}
+              onClose={onClose}
+            />
           )}
         </motion.div>
       </motion.div>

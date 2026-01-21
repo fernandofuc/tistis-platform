@@ -19,6 +19,12 @@ export { VoiceAgentWizard } from './VoiceAgentWizard';
 export { CallDetailModal } from './CallDetailModal';
 export { AssistantTypeSelector } from './AssistantTypeSelector';
 
+// FASE 4: Voice Test Modal Components
+export { StatusIndicator } from './StatusIndicator';
+export { AudioVisualizer, MiniVisualizer } from './AudioVisualizer';
+export { MicrophonePermissionBanner } from './MicrophonePermissionBanner';
+export { CallSummary } from './CallSummary';
+
 // Capability Components
 export { CapabilityBadge, CapabilityBadgeCompact } from './CapabilityBadge';
 export { CapabilitiesGrid, CapabilitiesComparison } from './CapabilitiesGrid';
