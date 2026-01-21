@@ -1852,6 +1852,9 @@ export default function AIAgentVozPage() {
           isOpen={showTalkToAssistant}
           onClose={() => setShowTalkToAssistant(false)}
           config={config}
+          vertical={vertical === 'restaurant' ? 'restaurant' : 'dental'}
+          accessToken={accessToken}
+          initialMode="text"
         />
 
         {/* Setup Wizard for new users */}

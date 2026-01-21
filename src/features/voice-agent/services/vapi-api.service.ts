@@ -14,6 +14,18 @@ export interface VAPIAssistantCreateRequest {
   firstMessage: string;
   firstMessageMode?: 'assistant-speaks-first' | 'assistant-waits-for-user';
 
+  // LLM Model (requerido para que el assistant genere respuestas)
+  model?: {
+    provider: 'openai' | 'anthropic' | 'google' | 'together-ai' | 'anyscale' | 'groq';
+    model: string;
+    messages?: Array<{
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+    }>;
+    temperature?: number;
+    maxTokens?: number;
+  };
+
   // Transcriber (STT)
   transcriber?: {
     provider: 'deepgram' | 'google' | 'azure' | 'assembly-ai';
@@ -185,19 +197,22 @@ async function vapiRequest<T>(
 
 /**
  * Crea un nuevo asistente en VAPI
- * Este asistente usará Server-Side Response Mode (TIS TIS genera respuestas)
+ * Si se proporciona 'model', VAPI usará ese LLM para generar respuestas.
+ * Si no se proporciona, se usa Server-Side Response Mode (TIS TIS genera respuestas via webhook).
  */
 export async function createAssistant(
   request: VAPIAssistantCreateRequest
 ): Promise<{ assistant?: VAPIAssistant; error?: VAPIError }> {
   console.log('[VAPI API] Creating assistant:', request.name);
 
-  // Construir el body con Server-Side Response Mode
-  // NO incluimos "model" para que VAPI no genere respuestas
+  // Construir el body - model es opcional
   const body: VAPIAssistantCreateRequest = {
     name: request.name,
     firstMessage: request.firstMessage,
     firstMessageMode: request.firstMessageMode || 'assistant-speaks-first',
+
+    // LLM Model (si se proporciona, VAPI genera respuestas)
+    ...(request.model && { model: request.model }),
 
     // Transcriber (Deepgram - Multi-language con español principal)
     // Usa detección automática para soportar inglés y otros idiomas
