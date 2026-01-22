@@ -3,6 +3,7 @@
  * Event Router Tests
  */
 
+import { describe, it, expect, vi } from 'vitest';
 import {
   WebhookEventRouter,
   createEventRouter,
@@ -40,7 +41,7 @@ describe('WebhookEventRouter', () => {
     });
 
     it('should create router with handlers', () => {
-      const mockHandler = jest.fn();
+      const mockHandler = vi.fn();
       const router = new WebhookEventRouter({
         'assistant-request': mockHandler,
       });
@@ -66,7 +67,7 @@ describe('WebhookEventRouter', () => {
         shouldLog: true,
       };
 
-      const mockHandler = jest.fn().mockResolvedValue(mockResponse);
+      const mockHandler = vi.fn().mockResolvedValue(mockResponse);
 
       const router = new WebhookEventRouter({
         'assistant-request': mockHandler,
@@ -127,7 +128,7 @@ describe('WebhookEventRouter', () => {
         statusCode: 200,
       };
 
-      const defaultHandler = jest.fn().mockResolvedValue(defaultResponse);
+      const defaultHandler = vi.fn().mockResolvedValue(defaultResponse);
 
       const router = new WebhookEventRouter({}, {
         defaultHandler,
@@ -153,7 +154,7 @@ describe('WebhookEventRouter', () => {
     });
 
     it('should handle handler errors gracefully', async () => {
-      const mockHandler = jest.fn().mockRejectedValue(new Error('Handler failed'));
+      const mockHandler = vi.fn().mockRejectedValue(new Error('Handler failed'));
 
       const router = new WebhookEventRouter({
         'assistant-request': mockHandler,
@@ -170,9 +171,9 @@ describe('WebhookEventRouter', () => {
     });
 
     it('should call onEventProcessed callback', async () => {
-      const onEventProcessed = jest.fn();
+      const onEventProcessed = vi.fn();
 
-      const mockHandler = jest.fn().mockResolvedValue({
+      const mockHandler = vi.fn().mockResolvedValue({
         response: formatAckResponse(),
         statusCode: 200,
       });
@@ -208,18 +209,18 @@ describe('WebhookEventRouter', () => {
 
       expect(router.hasHandler('transcript')).toBe(false);
 
-      router.registerHandler('transcript', jest.fn());
+      router.registerHandler('transcript', vi.fn());
 
       expect(router.hasHandler('transcript')).toBe(true);
     });
 
     it('should override existing handler', async () => {
-      const handler1 = jest.fn().mockResolvedValue({
+      const handler1 = vi.fn().mockResolvedValue({
         response: { status: 'ok' },
         statusCode: 200,
       });
 
-      const handler2 = jest.fn().mockResolvedValue({
+      const handler2 = vi.fn().mockResolvedValue({
         response: { status: 'ok' },
         statusCode: 200,
       });
@@ -250,7 +251,7 @@ describe('WebhookEventRouter', () => {
   describe('unregisterHandler()', () => {
     it('should unregister a handler', () => {
       const router = new WebhookEventRouter({
-        'transcript': jest.fn(),
+        'transcript': vi.fn(),
       });
 
       expect(router.hasHandler('transcript')).toBe(true);
@@ -264,9 +265,9 @@ describe('WebhookEventRouter', () => {
   describe('getRegisteredEventTypes()', () => {
     it('should return all registered event types', () => {
       const router = new WebhookEventRouter({
-        'assistant-request': jest.fn(),
-        'transcript': jest.fn(),
-        'status-update': jest.fn(),
+        'assistant-request': vi.fn(),
+        'transcript': vi.fn(),
+        'status-update': vi.fn(),
       });
 
       const types = router.getRegisteredEventTypes();
@@ -283,7 +284,7 @@ describe('Factory Functions', () => {
   describe('createEventRouter()', () => {
     it('should create router with provided handlers', () => {
       const handlers = {
-        'transcript': jest.fn(),
+        'transcript': vi.fn(),
       };
 
       const router = createEventRouter(handlers);

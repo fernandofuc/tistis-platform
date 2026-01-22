@@ -2,6 +2,11 @@
 // TIS TIS PLATFORM - Button Component Tests
 // =====================================================
 
+/**
+ * @vitest-environment jsdom
+ */
+
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Button } from '../../src/shared/components/ui/Button';
 
@@ -41,18 +46,20 @@ describe('Button', () => {
   });
 
   it('applies correct size styles', () => {
+    // Note: Button uses responsive classes with mobile-first design
+    // Base padding (py-2) applies on mobile, sm:py-1.5 on larger screens
     const { rerender } = render(<Button size="sm">Small</Button>);
-    expect(screen.getByRole('button')).toHaveClass('px-3', 'py-1.5');
+    expect(screen.getByRole('button')).toHaveClass('px-3', 'py-2');
 
     rerender(<Button size="md">Medium</Button>);
-    expect(screen.getByRole('button')).toHaveClass('px-4', 'py-2');
+    expect(screen.getByRole('button')).toHaveClass('px-4', 'py-2.5');
 
     rerender(<Button size="lg">Large</Button>);
     expect(screen.getByRole('button')).toHaveClass('px-6', 'py-3');
   });
 
   it('handles click events', () => {
-    const handleClick = jest.fn();
+    const handleClick = vi.fn();
     render(<Button onClick={handleClick}>Click me</Button>);
 
     fireEvent.click(screen.getByRole('button'));
@@ -82,7 +89,7 @@ describe('Button', () => {
   });
 
   it('does not call onClick when disabled', () => {
-    const handleClick = jest.fn();
+    const handleClick = vi.fn();
     render(
       <Button disabled onClick={handleClick}>
         Disabled

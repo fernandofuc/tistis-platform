@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimitMigration } from '@/src/shared/lib/rate-limit-migration';
 import {
-  checkRateLimit,
   getClientIP,
   contactLimiter,
   rateLimitExceeded,
@@ -42,7 +42,7 @@ interface EnterpriseContactRequest {
 export async function POST(request: NextRequest) {
   // Rate limiting: 5 requests per 5 minutes per IP
   const clientIP = getClientIP(request);
-  const rateLimitResult = checkRateLimit(clientIP, contactLimiter);
+  const rateLimitResult = await checkRateLimitMigration(clientIP, contactLimiter);
 
   if (!rateLimitResult.success) {
     return rateLimitExceeded(rateLimitResult);

@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable instrumentation hook for startup validation
+  experimental: {
+    instrumentationHook: true,
+  },
   images: {
     domains: [
       'your-project.supabase.co', // Para imágenes de Supabase

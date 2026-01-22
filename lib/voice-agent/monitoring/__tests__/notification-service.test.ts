@@ -10,6 +10,7 @@
  * - Delivery tracking
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   NotificationService,
   getNotificationService,
@@ -33,7 +34,7 @@ import type {
 // =====================================================
 
 // Mock fetch for testing
-const mockFetch = jest.fn();
+const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 describe('Notification Service', () => {
@@ -56,7 +57,8 @@ describe('Notification Service', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
+    mockFetch.mockReset();
     NotificationService.resetInstance();
 
     // Create new service with short intervals for testing
@@ -216,7 +218,8 @@ describe('Notification Service', () => {
     });
 
     it('should handle failed notifications', async () => {
-      mockFetch.mockResolvedValueOnce({
+      // Mock all fetch calls to fail for this test
+      mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -326,17 +329,18 @@ describe('Notification Service', () => {
       });
 
       // Warning should trigger for warning channel
-      const warningAlert = createTestAlert({ severity: 'warning' });
+      // Use different ruleId to avoid deduplication
+      const warningAlert = createTestAlert({ severity: 'warning', ruleId: 'warning-rule' });
       const warningResults = await notificationService.sendAlertNotification(warningAlert, ['slack']);
       expect(warningResults).toHaveLength(1);
 
       // Info should not trigger for warning channel
-      const infoAlert = createTestAlert({ severity: 'info', id: 'info-alert' });
+      const infoAlert = createTestAlert({ severity: 'info', id: 'info-alert', ruleId: 'info-rule' });
       const infoResults = await notificationService.sendAlertNotification(infoAlert, ['slack']);
       expect(infoResults).toHaveLength(0);
 
       // Critical should trigger for warning channel
-      const criticalAlert = createTestAlert({ severity: 'critical', id: 'critical-alert' });
+      const criticalAlert = createTestAlert({ severity: 'critical', id: 'critical-alert', ruleId: 'critical-rule' });
       const criticalResults = await notificationService.sendAlertNotification(criticalAlert, ['slack']);
       expect(criticalResults).toHaveLength(1);
     });
@@ -359,8 +363,12 @@ describe('Notification Service', () => {
 
     it('should rate limit notifications', async () => {
       // Send more than rate limit (5 per minute)
+      // Use different ruleId for each alert to avoid deduplication
       for (let i = 0; i < 10; i++) {
-        const alert = createTestAlert({ id: `alert-${i}` });
+        const alert = createTestAlert({
+          id: `alert-${i}`,
+          ruleId: `rule-${i}`,  // Different ruleId to avoid deduplication
+        });
         await notificationService.sendAlertNotification(alert, ['slack']);
       }
 
@@ -401,8 +409,10 @@ describe('Notification Service', () => {
     });
 
     it('should not deduplicate different alerts', async () => {
-      const alert1 = createTestAlert({ id: 'alert-1' });
-      const alert2 = createTestAlert({ id: 'alert-2' });
+      // Use different ruleId to ensure they're treated as different alerts
+      // (deduplication key is based on ruleId:status:labels, not id)
+      const alert1 = createTestAlert({ id: 'alert-1', ruleId: 'rule-1' });
+      const alert2 = createTestAlert({ id: 'alert-2', ruleId: 'rule-2' });
 
       await notificationService.sendAlertNotification(alert1, ['slack']);
       const secondResults = await notificationService.sendAlertNotification(alert2, ['slack']);

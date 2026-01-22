@@ -10,8 +10,8 @@ import {
   canGenerateInsights,
   getUnseenInsightsCount,
 } from '@/src/features/ai/services/business-insights.service';
+import { checkRateLimitMigration } from '@/src/shared/lib/rate-limit-migration';
 import {
-  checkRateLimit,
   getClientIP,
   publicAPILimiter,
   rateLimitExceeded,
@@ -73,7 +73,7 @@ async function getUserContext(supabase: ReturnType<typeof createAuthenticatedCli
 export async function GET(request: NextRequest) {
   // Rate limiting: prevent excessive queries (100 per minute)
   const clientIP = getClientIP(request);
-  const rateLimitResult = checkRateLimit(clientIP, publicAPILimiter);
+  const rateLimitResult = await checkRateLimitMigration(clientIP, publicAPILimiter);
 
   if (!rateLimitResult.success) {
     return rateLimitExceeded(rateLimitResult);

@@ -6,13 +6,13 @@
  */
 
 // Mock LangChain modules before importing
-jest.mock('@langchain/openai', () => ({
-  ChatOpenAI: jest.fn().mockImplementation(() => ({
-    invoke: jest.fn().mockResolvedValue({ content: '{"intent": "direct", "confidence": 0.8}' }),
+vi.mock('@langchain/openai', () => ({
+  ChatOpenAI: vi.fn().mockImplementation(() => ({
+    invoke: vi.fn().mockResolvedValue({ content: '{"intent": "direct", "confidence": 0.8}' }),
   })),
 }));
 
-jest.mock('@langchain/core/messages', () => ({
+vi.mock('@langchain/core/messages', () => ({
   HumanMessage: class HumanMessage {
     constructor(public content: string) {}
     _getType() { return 'human'; }
@@ -28,21 +28,22 @@ jest.mock('@langchain/core/messages', () => ({
 }));
 
 // Mock LangGraph Annotation
-jest.mock('@langchain/langgraph', () => {
+vi.mock('@langchain/langgraph', () => {
   const mockAnnotation = Object.assign(
-    jest.fn().mockImplementation((config = {}) => ({
+    vi.fn().mockImplementation((config = {}) => ({
       ...config,
     })),
     {
-      Root: jest.fn().mockImplementation((config) => ({ State: config })),
+      Root: vi.fn().mockImplementation((config) => ({ State: config })),
     }
   );
   return {
     Annotation: mockAnnotation,
-    messagesStateReducer: jest.fn(),
+    messagesStateReducer: vi.fn(),
   };
 });
 
+import { describe, it, expect, vi } from 'vitest';
 import { routerNode, createRouterNode } from '@/lib/voice-agent/langgraph/nodes/router';
 import { createInitialState } from '@/lib/voice-agent/langgraph/state';
 

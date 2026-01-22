@@ -154,7 +154,6 @@ describe('Voice Logger System', () => {
       logger.logCallStart({
         callId: 'call-123',
         tenantId: 'tenant-456',
-        tenantId: 'business-789',
         assistantType: 'restaurant',
         apiVersion: 'v2',
         callerNumber: '+1234567890',
@@ -464,7 +463,6 @@ describe('Voice Logger System', () => {
       const childLogger = logger.child({
         callId: 'call-123',
         tenantId: 'tenant-456',
-        tenantId: 'business-789',
         apiVersion: 'v2',
       });
 
@@ -473,7 +471,6 @@ describe('Voice Logger System', () => {
       expect(capturedLogs).toHaveLength(1);
       expect(capturedLogs[0].callId).toBe('call-123');
       expect(capturedLogs[0].tenantId).toBe('tenant-456');
-      expect(capturedLogs[0].data?.tenantId).toBe('business-789');
     });
 
     it('should allow overriding default context', () => {

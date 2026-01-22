@@ -132,26 +132,26 @@ const SENSITIVE_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
 ];
 
 /**
- * Keys that should always be redacted
+ * Keys that should always be redacted (all lowercase for case-insensitive matching)
  */
 const SENSITIVE_KEYS = new Set([
   'password',
   'secret',
   'token',
-  'apiKey',
+  'apikey',      // Matches apiKey, ApiKey, APIKEY, etc.
   'api_key',
-  'secretKey',
+  'secretkey',   // Matches secretKey, SecretKey, etc.
   'secret_key',
   'signature',
   'authorization',
   'x-vapi-signature',
-  'creditCard',
+  'creditcard',  // Matches creditCard, CreditCard, etc.
   'ssn',
-  'privateKey',
+  'privatekey',  // Matches privateKey, PrivateKey, etc.
   'private_key',
-  'accessToken',
+  'accesstoken', // Matches accessToken, AccessToken, etc.
   'access_token',
-  'refreshToken',
+  'refreshtoken', // Matches refreshToken, RefreshToken, etc.
   'refresh_token',
 ]);
 

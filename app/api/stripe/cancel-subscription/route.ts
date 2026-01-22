@@ -10,6 +10,10 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
+import { createComponentLogger } from '@/src/shared/lib';
+
+// Create logger for cancel subscription endpoint
+const logger = createComponentLogger('stripe-cancel');
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -113,7 +117,7 @@ export async function POST(request: NextRequest) {
     // CRITICAL FIX: Validate Stripe subscription exists before cancelling
     // ============================================
     if (!subscription.stripe_subscription_id?.startsWith('sub_')) {
-      console.error('[Cancel] Invalid stripe_subscription_id:', subscription.stripe_subscription_id);
+      logger.error('Invalid stripe_subscription_id', { subscriptionId: subscription.id });
       return NextResponse.json(
         { error: 'Suscripción no vinculada a Stripe. Contacta a soporte.' },
         { status: 400 }
@@ -127,7 +131,7 @@ export async function POST(request: NextRequest) {
 
       // Check if already cancelled
       if (stripeSubscription.status === 'canceled') {
-        console.log('[Cancel] Subscription already cancelled in Stripe');
+        logger.info('Subscription already cancelled in Stripe', { subscriptionId: subscription.id });
 
         // Update local DB to match
         await supabaseAdmin
@@ -145,8 +149,9 @@ export async function POST(request: NextRequest) {
           already_cancelled: true,
         });
       }
-    } catch (stripeError: any) {
-      console.error('[Cancel] Stripe subscription not found:', stripeError.message);
+    } catch (stripeError: unknown) {
+      const stripeErr = stripeError as Error;
+      logger.warn('Stripe subscription not found', { subscriptionId: subscription.id, error: stripeErr.message });
 
       // Mark local subscription as cancelled anyway (sync fix)
       await supabaseAdmin
@@ -261,15 +266,18 @@ export async function POST(request: NextRequest) {
         branches_count: subscription.max_branches || 1,
         created_by: user.id,
       });
-      console.log('Cancellation feedback logged');
+      logger.debug('Cancellation feedback logged');
     } catch (feedbackErr) {
       // Non-blocking - just log the error
-      console.error('Failed to log cancellation feedback:', feedbackErr);
+      logger.warn('Failed to log cancellation feedback', {}, feedbackErr as Error);
     }
 
-    console.log(`❌ Subscription cancelled: ${client.business_name} (${subscription.plan})`);
-    console.log(`   Reason: ${reason || 'not_specified'}`);
-    console.log(`   Data retained until: ${dataRetentionDate.toISOString()}`);
+    logger.info('Subscription cancelled', {
+      businessName: client.business_name,
+      plan: subscription.plan,
+      reason: reason || 'not_specified',
+      dataRetentionUntil: dataRetentionDate.toISOString(),
+    });
 
     return NextResponse.json({
       success: true,
@@ -278,10 +286,11 @@ export async function POST(request: NextRequest) {
       data_retention_until: dataRetentionDate.toISOString(),
     });
 
-  } catch (error: any) {
-    console.error('Cancel subscription error:', error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error('Cancel subscription error', { errorMessage: err.message }, err);
     return NextResponse.json(
-      { error: error.message || 'Error al cancelar la suscripción' },
+      { error: err.message || 'Error al cancelar la suscripción' },
       { status: 500 }
     );
   }

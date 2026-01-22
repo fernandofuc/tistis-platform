@@ -3,6 +3,7 @@
  * Status Update Handler Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   handleStatusUpdate,
   handleSpeechUpdate,
@@ -23,28 +24,28 @@ import type {
 
 // Mock Supabase - proper chain handling
 const createMockSupabase = () => {
-  const mockSingle = jest.fn().mockResolvedValue({
+  const mockSingle = vi.fn().mockResolvedValue({
     data: {
       id: 'call-123',
       status: 'initiated',
     },
   });
 
-  const mockEq = jest.fn().mockImplementation(() => ({
+  const mockEq = vi.fn().mockImplementation(() => ({
     single: mockSingle,
     eq: mockEq,
   }));
 
-  const mockUpdate = jest.fn().mockImplementation(() => ({
+  const mockUpdate = vi.fn().mockImplementation(() => ({
     eq: mockEq,
   }));
 
-  const mockSelect = jest.fn().mockImplementation(() => ({
+  const mockSelect = vi.fn().mockImplementation(() => ({
     eq: mockEq,
     single: mockSingle,
   }));
 
-  const mockFrom = jest.fn().mockImplementation(() => ({
+  const mockFrom = vi.fn().mockImplementation(() => ({
     select: mockSelect,
     update: mockUpdate,
     eq: mockEq,
@@ -82,7 +83,7 @@ describe('handleStatusUpdate', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSupabase = createMockSupabase();
   });
 
@@ -235,7 +236,7 @@ describe('handleStatusUpdate', () => {
 
   describe('Status Change Callback', () => {
     it('should call onStatusChange callback', async () => {
-      const onStatusChange = jest.fn().mockResolvedValue(undefined);
+      const onStatusChange = vi.fn().mockResolvedValue(undefined);
 
       const payload = createPayload('in-progress');
       await handleStatusUpdate(payload, createContext(), {
@@ -252,7 +253,7 @@ describe('handleStatusUpdate', () => {
     });
 
     it('should handle callback errors gracefully', async () => {
-      const onStatusChange = jest.fn().mockRejectedValue(new Error('Callback error'));
+      const onStatusChange = vi.fn().mockRejectedValue(new Error('Callback error'));
 
       const payload = createPayload('in-progress');
       const result = await handleStatusUpdate(payload, createContext(), {

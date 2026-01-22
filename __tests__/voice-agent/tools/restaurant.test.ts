@@ -3,6 +3,7 @@
  * Restaurant Tools Tests
  */
 
+import { describe, it, expect, vi } from 'vitest';
 import {
   checkAvailability as restaurantCheckAvailability,
   createReservation,
@@ -13,30 +14,50 @@ import {
 } from '@/lib/voice-agent/tools/restaurant';
 import { createToolContext, type ToolContext } from '@/lib/voice-agent/tools';
 
-// Mock Supabase client
-const createMockSupabase = (overrides: Record<string, unknown> = {}) => {
-  const mockChain = {
-    from: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
-    delete: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    neq: jest.fn().mockReturnThis(),
-    in: jest.fn().mockReturnThis(),
-    ilike: jest.fn().mockReturnThis(),
-    or: jest.fn().mockReturnThis(),
-    not: jest.fn().mockReturnThis(),
-    gte: jest.fn().mockReturnThis(),
-    lte: jest.fn().mockReturnThis(),
-    order: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
-    single: jest.fn().mockResolvedValue({ data: null, error: null }),
-    rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
+// Mock Supabase client type for tests
+interface MockSupabaseChain {
+  from: ReturnType<typeof vi.fn>;
+  select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
+  ilike: ReturnType<typeof vi.fn>;
+  or: ReturnType<typeof vi.fn>;
+  not: ReturnType<typeof vi.fn>;
+  gte: ReturnType<typeof vi.fn>;
+  lte: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  limit: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+  rpc: ReturnType<typeof vi.fn>;
+}
+
+const createMockSupabase = (overrides: Record<string, unknown> = {}): MockSupabaseChain & ToolContext['supabase'] => {
+  const mockChain: MockSupabaseChain = {
+    from: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    neq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    ilike: vi.fn().mockReturnThis(),
+    or: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lte: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     ...overrides,
   };
 
-  return mockChain as unknown as ToolContext['supabase'];
+  return mockChain as MockSupabaseChain & ToolContext['supabase'];
 };
 
 const createTestContext = (supabase: ToolContext['supabase']): ToolContext =>
@@ -65,7 +86,7 @@ describe('Restaurant Tools', () => {
 
     it('should handle successful availability check via RPC', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      (mockSupabase.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           available: true,
           slots: ['18:00', '18:30', '19:00'],
@@ -107,7 +128,7 @@ describe('Restaurant Tools', () => {
 
     it('should provide alternatives when not available', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      (mockSupabase.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           available: false,
           slots: [],
@@ -159,7 +180,7 @@ describe('Restaurant Tools', () => {
 
     it('should create reservation successfully', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      (mockSupabase.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           reservation_id: 'res-123',
           confirmation_code: 'ABC123',
@@ -186,12 +207,12 @@ describe('Restaurant Tools', () => {
 
     it('should handle unavailable slot', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      (mockSupabase.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: null,
         error: { message: 'Slot not available' },
       });
 
-      (mockSupabase.single as jest.Mock).mockResolvedValue({
+      (mockSupabase.single as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: null,
         error: { message: 'Conflict' },
       });
@@ -245,7 +266,7 @@ describe('Restaurant Tools', () => {
 
     it('should find reservation by confirmation code', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.single as jest.Mock).mockResolvedValue({
+      (mockSupabase.single as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           id: 'res-123',
           confirmation_code: 'ABC123',
@@ -285,7 +306,7 @@ describe('Restaurant Tools', () => {
 
     it('should cancel reservation', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.single as jest.Mock)
+      (mockSupabase.single as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
           data: {
             id: 'res-123',
@@ -329,13 +350,13 @@ describe('Restaurant Tools', () => {
       ];
 
       // Create a proper chain mock
-      (mockSupabase.from as jest.Mock).mockImplementation(() => ({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        ilike: jest.fn().mockReturnThis(),
-        or: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: mockItems, error: null }),
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: mockItems, error: null }),
       }));
 
       const context = createTestContext(mockSupabase);
@@ -352,13 +373,13 @@ describe('Restaurant Tools', () => {
         { id: '1', name: 'Tacos al pastor', description: 'Tacos', price: 45, category: 'Tacos' },
       ];
 
-      (mockSupabase.from as jest.Mock).mockImplementation(() => ({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        ilike: jest.fn().mockReturnThis(),
-        or: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: mockItems, error: null }),
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: mockItems, error: null }),
       }));
 
       const context = createTestContext(mockSupabase);
@@ -406,12 +427,12 @@ describe('Restaurant Tools', () => {
       const mockSupabase = createMockSupabase();
 
       // Mock menu items query
-      (mockSupabase.from as jest.Mock).mockImplementation((table: string) => {
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
         if (table === 'menu_items') {
           return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            in: jest.fn().mockResolvedValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockResolvedValue({
               data: [{ id: 'item-1', name: 'Tacos', price: 45, is_available: true }],
               error: null,
             }),
@@ -419,9 +440,9 @@ describe('Restaurant Tools', () => {
         }
         if (table === 'orders') {
           return {
-            insert: jest.fn().mockReturnThis(),
-            select: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
               data: { id: 'order-123', order_number: 'ORD-ABC1' },
               error: null,
             }),

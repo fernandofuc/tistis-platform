@@ -3,6 +3,7 @@
  * Common Tools Tests
  */
 
+import { describe, it, expect, vi } from 'vitest';
 import {
   transferToHuman,
   getBusinessHours,
@@ -10,19 +11,28 @@ import {
 } from '@/lib/voice-agent/tools';
 import { createToolContext, type ToolContext } from '@/lib/voice-agent/tools';
 
-// Mock Supabase client
-const createMockSupabase = (overrides: Record<string, unknown> = {}) => {
-  const mockChain = {
-    from: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    single: jest.fn().mockResolvedValue({ data: null, error: null }),
+// Mock Supabase client type for tests
+interface MockSupabaseChain {
+  from: ReturnType<typeof vi.fn>;
+  select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+}
+
+const createMockSupabase = (overrides: Record<string, unknown> = {}): MockSupabaseChain & ToolContext['supabase'] => {
+  const mockChain: MockSupabaseChain = {
+    from: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
     ...overrides,
   };
 
-  return mockChain as unknown as ToolContext['supabase'];
+  return mockChain as MockSupabaseChain & ToolContext['supabase'];
 };
 
 const createTestContext = (
@@ -85,7 +95,7 @@ describe('Common Tools', () => {
 
     it('should handle transfer when enabled', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.single as jest.Mock).mockResolvedValue({
+      (mockSupabase.single as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           transfer_config: {
             enabled: true,
@@ -112,7 +122,7 @@ describe('Common Tools', () => {
 
     it('should fail when transfers not enabled', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.single as jest.Mock).mockResolvedValue({
+      (mockSupabase.single as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           transfer_config: {
             enabled: false,
@@ -133,7 +143,7 @@ describe('Common Tools', () => {
 
     it('should handle priority levels', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.single as jest.Mock).mockResolvedValue({
+      (mockSupabase.single as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           transfer_config: {
             enabled: true,
@@ -169,12 +179,12 @@ describe('Common Tools', () => {
     it('should return business hours from branch', async () => {
       const mockSupabase = createMockSupabase();
 
-      (mockSupabase.from as jest.Mock).mockImplementation((table: string) => {
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
         if (table === 'branches') {
           return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
               data: {
                 name: 'Sucursal Centro',
                 hours: {
@@ -206,10 +216,10 @@ describe('Common Tools', () => {
     it('should return specific day hours', async () => {
       const mockSupabase = createMockSupabase();
 
-      (mockSupabase.from as jest.Mock).mockImplementation(() => ({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
           data: {
             hours: {
               monday: { open: '09:00', close: '18:00' },
@@ -230,10 +240,10 @@ describe('Common Tools', () => {
     it('should handle today/tomorrow', async () => {
       const mockSupabase = createMockSupabase();
 
-      (mockSupabase.from as jest.Mock).mockImplementation(() => ({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
           data: {
             hours: {
               monday: { open: '09:00', close: '18:00' },
@@ -258,10 +268,10 @@ describe('Common Tools', () => {
     it('should handle closed days', async () => {
       const mockSupabase = createMockSupabase();
 
-      (mockSupabase.from as jest.Mock).mockImplementation(() => ({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
           data: {
             hours: {
               sunday: { closed: true },
@@ -281,19 +291,19 @@ describe('Common Tools', () => {
     it('should fallback to voice_config', async () => {
       const mockSupabase = createMockSupabase();
 
-      (mockSupabase.from as jest.Mock).mockImplementation((table: string) => {
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
         if (table === 'branches') {
           return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
           };
         }
         if (table === 'voice_configs') {
           return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
               data: {
                 business_hours: {
                   monday: { open: '08:00', close: '20:00' },
@@ -404,10 +414,10 @@ describe('Common Tools Integration', () => {
 
   it('should support both Spanish and English locales', async () => {
     const mockSupabase = createMockSupabase();
-    (mockSupabase.from as jest.Mock).mockImplementation(() => ({
-      select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({
+    (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
         data: {
           hours: { monday: { open: '09:00', close: '18:00' } },
         },

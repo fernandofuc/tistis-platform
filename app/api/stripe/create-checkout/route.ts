@@ -13,6 +13,10 @@ import {
   checkoutLimiter,
   rateLimitExceeded,
 } from '@/src/shared/lib/rate-limit';
+import { createComponentLogger } from '@/src/shared/lib';
+
+// Create logger for checkout endpoint
+const logger = createComponentLogger('stripe-checkout');
 
 // Create Stripe client lazily
 function getStripeClient() {
@@ -25,6 +29,7 @@ export async function POST(req: NextRequest) {
   const rateLimitResult = checkRateLimit(clientIP, checkoutLimiter);
 
   if (!rateLimitResult.success) {
+    logger.warn('Rate limit exceeded for checkout', { clientIP });
     return rateLimitExceeded(rateLimitResult);
   }
 
@@ -52,7 +57,7 @@ export async function POST(req: NextRequest) {
     // Discovery flow sends 'otro' to /enterprise, not here
     const VALID_VERTICALS = ['dental', 'restaurant'];
     if (!vertical || !VALID_VERTICALS.includes(vertical)) {
-      console.error('🚨 [Checkout] Invalid or missing vertical:', vertical);
+      logger.warn('Invalid or missing vertical', { vertical });
       return NextResponse.json(
         { error: 'Vertical es requerido. Por favor vuelve a la página de precios y selecciona tu tipo de negocio.' },
         { status: 400 }
@@ -85,7 +90,7 @@ export async function POST(req: NextRequest) {
     // ============================================
     const branchCount = Math.max(1, Math.min(branches, 100)); // Clamp to 1-100
     if (branchCount > planConfig.branchLimit) {
-      console.error('🚨 [Checkout] Branches exceed plan limit:', { requested: branchCount, limit: planConfig.branchLimit });
+      logger.warn('Branches exceed plan limit', { requested: branchCount, limit: planConfig.branchLimit, plan });
       return NextResponse.json(
         { error: `El plan ${planConfig.name} permite máximo ${planConfig.branchLimit} sucursales. Selecciona un plan superior o reduce las sucursales.` },
         { status: 400 }
@@ -170,14 +175,22 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    logger.info('Checkout session created', {
+      sessionId: session.id,
+      plan,
+      branches: branchCount,
+      vertical,
+    });
+
     return NextResponse.json({
       sessionId: session.id,
       url: session.url,
     });
-  } catch (error: any) {
-    console.error('Stripe checkout error:', error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error('Stripe checkout error', { errorMessage: err.message }, err);
     return NextResponse.json(
-      { error: error.message || 'Error al crear sesion de pago' },
+      { error: err.message || 'Error al crear sesion de pago' },
       { status: 500 }
     );
   }

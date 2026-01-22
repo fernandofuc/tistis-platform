@@ -12,13 +12,14 @@
  */
 
 import React from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // =====================================================
 // MOCKS
 // =====================================================
 
 // Mock framer-motion
-jest.mock('framer-motion', () => ({
+vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: React.PropsWithChildren<object>) => (
       <div {...props}>{children}</div>
@@ -48,16 +49,16 @@ class MockAudio {
   onended: (() => void) | null = null;
   onerror: (() => void) | null = null;
 
-  load = jest.fn(() => {
+  load = vi.fn(() => {
     setTimeout(() => this.oncanplaythrough?.(), 10);
   });
 
-  play = jest.fn(() => {
+  play = vi.fn(() => {
     this.paused = false;
     return Promise.resolve();
   });
 
-  pause = jest.fn(() => {
+  pause = vi.fn(() => {
     this.paused = true;
   });
 }
@@ -68,11 +69,11 @@ let mockAudioInstance: MockAudio;
 beforeEach(() => {
   // Reset mock Audio
   mockAudioInstance = new MockAudio();
-  (global as unknown as { Audio: typeof MockAudio }).Audio = jest.fn(() => mockAudioInstance);
+  (global as unknown as { Audio: typeof MockAudio }).Audio = vi.fn(() => mockAudioInstance);
 });
 
 // Mock fetch
-const mockFetch = jest.fn();
+const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 // =====================================================
@@ -125,7 +126,7 @@ const defaultConfig = {
   hasBeenTested: false,
 };
 
-const mockOnUpdateConfig = jest.fn();
+const mockOnUpdateConfig = vi.fn();
 const mockAccessToken = 'test-token-123';
 
 // =====================================================
@@ -135,10 +136,10 @@ const mockAccessToken = 'test-token-123';
 // Helper to import component after mocks are set
 async function importStepSelectVoice() {
   // Reset modules to get fresh imports with mocks
-  jest.resetModules();
+  vi.resetModules();
 
   // Mock the types module
-  jest.doMock('@/src/features/voice-agent/types', () => ({
+  vi.doMock('@/src/features/voice-agent/types', () => ({
     AVAILABLE_VOICES: mockVoices,
     VOICE_PREVIEW_TEXT: 'Hola, soy tu asistente virtual. ¿En qué puedo ayudarte hoy?',
   }));

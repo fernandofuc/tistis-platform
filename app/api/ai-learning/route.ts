@@ -5,8 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimitMigration } from '@/src/shared/lib/rate-limit-migration';
 import {
-  checkRateLimit,
   getClientIP,
   publicAPILimiter,
   rateLimitExceeded,
@@ -114,7 +114,7 @@ const HIGH_PRIORITY_TYPES = ['urgency_indicator', 'complaint', 'objection', 'pai
 export async function GET(request: NextRequest) {
   // Rate limiting
   const clientIP = getClientIP(request);
-  const rateLimitResult = checkRateLimit(clientIP, publicAPILimiter);
+  const rateLimitResult = await checkRateLimitMigration(clientIP, publicAPILimiter);
 
   if (!rateLimitResult.success) {
     return rateLimitExceeded(rateLimitResult);

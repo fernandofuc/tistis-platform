@@ -2,6 +2,7 @@
  * Tests for Admin Authentication Utility
  */
 
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   verifyAdminAuth,
@@ -12,30 +13,38 @@ import {
 // Mock environment
 const originalEnv = process.env;
 
-// Mock rate limiting
-jest.mock('../../../src/shared/lib/rate-limit', () => ({
-  checkRateLimit: jest.fn(() => ({
+// Helper to set NODE_ENV in tests (TypeScript declares it as readonly)
+function setNodeEnv(env: 'development' | 'production' | 'test') {
+  (process.env as { NODE_ENV: string }).NODE_ENV = env;
+}
+
+// Create mock functions with vi.hoisted so they're available in vi.mock
+const mockRateLimitFns = vi.hoisted(() => ({
+  checkRateLimit: vi.fn(() => ({
     success: true,
     limit: 3,
     remaining: 2,
     resetAt: Date.now() + 60000,
   })),
-  getClientIP: jest.fn(() => '127.0.0.1'),
+  getClientIP: vi.fn(() => '127.0.0.1'),
   strictLimiter: {
     limit: 3,
     windowSeconds: 60,
     identifier: 'strict',
   },
-  rateLimitExceeded: jest.fn(() => ({
+  rateLimitExceeded: vi.fn(() => ({
     status: 429,
     json: () => ({ error: 'Rate limit exceeded' }),
   })),
 }));
 
+// Mock rate limiting
+vi.mock('../../../src/shared/lib/rate-limit', () => mockRateLimitFns);
+
 // Mock NextResponse
-jest.mock('next/server', () => ({
+vi.mock('next/server', () => ({
   NextResponse: {
-    json: jest.fn((body, options) => ({
+    json: vi.fn((body, options) => ({
       body,
       status: options?.status || 200,
     })),
@@ -44,7 +53,7 @@ jest.mock('next/server', () => ({
 
 describe('Admin Authentication', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     process.env = { ...originalEnv };
   });
 
@@ -75,7 +84,7 @@ describe('Admin Authentication', () => {
       });
 
       it('should return error in production', () => {
-        process.env.NODE_ENV = 'production';
+        setNodeEnv('production');
         const request = createMockRequest('any-key');
 
         const result = verifyAdminAuth(request);
@@ -86,7 +95,7 @@ describe('Admin Authentication', () => {
       });
 
       it('should return error in development when requireInDev is true (default)', () => {
-        process.env.NODE_ENV = 'development';
+        setNodeEnv('development');
         const request = createMockRequest('any-key');
 
         const result = verifyAdminAuth(request);
@@ -96,7 +105,7 @@ describe('Admin Authentication', () => {
       });
 
       it('should allow access in development when requireInDev is false', () => {
-        process.env.NODE_ENV = 'development';
+        setNodeEnv('development');
         const request = createMockRequest();
         const config: AdminAuthConfig = { requireInDev: false };
 
@@ -111,7 +120,7 @@ describe('Admin Authentication', () => {
 
       beforeEach(() => {
         process.env.ADMIN_API_KEY = validKey;
-        process.env.NODE_ENV = 'production';
+        setNodeEnv('production');
       });
 
       it('should return error when no key provided', () => {
@@ -158,30 +167,27 @@ describe('Admin Authentication', () => {
 
       beforeEach(() => {
         process.env.ADMIN_API_KEY = validKey;
-        process.env.NODE_ENV = 'production';
+        setNodeEnv('production');
       });
 
       it('should apply rate limiting by default', () => {
-        const { checkRateLimit } = require('../../../src/shared/lib/rate-limit');
         const request = createMockRequest(validKey);
 
         verifyAdminAuth(request);
 
-        expect(checkRateLimit).toHaveBeenCalled();
+        expect(mockRateLimitFns.checkRateLimit).toHaveBeenCalled();
       });
 
       it('should skip rate limiting when disabled', () => {
-        const { checkRateLimit } = require('../../../src/shared/lib/rate-limit');
         const request = createMockRequest(validKey);
 
         verifyAdminAuth(request, { rateLimit: false });
 
-        expect(checkRateLimit).not.toHaveBeenCalled();
+        expect(mockRateLimitFns.checkRateLimit).not.toHaveBeenCalled();
       });
 
       it('should return rate limit response when exceeded', () => {
-        const { checkRateLimit, rateLimitExceeded } = require('../../../src/shared/lib/rate-limit');
-        checkRateLimit.mockReturnValueOnce({
+        mockRateLimitFns.checkRateLimit.mockReturnValueOnce({
           success: false,
           limit: 3,
           remaining: 0,
@@ -193,7 +199,7 @@ describe('Admin Authentication', () => {
 
         expect(result.authorized).toBe(false);
         expect(result.reason).toBe('rate_limit_exceeded');
-        expect(rateLimitExceeded).toHaveBeenCalled();
+        expect(mockRateLimitFns.rateLimitExceeded).toHaveBeenCalled();
       });
     });
   });
@@ -203,7 +209,7 @@ describe('Admin Authentication', () => {
 
     beforeEach(() => {
       process.env.ADMIN_API_KEY = validKey;
-      process.env.NODE_ENV = 'production';
+      setNodeEnv('production');
     });
 
     it('should return true for valid key', () => {
@@ -219,13 +225,12 @@ describe('Admin Authentication', () => {
     });
 
     it('should not apply rate limiting', () => {
-      const { checkRateLimit } = require('../../../src/shared/lib/rate-limit');
-      checkRateLimit.mockClear();
+      mockRateLimitFns.checkRateLimit.mockClear();
 
       const request = createMockRequest(validKey);
       isValidAdminKey(request);
 
-      expect(checkRateLimit).not.toHaveBeenCalled();
+      expect(mockRateLimitFns.checkRateLimit).not.toHaveBeenCalled();
     });
   });
 });
@@ -235,7 +240,7 @@ describe('Timing-safe comparison', () => {
 
   beforeEach(() => {
     process.env.ADMIN_API_KEY = validKey;
-    process.env.NODE_ENV = 'production';
+    setNodeEnv('production');
   });
 
   it('should reject keys with same prefix but different content', () => {

@@ -3,6 +3,7 @@
  * Tool System Integration Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   ToolRegistry,
   createToolContext,
@@ -17,13 +18,13 @@ import {
 // Mock Supabase
 const createMockSupabase = () => {
   return {
-    from: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    single: jest.fn().mockResolvedValue({ data: null, error: null }),
-    rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
+    from: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
   } as unknown as ToolContext['supabase'];
 };
 

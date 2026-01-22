@@ -10,6 +10,10 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { getPlanConfig } from '@/src/shared/config/plans';
 import { checkRateLimit, getClientIP, strictLimiter, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
+import { createComponentLogger } from '@/src/shared/lib';
+
+// Create logger for change plan endpoint
+const logger = createComponentLogger('stripe-change-plan');
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -64,7 +68,7 @@ async function getOrCreatePriceForPlan(stripe: Stripe, planName: string): Promis
 
   // Search for existing product with this plan name
   const productName = `TIS TIS - Plan ${planName.charAt(0).toUpperCase() + planName.slice(1)}`;
-  console.log('[Change Plan] Searching for existing product:', productName);
+  logger.debug('Searching for existing product', { productName });
 
   const existingProducts = await stripe.products.search({
     query: `name:"${productName}"`,
@@ -74,7 +78,7 @@ async function getOrCreatePriceForPlan(stripe: Stripe, planName: string): Promis
 
   if (existingProducts.data.length > 0) {
     productId = existingProducts.data[0].id;
-    console.log('[Change Plan] Found existing product:', productId);
+    logger.debug('Found existing product', { productId });
 
     // Check if there's already an active price for this product
     const existingPrices = await stripe.prices.list({
@@ -84,12 +88,12 @@ async function getOrCreatePriceForPlan(stripe: Stripe, planName: string): Promis
     });
 
     if (existingPrices.data.length > 0) {
-      console.log('[Change Plan] Found existing price:', existingPrices.data[0].id);
+      logger.debug('Found existing price', { priceId: existingPrices.data[0].id });
       return existingPrices.data[0].id;
     }
   } else {
     // Create new product
-    console.log('[Change Plan] Creating new product:', productName);
+    logger.debug('Creating new product', { productName });
     const product = await stripe.products.create({
       name: productName,
       description: `Suscripción mensual al plan ${planName}`,
@@ -99,7 +103,7 @@ async function getOrCreatePriceForPlan(stripe: Stripe, planName: string): Promis
 
   // Create price for the product
   const planConfig = getPlanConfig(planName);
-  console.log('[Change Plan] Creating price for product:', productId);
+  logger.debug('Creating price for product', { productId });
   const price = await stripe.prices.create({
     product: productId,
     currency: 'mxn',
@@ -107,7 +111,7 @@ async function getOrCreatePriceForPlan(stripe: Stripe, planName: string): Promis
     recurring: { interval: 'month' },
   });
 
-  console.log('[Change Plan] Created price:', price.id);
+  logger.debug('Created price', { priceId: price.id });
   return price.id;
 }
 
@@ -124,7 +128,7 @@ export async function POST(request: NextRequest) {
     // Get access token from Authorization header
     const accessToken = getAccessToken(request);
     if (!accessToken) {
-      console.error('[Change Plan] No access token in request');
+      logger.warn('No access token in request');
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
@@ -143,7 +147,7 @@ export async function POST(request: NextRequest) {
     // Authenticate user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      console.error('[Change Plan] Auth error:', authError);
+      logger.warn('Auth error', { errorMessage: authError?.message });
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
@@ -172,7 +176,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!tenant) {
-      console.error('[Change Plan] Tenant not found:', userRole.tenant_id);
+      logger.error('Tenant not found', { tenantId: userRole.tenant_id });
       return NextResponse.json({
         error: 'Tenant no encontrado'
       }, { status: 404 });
@@ -187,7 +191,7 @@ export async function POST(request: NextRequest) {
 
     // If no client exists, create one with Stripe customer
     if (!client) {
-      console.log('[Change Plan] Creating client for tenant:', userRole.tenant_id);
+      logger.info('Creating client for tenant', { tenantId: userRole.tenant_id });
 
       const stripe = getStripeClient();
 
@@ -216,19 +220,19 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (createError) {
-        console.error('[Change Plan] Error creating client:', createError);
+        logger.error('Error creating client', { errorMessage: createError.message });
         return NextResponse.json({
           error: 'Error al crear información de facturación. Por favor contacta a soporte.'
         }, { status: 500 });
       }
 
       client = newClient;
-      console.log('[Change Plan] Client created:', client.id);
+      logger.info('Client created', { clientId: client.id });
     }
 
     // If client exists but has no Stripe customer, create one
     if (!client.stripe_customer_id) {
-      console.log('[Change Plan] Creating Stripe customer for existing client:', client.id);
+      logger.info('Creating Stripe customer for existing client', { clientId: client.id });
 
       const stripe = getStripeClient();
 
@@ -249,7 +253,7 @@ export async function POST(request: NextRequest) {
         .eq('id', client.id);
 
       client.stripe_customer_id = stripeCustomer.id;
-      console.log('[Change Plan] Stripe customer created:', stripeCustomer.id);
+      logger.info('Stripe customer created', { stripeCustomerId: stripeCustomer.id });
     }
 
     // Get active or trialing subscription
@@ -265,7 +269,7 @@ export async function POST(request: NextRequest) {
 
     // If no subscription exists, create a checkout session for the new plan
     if (!subscription) {
-      console.log('[Change Plan] No active/trialing subscription, creating checkout session');
+      logger.info('No active/trialing subscription, creating checkout session');
 
       const stripe = getStripeClient();
 
@@ -277,11 +281,12 @@ export async function POST(request: NextRequest) {
         || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
         || 'https://tistis-platform-5fc5.vercel.app';
 
-      console.log('[Change Plan] Creating checkout session (no subscription)');
-      console.log('  tenant_id:', userRole.tenant_id);
-      console.log('  client_id:', client.id);
-      console.log('  newPlan:', newPlan);
-      console.log('  priceId:', priceId);
+      logger.debug('Creating checkout session (no subscription)', {
+        tenantId: userRole.tenant_id,
+        clientId: client.id,
+        newPlan,
+        priceId,
+      });
 
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
@@ -301,8 +306,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      console.log('[Change Plan] Checkout session created:', checkoutSession.id);
-      console.log('[Change Plan] Checkout URL:', checkoutSession.url);
+      logger.info('Checkout session created', { sessionId: checkoutSession.id });
 
       return NextResponse.json({
         success: true,
@@ -328,15 +332,18 @@ export async function POST(request: NextRequest) {
     const newPlanOrder = getPlanConfig(newPlan)?.order || 0;
     const currentPlanOrder = getPlanConfig(tenant.plan)?.order || 0;
 
-    console.log('[Change Plan] Plan comparison:');
-    console.log('  tenant.plan:', tenant.plan, '-> order:', currentPlanOrder);
-    console.log('  newPlan:', newPlan, '-> order:', newPlanOrder);
-    console.log('  subscription.plan:', subscription.plan, '(might be out of sync)');
+    logger.debug('Plan comparison', {
+      tenantPlan: tenant.plan,
+      currentPlanOrder,
+      newPlan,
+      newPlanOrder,
+      subscriptionPlan: subscription.plan,
+    });
 
     const isUpgrade = newPlanOrder > currentPlanOrder;
     const isDowngrade = newPlanOrder < currentPlanOrder;
 
-    console.log('[Change Plan] isUpgrade:', isUpgrade, 'isDowngrade:', isDowngrade);
+    logger.debug('Plan change direction', { isUpgrade, isDowngrade });
 
     // Check if this is a real Stripe subscription (starts with 'sub_')
     const isRealStripeSubscription = subscription.stripe_subscription_id?.startsWith('sub_');
@@ -349,15 +356,16 @@ export async function POST(request: NextRequest) {
         stripeSubscription = await stripe.subscriptions.retrieve(
           subscription.stripe_subscription_id
         );
-      } catch (stripeError: any) {
-        console.log('[Change Plan] Stripe subscription not found:', stripeError.message);
+      } catch (stripeError: unknown) {
+        const err = stripeError as Error;
+        logger.warn('Stripe subscription not found', { errorMessage: err.message });
         stripeSubscription = null;
       }
     }
 
     // If no valid Stripe subscription, redirect to checkout
     if (!stripeSubscription) {
-      console.log('[Change Plan] No valid Stripe subscription found, creating checkout session');
+      logger.info('No valid Stripe subscription found, creating checkout session');
 
       // Get or create the price for the new plan (reuses existing if found)
       const priceId = await getOrCreatePriceForPlan(stripe, newPlan);
@@ -367,12 +375,13 @@ export async function POST(request: NextRequest) {
         || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
         || 'https://tistis-platform-5fc5.vercel.app';
 
-      console.log('[Change Plan] Creating checkout session for plan change');
-      console.log('  tenant_id:', userRole.tenant_id);
-      console.log('  client_id:', client.id);
-      console.log('  previous_subscription_id:', subscription.id);
-      console.log('  newPlan:', newPlan);
-      console.log('  priceId:', priceId);
+      logger.debug('Creating checkout session for plan change', {
+        tenantId: userRole.tenant_id,
+        clientId: client.id,
+        previousSubscriptionId: subscription.id,
+        newPlan,
+        priceId,
+      });
 
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: client.stripe_customer_id,
@@ -393,8 +402,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      console.log('[Change Plan] Checkout session created:', checkoutSession.id);
-      console.log('[Change Plan] Checkout URL:', checkoutSession.url);
+      logger.info('Checkout session created for plan change', { sessionId: checkoutSession.id });
 
       return NextResponse.json({
         success: true,
@@ -423,7 +431,7 @@ export async function POST(request: NextRequest) {
 
     // Get or create the price for the new plan (reuses existing if found)
     const newPriceId = await getOrCreatePriceForPlan(stripe, newPlan);
-    console.log('[Change Plan] Using price for subscription update:', newPriceId);
+    logger.debug('Using price for subscription update', { newPriceId });
 
     // Update the subscription in Stripe
     const updatedSubscription = await stripe.subscriptions.update(
@@ -457,7 +465,7 @@ export async function POST(request: NextRequest) {
       periodEnd = items?.[0]?.current_period_end;
     }
     const currentPeriodEnd = periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
-    console.log('[Change Plan] current_period_end:', currentPeriodEnd);
+    logger.debug('current_period_end extracted', { currentPeriodEnd });
 
     // Update local subscription record
     // IMPORTANT: We do NOT update max_branches here!
@@ -486,9 +494,9 @@ export async function POST(request: NextRequest) {
       .eq('id', userRole.tenant_id);
 
     if (tenantUpdateError) {
-      console.error('[Change Plan] Error updating tenant plan:', tenantUpdateError);
+      logger.error('Error updating tenant plan', { errorMessage: tenantUpdateError.message });
     } else {
-      console.log('[Change Plan] Tenant plan updated to:', newPlan);
+      logger.debug('Tenant plan updated', { newPlan });
     }
 
     // Log the plan change
@@ -508,7 +516,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`✅ Plan changed: ${tenant.plan} → ${newPlan} for tenant ${userRole.tenant_id}`);
+    logger.info('Plan changed successfully', {
+      previousPlan: tenant.plan,
+      newPlan,
+      tenantId: userRole.tenant_id,
+      isUpgrade,
+    });
 
     return NextResponse.json({
       success: true,
@@ -519,10 +532,11 @@ export async function POST(request: NextRequest) {
       isUpgrade,
     });
 
-  } catch (error: any) {
-    console.error('Change plan error:', error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error('Change plan error', { errorMessage: err.message }, err);
     return NextResponse.json(
-      { error: error.message || 'Error al cambiar el plan' },
+      { error: err.message || 'Error al cambiar el plan' },
       { status: 500 }
     );
   }

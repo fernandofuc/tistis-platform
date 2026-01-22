@@ -6,6 +6,10 @@ import { createClient } from '@supabase/supabase-js';
 import { emailService } from '@/src/lib/email';
 import { provisionTenant } from '@/lib/provisioning';
 import { getPlanConfig, PLAN_CONFIG } from '@/src/shared/config/plans';
+import { createComponentLogger } from '@/src/shared/lib';
+
+// Create logger for Stripe webhook
+const logger = createComponentLogger('stripe-webhook');
 
 // ============================================
 // VALID PLANS - Source of truth
@@ -29,9 +33,10 @@ function getSupabaseClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!serviceRoleKey) {
-    console.error('🚨 CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured!');
-    console.error('   Webhook will fail to update database due to RLS policies.');
-    console.error('   Please add SUPABASE_SERVICE_ROLE_KEY to Vercel environment variables.');
+    logger.error('SUPABASE_SERVICE_ROLE_KEY is not configured', {
+      impact: 'Webhook will fail to update database due to RLS policies',
+      action: 'Add SUPABASE_SERVICE_ROLE_KEY to Vercel environment variables',
+    });
     // Still try with anon key but log the warning
   }
 
@@ -96,6 +101,7 @@ export async function POST(req: NextRequest) {
   const stripe = getStripeClient();
 
   if (!signature) {
+    logger.warn('Missing Stripe signature header');
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
@@ -107,7 +113,7 @@ export async function POST(req: NextRequest) {
   const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
 
   if (isProduction && !process.env.STRIPE_WEBHOOK_SECRET) {
-    console.error('🚨 CRITICAL: STRIPE_WEBHOOK_SECRET is required in production!');
+    logger.error('STRIPE_WEBHOOK_SECRET is required in production', { isProduction });
     return NextResponse.json({ error: 'Webhook configuration error' }, { status: 500 });
   }
 
@@ -121,11 +127,12 @@ export async function POST(req: NextRequest) {
       );
     } else {
       // For LOCAL testing only - NOT production
-      console.warn('⚠️ [Webhook] Running without signature verification (development only)');
+      logger.warn('Running without signature verification (development only)');
       event = JSON.parse(body) as Stripe.Event;
     }
-  } catch (err: any) {
-    console.error('Webhook signature verification failed:', err.message);
+  } catch (err: unknown) {
+    const error = err as Error;
+    logger.error('Webhook signature verification failed', { errorMessage: error.message });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -134,21 +141,23 @@ export async function POST(req: NextRequest) {
   // CRITICAL: Allow retry of FAILED events so provisioning can complete
   // ============================================
   if (await isEventProcessedSuccessfully(event.id)) {
-    console.log(`⏭️ [Webhook] Event already processed successfully, skipping: ${event.id}`);
+    logger.info('Event already processed successfully, skipping', { eventId: event.id, eventType: event.type });
     return NextResponse.json({ received: true, skipped: true });
   }
 
   // Track retry attempts for previously failed events
   const retryCount = await incrementRetryCount(event.id);
   if (retryCount > 1) {
-    console.log(`🔄 [Webhook] Retry attempt ${retryCount} for event: ${event.id}`);
+    logger.info('Retry attempt for event', { eventId: event.id, retryCount });
   }
-
-  console.log('📨 Stripe webhook received:', event.type);
 
   // Log which Supabase key is being used (for debugging)
   const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-  console.log(`🔑 [Webhook] Using ${hasServiceRole ? 'SERVICE_ROLE_KEY' : 'ANON_KEY (⚠️ WARNING: May fail due to RLS)'}`);
+  logger.info('Stripe webhook received', {
+    eventType: event.type,
+    eventId: event.id,
+    hasServiceRole,
+  });
 
   try {
     switch (event.type) {
@@ -189,28 +198,34 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        logger.debug('Unhandled event type', { eventType: event.type });
     }
 
     // ✅ Mark event as processed successfully
     await markEventProcessed(event.id, event.type, 'success');
+    logger.info('Webhook processed successfully', { eventId: event.id, eventType: event.type });
     return NextResponse.json({ received: true });
-  } catch (error: any) {
-    console.error('Webhook handler error:', error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error('Webhook handler error', {
+      eventId: event.id,
+      eventType: event.type,
+      errorMessage: err.message,
+    }, err);
 
     // ❌ Mark event as failed (will be retried by Stripe)
-    await markEventProcessed(event.id, event.type, 'failed', error.message);
+    await markEventProcessed(event.id, event.type, 'failed', err.message);
 
     // Return 500 so Stripe retries the webhook
     return NextResponse.json(
-      { error: error.message || 'Webhook handler failed' },
+      { error: err.message || 'Webhook handler failed' },
       { status: 500 }
     );
   }
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-  console.log('✅ Checkout completed:', session.id);
+  logger.info('Checkout completed', { sessionId: session.id });
   const supabase = getSupabaseClient();
 
   const { plan, customerName, proposalId, branches, addons, client_id, tenant_id, previous_subscription_id } = session.metadata || {};
@@ -222,10 +237,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // PLAN CHANGE FLOW: Handle upgrade/downgrade from existing subscription
   // ============================================
   if (previous_subscription_id && client_id) {
-    console.log('🔄 [Checkout] Plan change detected - updating existing subscription');
-    console.log('   Previous subscription ID:', previous_subscription_id);
-    console.log('   New plan:', plan);
-    console.log('   Client ID:', client_id);
+    logger.info('Plan change detected - updating existing subscription', {
+      previousSubscriptionId: previous_subscription_id,
+      newPlan: plan,
+      clientId: client_id,
+    });
 
     const validatedPlan = isValidPlan(plan) ? plan : 'essentials';
 
@@ -247,10 +263,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         }
         if (periodEnd) {
           currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
-          console.log('✅ [Checkout] Got current_period_end from Stripe:', currentPeriodEnd);
+          logger.debug('Got current_period_end from Stripe', { currentPeriodEnd });
         }
       } catch (err) {
-        console.error('⚠️ [Checkout] Could not fetch Stripe subscription for period_end:', err);
+        logger.warn('Could not fetch Stripe subscription for period_end', { stripeSubscriptionId });
       }
 
       // Update the existing subscription record with the new Stripe subscription
@@ -283,18 +299,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         .eq('id', previous_subscription_id);
 
       if (updateError) {
-        console.error('🚨 [Checkout] Error updating subscription:', updateError);
+        logger.error('Error updating subscription', { error: updateError.message });
         throw new Error(`Failed to update subscription: ${updateError.message}`);
       }
 
-      console.log('✅ [Checkout] Subscription updated to plan:', validatedPlan);
+      logger.info('Subscription updated to plan', { plan: validatedPlan });
 
       // CRITICAL: Also update tenant.plan - this is what the dashboard reads
       // First, try to get tenant_id from metadata, then from client
       let tenantIdToUpdate = tenant_id;
 
       if (!tenantIdToUpdate && client_id) {
-        console.log('🔍 [Checkout] tenant_id not in metadata, fetching from client:', client_id);
+        logger.debug('tenant_id not in metadata, fetching from client', { clientId: client_id });
         const { data: clientData } = await supabase
           .from('clients')
           .select('tenant_id')
@@ -303,7 +319,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
         if (clientData?.tenant_id) {
           tenantIdToUpdate = clientData.tenant_id;
-          console.log('✅ [Checkout] Found tenant_id from client:', tenantIdToUpdate);
+          logger.debug('Found tenant_id from client', { tenantId: tenantIdToUpdate });
         }
       }
 
@@ -317,13 +333,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           .eq('id', tenantIdToUpdate);
 
         if (tenantUpdateError) {
-          console.error('🚨 [Checkout] Error updating tenant plan:', tenantUpdateError);
+          logger.error('Error updating tenant plan', { error: tenantUpdateError.message });
           // Don't throw - subscription is already updated
         } else {
-          console.log('✅ [Checkout] Tenant plan updated to:', validatedPlan);
+          logger.info('Tenant plan updated', { plan: validatedPlan, tenantId: tenantIdToUpdate });
         }
       } else {
-        console.warn('⚠️ [Checkout] Could not find tenant_id to update plan');
+        logger.warn('Could not find tenant_id to update plan');
       }
 
       // Log the plan change
@@ -338,7 +354,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         },
       });
 
-      console.log('✅ [Checkout] Plan change completed successfully');
+      logger.info('Plan change completed successfully', { sessionId: session.id });
       return; // Exit early - no need to create new client/subscription
     }
   }
@@ -347,7 +363,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // FIX 1: Email obligatorio - BLOQUEAR si falta (Stripe reintentará)
   // ============================================
   if (!customerEmail) {
-    console.error('🚨 [Checkout] CRITICAL: No customer email found in session:', session.id);
+    logger.error('No customer email found in session', { sessionId: session.id });
     throw new Error('Customer email is required for checkout completion');
   }
 
@@ -355,15 +371,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // FIX 4: Validar plan obligatorio y válido
   // ============================================
   if (!plan) {
-    console.error('🚨 [Checkout] WARNING: No plan in metadata, defaulting to essentials');
+    logger.warn('No plan in metadata, defaulting to essentials', { sessionId: session.id });
   }
 
   const validatedPlan = isValidPlan(plan) ? plan : 'essentials';
   if (plan && !isValidPlan(plan)) {
-    console.warn(`⚠️ [Checkout] Invalid plan "${plan}", using "essentials"`);
+    logger.warn('Invalid plan in metadata, using essentials', { invalidPlan: plan });
   }
 
-  console.log('📋 Checkout metadata:', { plan: validatedPlan, customerName, branches, addons, proposalId });
+  logger.debug('Checkout metadata', { plan: validatedPlan, branches, hasAddons: !!addons, hasProposalId: !!proposalId });
 
   // Find or create client (case-insensitive email match)
   let { data: existingClient } = await supabase
@@ -395,11 +411,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       .single();
 
     if (error) {
-      console.error('🚨 [Checkout] Error creating client:', error);
+      logger.error('Error creating client', { error: error.message });
       throw new Error(`Failed to create client: ${error.message}`);
     }
     clientId = newClient?.id || null;
-    console.log('✅ New client created:', clientId);
+    logger.info('New client created', { clientId });
   } else {
     // Update existing client to active
     await supabase
@@ -409,7 +425,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         locations_count: branches ? parseInt(branches) : 1,
       })
       .eq('id', existingClient.id);
-    console.log('✅ Existing client updated:', existingClient.id);
+    logger.info('Existing client updated', { clientId: existingClient.id });
   }
 
   // Update proposal if exists
@@ -421,7 +437,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         accepted_at: new Date().toISOString(),
       })
       .eq('id', proposalId);
-    console.log('✅ Proposal marked as accepted:', proposalId);
+    logger.info('Proposal marked as accepted', { proposalId });
   }
 
   // Create onboarding data record for the new client
@@ -435,13 +451,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       }, { onConflict: 'client_id' });
 
     if (onboardingError) {
-      console.error('Error creating onboarding data:', onboardingError);
+      logger.warn('Error creating onboarding data', { error: onboardingError.message, clientId });
     } else {
-      console.log('✅ Onboarding data created for client:', clientId);
+      logger.debug('Onboarding data created for client', { clientId });
     }
   }
 
-  console.log('✅ Checkout processing complete for client:', clientId);
+  logger.info('Checkout processing complete', { clientId, plan: validatedPlan });
 
   // 📧 Send Welcome Email
   if (customerEmail && customerName) {
@@ -458,18 +474,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       });
 
       if (emailResult.success) {
-        console.log('📧 Welcome email sent successfully');
+        logger.info('Welcome email sent successfully');
       } else {
-        console.error('📧 Failed to send welcome email:', emailResult.error);
+        logger.error('Failed to send welcome email', { error: emailResult.error });
       }
     } catch (emailError) {
-      console.error('📧 Error sending welcome email:', emailError);
+      logger.error('Error sending welcome email', {}, emailError as Error);
     }
   }
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
-  console.log('🆕 Subscription created:', subscription.id);
+  logger.info('Subscription created', { subscriptionId: subscription.id });
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
@@ -483,7 +499,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   let detectedPlan = metadataPlan;
 
   if (!detectedPlan || !isValidPlan(detectedPlan)) {
-    console.log('⚠️ [Subscription] Plan not in metadata, detecting from product name...');
+    logger.debug('Plan not in metadata, detecting from product name');
 
     // Try to detect plan from the subscription items (product names)
     for (const item of subscription.items.data) {
@@ -499,7 +515,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
           const product = await stripe.products.retrieve(price.product);
           productName = product.name || '';
         } catch (e) {
-          console.warn('Could not fetch product:', price.product);
+          logger.warn('Could not fetch product', { productId: price.product });
         }
       }
 
@@ -507,15 +523,15 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       const nameLower = productName.toLowerCase();
       if (nameLower.includes('growth')) {
         detectedPlan = 'growth';
-        console.log('✅ [Subscription] Detected plan from product name:', productName, '-> growth');
+        logger.debug('Detected plan from product name', { productName, plan: 'growth' });
         break;
       } else if (nameLower.includes('essentials')) {
         detectedPlan = 'essentials';
-        console.log('✅ [Subscription] Detected plan from product name:', productName, '-> essentials');
+        logger.debug('Detected plan from product name', { productName, plan: 'essentials' });
         break;
       } else if (nameLower.includes('starter')) {
         detectedPlan = 'starter';
-        console.log('✅ [Subscription] Detected plan from product name:', productName, '-> starter');
+        logger.debug('Detected plan from product name', { productName, plan: 'starter' });
         break;
       }
     }
@@ -525,7 +541,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const plan = detectedPlan;
 
   // Log without exposing PII
-  console.log('📋 Subscription metadata:', { plan, metadataPlan, branches, addons, hasCustomerPhone: !!customerPhone });
+  logger.debug('Subscription metadata', { plan, metadataPlan, branches, hasAddons: !!addons, hasCustomerPhone: !!customerPhone });
 
   // ============================================
   // FIX: Detect PLAN CHANGE scenario
@@ -544,9 +560,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
     const checkoutSession = recentSessions.data[0];
     if (checkoutSession?.metadata?.previous_subscription_id) {
-      console.log('⏭️ [Subscription] This is a plan change subscription - skipping (handled by checkout.session.completed)');
-      console.log('   Previous subscription ID:', checkoutSession.metadata.previous_subscription_id);
-      console.log('   New Stripe subscription ID:', subscription.id);
+      logger.info('Plan change subscription - skipping (handled by checkout.session.completed)', {
+        previousSubscriptionId: checkoutSession.metadata.previous_subscription_id,
+        newSubscriptionId: subscription.id,
+      });
 
       // The checkout.session.completed handler already:
       // 1. Updated the existing subscription with the new stripe_subscription_id
@@ -557,7 +574,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   } catch (sessionError) {
     // If we can't find the checkout session, continue with normal flow
     // This happens for subscriptions created directly (not via checkout)
-    console.log('📋 [Subscription] No checkout session found, proceeding with normal flow');
+    logger.debug('No checkout session found, proceeding with normal flow');
   }
 
   // Get customer email from Stripe (normalize to lowercase)
@@ -569,7 +586,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   // FIX 1: Email obligatorio - BLOQUEAR si falta
   // ============================================
   if (!customerEmail) {
-    console.error('🚨 [Subscription] CRITICAL: No customer email found for subscription:', subscription.id);
+    logger.error('No customer email found for subscription', { subscriptionId: subscription.id });
     throw new Error('Customer email is required for subscription creation');
   }
 
@@ -596,19 +613,19 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     const clientMetadataPlan = client?.metadata?.plan;
     if (clientMetadataPlan && isValidPlan(clientMetadataPlan)) {
       finalPlan = clientMetadataPlan;
-      console.log('✅ [Subscription] Got plan from client.metadata:', finalPlan);
+      logger.debug('Got plan from client.metadata', { plan: finalPlan });
     }
   }
 
   const validatedPlan = isValidPlan(finalPlan) ? finalPlan : 'essentials';
   if (!finalPlan) {
-    console.warn('⚠️ [Subscription] No plan found in any source, defaulting to essentials');
+    logger.warn('No plan found in any source, defaulting to essentials');
   } else if (!isValidPlan(finalPlan)) {
-    console.warn(`⚠️ [Subscription] Invalid plan "${finalPlan}", using "essentials"`);
+    logger.warn('Invalid plan, using essentials', { invalidPlan: finalPlan });
   }
 
   if (!client) {
-    console.warn('⚠️ [Subscription] Client not found, creating now (race condition fallback)');
+    logger.warn('Client not found, creating now (race condition fallback)');
 
     // Create client if checkout.session.completed hasn't created it yet
     const { data: newClient, error: createClientError } = await supabase
@@ -628,12 +645,12 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       .single();
 
     if (createClientError || !newClient) {
-      console.error('🚨 [Subscription] Failed to create client:', createClientError);
+      logger.error('Failed to create client', { error: createClientError?.message });
       throw new Error(`Failed to create client: ${createClientError?.message || 'Unknown error'}`);
     }
 
     client = newClient;
-    console.log('✅ [Subscription] Client created via fallback:', client.id);
+    logger.info('Client created via fallback', { clientId: client.id });
   }
 
   // Calculate total monthly amount from all line items
@@ -673,7 +690,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     .single();
 
   if (existingSubscription) {
-    console.log('⏭️ [Subscription] Subscription already exists, updating instead:', subscription.id);
+    logger.info('Subscription already exists, updating instead', { subscriptionId: subscription.id });
 
     // Update existing subscription
     const { error: updateError } = await supabase
@@ -687,9 +704,9 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       .eq('stripe_subscription_id', subscription.id);
 
     if (updateError) {
-      console.error('🚨 [Subscription] Error updating existing subscription:', updateError);
+      logger.error('Error updating existing subscription', { error: updateError.message });
     } else {
-      console.log('✅ [Subscription] Existing subscription updated, skipping duplicate creation');
+      logger.info('Existing subscription updated, skipping duplicate creation');
     }
 
     // Exit early - tenant provisioning was already done
@@ -715,12 +732,16 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   });
 
   if (error) {
-    console.error('🚨 [Subscription] Error creating subscription record:', error);
+    logger.error('Error creating subscription record', { error: error.message, clientId: client.id });
     throw new Error(`Failed to create subscription record: ${error.message}`);
   }
 
-  console.log('✅ Subscription record created for client:', client.id);
-  console.log('   Plan:', validatedPlan, '| Contracted Branches:', contractedBranches, '| Amount:', totalMonthlyAmount / 100, 'MXN');
+  logger.info('Subscription record created', {
+    clientId: client.id,
+    plan: validatedPlan,
+    contractedBranches,
+    monthlyAmount: totalMonthlyAmount / 100,
+  });
 
   // Get the newly created subscription ID
   const { data: newSubscription } = await supabase
@@ -739,7 +760,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   // - User role para permisos
   // - Servicios y FAQs por defecto según vertical
   // ============================================
-  console.log('🏗️ [Webhook] Starting tenant provisioning...');
+  logger.info('Starting tenant provisioning', { clientId: client.id, plan: validatedPlan });
 
   const provisionResult = await provisionTenant({
     client_id: client.id,
@@ -754,11 +775,11 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   });
 
   if (provisionResult.success) {
-    console.log('✅ [Webhook] Tenant provisioned successfully:', {
-      tenant_id: provisionResult.tenant_id,
-      tenant_slug: provisionResult.tenant_slug,
-      branch_id: provisionResult.branch_id,
-      user_id: provisionResult.user_id,
+    logger.info('Tenant provisioned successfully', {
+      tenantId: provisionResult.tenant_id,
+      tenantSlug: provisionResult.tenant_slug,
+      branchId: provisionResult.branch_id,
+      userId: provisionResult.user_id,
     });
 
     // ============================================
@@ -769,7 +790,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         .from('clients')
         .update({ tenant_id: provisionResult.tenant_id })
         .eq('id', client.id);
-      console.log('✅ [Webhook] Client linked to tenant:', provisionResult.tenant_id);
+      logger.info('Client linked to tenant', { clientId: client.id, tenantId: provisionResult.tenant_id });
     }
 
     // 📧 Enviar email con credenciales de acceso
@@ -787,20 +808,24 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
           tenantSlug: provisionResult.tenant_slug || '',
         });
 
-        console.log('📧 [Webhook] Credentials email sent successfully');
+        logger.info('Credentials email sent successfully');
       } catch (emailError) {
-        console.error('📧 [Webhook] Error sending credentials email:', emailError);
+        logger.error('Error sending credentials email', {}, emailError as Error);
       }
     } else {
       // Usuario existente - puede usar su misma cuenta de TIS TIS
-      console.log('✅ [Webhook] User already has TIS TIS account - no credentials email needed');
+      logger.info('User already has TIS TIS account - no credentials email needed');
     }
   } else {
     // ============================================
     // FIX 5: BLOQUEAR si provisioning falla
     // Esto hará que Stripe reintente el webhook
     // ============================================
-    console.error('🚨 [Webhook] Tenant provisioning FAILED:', provisionResult.error);
+    logger.error('Tenant provisioning FAILED', {
+      error: provisionResult.error,
+      details: provisionResult.details,
+      clientId: client.id,
+    });
 
     // Notificar al equipo de TIS TIS sobre el fallo
     await supabase.from('notification_queue').insert({
@@ -839,7 +864,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  console.log('🔄 Subscription updated:', subscription.id);
+  logger.info('Subscription updated', { subscriptionId: subscription.id, status: subscription.status });
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
@@ -853,16 +878,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   // If period dates are missing, fetch fresh from Stripe
   if (!periodStart || !periodEnd) {
     try {
-      console.log('📅 [SubscriptionUpdated] Fetching fresh data from Stripe...');
+      logger.debug('Fetching fresh data from Stripe');
       const freshSubscription = await stripe.subscriptions.retrieve(subscription.id);
       periodStart = (freshSubscription as any).current_period_start || periodStart;
       periodEnd = (freshSubscription as any).current_period_end || periodEnd;
-      console.log('✅ [SubscriptionUpdated] Got fresh period dates:', {
+      logger.debug('Got fresh period dates', {
         periodStart: periodStart ? new Date(periodStart * 1000).toISOString() : null,
         periodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       });
     } catch (err) {
-      console.error('⚠️ [SubscriptionUpdated] Could not fetch fresh data from Stripe:', err);
+      logger.warn('Could not fetch fresh data from Stripe', { subscriptionId: subscription.id });
     }
   }
 
@@ -884,7 +909,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   let detectedPlan = metadataPlan;
 
   if (!detectedPlan || !isValidPlan(detectedPlan)) {
-    console.log('⚠️ [SubscriptionUpdated] Plan not in metadata, detecting from product name...');
+    logger.debug('Plan not in metadata, detecting from product name');
 
     // Try to detect plan from the subscription items (product names)
     for (const item of subscription.items.data) {
@@ -900,7 +925,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           const product = await stripe.products.retrieve(price.product);
           productName = product.name || '';
         } catch (e) {
-          console.warn('Could not fetch product:', price.product);
+          logger.warn('Could not fetch product', { productId: price.product });
         }
       }
 
@@ -912,15 +937,15 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
       if (nameLower.includes('growth')) {
         detectedPlan = 'growth';
-        console.log('✅ [SubscriptionUpdated] Detected plan from product name:', productName, '-> growth');
+        logger.debug('Detected plan from product name', { productName, plan: 'growth' });
         break;
       } else if (nameLower.includes('essentials')) {
         detectedPlan = 'essentials';
-        console.log('✅ [SubscriptionUpdated] Detected plan from product name:', productName, '-> essentials');
+        logger.debug('Detected plan from product name', { productName, plan: 'essentials' });
         break;
       } else if (nameLower.includes('starter')) {
         detectedPlan = 'starter';
-        console.log('✅ [SubscriptionUpdated] Detected plan from product name:', productName, '-> starter');
+        logger.debug('Detected plan from product name', { productName, plan: 'starter' });
         break;
       }
     }
@@ -946,19 +971,19 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   if (branchesCount !== undefined) {
     updateData.max_branches = branchesCount;
     updateData.branches = branchesCount;
-    console.log(`📊 Branches count updated to: ${branchesCount}`);
+    logger.debug('Branches count updated', { branchesCount });
   }
 
   // Update plan if detected or in metadata
   if (detectedPlan && isValidPlan(detectedPlan)) {
     updateData.plan = detectedPlan;
-    console.log(`📋 Plan updated to: ${detectedPlan}`);
+    logger.debug('Plan updated', { plan: detectedPlan });
   }
 
   // Update monthly amount if changed
   if (totalMonthlyAmount > 0) {
     updateData.monthly_amount = totalMonthlyAmount / 100;
-    console.log(`💰 Monthly amount updated to: ${totalMonthlyAmount / 100} MXN`);
+    logger.debug('Monthly amount updated', { monthlyAmount: totalMonthlyAmount / 100 });
   }
 
   const { error } = await supabase
@@ -967,12 +992,13 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     .eq('stripe_subscription_id', subscription.id);
 
   if (error) {
-    console.error('🚨 [SubscriptionUpdated] Error updating subscription:', error);
+    logger.error('Error updating subscription', { error: error.message, subscriptionId: subscription.id });
     throw new Error(`Failed to update subscription: ${error.message}`);
   }
 
-  console.log('✅ Subscription record updated:', {
+  logger.info('Subscription record updated', {
     status,
+    subscriptionId: subscription.id,
     periodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
   });
 
@@ -999,14 +1025,14 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           .from('tenants')
           .update({ plan: detectedPlan, updated_at: new Date().toISOString() })
           .eq('id', clientData.tenant_id);
-        console.log('✅ [SubscriptionUpdated] Tenant plan updated to:', detectedPlan);
+        logger.info('Tenant plan updated', { plan: detectedPlan, tenantId: clientData.tenant_id });
       }
     }
   }
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  console.log('❌ Subscription deleted:', subscription.id);
+  logger.info('Subscription deleted', { subscriptionId: subscription.id });
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
@@ -1051,12 +1077,12 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       });
 
       if (emailResult.success) {
-        console.log('📧 Cancellation email sent successfully');
+        logger.info('Cancellation email sent successfully');
       } else {
-        console.error('📧 Failed to send cancellation email:', emailResult.error);
+        logger.error('Failed to send cancellation email', { error: emailResult.error });
       }
     } catch (emailError) {
-      console.error('📧 Error sending cancellation email:', emailError);
+      logger.error('Error sending cancellation email', {}, emailError as Error);
     }
   }
 }
@@ -1078,8 +1104,12 @@ interface AssemblyTriggerParams {
 }
 
 async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
-  console.log('🚀 [AssemblyTrigger] Starting micro-app provisioning...');
-  console.log('📋 [AssemblyTrigger] Params:', params);
+  logger.info('Starting micro-app provisioning', {
+    clientId: params.client_id,
+    plan: params.plan,
+    vertical: params.vertical,
+    branches: params.branches,
+  });
 
   try {
     const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL
@@ -1105,9 +1135,9 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('❌ [AssemblyTrigger] Assembly Engine failed:', {
+      logger.error('Assembly Engine failed', {
         status: response.status,
-        error: errorData
+        clientId: params.client_id,
       });
 
       // Notify team of assembly failure (non-blocking)
@@ -1128,17 +1158,17 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
     }
 
     const result = await response.json();
-    console.log('✅ [AssemblyTrigger] Assembly Engine succeeded:', {
-      deployment_id: result.data?.deployment_id,
-      components_count: result.data?.components_count,
-      estimated_minutes: result.data?.estimated_duration_minutes
+    logger.info('Assembly Engine succeeded', {
+      deploymentId: result.data?.deployment_id,
+      componentsCount: result.data?.components_count,
+      estimatedMinutes: result.data?.estimated_duration_minutes,
     });
 
     // Note: Deployment is now handled entirely by Assembly Engine
     // No external workflow trigger needed
 
   } catch (error) {
-    console.error('💥 [AssemblyTrigger] Unexpected error:', error);
+    logger.error('Unexpected error in Assembly Engine trigger', {}, error as Error);
   }
 }
 
@@ -1147,13 +1177,13 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
 // ============================================
 
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  console.log('💰 Payment succeeded for invoice:', invoice.id);
+  logger.info('Payment succeeded for invoice', { invoiceId: invoice.id });
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
   // Skip if no customer
   if (!invoice.customer) {
-    console.log('No customer on invoice, skipping');
+    logger.debug('No customer on invoice, skipping');
     return;
   }
 
@@ -1163,7 +1193,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   const customerName = (customer as Stripe.Customer).name || 'Cliente';
 
   if (!customerEmail) {
-    console.error('No customer email found for invoice:', invoice.id);
+    logger.warn('No customer email found for invoice', { invoiceId: invoice.id });
     return;
   }
 
@@ -1183,7 +1213,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       const periodStart = (stripeSubscription as any).current_period_start;
       const periodEnd = (stripeSubscription as any).current_period_end;
 
-      console.log('📅 [Invoice] Syncing billing dates from Stripe subscription:', {
+      logger.debug('Syncing billing dates from Stripe subscription', {
         subscriptionId,
         periodStart: periodStart ? new Date(periodStart * 1000).toISOString() : null,
         periodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
@@ -1203,9 +1233,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         .single();
 
       if (updateError) {
-        console.error('🚨 [Invoice] Error updating subscription dates:', updateError);
+        logger.error('Error updating subscription dates', { error: updateError.message });
       } else {
-        console.log('✅ [Invoice] Subscription billing dates synced successfully');
+        logger.info('Subscription billing dates synced successfully');
         if (sub?.plan) {
           planName = getPlanDisplayName(sub.plan);
         }
@@ -1216,7 +1246,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         nextBillingDate = new Date(periodEnd * 1000).toISOString();
       }
     } catch (err) {
-      console.error('⚠️ [Invoice] Error fetching Stripe subscription:', err);
+      logger.warn('Error fetching Stripe subscription', { subscriptionId });
 
       // Fallback: try to get plan from database without updating dates
       const { data: sub } = await supabase
@@ -1254,23 +1284,23 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     });
 
     if (emailResult.success) {
-      console.log('📧 Payment confirmed email sent successfully');
+      logger.info('Payment confirmed email sent successfully');
     } else {
-      console.error('📧 Failed to send payment email:', emailResult.error);
+      logger.error('Failed to send payment email', { error: emailResult.error });
     }
   } catch (emailError) {
-    console.error('📧 Error sending payment email:', emailError);
+    logger.error('Error sending payment email', {}, emailError as Error);
   }
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
-  console.log('❌ Payment failed for invoice:', invoice.id);
+  logger.warn('Payment failed for invoice', { invoiceId: invoice.id });
   const stripe = getStripeClient();
   const supabase = getSupabaseClient();
 
   // Skip if no customer
   if (!invoice.customer) {
-    console.log('No customer on invoice, skipping');
+    logger.debug('No customer on invoice, skipping');
     return;
   }
 
@@ -1280,7 +1310,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   const customerName = (customer as Stripe.Customer).name || 'Cliente';
 
   if (!customerEmail) {
-    console.error('No customer email found for invoice:', invoice.id);
+    logger.warn('No customer email found for failed invoice', { invoiceId: invoice.id });
     return;
   }
 
@@ -1303,9 +1333,9 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       .single();
 
     if (updateError) {
-      console.error('🚨 [PaymentFailed] Error updating subscription status:', updateError);
+      logger.error('Error updating subscription status to past_due', { error: updateError.message });
     } else {
-      console.log('⚠️ [PaymentFailed] Subscription marked as past_due:', failedSubscriptionId);
+      logger.warn('Subscription marked as past_due', { subscriptionId: failedSubscriptionId });
     }
 
     if (sub?.plan) {
@@ -1328,7 +1358,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', clientData.tenant_id);
-        console.log('⚠️ [PaymentFailed] Tenant marked as past_due:', clientData.tenant_id);
+        logger.warn('Tenant marked as past_due', { tenantId: clientData.tenant_id });
       }
     }
   }
@@ -1363,12 +1393,12 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     });
 
     if (emailResult.success) {
-      console.log('📧 Payment failed email sent successfully');
+      logger.info('Payment failed notification email sent');
     } else {
-      console.error('📧 Failed to send payment failed email:', emailResult.error);
+      logger.error('Failed to send payment failed email', { error: emailResult.error });
     }
   } catch (emailError) {
-    console.error('📧 Error sending payment failed email:', emailError);
+    logger.error('Error sending payment failed email', {}, emailError as Error);
   }
 
   // Also notify internal team

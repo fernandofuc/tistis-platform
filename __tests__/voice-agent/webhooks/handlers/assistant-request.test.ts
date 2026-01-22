@@ -3,6 +3,7 @@
  * Assistant Request Handler Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   handleAssistantRequest,
   createAssistantRequestHandler,
@@ -14,12 +15,12 @@ import type {
 
 // Mock Supabase
 const mockSupabase = {
-  from: jest.fn().mockReturnThis(),
-  select: jest.fn().mockReturnThis(),
-  insert: jest.fn().mockReturnThis(),
-  update: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  single: jest.fn(),
+  from: vi.fn().mockReturnThis(),
+  select: vi.fn().mockReturnThis(),
+  insert: vi.fn().mockReturnThis(),
+  update: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  single: vi.fn(),
 };
 
 describe('handleAssistantRequest', () => {
@@ -48,7 +49,7 @@ describe('handleAssistantRequest', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Success Cases', () => {

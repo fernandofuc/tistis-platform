@@ -3,6 +3,7 @@
  * End of Call Handler Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   handleEndOfCall,
   createEndOfCallHandler,
@@ -14,12 +15,12 @@ import type {
 
 // Mock Supabase
 const mockSupabase = {
-  from: jest.fn().mockReturnThis(),
-  select: jest.fn().mockReturnThis(),
-  insert: jest.fn().mockReturnThis(),
-  update: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  single: jest.fn(),
+  from: vi.fn().mockReturnThis(),
+  select: vi.fn().mockReturnThis(),
+  insert: vi.fn().mockReturnThis(),
+  update: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  single: vi.fn(),
 };
 
 describe('handleEndOfCall', () => {
@@ -46,7 +47,7 @@ describe('handleEndOfCall', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Default: call found
     mockSupabase.single.mockResolvedValue({
       data: {

@@ -3,6 +3,7 @@
  * VoiceRAG Core Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   VoiceRAG,
   createVoiceRAG,
@@ -15,17 +16,17 @@ import { resetResponseFormatter } from '../../../lib/voice-agent/rag/response-fo
 import type { RAGContext, VoiceRAGConfig } from '../../../lib/voice-agent/rag/types';
 
 // Mock fetch for OpenAI embeddings
-const mockFetch = jest.fn();
+const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 // Mock Supabase
-const mockRpc = jest.fn();
-const mockFunctionsInvoke = jest.fn();
-const mockFrom = jest.fn();
-const mockSelect = jest.fn();
-const mockEq = jest.fn();
-const mockIn = jest.fn();
-const mockLimit = jest.fn();
+const mockRpc = vi.fn();
+const mockFunctionsInvoke = vi.fn();
+const mockFrom = vi.fn();
+const mockSelect = vi.fn();
+const mockEq = vi.fn();
+const mockIn = vi.fn();
+const mockLimit = vi.fn();
 
 const mockSupabase = {
   rpc: mockRpc,
@@ -63,7 +64,7 @@ describe('VoiceRAG', () => {
   const mockEmbedding = Array(1536).fill(0.1);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     resetVoiceRAG();
     resetCache();
     resetQueryOptimizer();

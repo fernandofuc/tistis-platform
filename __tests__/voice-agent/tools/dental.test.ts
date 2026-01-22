@@ -3,8 +3,8 @@
  * Dental Tools Tests
  */
 
+import { describe, it, expect, vi } from 'vitest';
 import {
-  dentalCheckAvailability,
   createAppointment,
   modifyAppointment,
   cancelAppointment,
@@ -15,30 +15,50 @@ import { createToolContext, type ToolContext } from '@/lib/voice-agent/tools';
 // Import directly from dental module for proper types
 import { checkAvailability } from '@/lib/voice-agent/tools/dental/check-availability';
 
-// Mock Supabase client
-const createMockSupabase = (overrides: Record<string, unknown> = {}) => {
-  const mockChain = {
-    from: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
-    delete: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    neq: jest.fn().mockReturnThis(),
-    in: jest.fn().mockReturnThis(),
-    ilike: jest.fn().mockReturnThis(),
-    or: jest.fn().mockReturnThis(),
-    not: jest.fn().mockReturnThis(),
-    gte: jest.fn().mockReturnThis(),
-    lte: jest.fn().mockReturnThis(),
-    order: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
-    single: jest.fn().mockResolvedValue({ data: null, error: null }),
-    rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
+// Mock Supabase client type for tests
+interface MockSupabaseChain {
+  from: ReturnType<typeof vi.fn>;
+  select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
+  ilike: ReturnType<typeof vi.fn>;
+  or: ReturnType<typeof vi.fn>;
+  not: ReturnType<typeof vi.fn>;
+  gte: ReturnType<typeof vi.fn>;
+  lte: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  limit: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+  rpc: ReturnType<typeof vi.fn>;
+}
+
+const createMockSupabase = (overrides: Record<string, unknown> = {}): MockSupabaseChain & ToolContext['supabase'] => {
+  const mockChain: MockSupabaseChain = {
+    from: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    neq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    ilike: vi.fn().mockReturnThis(),
+    or: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lte: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     ...overrides,
   };
 
-  return mockChain as unknown as ToolContext['supabase'];
+  return mockChain as MockSupabaseChain & ToolContext['supabase'];
 };
 
 const createTestContext = (supabase: ToolContext['supabase']): ToolContext =>
@@ -72,7 +92,7 @@ describe('Dental Tools', () => {
 
     it('should handle successful availability check', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      (mockSupabase.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           available: true,
           slots: [
@@ -111,7 +131,7 @@ describe('Dental Tools', () => {
 
     it('should filter by specialty', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      (mockSupabase.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           available: true,
           slots: [{ time: '10:00', doctor_id: 'doc-1', doctor_name: 'Dr. Ortiz' }],
@@ -162,13 +182,13 @@ describe('Dental Tools', () => {
       const mockSupabase = createMockSupabase();
 
       // Mock service lookup
-      (mockSupabase.from as jest.Mock).mockImplementation((table: string) => {
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
         if (table === 'services') {
           return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            ilike: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            ilike: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
               data: { id: 'serv-1', name: 'Limpieza', duration_minutes: 30 },
               error: null,
             }),
@@ -176,13 +196,13 @@ describe('Dental Tools', () => {
         }
         if (table === 'doctors') {
           return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockResolvedValue({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({
               data: [{ id: 'doc-1', name: 'Dr. García' }],
               error: null,
             }),
-            single: jest.fn().mockResolvedValue({
+            single: vi.fn().mockResolvedValue({
               data: { name: 'Dr. García' },
               error: null,
             }),
@@ -190,13 +210,13 @@ describe('Dental Tools', () => {
         }
         if (table === 'appointments') {
           return {
-            select: jest.fn().mockReturnThis(),
-            insert: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            neq: jest.fn().mockReturnThis(),
-            not: jest.fn().mockReturnThis(),
-            or: jest.fn().mockResolvedValue({ data: [], error: null }),
-            single: jest.fn().mockResolvedValue({
+            select: vi.fn().mockReturnThis(),
+            insert: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            not: vi.fn().mockReturnThis(),
+            or: vi.fn().mockResolvedValue({ data: [], error: null }),
+            single: vi.fn().mockResolvedValue({
               data: { id: 'apt-123', confirmation_code: 'XYZ789' },
               error: null,
             }),
@@ -205,7 +225,7 @@ describe('Dental Tools', () => {
         return mockSupabase;
       });
 
-      (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      (mockSupabase.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: [{ doctor_id: 'doc-1', doctor_name: 'Dr. García' }],
         error: null,
       });
@@ -262,7 +282,7 @@ describe('Dental Tools', () => {
 
     it('should verify phone number', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.single as jest.Mock).mockResolvedValue({
+      (mockSupabase.single as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: {
           id: 'apt-123',
           patient_phone: '5551234567',
@@ -303,7 +323,7 @@ describe('Dental Tools', () => {
 
     it('should cancel appointment', async () => {
       const mockSupabase = createMockSupabase();
-      (mockSupabase.single as jest.Mock)
+      (mockSupabase.single as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
           data: {
             id: 'apt-123',
@@ -346,14 +366,14 @@ describe('Dental Tools', () => {
 
       // Create a chainable mock that supports multiple .order() calls
       const createChainableMock = (finalData: unknown) => {
-        const chain: Record<string, jest.Mock> = {};
-        chain.select = jest.fn().mockReturnValue(chain);
-        chain.eq = jest.fn().mockReturnValue(chain);
-        chain.ilike = jest.fn().mockReturnValue(chain);
-        chain.or = jest.fn().mockReturnValue(chain);
-        chain.order = jest.fn().mockReturnValue(chain);
+        const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+        chain.select = vi.fn().mockReturnValue(chain);
+        chain.eq = vi.fn().mockReturnValue(chain);
+        chain.ilike = vi.fn().mockReturnValue(chain);
+        chain.or = vi.fn().mockReturnValue(chain);
+        chain.order = vi.fn().mockReturnValue(chain);
         // Final method that resolves
-        chain.then = jest.fn((resolve) => resolve({ data: finalData, error: null }));
+        chain.then = vi.fn((resolve) => resolve({ data: finalData, error: null }));
         // Make it thenable for await
         Object.defineProperty(chain, 'then', {
           value: (resolve: (value: unknown) => void) => Promise.resolve({ data: finalData, error: null }).then(resolve),
@@ -361,7 +381,7 @@ describe('Dental Tools', () => {
         return chain;
       };
 
-      (mockSupabase.from as jest.Mock).mockImplementation(() => createChainableMock(mockServices));
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => createChainableMock(mockServices));
 
       const context = createTestContext(mockSupabase);
       const result = await getServices.handler({}, context);
@@ -379,19 +399,19 @@ describe('Dental Tools', () => {
 
       // Create a chainable mock that supports multiple .order() calls
       const createChainableMock = (finalData: unknown) => {
-        const chain: Record<string, jest.Mock> = {};
-        chain.select = jest.fn().mockReturnValue(chain);
-        chain.eq = jest.fn().mockReturnValue(chain);
-        chain.ilike = jest.fn().mockReturnValue(chain);
-        chain.or = jest.fn().mockReturnValue(chain);
-        chain.order = jest.fn().mockReturnValue(chain);
+        const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+        chain.select = vi.fn().mockReturnValue(chain);
+        chain.eq = vi.fn().mockReturnValue(chain);
+        chain.ilike = vi.fn().mockReturnValue(chain);
+        chain.or = vi.fn().mockReturnValue(chain);
+        chain.order = vi.fn().mockReturnValue(chain);
         Object.defineProperty(chain, 'then', {
           value: (resolve: (value: unknown) => void) => Promise.resolve({ data: finalData, error: null }).then(resolve),
         });
         return chain;
       };
 
-      (mockSupabase.from as jest.Mock).mockImplementation(() => createChainableMock(mockServices));
+      (mockSupabase.from as ReturnType<typeof vi.fn>).mockImplementation(() => createChainableMock(mockServices));
 
       const context = createTestContext(mockSupabase);
       const result = await getServices.handler({ category: 'cosmetico' }, context);

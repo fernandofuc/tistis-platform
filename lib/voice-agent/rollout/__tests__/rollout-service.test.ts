@@ -232,6 +232,7 @@ describe('RolloutService', () => {
 
   describe('getStatus', () => {
     it('should return default status when flag not found', async () => {
+      // v2 is the default - when flag not found, v2 is enabled
       mockSingle.mockResolvedValueOnce({
         data: null,
         error: { message: 'Not found' },
@@ -239,15 +240,17 @@ describe('RolloutService', () => {
 
       const status = await service.getStatus();
 
-      expect(status.currentStage).toBe('disabled');
-      expect(status.percentage).toBe(0);
-      expect(status.enabled).toBe(false);
+      // Default is v2 enabled (complete stage at 100%)
+      expect(status.currentStage).toBe('complete');
+      expect(status.percentage).toBe(100);
+      expect(status.enabled).toBe(true);
     });
 
     it('should return correct status from flag data', async () => {
+      // v2-only mode: percentage is ignored, stage is determined by enabled flag
       const mockFlag = createMockFeatureFlag({
         enabled: true,
-        percentage: 25,
+        percentage: 25, // Stored but ignored in v2-only mode
         enabled_tenants: ['tenant-1', 'tenant-2'],
         disabled_tenants: ['tenant-3'],
       });
@@ -264,25 +267,24 @@ describe('RolloutService', () => {
       const status = await service.getStatus();
 
       expect(status.enabled).toBe(true);
-      expect(status.percentage).toBe(25);
-      expect(status.currentStage).toBe('expansion');
+      // In v2-only mode: enabled=true means 100%, stage='complete'
+      expect(status.percentage).toBe(100);
+      expect(status.currentStage).toBe('complete');
       expect(status.enabledTenants).toEqual(['tenant-1', 'tenant-2']);
       expect(status.disabledTenants).toEqual(['tenant-3']);
     });
 
-    it('should map percentages to correct stages', async () => {
+    it('should map enabled/disabled to correct stages (v2-only mode)', async () => {
+      // v2-only architecture: percentage-based rollout was simplified
+      // Stage is determined by enabled flag: true = complete, false = disabled
       const testCases = [
-        { percentage: 0, expectedStage: 'disabled' },
-        { percentage: 5, expectedStage: 'canary' },
-        { percentage: 10, expectedStage: 'early_adopters' },
-        { percentage: 25, expectedStage: 'expansion' },
-        { percentage: 50, expectedStage: 'majority' },
-        { percentage: 100, expectedStage: 'complete' },
+        { enabled: false, expectedStage: 'disabled', expectedPercentage: 0 },
+        { enabled: true, expectedStage: 'complete', expectedPercentage: 100 },
       ];
 
-      for (const { percentage, expectedStage } of testCases) {
+      for (const { enabled, expectedStage, expectedPercentage } of testCases) {
         mockSingle.mockResolvedValueOnce({
-          data: createMockFeatureFlag({ percentage }),
+          data: createMockFeatureFlag({ enabled, percentage: 50 }), // percentage ignored
           error: null,
         });
         mockLimit.mockResolvedValueOnce({
@@ -292,6 +294,7 @@ describe('RolloutService', () => {
 
         const status = await service.getStatus();
         expect(status.currentStage).toBe(expectedStage);
+        expect(status.percentage).toBe(expectedPercentage);
       }
     });
   });
@@ -351,12 +354,13 @@ describe('RolloutService', () => {
       expect(result).toBe(true);
     });
 
-    it('should respect percentage-based rollout', async () => {
-      // With 50% rollout, roughly half should be on v2
+    it('should return true when globally enabled (v2 is default)', async () => {
+      // v2 is the default - percentage-based rollout was simplified
+      // When enabled, all tenants use v2 unless explicitly disabled
       mockSingle.mockResolvedValue({
         data: createMockFeatureFlag({
           enabled: true,
-          percentage: 50,
+          percentage: 100, // v2-only uses 100%
         }),
         error: null,
       });
@@ -372,9 +376,8 @@ describe('RolloutService', () => {
       }
 
       const v2Count = results.filter((r) => r).length;
-      // Should be roughly 50%, with some tolerance
-      expect(v2Count).toBeGreaterThan(30);
-      expect(v2Count).toBeLessThan(70);
+      // All tenants should use v2 when globally enabled
+      expect(v2Count).toBe(100);
     });
 
     it('should be consistent for the same tenant', async () => {

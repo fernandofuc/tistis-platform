@@ -2,13 +2,17 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { checkRateLimitMigration } from '@/src/shared/lib/rate-limit-migration';
 import {
-  checkRateLimit,
   getClientIP,
   publicAPILimiter,
   rateLimitExceeded,
 } from '@/src/shared/lib/rate-limit';
 import { createClient } from '@supabase/supabase-js';
+import { createComponentLogger } from '@/src/shared/lib';
+
+// Create logger for this endpoint
+const logger = createComponentLogger('onboarding-status');
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -22,22 +26,28 @@ function getSupabaseClient() {
 }
 
 export async function GET(req: NextRequest) {
+  const startTime = Date.now();
+
   // Rate limiting: prevent abuse of Stripe API queries
   const clientIP = getClientIP(req);
-  const rateLimitResult = checkRateLimit(clientIP, publicAPILimiter);
+  const rateLimitResult = await checkRateLimitMigration(clientIP, publicAPILimiter);
 
   if (!rateLimitResult.success) {
+    logger.warn('Rate limit exceeded', { clientIP });
     return rateLimitExceeded(rateLimitResult);
   }
 
   const sessionId = req.nextUrl.searchParams.get('session_id');
 
   if (!sessionId) {
+    logger.warn('Missing session_id parameter');
     return NextResponse.json(
       { success: false, error: 'Missing session_id' },
       { status: 400 }
     );
   }
+
+  logger.info('Checking onboarding status', { sessionId: sessionId.substring(0, 20) + '...' });
 
   try {
     const stripe = getStripeClient();
@@ -89,6 +99,12 @@ export async function GET(req: NextRequest) {
     // SIMPLIFICADO: Si el pago fue exitoso, el sistema está listo
     // El usuario ya tiene cuenta de TIS TIS (usó su email para pagar)
     // Solo necesita hacer login con su cuenta existente
+    logger.info('Onboarding status check completed', {
+      durationMs: Date.now() - startTime,
+      stage: 'ready',
+      plan,
+    });
+
     return NextResponse.json({
       success: true,
       status: {
@@ -105,12 +121,16 @@ export async function GET(req: NextRequest) {
       }
     });
 
-  } catch (error: any) {
-    console.error('Error checking onboarding status:', error);
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string };
+    logger.error('Onboarding status check failed', {
+      durationMs: Date.now() - startTime,
+      errorCode: err.code,
+    }, err);
 
     // If error is due to missing tables, assume system is ready
     // (migration might not have run yet)
-    if (error.message?.includes('relation') || error.code === '42P01') {
+    if (err.message?.includes('relation') || err.code === '42P01') {
       return NextResponse.json({
         success: true,
         status: {
@@ -129,7 +149,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, error: error.message || 'Error checking status' },
+      { success: false, error: err.message || 'Error checking status' },
       { status: 500 }
     );
   }

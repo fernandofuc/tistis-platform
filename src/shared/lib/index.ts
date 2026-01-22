@@ -110,3 +110,19 @@ export {
   type LogEntry,
   type LoggerConfig,
 } from './structured-logger';
+
+// Logger Instance (ready-to-use singleton)
+export {
+  logger,
+  loggers,
+  createComponentLogger,
+  createRouteLogger,
+} from './logger-instance';
+
+// Rate Limit Migration Wrapper
+export {
+  checkRateLimitMigration,
+  compareRateLimiters,
+  type RateLimitConfig,
+  type RateLimitResult,
+} from './rate-limit-migration';

@@ -3,6 +3,7 @@
  * Function Call Handler Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   handleFunctionCall,
   handleToolCalls,
@@ -19,12 +20,12 @@ import type {
 
 // Mock Supabase
 const mockSupabase = {
-  from: jest.fn().mockReturnThis(),
-  select: jest.fn().mockReturnThis(),
-  insert: jest.fn().mockReturnThis(),
-  update: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  single: jest.fn(),
+  from: vi.fn().mockReturnThis(),
+  select: vi.fn().mockReturnThis(),
+  insert: vi.fn().mockReturnThis(),
+  update: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  single: vi.fn(),
 };
 
 describe('handleFunctionCall', () => {
@@ -52,7 +53,7 @@ describe('handleFunctionCall', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSupabase.single.mockResolvedValue({ data: { id: 'call-123', tenant_id: 'tenant-123' } });
   });
 
@@ -70,7 +71,7 @@ describe('handleFunctionCall', () => {
     });
 
     it('should use custom function executor', async () => {
-      const customExecutor: FunctionExecutor = jest.fn().mockResolvedValue({
+      const customExecutor: FunctionExecutor = vi.fn().mockResolvedValue({
         success: true,
         result: { message: 'Custom result' },
         voiceMessage: 'Custom voice message',
@@ -213,7 +214,7 @@ describe('handleFunctionCall', () => {
     });
 
     it('should handle executor errors gracefully', async () => {
-      const failingExecutor: FunctionExecutor = jest.fn().mockRejectedValue(
+      const failingExecutor: FunctionExecutor = vi.fn().mockRejectedValue(
         new Error('Execution failed')
       );
 
@@ -231,7 +232,7 @@ describe('handleFunctionCall', () => {
     });
 
     it('should handle executor returning failure', async () => {
-      const failingExecutor: FunctionExecutor = jest.fn().mockResolvedValue({
+      const failingExecutor: FunctionExecutor = vi.fn().mockResolvedValue({
         success: false,
         error: 'Function failed',
       });
@@ -297,7 +298,7 @@ describe('handleToolCalls', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSupabase.single.mockResolvedValue({ data: { id: 'call-123', tenant_id: 'tenant-123' } });
   });
 
@@ -318,7 +319,7 @@ describe('handleToolCalls', () => {
   });
 
   it('should handle partial failures', async () => {
-    const customExecutor: FunctionExecutor = jest.fn()
+    const customExecutor: FunctionExecutor = vi.fn()
       .mockResolvedValueOnce({ success: true, result: { message: 'Success' } })
       .mockResolvedValueOnce({ success: false, error: 'Failed' });
 

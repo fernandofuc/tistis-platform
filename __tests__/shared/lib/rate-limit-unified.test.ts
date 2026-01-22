@@ -3,6 +3,7 @@
  * Tests both in-memory fallback and mock Redis integration
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   checkUnifiedRateLimit,
   UNIFIED_RATE_LIMITS,
@@ -12,9 +13,9 @@ import {
 } from '../../../src/shared/lib/rate-limit-unified';
 
 // Mock NextResponse for testing
-jest.mock('next/server', () => ({
+vi.mock('next/server', () => ({
   NextResponse: {
-    json: jest.fn((body, options) => ({
+    json: vi.fn((body, options) => ({
       body,
       status: options?.status || 200,
       headers: new Map(Object.entries(options?.headers || {})),
@@ -25,7 +26,7 @@ jest.mock('next/server', () => ({
 describe('Unified Rate Limiter', () => {
   // Reset module state between tests
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('checkUnifiedRateLimit (in-memory fallback)', () => {

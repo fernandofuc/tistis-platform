@@ -8,11 +8,9 @@
  * 3. Timestamp Validation
  * 4. HMAC Signature
  * 5. Content Validation
- *
- * @jest-environment node
  */
 
-// Jest test suite - globals provided by Jest
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'crypto';
 import {
   WebhookSecurityGate,
@@ -171,13 +169,8 @@ describe('IPWhitelist', () => {
 
   describe('Development Mode', () => {
     it('should allow all IPs in development when configured', () => {
-      const originalEnv = process.env.NODE_ENV;
-      // Use Object.defineProperty to avoid TS read-only error
-      Object.defineProperty(process.env, 'NODE_ENV', {
-        value: 'development',
-        writable: true,
-        configurable: true,
-      });
+      // Use vi.stubEnv to mock NODE_ENV
+      vi.stubEnv('NODE_ENV', 'development');
 
       const whitelist = new IPWhitelist({
         allowAllInDevelopment: true,
@@ -187,11 +180,7 @@ describe('IPWhitelist', () => {
       expect(whitelist.isAllowed('192.168.1.1')).toBe(true);
 
       // Restore original value
-      Object.defineProperty(process.env, 'NODE_ENV', {
-        value: originalEnv,
-        writable: true,
-        configurable: true,
-      });
+      vi.unstubAllEnvs();
     });
   });
 });
@@ -778,8 +767,7 @@ describe('Factory Functions', () => {
 
 describe('Rate Limiter Memory Exhaustion Protection', () => {
   it('should reject requests when maxEntries is reached', () => {
-    // Import RateLimiter directly for isolated testing
-    const { RateLimiter } = require('../../../lib/voice-agent/security/rate-limiter');
+    // RateLimiter is already imported at top level
 
     // Create rate limiter with very low maxEntries
     const limiter = new RateLimiter({
@@ -805,7 +793,7 @@ describe('Rate Limiter Memory Exhaustion Protection', () => {
   });
 
   it('should allow requests after cleanup frees entries', () => {
-    const { RateLimiter } = require('../../../lib/voice-agent/security/rate-limiter');
+    // RateLimiter is already imported at top level
 
     // Create rate limiter with very short window
     const limiter = new RateLimiter({
@@ -835,7 +823,7 @@ describe('Rate Limiter Memory Exhaustion Protection', () => {
   });
 
   it('should have default maxEntries of 100000', () => {
-    const { RateLimiter } = require('../../../lib/voice-agent/security/rate-limiter');
+    // RateLimiter is already imported at top level
 
     const limiter = new RateLimiter({});
     const stats = limiter.getStats();

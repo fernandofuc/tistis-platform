@@ -1104,6 +1104,95 @@ Cada webhook verifica firmas criptográficas y procesa mensajes de forma asíncr
 
 **Auditorias Completadas:** #11, #12, #13, #14, #15, #16 (25+ vulnerabilidades corregidas)
 
+## 🏗️ Infrastructure (Actualizado 2026-01-21)
+
+### Logging
+
+El sistema utiliza logging estructurado JSON para trazabilidad completa:
+
+```typescript
+import { getLogger } from '@/src/shared/lib/structured-logger';
+
+const logger = getLogger('voice-agent');
+logger.info('Processing call', { callId, tenantId });
+```
+
+**Características:**
+- Redacción automática de campos sensibles (password, token, apiKey, secret, etc.)
+- Niveles: debug, info, warn, error
+- Metadatos estructurados por contexto
+- Compatible con servicios de agregación de logs
+
+### Environment Validation
+
+Validación de variables de entorno al iniciar la aplicación:
+
+```typescript
+// src/instrumentation.ts - Se ejecuta automáticamente al iniciar Next.js
+import { validateEnvironment } from '@/src/shared/lib/env-validator';
+
+export function register() {
+  validateEnvironment(); // Falla el build si faltan vars críticas
+}
+```
+
+**Variables Validadas:**
+- `NEXT_PUBLIC_SUPABASE_URL` (requerida)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (requerida)
+- `SUPABASE_SERVICE_ROLE_KEY` (requerida en producción)
+- `OPENROUTER_API_KEY` (requerida para AI)
+- `VAPI_API_KEY` (opcional, para Voice Agent)
+- `STRIPE_SECRET_KEY` (opcional, para pagos)
+
+### Rate Limiting
+
+Sistema unificado de rate limiting con Redis y fallback a memoria:
+
+```typescript
+import { checkRateLimitMigration } from '@/src/shared/lib/rate-limit-migration';
+import { publicAPILimiter, getClientIP } from '@/src/shared/lib/rate-limit';
+
+// En un API route
+const clientIP = getClientIP(request);
+const result = await checkRateLimitMigration(clientIP, publicAPILimiter);
+
+if (!result.success) {
+  return rateLimitExceeded(result);
+}
+```
+
+**Limitadores Pre-configurados:**
+- `strictLimiter`: 3 req/min (admin auth)
+- `standardLimiter`: 60 req/min (APIs autenticadas)
+- `publicAPILimiter`: 100 req/min (APIs públicas)
+- `webhookLimiter`: 200 req/min (webhooks)
+
+**Flags de Migración:**
+- `USE_UNIFIED_RATE_LIMIT`: Usa el nuevo rate limiter unificado
+- `RATE_LIMIT_SHADOW_MODE`: Compara ambos sin afectar usuarios
+
+### Admin Authentication
+
+Autenticación centralizada para endpoints administrativos:
+
+```typescript
+import { verifyAdminAuth } from '@/src/shared/lib/admin-auth';
+
+export async function POST(request: NextRequest) {
+  const auth = verifyAdminAuth(request);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+  // ... proceso administrativo
+}
+```
+
+**Características:**
+- Verificación timing-safe de tokens
+- Rate limiting integrado (3 req/min por defecto)
+- Header: `X-Admin-Key`
+- Variable de entorno: `ADMIN_API_KEY`
+
 ### Roles Disponibles
 
 - `super_admin` - Acceso total multi-tenant

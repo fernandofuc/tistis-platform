@@ -10,6 +10,7 @@
  * - Cache behavior
  */
 
+import { describe, it, expect, vi } from 'vitest';
 import {
   AssistantTypeManager,
   createLocalAssistantTypeManager,
@@ -785,8 +786,8 @@ describe('Validation Arrays', () => {
     });
 
     it('should have correct total count', () => {
-      // 4 shared + 6 restaurant + 6 dental = 16
-      expect(ALL_CAPABILITIES).toHaveLength(16);
+      // 5 shared + 6 restaurant + 6 dental = 17
+      expect(ALL_CAPABILITIES).toHaveLength(17);
     });
 
     it('should not have duplicates', () => {
@@ -928,7 +929,7 @@ describe('rowToAssistantType', () => {
   });
 
   it('should filter out invalid capabilities with warning', () => {
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const rowWithInvalidCaps = {
       ...validRow,
@@ -948,7 +949,7 @@ describe('rowToAssistantType', () => {
   });
 
   it('should filter out invalid tools with warning', () => {
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const rowWithInvalidTools = {
       ...validRow,

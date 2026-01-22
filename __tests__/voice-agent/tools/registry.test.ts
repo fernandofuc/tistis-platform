@@ -3,6 +3,7 @@
  * Tool Registry Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   ToolRegistry,
   createToolContext,
@@ -13,13 +14,13 @@ import {
 
 // Mock Supabase client
 const mockSupabase = {
-  from: jest.fn().mockReturnThis(),
-  select: jest.fn().mockReturnThis(),
-  insert: jest.fn().mockReturnThis(),
-  update: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  single: jest.fn().mockResolvedValue({ data: null, error: null }),
-  rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
+  from: vi.fn().mockReturnThis(),
+  select: vi.fn().mockReturnThis(),
+  insert: vi.fn().mockReturnThis(),
+  update: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  single: vi.fn().mockResolvedValue({ data: null, error: null }),
+  rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
 } as unknown as ToolContext['supabase'];
 
 describe('ToolRegistry', () => {
@@ -53,7 +54,7 @@ describe('ToolRegistry', () => {
     });
 
     it('should warn but allow overwriting duplicate tool names', () => {
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const tool: ToolDefinition = {
         name: 'duplicate_tool',
@@ -346,7 +347,7 @@ describe('ToolRegistry', () => {
     });
 
     it('should execute tool handler', async () => {
-      const mockHandler = jest.fn().mockResolvedValue({
+      const mockHandler = vi.fn().mockResolvedValue({
         success: true,
         voiceMessage: 'Tool executed',
         data: { result: 'test' },
@@ -396,7 +397,7 @@ describe('ToolRegistry', () => {
     });
 
     it('should handle timeout', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       registry.register({
         name: 'timeout_test',
@@ -414,13 +415,13 @@ describe('ToolRegistry', () => {
       });
 
       const promise = registry.execute('timeout_test', {}, mockContext);
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
 
       const result = await promise;
       expect(result.success).toBe(false);
       expect(result.error).toContain('timeout');
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 

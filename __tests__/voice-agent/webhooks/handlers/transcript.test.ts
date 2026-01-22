@@ -3,6 +3,7 @@
  * Transcript Handler Tests
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   handleTranscript,
   createTranscriptHandler,
@@ -15,11 +16,11 @@ import type {
 
 // Mock Supabase
 const mockSupabase = {
-  from: jest.fn().mockReturnThis(),
-  select: jest.fn().mockReturnThis(),
-  insert: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  single: jest.fn(),
+  from: vi.fn().mockReturnThis(),
+  select: vi.fn().mockReturnThis(),
+  insert: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  single: vi.fn(),
 };
 
 describe('handleTranscript', () => {
@@ -48,7 +49,7 @@ describe('handleTranscript', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSupabase.select.mockReturnThis();
     mockSupabase.single.mockResolvedValue({ count: 0 });
     mockSupabase.insert.mockResolvedValue({ error: null });
@@ -214,7 +215,7 @@ describe('handleTranscript', () => {
 
   describe('Custom Callback', () => {
     it('should call onTranscript callback', async () => {
-      const onTranscript = jest.fn().mockResolvedValue(undefined);
+      const onTranscript = vi.fn().mockResolvedValue(undefined);
 
       const payload = createPayload({
         transcript: {
@@ -240,7 +241,7 @@ describe('handleTranscript', () => {
     });
 
     it('should handle callback errors gracefully', async () => {
-      const onTranscript = jest.fn().mockRejectedValue(new Error('Callback error'));
+      const onTranscript = vi.fn().mockRejectedValue(new Error('Callback error'));
 
       const payload = createPayload();
 
@@ -265,7 +266,7 @@ describe('handleTranscript', () => {
       });
 
       // Using a spy to check console.log
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await handleTranscript(payload, createContext(), {
         supabaseClient: mockSupabase as any,

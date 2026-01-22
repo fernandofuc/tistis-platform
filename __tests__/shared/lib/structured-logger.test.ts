@@ -2,6 +2,7 @@
  * Tests for Structured Logger
  */
 
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import {
   StructuredLogger,
   createLogger,
@@ -14,24 +15,24 @@ import {
 
 describe('StructuredLogger', () => {
   let consoleSpy: {
-    debug: jest.SpyInstance;
-    info: jest.SpyInstance;
-    warn: jest.SpyInstance;
-    error: jest.SpyInstance;
+    debug: MockInstance;
+    info: MockInstance;
+    warn: MockInstance;
+    error: MockInstance;
   };
 
   beforeEach(() => {
     consoleSpy = {
-      debug: jest.spyOn(console, 'debug').mockImplementation(),
-      info: jest.spyOn(console, 'info').mockImplementation(),
-      warn: jest.spyOn(console, 'warn').mockImplementation(),
-      error: jest.spyOn(console, 'error').mockImplementation(),
+      debug: vi.spyOn(console, 'debug').mockImplementation(() => {}),
+      info: vi.spyOn(console, 'info').mockImplementation(() => {}),
+      warn: vi.spyOn(console, 'warn').mockImplementation(() => {}),
+      error: vi.spyOn(console, 'error').mockImplementation(() => {}),
     };
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('log levels', () => {
