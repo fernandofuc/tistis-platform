@@ -92,7 +92,7 @@ export async function GET(
       );
     }
 
-    // Fetch the API key with creator info
+    // Fetch the API key with creator info (FASE 2: include branch context)
     const { data: key, error } = await supabase
       .from('api_keys')
       .select(
@@ -105,6 +105,9 @@ export async function GET(
         key_hint,
         key_prefix,
         environment,
+        branch_id,
+        scope_type,
+        branch_context,
         scopes,
         rate_limit_rpm,
         rate_limit_daily,
@@ -159,7 +162,7 @@ export async function GET(
       }
     }
 
-    // Build response
+    // Build response (FASE 2: include branch context)
     const keyWithCreator: APIKeyWithCreator = {
       id: key.id,
       tenant_id: key.tenant_id,
@@ -169,6 +172,9 @@ export async function GET(
       key_hint: key.key_hint,
       key_prefix: key.key_prefix,
       environment: key.environment,
+      branch_id: key.branch_id || undefined,
+      scope_type: key.scope_type || 'tenant',
+      branch_context: key.branch_context || undefined,
       scopes: key.scopes || [],
       rate_limit_rpm: key.rate_limit_rpm,
       rate_limit_daily: key.rate_limit_daily,
@@ -368,6 +374,9 @@ export async function PATCH(
         key_hint,
         key_prefix,
         environment,
+        branch_id,
+        scope_type,
+        branch_context,
         scopes,
         rate_limit_rpm,
         rate_limit_daily,
@@ -436,6 +445,9 @@ export async function PATCH(
     const response: UpdateAPIKeyResponse = {
       key: {
         ...updatedKey,
+        branch_id: updatedKey.branch_id || undefined,
+        scope_type: updatedKey.scope_type || 'tenant',
+        branch_context: updatedKey.branch_context || undefined,
         scopes: updatedKey.scopes || [],
         usage_count: updatedKey.usage_count || 0,
       },

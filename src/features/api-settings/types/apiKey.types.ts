@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - API Key Types
 // Type definitions for the API Key management feature
+// FASE 2: Enhanced with branch context support
 // =====================================================
 
 // ======================
@@ -20,6 +21,13 @@ export type APIKeyEnvironment = 'live' | 'test';
 export type APIKeyStatus = 'active' | 'revoked' | 'expired';
 
 /**
+ * Scope type for API Key (FASE 2)
+ * - tenant: Access to all branches (legacy and admin keys)
+ * - branch: Access to specific branch only
+ */
+export type APIKeyScopeType = 'tenant' | 'branch';
+
+/**
  * Prefix used for API Keys based on environment
  */
 export type APIKeyPrefix = 'tis_live_' | 'tis_test_';
@@ -31,6 +39,7 @@ export type APIKeyPrefix = 'tis_live_' | 'tis_test_';
 /**
  * Full API Key entity as stored in database
  * Note: key_hash is NEVER exposed to frontend
+ * FASE 2: Enhanced with branch context
  */
 export interface APIKey {
   id: string;
@@ -47,6 +56,11 @@ export interface APIKey {
 
   // Environment
   environment: APIKeyEnvironment;
+
+  // ✅ FASE 2: Branch Context
+  branch_id?: string | null;
+  scope_type: APIKeyScopeType;
+  branch_context?: Record<string, unknown>;
 
   // Permissions
   scopes: string[];
@@ -93,6 +107,7 @@ export interface APIKeyWithCreator extends APIKey {
 
 /**
  * API Key as returned in list responses (simplified)
+ * FASE 2: Enhanced with branch info
  */
 export interface APIKeyListItem {
   id: string;
@@ -101,6 +116,9 @@ export interface APIKeyListItem {
   key_hint: string;
   key_prefix: APIKeyPrefix;
   environment: APIKeyEnvironment;
+  branch_id?: string | null;          // ✅ FASE 2
+  scope_type: APIKeyScopeType;        // ✅ FASE 2
+  branch_name?: string;                // ✅ FASE 2 - Denormalized for display
   scopes: string[];
   is_active: boolean;
   last_used_at?: string;
@@ -115,11 +133,14 @@ export interface APIKeyListItem {
 
 /**
  * Request to create a new API Key
+ * FASE 2: Enhanced with branch context
  */
 export interface CreateAPIKeyRequest {
   name: string;
   description?: string;
   environment: APIKeyEnvironment;
+  scope_type: APIKeyScopeType;        // ✅ FASE 2
+  branch_id?: string | null;          // ✅ FASE 2
   scopes: string[];
   rate_limit_rpm?: number;
   rate_limit_daily?: number;

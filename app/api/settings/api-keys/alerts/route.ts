@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch all active API keys for this tenant
+    // Fetch all active API keys for this tenant (FASE 2: include branch context)
     const { data: keys, error: keysError } = await supabase
       .from('api_keys')
       .select(
@@ -54,6 +54,8 @@ export async function GET(request: NextRequest) {
         key_hint,
         key_prefix,
         environment,
+        branch_id,
+        scope_type,
         scopes,
         is_active,
         last_used_at,
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Transform to list items
+    // Transform to list items (FASE 2: include branch fields)
     const keysList: APIKeyListItem[] = (keys || []).map((key) => ({
       id: key.id,
       name: key.name,
@@ -81,6 +83,8 @@ export async function GET(request: NextRequest) {
       key_hint: key.key_hint,
       key_prefix: key.key_prefix,
       environment: key.environment,
+      branch_id: key.branch_id || null,
+      scope_type: key.scope_type || 'tenant',
       scopes: key.scopes || [],
       is_active: key.is_active,
       last_used_at: key.last_used_at,

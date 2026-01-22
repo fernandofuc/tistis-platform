@@ -137,6 +137,8 @@ export function CreateAPIKeyModal({
         name: name.trim(),
         description: description.trim() || undefined,
         environment,
+        scope_type: 'tenant', // Legacy modal defaults to tenant-wide
+        branch_id: null,
         scopes: selectedScopes,
         rate_limit_rpm: rateLimitRpm,
         rate_limit_daily: rateLimitDaily,

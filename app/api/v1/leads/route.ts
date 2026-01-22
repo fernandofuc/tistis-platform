@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Public API: Leads
 // API Key authenticated endpoint for leads management
+// FASE 2: Automatic branch filtering via API Key
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,6 +9,7 @@ import {
   authenticateAPIKey,
   createAPIKeyErrorResponse,
   createAPIKeyAuthenticatedClient,
+  applyAutomaticBranchFilter,
 } from '@/src/shared/lib/api-key-auth';
 import {
   applyRateLimit,
@@ -15,6 +17,10 @@ import {
   createRateLimitExceededResponse,
 } from '@/src/shared/lib/api-key-rate-limit';
 import { logRequest } from '@/src/shared/lib/api-key-logger';
+import {
+  applyDeprecationChecks,
+  addDeprecationHeaders,
+} from '@/src/shared/lib/api-deprecation';
 import type { APIScope } from '@/src/features/api-settings/types';
 
 // Force dynamic rendering - this API uses request headers
@@ -27,6 +33,7 @@ export const dynamic = 'force-dynamic';
 interface Lead {
   id: string;
   tenant_id: string;
+  branch_id?: string | null;
   phone: string;
   name?: string;
   email?: string;
@@ -42,6 +49,11 @@ interface LeadsListResponse {
   total: number;
   page: number;
   pageSize: number;
+  filters?: {
+    branch_id?: string | null;
+    status?: string | null;
+    search?: string | null;
+  };
 }
 
 interface CreateLeadRequest {
@@ -113,8 +125,33 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 3. Parse and validate query parameters
+    // 3. Create Supabase client for query execution
+    const supabase = createAPIKeyAuthenticatedClient();
+
+    // ✅ 4. FASE 2: Extract optional branch_id from query params (backward compat)
     const url = new URL(request.url);
+    const queryParamBranchId = url.searchParams.get('branch_id') || undefined;
+
+    // ✅ FASE 3: Check deprecation policy (warning/soft/hard enforcement)
+    const deprecationCheck = applyDeprecationChecks(request, auth, queryParamBranchId);
+    if (deprecationCheck) {
+      // Blocked by deprecation policy - log and return error
+      logRequest({
+        keyId: auth.keyId!,
+        tenantId: auth.tenantId!,
+        endpoint: '/api/v1/leads',
+        method: 'GET',
+        statusCode: deprecationCheck.status,
+        responseTimeMs: Date.now() - startTime,
+        scopeUsed: 'leads:read',
+        ipAddress,
+        userAgent,
+        errorMessage: 'Blocked by deprecation policy',
+      });
+      return deprecationCheck;
+    }
+
+    // 5. Parse and validate query parameters
     const pageParam = parseInt(url.searchParams.get('page') || '1', 10);
     const pageSizeParam = parseInt(url.searchParams.get('pageSize') || '20', 10);
 
@@ -127,17 +164,16 @@ export async function GET(request: NextRequest) {
     const status = url.searchParams.get('status');
     const search = url.searchParams.get('search');
 
-    // 4. Query leads from database
-    const supabase = createAPIKeyAuthenticatedClient();
-
+    // 6. Build query with tenant filter
     let query = supabase
       .from('leads')
       .select('*', { count: 'exact' })
-      .eq('tenant_id', auth.tenantId!)
-      .order('created_at', { ascending: false })
-      .range((page - 1) * pageSize, page * pageSize - 1);
+      .eq('tenant_id', auth.tenantId!);
 
-    // Apply filters
+    // ✅ FASE 2: Apply automatic branch filter based on API Key and query param
+    query = applyAutomaticBranchFilter(query, auth, 'leads', queryParamBranchId);
+
+    // Apply other filters BEFORE sorting/pagination for better performance
     if (status) {
       query = query.eq('status', status);
     }
@@ -153,6 +189,11 @@ export async function GET(request: NextRequest) {
         `name.ilike.%${sanitizedSearch}%,phone.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`
       );
     }
+
+    // Apply sorting and pagination AFTER filters
+    query = query
+      .order('created_at', { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1);
 
     const { data: leads, error, count } = await query;
 
@@ -179,15 +220,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 5. Build response
-    const response: LeadsListResponse = {
+    // 7. Build response data
+    const responseData: LeadsListResponse = {
       data: leads || [],
       total: count || 0,
       page,
       pageSize,
+      filters: {
+        branch_id: queryParamBranchId || auth.branchId || null,
+        status,
+        search,
+      },
     };
 
-    // 6. Log successful request
+    let nextResponse = NextResponse.json(responseData, { status: 200 });
+
+    // ✅ FASE 3: Add deprecation headers if using query param filtering
+    nextResponse = addDeprecationHeaders(nextResponse, auth, queryParamBranchId);
+
+    // 9. Log successful request
     logRequest({
       keyId: auth.keyId!,
       tenantId: auth.tenantId!,
@@ -200,7 +251,7 @@ export async function GET(request: NextRequest) {
       userAgent,
     });
 
-    return addRateLimitHeaders(NextResponse.json(response), rateLimit);
+    return addRateLimitHeaders(nextResponse, rateLimit);
   } catch (error) {
     console.error('[API v1/leads] Unexpected error:', error);
     logRequest({
@@ -385,10 +436,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Create the lead
+    // ✅ FASE 2: Auto-assign branch_id if API Key is branch-specific
     const { data: newLead, error: insertError } = await supabase
       .from('leads')
       .insert({
         tenant_id: auth.tenantId!,
+        branch_id: auth.branchId || null, // ✅ Auto-assign from API Key
         phone: sanitizedPhone,
         name: body.name?.trim() || null,
         email: body.email?.trim().toLowerCase() || null,

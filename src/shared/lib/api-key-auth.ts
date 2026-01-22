@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - API Key Authentication
 // Middleware for authenticating requests via API Keys
+// FASE 2: Enhanced with branch context support
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,11 +26,14 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
  * Result of API Key authentication
+ * FASE 2: Enhanced with branch context
  */
 export interface APIKeyAuthResult {
   success: boolean;
   keyId?: string;
   tenantId?: string;
+  branchId?: string | null;          // ✅ NUEVO - FASE 2
+  scopeType?: 'tenant' | 'branch';   // ✅ NUEVO - FASE 2
   environment?: APIKeyEnvironment;
   scopes?: APIScope[];
   rateLimits?: {
@@ -57,17 +61,30 @@ export type APIKeyErrorCode =
 
 /**
  * Context passed to authenticated API routes
+ * FASE 2: Enhanced with branch context
  */
 export interface APIKeyContext {
   client: SupabaseClient;
   keyId: string;
   tenantId: string;
+  branchId: string | null;           // ✅ NUEVO - FASE 2
+  scopeType: 'tenant' | 'branch';    // ✅ NUEVO - FASE 2
   environment: APIKeyEnvironment;
   scopes: APIScope[];
   rateLimits: {
     rpm: number;
     daily: number;
   };
+}
+
+/**
+ * Branch filter context helper
+ * FASE 2: NEW
+ */
+export interface BranchFilterContext {
+  branchId: string | null;
+  scopeType: 'tenant' | 'branch';
+  hasBranchAccess: (targetBranchId: string) => boolean;
 }
 
 // ======================
@@ -162,6 +179,8 @@ export async function authenticateAPIKey(
       .select(`
         id,
         tenant_id,
+        branch_id,
+        scope_type,
         environment,
         scopes,
         rate_limit_rpm,
@@ -253,11 +272,13 @@ export async function authenticateAPIKey(
       console.error('[API Key Auth] Failed to update usage:', err);
     });
 
-    // 10. Return success with context
+    // 10. Return success with context (✅ FASE 2: includes branch context)
     return {
       success: true,
       keyId: keyRecord.id,
       tenantId: keyRecord.tenant_id,
+      branchId: keyRecord.branch_id || null,          // ✅ NUEVO - FASE 2
+      scopeType: keyRecord.scope_type || 'tenant',    // ✅ NUEVO - FASE 2
       environment: keyRecord.environment as APIKeyEnvironment,
       scopes: keyScopes,
       rateLimits: {
@@ -473,6 +494,118 @@ export function hasAllScopes(scopes: APIScope[], required: APIScope[]): boolean 
 }
 
 // ======================
+// FASE 2: BRANCH FILTER UTILITIES
+// ======================
+
+/**
+ * Create a branch filter context helper from auth result
+ * FASE 2: NEW
+ *
+ * @param auth - API Key authentication result
+ * @returns Branch filter context with helper function
+ *
+ * @example
+ * ```typescript
+ * const context = createBranchFilterContext(auth);
+ * if (!context.hasBranchAccess(requestedBranchId)) {
+ *   return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+ * }
+ * ```
+ */
+export function createBranchFilterContext(auth: APIKeyAuthResult): BranchFilterContext {
+  return {
+    branchId: auth.branchId || null,
+    scopeType: auth.scopeType || 'tenant',
+
+    // Helper function: verifica si key tiene acceso a un branch específico
+    hasBranchAccess: (targetBranchId: string): boolean => {
+      // Caso 1: Key tenant-wide (legacy) → acceso a todos los branches
+      if (auth.scopeType === 'tenant' || !auth.branchId) {
+        return true;
+      }
+
+      // Caso 2: Key branch-specific → solo su branch
+      return auth.branchId === targetBranchId;
+    },
+  };
+}
+
+/**
+ * Apply automatic branch filtering to a Supabase query
+ * FASE 2: NEW - Middleware automático con validación de seguridad
+ *
+ * IMPORTANTE - Lógica de filtrado con validación de seguridad:
+ *
+ * 1. Si API Key es BRANCH-SPECIFIC:
+ *    - Query parameter se IGNORA (seguridad)
+ *    - Siempre filtra por el branch de la API Key
+ *    - Previene acceso cross-branch
+ *
+ * 2. Si API Key es TENANT-WIDE:
+ *    - Query parameter tiene prioridad (backward compat FASE 1)
+ *    - Sin query param = sin filtro (acceso a todos los branches)
+ *
+ * @param query - Supabase query builder
+ * @param auth - API Key authentication result
+ * @param tableName - Name of the table being queried
+ * @param queryParamBranchId - Optional branch_id from query parameter (FASE 1)
+ * @returns Modified query with branch filter applied
+ *
+ * @example
+ * ```typescript
+ * let query = supabase.from('leads').select('*');
+ * query = applyAutomaticBranchFilter(query, auth, 'leads', queryBranchId);
+ * ```
+ */
+export function applyAutomaticBranchFilter<T>(
+  query: any, // SupabaseQueryBuilder
+  auth: APIKeyAuthResult,
+  tableName: string,
+  queryParamBranchId?: string | null
+): any {
+  // Lista de tablas con soporte de branch filtering
+  const BRANCH_FILTERABLE_TABLES = [
+    'leads',
+    'appointments',
+    'menu_items',
+    'menu_categories',
+    'inventory_items',
+    'staff',
+  ];
+
+  // Si tabla no soporta branch filtering, retornar sin cambios
+  if (!BRANCH_FILTERABLE_TABLES.includes(tableName)) {
+    return query;
+  }
+
+  // Determinar qué branch_id usar con validación de seguridad
+  let effectiveBranchId: string | null = null;
+
+  // ✅ CASO 1: API Key es BRANCH-SPECIFIC
+  // Query parameter se IGNORA por seguridad - la key solo puede acceder a su branch
+  if (auth.scopeType === 'branch' && auth.branchId) {
+    effectiveBranchId = auth.branchId;
+  }
+  // ✅ CASO 2: API Key es TENANT-WIDE
+  // Query parameter tiene prioridad (backward compat FASE 1)
+  else if (auth.scopeType === 'tenant' || !auth.branchId) {
+    // Prioridad al query parameter si existe
+    if (queryParamBranchId) {
+      effectiveBranchId = queryParamBranchId;
+    }
+    // Sin query param = sin filtro (tenant-wide access)
+  }
+
+  // Si hay branch_id efectivo, aplicar filtro
+  if (effectiveBranchId) {
+    return query.eq('branch_id', effectiveBranchId);
+  }
+
+  // Sin filtro (tenant-wide access)
+  return query;
+}
+
+// ======================
 // MIDDLEWARE WRAPPER
 // ======================
 
@@ -516,6 +649,8 @@ export function withAPIKeyAuth(
       client: createAPIKeyAuthenticatedClient(),
       keyId: auth.keyId!,
       tenantId: auth.tenantId!,
+      branchId: auth.branchId || null,          // ✅ NUEVO - FASE 2
+      scopeType: auth.scopeType || 'tenant',    // ✅ NUEVO - FASE 2
       environment: auth.environment!,
       scopes: auth.scopes!,
       rateLimits: auth.rateLimits!,

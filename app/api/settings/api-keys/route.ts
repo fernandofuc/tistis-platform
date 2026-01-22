@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch API keys for this tenant
+    // Fetch API keys for this tenant with branch info (FASE 2)
     const { data: keys, error } = await supabase
       .from('api_keys')
       .select(
@@ -67,6 +67,8 @@ export async function GET(request: NextRequest) {
         key_hint,
         key_prefix,
         environment,
+        branch_id,
+        scope_type,
         scopes,
         rate_limit_rpm,
         rate_limit_daily,
@@ -74,7 +76,10 @@ export async function GET(request: NextRequest) {
         last_used_at,
         usage_count,
         created_at,
-        expires_at
+        expires_at,
+        branches!api_keys_branch_id_fkey (
+          name
+        )
       `
       )
       .eq('tenant_id', tenantId)
@@ -88,14 +93,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Transform to list items
-    const keysList: APIKeyListItem[] = (keys || []).map((key) => ({
+    // Transform to list items (FASE 2: include branch info)
+    const keysList: APIKeyListItem[] = (keys || []).map((key: any) => ({
       id: key.id,
       name: key.name,
       description: key.description,
       key_hint: key.key_hint,
       key_prefix: key.key_prefix,
       environment: key.environment,
+      branch_id: key.branch_id || null,
+      scope_type: key.scope_type || 'tenant',
+      branch_name: key.branches?.name || undefined,
       scopes: key.scopes || [],
       is_active: key.is_active,
       last_used_at: key.last_used_at,
@@ -170,6 +178,36 @@ export async function POST(request: NextRequest) {
     // Validate environment
     const environment = body.environment === 'test' ? 'test' : 'live';
 
+    // ✅ FASE 2: Validate scope_type and branch_id
+    const scopeType = body.scope_type === 'tenant' ? 'tenant' : 'branch';
+    const branchId = scopeType === 'branch' ? body.branch_id : null;
+
+    // If scope is branch, branch_id is required
+    if (scopeType === 'branch' && !branchId) {
+      return NextResponse.json(
+        { error: 'branch_id es requerido cuando scope_type es "branch"' },
+        { status: 400 }
+      );
+    }
+
+    // If branch_id is provided, validate it belongs to this tenant
+    if (branchId) {
+      const { data: branch, error: branchError } = await supabase
+        .from('branches')
+        .select('id, tenant_id')
+        .eq('id', branchId)
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .single();
+
+      if (branchError || !branch) {
+        return NextResponse.json(
+          { error: 'La sucursal especificada no existe o no pertenece a tu tenant' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Check max keys limit
     const { count: existingKeysCount } = await supabase
       .from('api_keys')
@@ -240,7 +278,7 @@ export async function POST(request: NextRequest) {
     }
     const expiresAt = expirationResult.value ?? null;
 
-    // Insert the new API key
+    // Insert the new API key (FASE 2: with branch context)
     const { data: newKey, error: insertError } = await supabase
       .from('api_keys')
       .insert({
@@ -252,6 +290,8 @@ export async function POST(request: NextRequest) {
         key_hint: generatedKey.hint,
         key_prefix: generatedKey.prefix,
         environment,
+        scope_type: scopeType,
+        branch_id: branchId,
         scopes,
         rate_limit_rpm: rateLimitRpm,
         rate_limit_daily: rateLimitDaily,
@@ -268,6 +308,8 @@ export async function POST(request: NextRequest) {
         key_hint,
         key_prefix,
         environment,
+        branch_id,
+        scope_type,
         scopes,
         is_active,
         created_at,
@@ -310,7 +352,7 @@ export async function POST(request: NextRequest) {
       user_agent: request.headers.get('user-agent') || undefined,
     });
 
-    // Build response with the secret key (shown only once)
+    // Build response with the secret key (shown only once) - FASE 2
     const keyListItem: APIKeyListItem = {
       id: newKey.id,
       name: newKey.name,
@@ -318,6 +360,8 @@ export async function POST(request: NextRequest) {
       key_hint: newKey.key_hint,
       key_prefix: newKey.key_prefix,
       environment: newKey.environment,
+      branch_id: newKey.branch_id || null,
+      scope_type: newKey.scope_type || 'tenant',
       scopes: newKey.scopes || [],
       is_active: newKey.is_active,
       usage_count: 0,
