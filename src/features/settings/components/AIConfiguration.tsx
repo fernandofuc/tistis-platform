@@ -211,6 +211,19 @@ export function AIConfiguration() {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<'clinic' | 'knowledge' | 'scoring' | 'catalog'>('clinic');
 
+  // CRITICAL DEBUG: Log component mount and state
+  console.log('[AIConfiguration] COMPONENT MOUNTED/RENDERED:', {
+    vertical,
+    activeSection,
+    tenant_id: tenant?.id,
+    tenant_vertical: tenant?.vertical,
+  });
+
+  // CRITICAL DEBUG: Monitor activeSection changes
+  useEffect(() => {
+    console.log('[AIConfiguration] activeSection CHANGED TO:', activeSection);
+  }, [activeSection]);
+
   // Terminology based on vertical
   const verticalTerms = {
     dental: {
@@ -932,7 +945,10 @@ export function AIConfiguration() {
               ].map((tab) => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveSection(tab.key as typeof activeSection)}
+                  onClick={() => {
+                    console.log('[AIConfiguration] Tab clicked:', tab.key, 'label:', tab.label);
+                    setActiveSection(tab.key as typeof activeSection);
+                  }}
                   className={cn(
                     'relative flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap',
                     activeSection === tab.key
@@ -1369,11 +1385,14 @@ export function AIConfiguration() {
           {/* Catálogo de Servicios / Menú (condicional por vertical) */}
           {activeSection === 'catalog' && (
             <div className="p-6">
-              {vertical === 'restaurant' ? (
-                <MenuCatalogConfig />
-              ) : (
-                <ServiceCatalogConfig />
-              )}
+              {(() => {
+                console.log('[AIConfiguration] Catalog section - vertical:', vertical, 'activeSection:', activeSection);
+                return vertical === 'restaurant' ? (
+                  <MenuCatalogConfig />
+                ) : (
+                  <ServiceCatalogConfig />
+                );
+              })()}
             </div>
           )}
 

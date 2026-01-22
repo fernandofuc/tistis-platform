@@ -167,6 +167,7 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
       const headers = await getAuthHeaders();
 
       // Fetch categories, items, and stats in parallel
+      // NOTE: Not filtering by is_active to show ALL categories (filtering happens in render)
       const [categoriesRes, itemsRes, statsRes] = await Promise.all([
         fetch('/api/restaurant/menu/categories?include_items=true', { headers }),
         fetch('/api/restaurant/menu/items?limit=500', { headers }),
@@ -187,13 +188,33 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
       const itemsData = await itemsRes.json();
       const statsData = statsRes.ok ? await statsRes.json() : null;
 
-      setCategories(categoriesData.categories || []);
-      setItems(itemsData.items || []);
-      setStats(statsData);
+      // CRITICAL DEBUG: Log RAW API responses to identify structure
+      console.log('[MenuCatalogConfig] RAW categoriesData:', JSON.stringify(categoriesData, null, 2));
+      console.log('[MenuCatalogConfig] RAW itemsData:', JSON.stringify(itemsData, null, 2));
+      console.log('[MenuCatalogConfig] RAW statsData:', JSON.stringify(statsData, null, 2));
+
+      // API returns { success: true, data: { categories, tree } } structure
+      // Access the nested data object correctly with fallbacks for backwards compatibility
+      const categoriesArray = categoriesData.data?.categories || categoriesData.categories || [];
+      const itemsArray = itemsData.data?.items || itemsData.items || [];
+      const statsObject = statsData?.data || statsData;
+
+      // Debug logging to help identify data structure issues
+      console.log('[MenuCatalogConfig] PROCESSED Data:', {
+        categoriesCount: categoriesArray.length,
+        itemsCount: itemsArray.length,
+        hasStats: !!statsObject,
+        categoriesArraySample: categoriesArray.slice(0, 2),
+        itemsArraySample: itemsArray.slice(0, 2),
+      });
+
+      setCategories(categoriesArray);
+      setItems(itemsArray);
+      setStats(statsObject);
 
       // Expand all categories by default
       const categoryIds = new Set<string>(
-        (categoriesData.categories || []).map((c: MenuCategory) => c.id)
+        categoriesArray.map((c: MenuCategory) => c.id)
       );
       setExpandedCategories(categoryIds);
     } catch (err) {
@@ -227,7 +248,11 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
     return items.filter(item => item.category_id === categoryId);
   };
 
-  const formatPrice = (price: number, currency: string = 'MXN') => {
+  const formatPrice = (price: number | null | undefined, currency: string = 'MXN') => {
+    // Guard against null/undefined/NaN values to prevent Intl.NumberFormat errors
+    if (price === null || price === undefined || isNaN(price)) {
+      return '—';
+    }
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
       currency,
@@ -292,6 +317,12 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
   // RENDER: Empty State
   // ======================
   if (categories.length === 0 && items.length === 0) {
+    console.warn('[MenuCatalogConfig] EMPTY STATE TRIGGERED - No data found:', {
+      categoriesLength: categories.length,
+      itemsLength: items.length,
+      categories,
+      items,
+    });
     return (
       <div className={cn('', className)}>
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-8 text-center">
@@ -554,22 +585,22 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
                               {/* Item Info */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <h5 className="font-medium text-gray-900 truncate">
+                                  <h5 className="font-medium text-gray-900 truncate" title={item.name}>
                                     {item.name}
                                   </h5>
                                   {item.is_featured && (
-                                    <span className="text-amber-500" title="Destacado" aria-label="Destacado">
+                                    <span className="text-amber-500" title="Destacado" aria-hidden="true">
                                       {icons.star}
                                     </span>
                                   )}
                                   {item.is_vegetarian && (
-                                    <span className="text-green-500" title="Vegetariano" aria-label="Vegetariano">
+                                    <span className="text-green-500" title="Vegetariano" aria-hidden="true">
                                       {icons.leaf}
                                     </span>
                                   )}
                                 </div>
                                 {item.short_description && (
-                                  <p className="text-xs text-gray-500 truncate mt-0.5">
+                                  <p className="text-xs text-gray-500 truncate mt-0.5" title={item.short_description}>
                                     {item.short_description}
                                   </p>
                                 )}
@@ -592,7 +623,7 @@ export function MenuCatalogConfig({ className }: MenuCatalogConfigProps) {
                                 <p className="font-semibold text-gray-900">
                                   {formatPrice(item.price, item.currency)}
                                 </p>
-                                {item.price_lunch && item.price_lunch !== item.price && (
+                                {item.price_lunch != null && item.price != null && item.price_lunch !== item.price && (
                                   <p className="text-xs text-gray-500">
                                     Comida: {formatPrice(item.price_lunch, item.currency)}
                                   </p>
