@@ -5,11 +5,84 @@ import type { NextRequest } from 'next/server';
 // ======================
 // SECURITY HEADERS
 // ======================
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+/**
+ * Build Content Security Policy based on environment
+ * Production: Stricter policy (still needs unsafe-inline for Next.js)
+ * Development: More permissive for hot reload
+ */
+function buildCSP(): string {
+  const policies: string[] = [
+    "default-src 'self'",
+  ];
+
+  // Script sources
+  if (isProduction) {
+    // Production: Next.js requires 'unsafe-inline' for hydration scripts
+    // Nonces would require changes to _document.tsx which is complex with App Router
+    // This is the recommended production CSP for Next.js 14+
+    policies.push(
+      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://vercel.live"
+    );
+  } else {
+    // Development: Allow unsafe-eval for hot reload
+    policies.push(
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://vercel.live"
+    );
+  }
+
+  // Style sources - unsafe-inline needed for styled-jsx and CSS-in-JS
+  policies.push("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com");
+
+  // Font sources
+  policies.push("font-src 'self' https://fonts.gstatic.com data:");
+
+  // Image sources
+  policies.push(
+    "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://*.stripe.com"
+  );
+
+  // Connect sources (API calls, WebSockets)
+  policies.push(
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vercel.live https://api.stripe.com https://api.openai.com https://api.anthropic.com https://api.vapi.ai wss://*.vapi.ai"
+  );
+
+  // Frame sources (for Stripe checkout, etc.)
+  policies.push("frame-src 'self' https://js.stripe.com https://hooks.stripe.com");
+
+  // Prevent embedding in iframes
+  policies.push("frame-ancestors 'none'");
+
+  // Form action
+  policies.push("form-action 'self'");
+
+  // Base URI
+  policies.push("base-uri 'self'");
+
+  // Upgrade insecure requests in production
+  if (isProduction) {
+    policies.push("upgrade-insecure-requests");
+  }
+
+  // Object sources (prevent plugins)
+  policies.push("object-src 'none'");
+
+  // Worker sources
+  policies.push("worker-src 'self' blob:");
+
+  // Manifest
+  policies.push("manifest-src 'self'");
+
+  return policies.join('; ');
+}
+
 function setSecurityHeaders(response: NextResponse): void {
   // Prevent clickjacking
   response.headers.set('X-Frame-Options', 'DENY');
 
-  // XSS Protection
+  // XSS Protection (legacy, CSP is primary protection)
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-XSS-Protection', '1; mode=block');
 
@@ -19,21 +92,19 @@ function setSecurityHeaders(response: NextResponse): void {
   // Permissions Policy (formerly Feature Policy)
   response.headers.set(
     'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+    'camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(self "https://js.stripe.com")'
   );
 
-  // Content Security Policy (CSP)
-  const cspHeader = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://vercel.live",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vercel.live",
-    "frame-ancestors 'none'",
-  ].join('; ');
+  // HSTS (Strict Transport Security) - only in production
+  if (isProduction) {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload'
+    );
+  }
 
-  response.headers.set('Content-Security-Policy', cspHeader);
+  // Content Security Policy
+  response.headers.set('Content-Security-Policy', buildCSP());
 }
 
 // ======================
@@ -42,6 +113,10 @@ function setSecurityHeaders(response: NextResponse): void {
 export async function middleware(req: NextRequest) {
   // Create response
   const res = NextResponse.next();
+
+  // Note: Nonces disabled - Next.js App Router doesn't easily support CSP nonces
+  // without custom _document.tsx modifications. Using 'unsafe-inline' for now.
+  // See: https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy
 
   // Set security headers
   setSecurityHeaders(res);

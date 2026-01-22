@@ -331,7 +331,12 @@ export async function POST(req: NextRequest) {
 }
 
 // GET endpoint para ver el SQL que se debe ejecutar
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // SECURITY: Require admin authorization for GET as well
+  if (!verifyAdminKey(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const sqlContent = `
 -- =====================================================
 -- FIX RLS RECURSION IN user_roles

@@ -65,3 +65,48 @@ export {
   type WhatsAppTemplateComponent,
   type WhatsAppInteractiveAction,
 } from './whatsapp';
+
+// Admin Authentication
+export {
+  verifyAdminAuth,
+  isValidAdminKey,
+  type AdminAuthResult,
+  type AdminAuthConfig,
+} from './admin-auth';
+
+// Environment Validation
+export {
+  validateEnvironment,
+  getEnvSummary,
+  assertValidEnvironment,
+  type EnvValidationResult,
+  type EnvVarConfig,
+} from './env-validator';
+
+// Unified Rate Limiting (Redis + Memory fallback)
+export {
+  checkUnifiedRateLimit,
+  applyRateLimit,
+  applyRateLimitByUser,
+  applyRateLimitByTenant,
+  createRateLimitResponse as createUnifiedRateLimitResponse,
+  addRateLimitHeaders,
+  getClientIP,
+  UNIFIED_RATE_LIMITS,
+  type UnifiedRateLimitConfig,
+  type UnifiedRateLimitResult,
+} from './rate-limit-unified';
+
+// Structured Logging
+export {
+  StructuredLogger,
+  getLogger,
+  createLogger,
+  generateCorrelationId,
+  getCorrelationId,
+  createRequestContext,
+  type LogLevel,
+  type LogContext,
+  type LogEntry,
+  type LoggerConfig,
+} from './structured-logger';

@@ -11,6 +11,14 @@ import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@
 import { sendWhatsAppMessage } from '@/src/features/messaging/services/whatsapp.service';
 import type { ChannelConnection } from '@/src/shared/types/whatsapp';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import { checkRateLimit, getClientIP, rateLimitExceeded } from '@/src/shared/lib/rate-limit';
+
+// Rate limit for message sending: 60 messages per minute per user
+const messageSendLimiter = {
+  limit: 60,
+  windowSeconds: 60,
+  identifier: 'message-send',
+};
 
 // ======================
 // TYPES
@@ -88,6 +96,14 @@ async function cancelPendingAIJobs(conversationId: string): Promise<number> {
 // POST - Send Message
 // ======================
 export async function POST(request: NextRequest) {
+  // Rate limiting to prevent abuse
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, messageSendLimiter);
+
+  if (!rateLimitResult.success) {
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   try {
     const authContext = await getAuthenticatedContext(request);
 

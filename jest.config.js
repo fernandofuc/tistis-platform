@@ -15,18 +15,22 @@ const customJestConfig = {
   testEnvironment: 'jest-environment-jsdom',
   moduleNameMapper: {
     // Handle module aliases (matching tsconfig.json paths)
-    // Root-level directories first (more specific)
-    '^@/lib/(.*)$': '<rootDir>/lib/$1',
-    '^@/components/(.*)$': '<rootDir>/components/$1',
-    '^@/app/(.*)$': '<rootDir>/app/$1',
-    // Then src subdirectories
+    // Priority order matters - more specific paths first
+    // Src subdirectories (explicit mapping)
     '^@/shared/(.*)$': '<rootDir>/src/shared/$1',
     '^@/features/(.*)$': '<rootDir>/src/features/$1',
     '^@/hooks/(.*)$': '<rootDir>/src/hooks/$1',
     '^@/utils/(.*)$': '<rootDir>/src/utils/$1',
     '^@/types/(.*)$': '<rootDir>/src/types/$1',
-    // Fallback to src for unmatched paths
-    '^@/(.*)$': '<rootDir>/src/$1',
+    // Root-level directories
+    '^@/lib/(.*)$': '<rootDir>/lib/$1',
+    '^@/components/(.*)$': '<rootDir>/components/$1',
+    '^@/app/(.*)$': '<rootDir>/app/$1',
+    '^@/src/shared/(.*)$': '<rootDir>/src/shared/$1',
+    '^@/src/features/(.*)$': '<rootDir>/src/features/$1',
+    '^@/src/(.*)$': '<rootDir>/src/$1',
+    // Fallback to root for unmatched paths
+    '^@/(.*)$': '<rootDir>/$1',
   },
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/.next/'],
   transform: {
