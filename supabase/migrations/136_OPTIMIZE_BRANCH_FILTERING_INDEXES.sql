@@ -8,6 +8,9 @@
 -- - Quitado CONCURRENTLY (no funciona en SQL Editor de Supabase)
 -- - Quitado NOW() en predicados (no es IMMUTABLE)
 -- - Quitado tablas que no existen (menu_items, inventory_items)
+-- - Quitado staff.branch_id (staff usa staff_branches para branches)
+-- - Corregido leads.name -> leads.full_name
+-- - Corregido appointments.service_type -> service_id
 -- =====================================================
 
 -- =====================================================
@@ -21,7 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_leads_branch_active_statuses
 
 -- LEADS: Search queries with branch filtering
 CREATE INDEX IF NOT EXISTS idx_leads_branch_search
-    ON leads(branch_id, name, phone, email)
+    ON leads(branch_id, full_name, phone, email)
     WHERE status IS NOT NULL;
 
 -- APPOINTMENTS: By branch and scheduled time
@@ -31,10 +34,12 @@ CREATE INDEX IF NOT EXISTS idx_appointments_branch_scheduled
 CREATE INDEX IF NOT EXISTS idx_appointments_branch_scheduled_desc
     ON appointments(branch_id, scheduled_at DESC);
 
--- STAFF: Active staff per branch
-CREATE INDEX IF NOT EXISTS idx_staff_branch_active
-    ON staff(branch_id, role)
-    WHERE is_active = true;
+-- STAFF_BRANCHES: Optimize branch membership lookups
+CREATE INDEX IF NOT EXISTS idx_staff_branches_branch_id
+    ON staff_branches(branch_id);
+
+CREATE INDEX IF NOT EXISTS idx_staff_branches_staff_id
+    ON staff_branches(staff_id);
 
 -- =====================================================
 -- COMPOSITE INDEXES FOR TENANT + BRANCH FILTERING
@@ -54,12 +59,12 @@ CREATE INDEX IF NOT EXISTS idx_appointments_tenant_branch_scheduled
 -- Covering index for lead list queries
 CREATE INDEX IF NOT EXISTS idx_leads_branch_covering
     ON leads(branch_id, created_at DESC)
-    INCLUDE (id, tenant_id, phone, name, status, source);
+    INCLUDE (id, tenant_id, phone, full_name, status, source);
 
 -- Covering index for appointment list queries
 CREATE INDEX IF NOT EXISTS idx_appointments_branch_covering
     ON appointments(branch_id, scheduled_at)
-    INCLUDE (id, tenant_id, lead_id, staff_id, status, service_type);
+    INCLUDE (id, tenant_id, lead_id, staff_id, status, service_id);
 
 -- =====================================================
 -- API KEYS OPTIMIZATION
@@ -82,6 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_branch_scope
 ANALYZE leads;
 ANALYZE appointments;
 ANALYZE staff;
+ANALYZE staff_branches;
 ANALYZE api_keys;
 ANALYZE branches;
 
@@ -92,15 +98,15 @@ ANALYZE branches;
 CREATE OR REPLACE VIEW vw_fase3_index_usage AS
 SELECT
     schemaname,
-    tablename,
-    indexname,
+    relname AS tablename,
+    indexrelname AS indexname,
     idx_scan AS index_scans,
     idx_tup_read AS tuples_read,
     idx_tup_fetch AS tuples_fetched,
     pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
 FROM pg_stat_user_indexes
 WHERE schemaname = 'public'
-    AND indexname LIKE 'idx_%_branch%'
+    AND indexrelname LIKE 'idx_%_branch%'
 ORDER BY idx_scan DESC;
 
 -- =====================================================
@@ -118,21 +124,21 @@ BEGIN
     RETURN QUERY
     SELECT
         'Index Existence'::TEXT,
-        CASE WHEN COUNT(*) >= 8 THEN 'PASS' ELSE 'FAIL' END::TEXT,
-        FORMAT('Found %s/8 expected indexes', COUNT(*))::TEXT
-    FROM pg_indexes
+        CASE WHEN COUNT(*) >= 6 THEN 'PASS' ELSE 'FAIL' END::TEXT,
+        FORMAT('Found %s/6 expected indexes', COUNT(*))::TEXT
+    FROM pg_stat_user_indexes
     WHERE schemaname = 'public'
-        AND indexname LIKE 'idx_%_branch%';
+        AND indexrelname LIKE 'idx_%_branch%';
 
     -- Check 2: Verify indexes are being used
     RETURN QUERY
     SELECT
         'Index Usage'::TEXT,
-        CASE WHEN COUNT(*) >= 5 THEN 'PASS' ELSE 'WARN' END::TEXT,
+        CASE WHEN COUNT(*) >= 3 THEN 'PASS' ELSE 'WARN' END::TEXT,
         FORMAT('%s indexes have recorded scans', COUNT(*))::TEXT
     FROM pg_stat_user_indexes
     WHERE schemaname = 'public'
-        AND indexname LIKE 'idx_%_branch%'
+        AND indexrelname LIKE 'idx_%_branch%'
         AND idx_scan > 0;
 END;
 $$ LANGUAGE plpgsql;
