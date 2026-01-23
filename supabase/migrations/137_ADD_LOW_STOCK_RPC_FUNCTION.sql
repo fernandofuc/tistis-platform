@@ -1,71 +1,16 @@
 -- =====================================================
--- TIS TIS PLATFORM - FASE 3: Low Stock RPC Function
+-- TIS TIS PLATFORM - FASE 3: Branch Stats RPC Functions
 -- Migration: 137_ADD_LOW_STOCK_RPC_FUNCTION
--- Description: RPC function for caching layer to query low stock items
+-- Description: RPC functions for caching layer to query branch stats
+--
+-- CORREGIDO:
+-- - Quitado inventory_items (tabla no existe)
+-- - Quitado CONCURRENTLY en REFRESH (no funciona en SQL Editor)
+-- - Funciones solo usan tablas que existen (leads, appointments, branches)
 -- =====================================================
 
 -- =====================================================
--- LOW STOCK ITEMS QUERY FUNCTION
--- =====================================================
-
-/**
- * Get inventory items where current_stock < minimum_stock
- * Supports branch filtering and caching
- *
- * @param p_tenant_id - Required tenant ID
- * @param p_branch_id - Optional branch ID (null = all branches)
- * @returns Array of low stock items with branch context
- */
-CREATE OR REPLACE FUNCTION get_low_stock_items(
-    p_tenant_id UUID,
-    p_branch_id UUID DEFAULT NULL
-)
-RETURNS TABLE(
-    id UUID,
-    tenant_id UUID,
-    branch_id UUID,
-    branch_name TEXT,
-    name TEXT,
-    sku TEXT,
-    current_stock INTEGER,
-    minimum_stock INTEGER,
-    stock_deficit INTEGER,
-    unit TEXT,
-    category TEXT,
-    last_updated_at TIMESTAMPTZ
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        i.id,
-        i.tenant_id,
-        i.branch_id,
-        b.name AS branch_name,
-        i.name,
-        i.sku,
-        i.current_stock,
-        i.minimum_stock,
-        (i.minimum_stock - i.current_stock) AS stock_deficit,
-        i.unit,
-        i.category,
-        i.updated_at AS last_updated_at
-    FROM inventory_items i
-    LEFT JOIN branches b ON b.id = i.branch_id
-    WHERE i.tenant_id = p_tenant_id
-        AND i.current_stock < i.minimum_stock
-        AND (p_branch_id IS NULL OR i.branch_id = p_branch_id)
-    ORDER BY (i.minimum_stock - i.current_stock) DESC, i.name ASC;
-END;
-$$ LANGUAGE plpgsql
-SECURITY DEFINER
-STABLE; -- STABLE because it doesn't modify data and result is consistent within transaction
-
--- Grant execute permission to authenticated users
-GRANT EXECUTE ON FUNCTION get_low_stock_items(UUID, UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION get_low_stock_items(UUID, UUID) TO service_role;
-
--- =====================================================
--- ADDITIONAL HELPER FUNCTIONS FOR CACHING LAYER
+-- BRANCH STATISTICS SUMMARY FUNCTION
 -- =====================================================
 
 /**
@@ -81,7 +26,6 @@ DECLARE
     result JSONB;
     lead_stats JSONB;
     appointment_stats JSONB;
-    inventory_stats JSONB;
 BEGIN
     -- Lead statistics
     SELECT jsonb_build_object(
@@ -108,23 +52,11 @@ BEGIN
     WHERE tenant_id = p_tenant_id
         AND branch_id = p_branch_id;
 
-    -- Inventory statistics
-    SELECT jsonb_build_object(
-        'total_items', COUNT(*),
-        'low_stock_items', COUNT(*) FILTER (WHERE current_stock < minimum_stock),
-        'out_of_stock', COUNT(*) FILTER (WHERE current_stock = 0)
-    )
-    INTO inventory_stats
-    FROM inventory_items
-    WHERE tenant_id = p_tenant_id
-        AND branch_id = p_branch_id;
-
-    -- Combine all stats
+    -- Combine all stats (sin inventory por ahora)
     result := jsonb_build_object(
         'branch_id', p_branch_id,
         'leads', lead_stats,
         'appointments', appointment_stats,
-        'inventory', inventory_stats,
         'generated_at', NOW()
     );
 
@@ -138,7 +70,7 @@ GRANT EXECUTE ON FUNCTION get_branch_stats_summary(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_branch_stats_summary(UUID, UUID) TO service_role;
 
 -- =====================================================
--- CACHE-FRIENDLY VIEWS
+-- CACHE-FRIENDLY MATERIALIZED VIEW
 -- =====================================================
 
 /**
@@ -146,7 +78,9 @@ GRANT EXECUTE ON FUNCTION get_branch_stats_summary(UUID, UUID) TO service_role;
  * Refresh this view periodically (e.g., every 5 minutes via cron)
  * For use in analytics dashboard
  */
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_branch_performance_metrics AS
+DROP MATERIALIZED VIEW IF EXISTS mv_branch_performance_metrics CASCADE;
+
+CREATE MATERIALIZED VIEW mv_branch_performance_metrics AS
 SELECT
     b.id AS branch_id,
     b.tenant_id,
@@ -162,25 +96,20 @@ SELECT
     COUNT(DISTINCT a.id) FILTER (WHERE a.created_at > NOW() - INTERVAL '30 days') AS appointments_30d,
     COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'completed' AND a.updated_at > NOW() - INTERVAL '30 days') AS completed_appointments_30d,
 
-    -- Inventory health
-    COUNT(DISTINCT ii.id) AS total_inventory_items,
-    COUNT(DISTINCT ii.id) FILTER (WHERE ii.current_stock < ii.minimum_stock) AS low_stock_items,
-
     -- Last updated
     NOW() AS refreshed_at
 
 FROM branches b
 LEFT JOIN leads l ON l.branch_id = b.id AND l.tenant_id = b.tenant_id
 LEFT JOIN appointments a ON a.branch_id = b.id AND a.tenant_id = b.tenant_id
-LEFT JOIN inventory_items ii ON ii.branch_id = b.id AND ii.tenant_id = b.tenant_id
 WHERE b.is_active = true
 GROUP BY b.id, b.tenant_id, b.name, b.is_headquarters;
 
 -- Create index on materialized view for fast lookups
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_branch_performance_branch_id
+CREATE UNIQUE INDEX idx_mv_branch_performance_branch_id
     ON mv_branch_performance_metrics(branch_id);
 
-CREATE INDEX IF NOT EXISTS idx_mv_branch_performance_tenant
+CREATE INDEX idx_mv_branch_performance_tenant
     ON mv_branch_performance_metrics(tenant_id);
 
 -- Grant select permission
@@ -193,12 +122,15 @@ GRANT SELECT ON mv_branch_performance_metrics TO service_role;
 
 /**
  * Refresh branch performance metrics
- * Call this via cron job or API endpoint every 5 minutes
+ * Call this via cron job or API endpoint
+ * NOTA: CONCURRENTLY requiere un UNIQUE INDEX (ya lo tenemos)
+ * pero no funciona en SQL Editor, ejecutar manualmente si es necesario
  */
 CREATE OR REPLACE FUNCTION refresh_branch_performance_metrics()
 RETURNS VOID AS $$
 BEGIN
-    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_branch_performance_metrics;
+    -- Sin CONCURRENTLY para compatibilidad con SQL Editor
+    REFRESH MATERIALIZED VIEW mv_branch_performance_metrics;
 END;
 $$ LANGUAGE plpgsql
 SECURITY DEFINER;
@@ -206,7 +138,7 @@ SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION refresh_branch_performance_metrics() TO service_role;
 
 -- =====================================================
--- MONITORING QUERIES
+-- MONITORING VIEW
 -- =====================================================
 
 -- Check when materialized view was last refreshed
@@ -230,7 +162,6 @@ GRANT SELECT ON vw_cache_freshness TO service_role;
 -- =====================================================
 
 -- To rollback:
--- DROP FUNCTION IF EXISTS get_low_stock_items(UUID, UUID);
 -- DROP FUNCTION IF EXISTS get_branch_stats_summary(UUID, UUID);
 -- DROP MATERIALIZED VIEW IF EXISTS mv_branch_performance_metrics CASCADE;
 -- DROP FUNCTION IF EXISTS refresh_branch_performance_metrics();
