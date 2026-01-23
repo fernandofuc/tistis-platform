@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Dashboard Sidebar Component
 // With Feature Flags, Multi-tenant Support & Expandable Submenus
+// Smooth Animations - Apple-like Fluidity
 // =====================================================
 
 'use client';
@@ -9,13 +10,52 @@ import { useMemo, useTransition, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { cn } from '@/shared/utils';
 import { useAppStore } from '@/shared/stores';
-import { useFeatureFlags, MODULE_FLAGS } from '@/src/hooks/useFeatureFlags';
+import { useFeatureFlags } from '@/src/hooks/useFeatureFlags';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useBusinessInsights } from '@/src/hooks/useBusinessInsights';
 import { BranchSelector } from '@/shared/components/ui';
 import type { SidebarProps, NavItem } from '../types';
+
+// ======================
+// ANIMATION CONFIGURATION
+// Apple-like smooth transitions with accessibility support
+// ======================
+const EASE_SMOOTH = [0.4, 0, 0.2, 1] as const;
+
+// Factory function for creating motion-aware transitions
+const createTransition = (duration: number, delay = 0, reducedMotion?: boolean) => ({
+  duration: reducedMotion ? 0 : duration,
+  delay: reducedMotion ? 0 : delay,
+  ease: EASE_SMOOTH,
+});
+
+// Submenu animation variants (used with Framer Motion variants prop)
+const getSubmenuVariants = (reducedMotion?: boolean) => ({
+  initial: { opacity: 0, height: 0 },
+  animate: {
+    opacity: 1,
+    height: 'auto',
+    transition: reducedMotion
+      ? { duration: 0 }
+      : {
+          height: { duration: 0.25, ease: EASE_SMOOTH },
+          opacity: { duration: 0.2, delay: 0.05 },
+        },
+  },
+  exit: {
+    opacity: 0,
+    height: 0,
+    transition: reducedMotion
+      ? { duration: 0 }
+      : {
+          height: { duration: 0.2, ease: EASE_SMOOTH },
+          opacity: { duration: 0.1 },
+        },
+  },
+});
 
 // ======================
 // ICONS (Inline SVGs for performance)
@@ -124,11 +164,6 @@ const icons = {
   chevronDown: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  ),
-  chevronRight: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
     </svg>
   ),
   // Agente Mensajes icon
@@ -366,8 +401,11 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
 
+  // Accessibility: Respect user's reduced motion preference
+  const prefersReducedMotion = useReducedMotion();
+
   // Multi-tenant hooks
-  const { tenant, isLoading: tenantLoading } = useTenant();
+  const { tenant } = useTenant();
   const { flagsLoading, isEnabled } = useFeatureFlags();
   const { unseenCount: businessInsightsCount } = useBusinessInsights();
 
@@ -503,52 +541,93 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200/80 transition-all duration-300 flex flex-col',
+        'fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200/80 flex flex-col',
+        !prefersReducedMotion && 'transition-all duration-300',
         collapsed ? 'w-20' : 'w-64'
       )}
     >
       {/* Logo TIS TIS - Links to landing page */}
       <div className={cn(
-        "h-16 flex items-center border-b border-slate-100/80 transition-all duration-300",
+        "h-16 flex items-center border-b border-slate-100/80",
+        !prefersReducedMotion && "transition-all duration-300 ease-out",
         collapsed ? "justify-center px-2" : "px-4"
       )}>
         <Link
           href="/"
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-        >
-          <Image
-            src="/logos/tis-brain-logo.png"
-            alt="TIS TIS"
-            width={collapsed ? 40 : 36}
-            height={collapsed ? 40 : 36}
-            className="object-contain"
-            priority
-          />
-          {!collapsed && (
-            <Image
-              src="/logos/tis-text-logo.png"
-              alt="TIS TIS"
-              width={80}
-              height={24}
-              className="object-contain"
-            />
+          className={cn(
+            "flex items-center gap-3 hover:opacity-80 overflow-hidden",
+            !prefersReducedMotion && "transition-opacity"
           )}
+        >
+          <motion.div
+            animate={{
+              width: collapsed ? 40 : 36,
+              height: collapsed ? 40 : 36,
+            }}
+            transition={createTransition(0.3, 0, prefersReducedMotion ?? false)}
+            className="flex-shrink-0"
+          >
+            <Image
+              src="/logos/tis-brain-logo.png"
+              alt="TIS TIS"
+              width={40}
+              height={40}
+              className="object-contain w-full h-full"
+              priority
+            />
+          </motion.div>
+          <AnimatePresence mode="wait">
+            {!collapsed && (
+              <motion.div
+                key="text-logo"
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 80 }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={createTransition(0.25, 0, prefersReducedMotion ?? false)}
+                className="overflow-hidden"
+              >
+                <Image
+                  src="/logos/tis-text-logo.png"
+                  alt="TIS TIS"
+                  width={80}
+                  height={24}
+                  className="object-contain"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Link>
       </div>
 
       {/* Plan badge - Premium styled */}
-      {!collapsed && tenant?.plan && (
-        <div className="px-4 py-3 border-b border-slate-100/80">
-          <span className={cn(
-            'inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-lg',
-            tenant.plan === 'growth' && 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-700 border border-purple-200/50',
-            tenant.plan === 'essentials' && 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 text-emerald-700 border border-emerald-200/50',
-            tenant.plan === 'starter' && 'bg-slate-100 text-slate-600 border border-slate-200/50',
-          )}>
-            Plan {tenant.plan.charAt(0).toUpperCase() + tenant.plan.slice(1)}
-          </span>
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {!collapsed && tenant?.plan && (
+          <motion.div
+            key="plan-badge"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={createTransition(0.25, 0, prefersReducedMotion ?? false)}
+            className="border-b border-slate-100/80 overflow-hidden"
+          >
+            <div className="px-4 py-3">
+              <motion.span
+                initial={{ opacity: 0, x: prefersReducedMotion ? 0 : -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={createTransition(0.2, 0.1, prefersReducedMotion ?? false)}
+                className={cn(
+                  'inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-lg',
+                  tenant.plan === 'growth' && 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-700 border border-purple-200/50',
+                  tenant.plan === 'essentials' && 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 text-emerald-700 border border-emerald-200/50',
+                  tenant.plan === 'starter' && 'bg-slate-100 text-slate-600 border border-slate-200/50',
+                )}
+              >
+                Plan {tenant.plan.charAt(0).toUpperCase() + tenant.plan.slice(1)}
+              </motion.span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Branch Selector - For multi-branch tenants */}
       <div className="px-4 py-3 border-b border-slate-100/80">
@@ -567,13 +646,22 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
           return (
             <div key={sectionKey} className="space-y-1">
               {/* Section Label - Only show if not collapsed and has label */}
-              {!collapsed && sectionLabel && (
-                <div className="px-3 pb-2">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                    {sectionLabel}
-                  </span>
-                </div>
-              )}
+              <AnimatePresence mode="wait">
+                {!collapsed && sectionLabel && (
+                  <motion.div
+                    key={`section-${sectionKey}`}
+                    initial={{ opacity: 0, x: prefersReducedMotion ? 0 : -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: prefersReducedMotion ? 0 : -10 }}
+                    transition={createTransition(0.2, 0, prefersReducedMotion ?? false)}
+                    className="px-3 pb-2"
+                  >
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                      {sectionLabel}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Section Items */}
               <div className="space-y-1">
@@ -593,7 +681,8 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                         <button
                           onClick={() => toggleSubmenu(item.href)}
                           className={cn(
-                            'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full text-left',
+                            'flex items-center gap-3 px-3 py-2.5 rounded-xl w-full text-left',
+                            !prefersReducedMotion && 'transition-all duration-200',
                             (isActive || isChildActive)
                               ? 'bg-tis-coral/10 text-tis-coral font-medium'
                               : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -602,58 +691,85 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                           title={collapsed ? displayName : undefined}
                         >
                           <span className={cn(
-                            'flex-shrink-0 transition-colors',
+                            'flex-shrink-0',
+                            !prefersReducedMotion && 'transition-colors',
                             (isActive || isChildActive) ? 'text-tis-coral' : 'text-slate-400'
                           )}>
                             {item.icon}
                           </span>
-                          {!collapsed && (
-                            <>
-                              <span className="text-sm flex-1">{displayName}</span>
-                              <span className={cn(
-                                'transition-transform duration-200',
-                                isExpanded ? 'rotate-0' : '-rotate-90'
-                              )}>
-                                {icons.chevronDown}
-                              </span>
-                            </>
-                          )}
+                          <AnimatePresence mode="wait">
+                            {!collapsed && (
+                              <motion.div
+                                key={`expandable-content-${item.href}`}
+                                initial={{ opacity: 0, x: prefersReducedMotion ? 0 : -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: prefersReducedMotion ? 0 : -8 }}
+                                transition={createTransition(0.2, 0, prefersReducedMotion ?? false)}
+                                className="flex items-center flex-1"
+                              >
+                                <span className="text-sm flex-1">{displayName}</span>
+                                <motion.span
+                                  animate={{ rotate: isExpanded ? 0 : -90 }}
+                                  transition={createTransition(0.2, 0, prefersReducedMotion ?? false)}
+                                >
+                                  {icons.chevronDown}
+                                </motion.span>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </button>
 
                         {/* Children items - show when expanded and not collapsed */}
-                        {!collapsed && isExpanded && (
-                          <div className="mt-1 ml-4 pl-3 border-l-2 border-slate-200/60 space-y-1">
-                            {item.children.map((child) => {
-                              const isChildItemActive = pathname === child.href || pathname.startsWith(`${child.href}/`);
-                              const childDisplayName = getDisplayName(child);
+                        <AnimatePresence mode="wait">
+                          {!collapsed && isExpanded && (
+                            <motion.div
+                              key={`submenu-${item.href}`}
+                              variants={getSubmenuVariants(prefersReducedMotion ?? false)}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                              className="mt-1 ml-4 pl-3 border-l-2 border-slate-200/60 space-y-1 overflow-hidden"
+                            >
+                              {item.children.map((child, childIndex) => {
+                                const isChildItemActive = pathname === child.href || pathname.startsWith(`${child.href}/`);
+                                const childDisplayName = getDisplayName(child);
 
-                              return (
-                                <Link
-                                  key={child.href}
-                                  href={child.href}
-                                  prefetch={true}
-                                  onClick={(e) => handleNavigation(child.href, e)}
-                                  onMouseEnter={() => handlePrefetch(child.href)}
-                                  className={cn(
-                                    'flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-                                    isChildItemActive
-                                      ? 'bg-tis-coral/10 text-tis-coral font-medium'
-                                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700',
-                                    isPending && 'opacity-70 pointer-events-none'
-                                  )}
-                                >
-                                  <span className={cn(
-                                    'flex-shrink-0 transition-colors w-4 h-4',
-                                    isChildItemActive ? 'text-tis-coral' : 'text-slate-400'
-                                  )}>
-                                    {child.icon}
-                                  </span>
-                                  <span className="text-sm">{childDisplayName}</span>
-                                </Link>
-                              );
-                            })}
-                          </div>
-                        )}
+                                return (
+                                  <motion.div
+                                    key={child.href}
+                                    initial={{ opacity: 0, x: prefersReducedMotion ? 0 : -12 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={createTransition(0.2, prefersReducedMotion ? 0 : childIndex * 0.05, prefersReducedMotion ?? false)}
+                                  >
+                                    <Link
+                                      href={child.href}
+                                      prefetch={true}
+                                      onClick={(e) => handleNavigation(child.href, e)}
+                                      onMouseEnter={() => handlePrefetch(child.href)}
+                                      className={cn(
+                                        'flex items-center gap-3 px-3 py-2 rounded-lg',
+                                        !prefersReducedMotion && 'transition-all duration-200',
+                                        isChildItemActive
+                                          ? 'bg-tis-coral/10 text-tis-coral font-medium'
+                                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700',
+                                        isPending && 'opacity-70 pointer-events-none'
+                                      )}
+                                    >
+                                      <span className={cn(
+                                        'flex-shrink-0 w-4 h-4',
+                                        !prefersReducedMotion && 'transition-colors',
+                                        isChildItemActive ? 'text-tis-coral' : 'text-slate-400'
+                                      )}>
+                                        {child.icon}
+                                      </span>
+                                      <span className="text-sm">{childDisplayName}</span>
+                                    </Link>
+                                  </motion.div>
+                                );
+                              })}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     );
                   }
@@ -667,7 +783,8 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                       onClick={(e) => handleNavigation(item.href, e)}
                       onMouseEnter={() => handlePrefetch(item.href)}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
+                        'flex items-center gap-3 px-3 py-2.5 rounded-xl',
+                        !prefersReducedMotion && 'transition-all duration-200',
                         isActive
                           ? 'bg-tis-coral/10 text-tis-coral font-medium'
                           : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -677,22 +794,43 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
                       title={collapsed ? displayName : undefined}
                     >
                       <span className={cn(
-                        'flex-shrink-0 transition-colors',
+                        'flex-shrink-0',
+                        !prefersReducedMotion && 'transition-colors',
                         isActive ? 'text-tis-coral' : 'text-slate-400'
                       )}>
                         {item.icon}
                       </span>
-                      {!collapsed && (
-                        <span className="text-sm">{displayName}</span>
-                      )}
-                      {(() => {
-                        const dynamicBadge = getDynamicBadge(item);
-                        return !collapsed && dynamicBadge && (
-                          <span className="ml-auto bg-tis-coral/10 text-tis-coral text-xs font-medium px-2 py-0.5 rounded-full">
-                            {dynamicBadge}
-                          </span>
-                        );
-                      })()}
+                      <AnimatePresence mode="wait">
+                        {!collapsed && (
+                          <motion.span
+                            key={`nav-text-${item.href}`}
+                            initial={{ opacity: 0, x: prefersReducedMotion ? 0 : -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: prefersReducedMotion ? 0 : -8 }}
+                            transition={createTransition(0.2, 0, prefersReducedMotion ?? false)}
+                            className="text-sm"
+                          >
+                            {displayName}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                      <AnimatePresence mode="wait">
+                        {(() => {
+                          const dynamicBadge = getDynamicBadge(item);
+                          return !collapsed && dynamicBadge && (
+                            <motion.span
+                              key={`nav-badge-${item.href}`}
+                              initial={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.8 }}
+                              transition={createTransition(0.2, 0, prefersReducedMotion ?? false)}
+                              className="ml-auto bg-tis-coral/10 text-tis-coral text-xs font-medium px-2 py-0.5 rounded-full"
+                            >
+                              {dynamicBadge}
+                            </motion.span>
+                          );
+                        })()}
+                      </AnimatePresence>
                     </Link>
                   );
                 })}
@@ -705,15 +843,31 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
       {/* Bottom Section - Vertical indicator & Collapse */}
       <div className="absolute bottom-0 left-0 right-0 border-t border-slate-100/80 bg-slate-50/50">
         {/* Vertical indicator (dental, restaurant, etc) */}
-        {!collapsed && tenant?.vertical && (
-          <div className="px-4 py-3">
-            <div className="text-[11px] text-slate-400 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span className="font-medium">Vertical:</span>
-              <span className="text-slate-500 capitalize">{tenant.vertical}</span>
-            </div>
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {!collapsed && tenant?.vertical && (
+            <motion.div
+              key="vertical-indicator"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={createTransition(0.25, 0, prefersReducedMotion ?? false)}
+              className="overflow-hidden"
+            >
+              <div className="px-4 py-3">
+                <motion.div
+                  initial={{ opacity: 0, x: prefersReducedMotion ? 0 : -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={createTransition(0.2, 0.1, prefersReducedMotion ?? false)}
+                  className="text-[11px] text-slate-400 flex items-center gap-2"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span className="font-medium">Vertical:</span>
+                  <span className="text-slate-500 capitalize">{tenant.vertical}</span>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Collapse Button */}
         <div className={cn('px-3 pb-4', !collapsed && tenant?.vertical ? 'pt-0' : 'pt-4')}>
@@ -721,12 +875,31 @@ export function Sidebar({ isCollapsed, onCollapse }: SidebarProps) {
             onClick={() => handleCollapse(!collapsed)}
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-xl w-full',
-              'text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all duration-200',
+              'text-slate-400 hover:bg-slate-100 hover:text-slate-600',
+              !prefersReducedMotion && 'transition-all duration-200',
               collapsed && 'justify-center px-2'
             )}
           >
-            {collapsed ? icons.expand : icons.collapse}
-            {!collapsed && <span className="text-sm font-medium">Minimizar</span>}
+            <motion.span
+              animate={{ rotate: prefersReducedMotion ? 0 : (collapsed ? 180 : 0) }}
+              transition={createTransition(0.3, 0, prefersReducedMotion ?? false)}
+            >
+              {collapsed ? icons.expand : icons.collapse}
+            </motion.span>
+            <AnimatePresence mode="wait">
+              {!collapsed && (
+                <motion.span
+                  key="collapse-text"
+                  initial={{ opacity: 0, x: prefersReducedMotion ? 0 : -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: prefersReducedMotion ? 0 : -8 }}
+                  transition={createTransition(0.2, 0, prefersReducedMotion ?? false)}
+                  className="text-sm font-medium"
+                >
+                  Minimizar
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
         </div>
       </div>
