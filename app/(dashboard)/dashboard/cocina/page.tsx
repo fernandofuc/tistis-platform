@@ -119,14 +119,24 @@ interface DeleteConfirmModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   loading: boolean;
+  error?: string | null;
 }
 
-function DeleteConfirmModal({ isOpen, stationName, onConfirm, onCancel, loading }: DeleteConfirmModalProps) {
+function DeleteConfirmModal({ isOpen, stationName, onConfirm, onCancel, loading, error }: DeleteConfirmModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onCancel} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-modal-title"
+    >
+      <div
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        onClick={loading ? undefined : onCancel}
+        aria-hidden="true"
+      />
       <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
         <div className="text-center">
           <div className="mx-auto w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center mb-4">
@@ -134,10 +144,15 @@ function DeleteConfirmModal({ isOpen, stationName, onConfirm, onCancel, loading 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h3 className="text-lg font-bold text-slate-900 mb-2">Eliminar estación</h3>
+          <h3 id="delete-modal-title" className="text-lg font-bold text-slate-900 mb-2">Eliminar estación</h3>
           <p className="text-slate-500 mb-6">
             ¿Estás seguro de que deseas eliminar la estación <strong>&quot;{stationName}&quot;</strong>? Esta acción no se puede deshacer.
           </p>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
           <div className="flex gap-3">
             <button
               onClick={onCancel}
@@ -300,6 +315,7 @@ export default function CocinaPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [stationToDelete, setStationToDelete] = useState<KitchenStationConfig | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Get active branch
   const activeBranchId = currentBranchId || branches?.[0]?.id;
@@ -361,12 +377,14 @@ export default function CocinaPage() {
   const handleConfirmDelete = useCallback(async () => {
     if (!stationToDelete) return;
     setDeleteLoading(true);
+    setDeleteError(null);
     try {
       await deleteStation(stationToDelete.id);
       setDeleteConfirmOpen(false);
       setStationToDelete(null);
     } catch (error) {
       console.error('Error deleting station:', error);
+      setDeleteError(error instanceof Error ? error.message : 'Error al eliminar la estación');
     } finally {
       setDeleteLoading(false);
     }
@@ -375,6 +393,7 @@ export default function CocinaPage() {
   const handleCancelDelete = useCallback(() => {
     setDeleteConfirmOpen(false);
     setStationToDelete(null);
+    setDeleteError(null);
   }, []);
 
   // Order handlers
@@ -564,6 +583,7 @@ export default function CocinaPage() {
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
         loading={deleteLoading}
+        error={deleteError}
       />
     </div>
   );

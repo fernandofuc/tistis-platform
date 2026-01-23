@@ -116,7 +116,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return errorResponse('Estación no encontrada', 404);
     }
 
-    const body = await request.json();
+    // Parse request body with error handling
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Cuerpo de solicitud inválido', 400);
+    }
+
     const {
       code,
       name,
@@ -197,6 +204,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         ? default_staff_ids.filter((id: unknown) => typeof id === 'string' && isValidUUID(id)).slice(0, 20)
         : [];
       updateData.default_staff_ids = validStaffIds;
+    }
+
+    // Check if there's anything to update (excluding updated_at)
+    if (Object.keys(updateData).length === 0) {
+      return errorResponse('No hay campos válidos para actualizar', 400);
     }
 
     // Always update updated_at

@@ -96,7 +96,14 @@ export async function POST(request: NextRequest) {
       return errorResponse('Sin permisos para crear estaciones', 403);
     }
 
-    const body = await request.json();
+    // Parse request body with error handling
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Cuerpo de solicitud inválido', 400);
+    }
+
     const {
       branch_id,
       code,
