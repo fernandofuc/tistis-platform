@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/process-sr-sales",
-      "schedule": "0 */1 * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }
