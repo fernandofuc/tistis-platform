@@ -284,7 +284,7 @@ SELECT
     k.created_at,
     k.last_used_at,
     k.usage_count,
-    t.business_name as tenant_name,
+    t.name as tenant_name,
     b.name as branch_name,
     b.address as branch_address
 FROM api_keys k
