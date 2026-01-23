@@ -2736,16 +2736,16 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="fixed inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col"
+        className="fixed inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col overflow-hidden"
       >
-        {/* Header con gradiente */}
-        <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 flex-shrink-0">
+        {/* Header con gradiente TIS TIS */}
+        <div className="bg-gradient-to-r from-tis-coral to-tis-orange text-white p-6 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold">
                 {isEditing ? `Editar ${terms.staffSingular}` : terms.staffAdd}
               </h3>
-              <p className="text-purple-100 text-sm mt-1">
+              <p className="text-white/80 text-sm mt-1">
                 {isEditing ? `Modifica los datos del ${terms.staffSingular.toLowerCase()}` : `Registra un nuevo ${terms.staffSingular.toLowerCase()}`}
               </p>
             </div>
@@ -2811,7 +2811,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
             <select
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-tis-coral/50 focus:border-tis-coral"
             >
               {terms.staffRoles.map((role) => (
                 <option key={role.value} value={role.value}>{role.label}</option>
@@ -2842,7 +2842,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
                     className={cn(
                       'flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border',
                       selectedBranches.includes(branch.id)
-                        ? 'bg-purple-50 border-purple-300 shadow-sm'
+                        ? 'bg-tis-coral/5 border-tis-coral/30 shadow-sm'
                         : 'bg-gray-50 border-transparent hover:bg-gray-100 hover:border-gray-200'
                     )}
                   >
@@ -2850,7 +2850,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
                       type="checkbox"
                       checked={selectedBranches.includes(branch.id)}
                       onChange={() => toggleBranch(branch.id)}
-                      className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      className="w-5 h-5 rounded border-gray-300 text-tis-coral focus:ring-tis-coral/50"
                     />
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{branch.name}</p>
@@ -2871,7 +2871,7 @@ function StaffModal({ staff, branches, staffBranches, tenantId, onClose, onSave,
               type="checkbox"
               checked={formData.is_active}
               onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-              className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              className="w-5 h-5 rounded border-gray-300 text-tis-coral focus:ring-tis-coral/50"
             />
             <div>
               <p className="font-medium text-gray-900">{terms.staffSingular} Activo</p>
