@@ -1,15 +1,21 @@
 /**
  * Tests for FASE 2 Schema Migration
  * Migration 135: ADD_BRANCH_CONTEXT_TO_API_KEYS
+ *
+ * NOTE: These are INTEGRATION tests that require a real Supabase connection.
+ * They are skipped when NEXT_PUBLIC_SUPABASE_URL is not available.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-describe('FASE 2 Schema Migration - API Keys Branch Context', () => {
+// Skip tests if Supabase is not configured (CI/local without .env)
+const shouldRunIntegrationTests = Boolean(supabaseUrl && supabaseServiceKey);
+
+describe.skipIf(!shouldRunIntegrationTests)('FASE 2 Schema Migration - API Keys Branch Context', () => {
   let supabase: any;
   let testTenant: any;
   let testBranch1: any;
@@ -17,7 +23,7 @@ describe('FASE 2 Schema Migration - API Keys Branch Context', () => {
   let testUser: any;
 
   beforeAll(async () => {
-    supabase = createClient(supabaseUrl, supabaseServiceKey);
+    supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
     // Create test data
     const { data: tenant } = await supabase

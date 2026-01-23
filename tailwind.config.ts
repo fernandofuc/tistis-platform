@@ -42,6 +42,9 @@ const config: Config = {
           400: '#7FA385',
           500: '#9DB8A1',
           600: '#7A9E7E',
+          700: '#5A7D5E',
+          800: '#3A5D3E',
+          900: '#2A4D2E',
         },
 
         // Neutrales sofisticados (del spec)

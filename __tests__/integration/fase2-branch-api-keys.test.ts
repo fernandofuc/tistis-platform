@@ -1,9 +1,12 @@
 // =====================================================
 // TIS TIS PLATFORM - FASE 2 Integration Tests
 // End-to-end tests for branch-specific API Keys
+//
+// NOTE: These are INTEGRATION tests that require a real Supabase connection.
+// They are skipped when NEXT_PUBLIC_SUPABASE_URL is not available.
 // =====================================================
 
-import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { generateAPIKey } from '@/src/features/api-settings/utils/keyGenerator';
 
@@ -11,8 +14,11 @@ import { generateAPIKey } from '@/src/features/api-settings/utils/keyGenerator';
 // SETUP
 // ======================
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Skip tests if Supabase is not configured (CI/local without .env)
+const shouldRunIntegrationTests = Boolean(supabaseUrl && supabaseServiceKey);
 const apiBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 let supabase: SupabaseClient;
@@ -27,10 +33,11 @@ let branch2Key: string;
 // TEST SUITE
 // ======================
 
-describe('FASE 2: Branch-Specific API Keys', () => {
+describe.skipIf(!shouldRunIntegrationTests)('FASE 2: Branch-Specific API Keys', () => {
   beforeAll(async () => {
     // Initialize Supabase client with service role
-    supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    // We can assert these exist because shouldRunIntegrationTests checks them
+    supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

@@ -3,7 +3,7 @@
  * Tests branch context support in authentication layer
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   createBranchFilterContext,
   applyAutomaticBranchFilter,
@@ -122,11 +122,13 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
 
     beforeEach(() => {
       mockQuery = {
-        eq: jest.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
       };
     });
 
-    it('should apply filter from query parameter (Priority 1)', () => {
+    it('should enforce API Key branch for branch-scoped keys (security)', () => {
+      // SEGURIDAD: Para API keys con scope branch, se ignora el query param
+      // y se usa siempre el branch de la API key
       const auth: APIKeyAuthResult = {
         success: true,
         scopeType: 'branch',
@@ -137,7 +139,22 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
 
       applyAutomaticBranchFilter(mockQuery, auth, 'leads', queryBranchId);
 
-      // Query param tiene prioridad sobre API Key branch_id
+      // Debe usar el branch de la API Key, ignorando el query param
+      expect(mockQuery.eq).toHaveBeenCalledWith('branch_id', 'branch-polanco');
+    });
+
+    it('should allow query param for tenant-scoped keys', () => {
+      // Tenant-wide keys pueden usar query param para filtrar
+      const auth: APIKeyAuthResult = {
+        success: true,
+        scopeType: 'tenant',
+        branchId: null,
+      } as APIKeyAuthResult;
+
+      const queryBranchId = 'branch-satelite';
+
+      applyAutomaticBranchFilter(mockQuery, auth, 'leads', queryBranchId);
+
       expect(mockQuery.eq).toHaveBeenCalledWith('branch_id', 'branch-satelite');
     });
 
@@ -213,7 +230,7 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
       } as APIKeyAuthResult;
 
       supportedTables.forEach((table) => {
-        const query = { eq: jest.fn().mockReturnThis() };
+        const query = { eq: vi.fn().mockReturnThis() };
         applyAutomaticBranchFilter(query, auth, table, null);
         expect(query.eq).toHaveBeenCalledWith('branch_id', 'branch-polanco');
       });
@@ -239,11 +256,13 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
 
     beforeEach(() => {
       mockQuery = {
-        eq: jest.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
       };
     });
 
-    it('should prioritize query param over API Key branch (backward compat)', () => {
+    it('should enforce API Key branch over query param for branch-scoped keys (security)', () => {
+      // SEGURIDAD: Una API Key con scope branch solo puede acceder a su branch
+      // El query param se ignora para prevenir acceso no autorizado a otros branches
       const auth: APIKeyAuthResult = {
         success: true,
         scopeType: 'branch',
@@ -254,8 +273,24 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
 
       applyAutomaticBranchFilter(mockQuery, auth, 'leads', queryBranchId);
 
+      // Debe usar el branch de la API key, ignorando el query param
+      expect(mockQuery.eq).toHaveBeenCalledWith('branch_id', 'branch-from-key');
+      expect(mockQuery.eq).not.toHaveBeenCalledWith('branch_id', 'branch-from-query');
+    });
+
+    it('should allow query param for tenant-wide API keys (backward compat)', () => {
+      // Backward compatibility: API keys con scope tenant pueden filtrar por branch
+      const auth: APIKeyAuthResult = {
+        success: true,
+        scopeType: 'tenant',
+        branchId: null,
+      } as APIKeyAuthResult;
+
+      const queryBranchId = 'branch-from-query';
+
+      applyAutomaticBranchFilter(mockQuery, auth, 'leads', queryBranchId);
+
       expect(mockQuery.eq).toHaveBeenCalledWith('branch_id', 'branch-from-query');
-      expect(mockQuery.eq).not.toHaveBeenCalledWith('branch_id', 'branch-from-key');
     });
 
     it('should use API Key branch when no query param provided', () => {
@@ -286,7 +321,7 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
 
   describe('Integration Scenarios', () => {
     it('should work with real-world tenant-wide scenario', () => {
-      const mockQuery = { eq: jest.fn().mockReturnThis() };
+      const mockQuery = { eq: vi.fn().mockReturnThis() };
 
       const auth: APIKeyAuthResult = {
         success: true,
@@ -303,13 +338,13 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
       expect(mockQuery.eq).not.toHaveBeenCalled();
 
       // Usuario ESPECIFICA branch_id → debe filtrar
-      const mockQuery2 = { eq: jest.fn().mockReturnThis() };
+      const mockQuery2 = { eq: vi.fn().mockReturnThis() };
       applyAutomaticBranchFilter(mockQuery2, auth, 'leads', 'branch-specific');
       expect(mockQuery2.eq).toHaveBeenCalledWith('branch_id', 'branch-specific');
     });
 
     it('should work with real-world branch-specific scenario', () => {
-      const mockQuery = { eq: jest.fn().mockReturnThis() };
+      const mockQuery = { eq: vi.fn().mockReturnThis() };
 
       const auth: APIKeyAuthResult = {
         success: true,
@@ -325,16 +360,17 @@ describe('API Key Auth - FASE 2 Branch Context', () => {
       applyAutomaticBranchFilter(mockQuery, auth, 'leads', null);
       expect(mockQuery.eq).toHaveBeenCalledWith('branch_id', 'branch-polanco-uuid');
 
-      // Aunque usuario intente especificar otro branch, query param tiene prioridad
-      // (esto es backward compat con FASE 1, aunque en producción podríamos validar permisos)
-      const mockQuery2 = { eq: jest.fn().mockReturnThis() };
+      // SEGURIDAD: Incluso si usuario intenta especificar otro branch,
+      // la API Key branch-specific solo puede acceder a su branch asignado
+      const mockQuery2 = { eq: vi.fn().mockReturnThis() };
       applyAutomaticBranchFilter(
         mockQuery2,
         auth,
         'leads',
-        'branch-satelite-uuid'
+        'branch-satelite-uuid' // Intento de acceder a otro branch
       );
-      expect(mockQuery2.eq).toHaveBeenCalledWith('branch_id', 'branch-satelite-uuid');
+      // Debe usar el branch de la API key, no el query param
+      expect(mockQuery2.eq).toHaveBeenCalledWith('branch_id', 'branch-polanco-uuid');
     });
   });
 });

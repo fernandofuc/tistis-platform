@@ -1,0 +1,512 @@
+{
+  "description": "Test payload for SoftRestaurant webhook integration",
+  "testCases": [
+    {
+      "name": "Complete sale with all fields",
+      "payload": {
+        "FolioVenta": "TICKET-001234",
+        "CodigoTienda": "POLANCO",
+        "CodigoCliente": "CLI-001",
+        "NombreCliente": "Juan Pérez",
+        "CodigoMesero": "MESERO-05",
+        "NombreMesero": "María González",
+        "NumeroMesa": "12",
+        "FechaApertura": "2026-01-22T14:30:00.000Z",
+        "FechaCierre": "2026-01-22T15:45:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Hamburguesa Clásica",
+            "Cantidad": 2,
+            "Precio": 150.0,
+            "Importe": 300.0,
+            "Descuento": 0,
+            "Impuestos": [
+              {
+                "CodigoImpuesto": "IVA",
+                "NombreImpuesto": "IVA 16%",
+                "Tasa": 16.0,
+                "Importe": 48.0
+              }
+            ],
+            "Modificadores": ["Sin cebolla", "Extra queso"],
+            "Notas": "Término medio",
+            "Timestamp": "2026-01-22T14:35:00.000Z",
+            "CodigoMesero": "MESERO-05"
+          },
+          {
+            "Codigo": "PROD-002",
+            "Descripcion": "Papas Fritas",
+            "Cantidad": 1,
+            "Precio": 75.0,
+            "Importe": 75.0,
+            "Descuento": 0,
+            "Impuestos": [
+              {
+                "CodigoImpuesto": "IVA",
+                "NombreImpuesto": "IVA 16%",
+                "Tasa": 16.0,
+                "Importe": 12.0
+              }
+            ],
+            "Modificadores": [],
+            "Notas": null,
+            "Timestamp": "2026-01-22T14:36:00.000Z"
+          },
+          {
+            "Codigo": "BEB-001",
+            "Descripcion": "Coca Cola 600ml",
+            "Cantidad": 2,
+            "Precio": 35.0,
+            "Importe": 70.0,
+            "Descuento": 0,
+            "Impuestos": [
+              {
+                "CodigoImpuesto": "IVA",
+                "NombreImpuesto": "IVA 16%",
+                "Tasa": 16.0,
+                "Importe": 11.2
+              }
+            ],
+            "Modificadores": [],
+            "Notas": null,
+            "Timestamp": "2026-01-22T14:37:00.000Z"
+          }
+        ],
+        "SubtotalSinImpuestos": 445.0,
+        "TotalImpuestos": 71.2,
+        "TotalDescuentos": 0,
+        "TotalPropinas": 50.0,
+        "Total": 566.2,
+        "Moneda": "MXN",
+        "Pagos": [
+          {
+            "FormaPago": "Tarjeta",
+            "Monto": 566.2,
+            "Moneda": "MXN",
+            "Referencia": "AUTH-123456",
+            "NumeroTarjeta": "4242",
+            "Propina": 50.0,
+            "Timestamp": "2026-01-22T15:45:00.000Z"
+          }
+        ],
+        "TipoVenta": "Mesa",
+        "NumeroComensales": 4,
+        "Observaciones": "Cliente frecuente - VIP",
+        "Metadata": {
+          "pos_version": "SR v10.2",
+          "cashier_id": "CAJERO-03"
+        }
+      },
+      "expectedResult": {
+        "success": true,
+        "phase": "registration",
+        "itemsRegistered": 3,
+        "paymentsRegistered": 1
+      }
+    },
+    {
+      "name": "Minimal valid sale (required fields only)",
+      "payload": {
+        "FolioVenta": "TICKET-001235",
+        "FechaApertura": "2026-01-22T16:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-003",
+            "Descripcion": "Ensalada César",
+            "Cantidad": 1,
+            "Precio": 120.0,
+            "Importe": 120.0
+          }
+        ],
+        "SubtotalSinImpuestos": 120.0,
+        "TotalImpuestos": 19.2,
+        "Total": 139.2
+      },
+      "expectedResult": {
+        "success": true,
+        "phase": "registration",
+        "itemsRegistered": 1,
+        "paymentsRegistered": 0
+      }
+    },
+    {
+      "name": "Sale with multiple payment methods",
+      "payload": {
+        "FolioVenta": "TICKET-001236",
+        "NumeroMesa": "5",
+        "FechaApertura": "2026-01-22T17:00:00.000Z",
+        "FechaCierre": "2026-01-22T17:30:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-004",
+            "Descripcion": "Pizza Margarita",
+            "Cantidad": 1,
+            "Precio": 200.0,
+            "Importe": 200.0,
+            "Impuestos": [
+              {
+                "CodigoImpuesto": "IVA",
+                "NombreImpuesto": "IVA 16%",
+                "Tasa": 16.0,
+                "Importe": 32.0
+              }
+            ]
+          }
+        ],
+        "SubtotalSinImpuestos": 200.0,
+        "TotalImpuestos": 32.0,
+        "TotalPropinas": 30.0,
+        "Total": 262.0,
+        "Moneda": "MXN",
+        "Pagos": [
+          {
+            "FormaPago": "Efectivo",
+            "Monto": 150.0,
+            "Moneda": "MXN",
+            "Propina": 20.0
+          },
+          {
+            "FormaPago": "Tarjeta",
+            "Monto": 112.0,
+            "Moneda": "MXN",
+            "Referencia": "AUTH-789012",
+            "NumeroTarjeta": "5555",
+            "Propina": 10.0
+          }
+        ],
+        "TipoVenta": "Mesa",
+        "NumeroComensales": 2
+      },
+      "expectedResult": {
+        "success": true,
+        "phase": "registration",
+        "itemsRegistered": 1,
+        "paymentsRegistered": 2
+      }
+    },
+    {
+      "name": "Takeout order",
+      "payload": {
+        "FolioVenta": "TICKET-001237",
+        "FechaApertura": "2026-01-22T18:00:00.000Z",
+        "FechaCierre": "2026-01-22T18:15:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-005",
+            "Descripcion": "Tacos al Pastor (3 pzas)",
+            "Cantidad": 2,
+            "Precio": 80.0,
+            "Importe": 160.0,
+            "Impuestos": [
+              {
+                "CodigoImpuesto": "IVA",
+                "NombreImpuesto": "IVA 16%",
+                "Tasa": 16.0,
+                "Importe": 25.6
+              }
+            ]
+          },
+          {
+            "Codigo": "BEB-002",
+            "Descripcion": "Agua de Horchata",
+            "Cantidad": 1,
+            "Precio": 30.0,
+            "Importe": 30.0,
+            "Impuestos": [
+              {
+                "CodigoImpuesto": "IVA",
+                "NombreImpuesto": "IVA 16%",
+                "Tasa": 16.0,
+                "Importe": 4.8
+              }
+            ]
+          }
+        ],
+        "SubtotalSinImpuestos": 190.0,
+        "TotalImpuestos": 30.4,
+        "Total": 220.4,
+        "Moneda": "MXN",
+        "Pagos": [
+          {
+            "FormaPago": "Efectivo",
+            "Monto": 220.4,
+            "Moneda": "MXN"
+          }
+        ],
+        "TipoVenta": "Para Llevar",
+        "NumeroComensales": 1
+      },
+      "expectedResult": {
+        "success": true,
+        "phase": "registration",
+        "itemsRegistered": 2,
+        "paymentsRegistered": 1
+      }
+    },
+    {
+      "name": "Invalid sale - missing FolioVenta",
+      "payload": {
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Test Product",
+            "Cantidad": 1,
+            "Precio": 100.0,
+            "Importe": 100.0
+          }
+        ],
+        "SubtotalSinImpuestos": 100.0,
+        "TotalImpuestos": 16.0,
+        "Total": 116.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["FolioVenta (ticket number) is required and must be a string"]
+      }
+    },
+    {
+      "name": "Invalid sale - empty products array",
+      "payload": {
+        "FolioVenta": "TICKET-001238",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [],
+        "SubtotalSinImpuestos": 0,
+        "TotalImpuestos": 0,
+        "Total": 0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["Productos (items) must be a non-empty array"]
+      }
+    },
+    {
+      "name": "Invalid sale - missing product required fields",
+      "payload": {
+        "FolioVenta": "TICKET-001239",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Descripcion": "Product without code",
+            "Cantidad": 1,
+            "Precio": 100.0
+          }
+        ],
+        "SubtotalSinImpuestos": 100.0,
+        "TotalImpuestos": 16.0,
+        "Total": 116.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": [
+          "Item 1: Codigo (product code) is required",
+          "Item 1: Importe (subtotal) is required"
+        ]
+      }
+    },
+    {
+      "name": "SECURITY: String overflow - FolioVenta exceeds 100 chars",
+      "payload": {
+        "FolioVenta": "TICKET-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Test Product",
+            "Cantidad": 1,
+            "Precio": 100.0,
+            "Importe": 100.0
+          }
+        ],
+        "SubtotalSinImpuestos": 100.0,
+        "TotalImpuestos": 16.0,
+        "Total": 116.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["FolioVenta exceeds maximum length of 100 characters"]
+      }
+    },
+    {
+      "name": "SECURITY: String overflow - Product description exceeds 500 chars",
+      "payload": {
+        "FolioVenta": "TICKET-001240",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+            "Cantidad": 1,
+            "Precio": 100.0,
+            "Importe": 100.0
+          }
+        ],
+        "SubtotalSinImpuestos": 100.0,
+        "TotalImpuestos": 16.0,
+        "Total": 116.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["Item 1: Descripcion exceeds maximum length of 500 characters"]
+      }
+    },
+    {
+      "name": "SECURITY: Numeric overflow - Quantity exceeds 10,000",
+      "payload": {
+        "FolioVenta": "TICKET-001241",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Test Product",
+            "Cantidad": 15000,
+            "Precio": 100.0,
+            "Importe": 1500000.0
+          }
+        ],
+        "SubtotalSinImpuestos": 1500000.0,
+        "TotalImpuestos": 240000.0,
+        "Total": 1740000.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["Item 1: Cantidad exceeds maximum of 10,000"]
+      }
+    },
+    {
+      "name": "SECURITY: Numeric overflow - Price exceeds 1,000,000",
+      "payload": {
+        "FolioVenta": "TICKET-001242",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Test Product",
+            "Cantidad": 1,
+            "Precio": 2000000.0,
+            "Importe": 2000000.0
+          }
+        ],
+        "SubtotalSinImpuestos": 2000000.0,
+        "TotalImpuestos": 320000.0,
+        "Total": 2320000.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["Item 1: Precio exceeds maximum of 1,000,000"]
+      }
+    },
+    {
+      "name": "SECURITY: DoS attack - Products array exceeds 500 items",
+      "payload": {
+        "FolioVenta": "TICKET-001243",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": "_ARRAY_OF_501_ITEMS_",
+        "SubtotalSinImpuestos": 50000.0,
+        "TotalImpuestos": 8000.0,
+        "Total": 58000.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["Productos array exceeds maximum of 500 items (DoS protection)"]
+      },
+      "note": "In actual test, replace '_ARRAY_OF_501_ITEMS_' with array of 501 product objects"
+    },
+    {
+      "name": "SECURITY: Negative quantity",
+      "payload": {
+        "FolioVenta": "TICKET-001244",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Test Product",
+            "Cantidad": -5,
+            "Precio": 100.0,
+            "Importe": -500.0
+          }
+        ],
+        "SubtotalSinImpuestos": -500.0,
+        "TotalImpuestos": -80.0,
+        "Total": -580.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["Item 1: Cantidad must be greater than 0"]
+      }
+    },
+    {
+      "name": "SECURITY: Negative price",
+      "payload": {
+        "FolioVenta": "TICKET-001245",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Test Product",
+            "Cantidad": 1,
+            "Precio": -100.0,
+            "Importe": -100.0
+          }
+        ],
+        "SubtotalSinImpuestos": -100.0,
+        "TotalImpuestos": -16.0,
+        "Total": -116.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["Item 1: Precio must be greater than or equal to 0"]
+      }
+    },
+    {
+      "name": "SECURITY: Guest count exceeds 1,000",
+      "payload": {
+        "FolioVenta": "TICKET-001246",
+        "FechaApertura": "2026-01-22T19:00:00.000Z",
+        "NumeroComensales": 1500,
+        "Productos": [
+          {
+            "Codigo": "PROD-001",
+            "Descripcion": "Test Product",
+            "Cantidad": 1,
+            "Precio": 100.0,
+            "Importe": 100.0
+          }
+        ],
+        "SubtotalSinImpuestos": 100.0,
+        "TotalImpuestos": 16.0,
+        "Total": 116.0
+      },
+      "expectedResult": {
+        "success": false,
+        "error": "Validation failed",
+        "validationErrors": ["NumeroComensales exceeds maximum of 1,000"]
+      }
+    }
+  ],
+  "curlExamples": [
+    {
+      "description": "POST webhook with valid sale",
+      "command": "curl -X POST https://tistis.app/api/soft-restaurant/webhook \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_API_KEY_HERE' \\\n  -d @complete-sale.json"
+    },
+    {
+      "description": "GET process pending sales",
+      "command": "curl -X GET 'https://tistis.app/api/soft-restaurant/process?limit=10' \\\n  -H 'Authorization: Bearer YOUR_USER_JWT_TOKEN'"
+    },
+    {
+      "description": "POST process specific sale",
+      "command": "curl -X POST https://tistis.app/api/soft-restaurant/process \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_USER_JWT_TOKEN' \\\n  -d '{\"sale_id\": \"uuid-here\"}'"
+    }
+  ]
+}

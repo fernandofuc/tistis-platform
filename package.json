@@ -13,6 +13,11 @@
     "test:coverage": "jest --coverage",
     "test:vitest": "vitest run",
     "test:vitest:watch": "vitest",
+    "test:fase3:unit": "vitest run __tests__/lib/api-deprecation.test.ts __tests__/lib/branch-filter-cache.test.ts",
+    "test:fase3:integration": "jest __tests__/migrations/fase3-*.test.ts __tests__/integration/fase3-*.test.ts",
+    "test:fase3:performance": "vitest run __tests__/performance/fase3-query-benchmarks.test.ts",
+    "test:fase3:e2e": "playwright test __tests__/e2e/fase3-analytics-dashboard.spec.ts",
+    "test:fase3:all": "npm run test:fase3:unit && npm run test:fase3:integration && npm run test:fase3:performance",
     "rollout:status": "npx tsx scripts/rollout/rollout-status.ts",
     "rollout:set": "npx tsx scripts/rollout/rollout-set.ts",
     "rollout:tenant": "npx tsx scripts/rollout/rollout-tenant.ts"

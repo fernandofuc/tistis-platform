@@ -21,6 +21,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { IntegrationHub } from '@/src/features/integrations';
 import { APIKeysSection } from '@/src/features/api-settings';
 import { cn } from '@/src/shared/utils';
+import { getNotificationOptionsForVertical } from '@/src/shared/config/notification-config';
 
 // ======================
 // PROFILE FORM STATE
@@ -507,13 +508,8 @@ export default function SettingsPage() {
                           </label>
                         </div>
 
-                        {/* Individual Toggles */}
-                        {[
-                          { label: 'Leads Calientes', desc: 'Notificación inmediata cuando llegue un lead HOT', key: 'notify_lead_hot' as const },
-                          { label: 'Nuevas Citas', desc: 'Cuando se agende una nueva cita', key: 'notify_appointment_created' as const },
-                          { label: 'Cancelaciones', desc: 'Alertar sobre citas canceladas', key: 'notify_appointment_cancelled' as const },
-                          { label: 'Escalaciones AI', desc: 'Cuando el asistente escale una conversación', key: 'notify_conversation_escalated' as const },
-                        ].map((item) => (
+                        {/* Individual Toggles - Dynamic by vertical */}
+                        {getNotificationOptionsForVertical(tenant?.vertical).map((item) => (
                           <div
                             key={item.key}
                             className={cn(

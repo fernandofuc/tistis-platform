@@ -3,7 +3,7 @@
  * FASE 1: Query Parameter Approach
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, vi } from 'vitest';
 import {
   validateBranchOwnership,
   applyBranchFilter,
@@ -15,10 +15,10 @@ describe('Branch Query Filter', () => {
   describe('validateBranchOwnership', () => {
     it('should return valid when branch belongs to tenant', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
           data: { id: 'branch-123', tenant_id: 'tenant-123' },
           error: null,
         }),
@@ -35,10 +35,10 @@ describe('Branch Query Filter', () => {
 
     it('should return invalid when branch does not belong to tenant', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
           data: null,
           error: { message: 'Not found' },
         }),
@@ -52,10 +52,10 @@ describe('Branch Query Filter', () => {
 
     it('should return invalid when branch does not exist', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
           data: null,
           error: null,
         }),
@@ -71,7 +71,7 @@ describe('Branch Query Filter', () => {
   describe('applyBranchFilter', () => {
     it('should add branch filter to query for supported table', () => {
       const mockQuery = {
-        eq: jest.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
       };
 
       const filtered = applyBranchFilter(mockQuery, 'branch-123', 'leads');
@@ -81,7 +81,7 @@ describe('Branch Query Filter', () => {
 
     it('should not filter when branchId is null', () => {
       const mockQuery = {
-        eq: jest.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
       };
 
       const filtered = applyBranchFilter(mockQuery, null, 'leads');
@@ -91,7 +91,7 @@ describe('Branch Query Filter', () => {
 
     it('should not filter unsupported tables', () => {
       const mockQuery = {
-        eq: jest.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
       };
 
       const filtered = applyBranchFilter(mockQuery, 'branch-123', 'unsupported_table');
@@ -111,7 +111,7 @@ describe('Branch Query Filter', () => {
 
       supportedTables.forEach((table) => {
         const mockQuery = {
-          eq: jest.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
         };
 
         applyBranchFilter(mockQuery, 'branch-123', table);
@@ -122,7 +122,7 @@ describe('Branch Query Filter', () => {
 
     it('should return original query when no filter applied', () => {
       const mockQuery = {
-        eq: jest.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
       };
 
       const result1 = applyBranchFilter(mockQuery, null, 'leads');
@@ -191,9 +191,9 @@ describe('Branch Query Filter', () => {
   describe('tenantHasMultipleBranches', () => {
     it('should return true when tenant has multiple branches', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
           count: 3,
           error: null,
         }),
@@ -209,9 +209,9 @@ describe('Branch Query Filter', () => {
 
     it('should return false when tenant has one branch', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
           count: 1,
           error: null,
         }),
@@ -224,9 +224,9 @@ describe('Branch Query Filter', () => {
 
     it('should return false when tenant has zero branches', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
           count: 0,
           error: null,
         }),
@@ -239,9 +239,9 @@ describe('Branch Query Filter', () => {
 
     it('should return false on database error', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
           count: null,
           error: { message: 'Database error' },
         }),
@@ -254,9 +254,9 @@ describe('Branch Query Filter', () => {
 
     it('should handle null count gracefully', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
           count: null,
           error: null,
         }),

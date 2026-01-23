@@ -1,15 +1,21 @@
 // =====================================================
 // TIS TIS PLATFORM - FASE 3 Integration Tests
 // Tests for Analytics API Endpoint
+//
+// NOTE: These are INTEGRATION tests that require a real Supabase connection.
+// They are skipped when NEXT_PUBLIC_SUPABASE_URL is not available.
 // =====================================================
 
-import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { generateAPIKey } from '@/src/features/api-settings/utils/keyGenerator';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const apiBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+// Skip tests if Supabase is not configured (CI/local without .env)
+const shouldRunIntegrationTests = Boolean(supabaseUrl && supabaseServiceKey);
 
 let supabase: SupabaseClient;
 let testTenantId: string;
@@ -21,9 +27,10 @@ let branch2APIKey: string;
 let apiKey1Id: string;
 let apiKey2Id: string;
 
-describe('FASE 3 Analytics API - Integration Tests', () => {
+describe.skipIf(!shouldRunIntegrationTests)('FASE 3 Analytics API - Integration Tests', () => {
   beforeAll(async () => {
-    supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    // We can assert these exist because shouldRunIntegrationTests checks them
+    supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

@@ -1,13 +1,19 @@
 // =====================================================
 // TIS TIS PLATFORM - FASE 3 Performance Tests
 // Database Query Latency Benchmarks
+//
+// NOTE: These are INTEGRATION tests that require a real Supabase connection.
+// They are skipped when NEXT_PUBLIC_SUPABASE_URL is not available.
 // =====================================================
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Skip tests if Supabase is not configured (CI/local without .env)
+const shouldRunIntegrationTests = Boolean(supabaseUrl && supabaseServiceKey);
 
 // Performance targets from TESTING_PLAN.md
 const TARGETS = {
@@ -17,13 +23,13 @@ const TARGETS = {
   CACHE_HIT_RATE: 70,          // > 70% cache hit rate
 };
 
-describe('FASE 3 Performance Benchmarks', () => {
+describe.skipIf(!shouldRunIntegrationTests)('FASE 3 Performance Benchmarks', () => {
   let supabase: SupabaseClient;
   let testTenantId: string;
   let testBranchId: string;
 
   beforeAll(async () => {
-    supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

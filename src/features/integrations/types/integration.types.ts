@@ -523,6 +523,94 @@ export interface TenantExternalData {
 // SOFTRESTAURANT SPECIFIC TYPES
 // ======================
 
+// ========================================
+// WEBHOOK PAYLOAD TYPES (SR → TIS TIS)
+// ========================================
+
+/**
+ * SoftRestaurant Webhook Sale Item
+ * Received from SR POST webhook for individual sale items
+ */
+export interface SRWebhookSaleItem {
+  Codigo: string;              // Product code in SR
+  Descripcion: string;         // Product name
+  Cantidad: number;            // Quantity sold
+  Precio: number;              // Unit price
+  Importe: number;             // Subtotal without tax
+  Descuento?: number;          // Discount amount
+  Impuestos?: Array<{          // Tax breakdown
+    CodigoImpuesto: string;
+    NombreImpuesto: string;
+    Tasa: number;              // Tax rate %
+    Importe: number;           // Tax amount
+  }>;
+  Modificadores?: string[];    // Modifiers applied
+  Notas?: string;              // Special instructions
+  Timestamp?: string;          // Item created timestamp
+  CodigoMesero?: string;       // Waiter/server code
+}
+
+/**
+ * SoftRestaurant Webhook Payment
+ * Received from SR POST webhook for payment information
+ */
+export interface SRWebhookPayment {
+  FormaPago: string;           // Payment method (Efectivo, Tarjeta, etc.)
+  Monto: number;               // Payment amount
+  Moneda?: string;             // Currency (MXN, USD, etc.)
+  Referencia?: string;         // Payment reference/authorization
+  NumeroTarjeta?: string;      // Last 4 digits of card (if card payment)
+  Propina?: number;            // Tip amount
+  Timestamp?: string;          // Payment timestamp
+}
+
+/**
+ * SoftRestaurant Webhook Sale
+ * Main payload received from SR POST webhook
+ */
+export interface SRWebhookSale {
+  // Sale identification
+  FolioVenta: string;          // Sale/Ticket number (REQUIRED)
+  CodigoTienda?: string;       // Store/branch code in SR
+
+  // Customer info
+  CodigoCliente?: string;      // Customer code in SR
+  NombreCliente?: string;      // Customer name
+
+  // Server/Waiter
+  CodigoMesero?: string;       // Waiter code in SR
+  NombreMesero?: string;       // Waiter name
+
+  // Table info
+  NumeroMesa?: string;         // Table number
+
+  // Timing
+  FechaApertura: string;       // Sale opened date (ISO 8601)
+  FechaCierre?: string;        // Sale closed date (ISO 8601)
+
+  // Sale items (REQUIRED)
+  Productos: SRWebhookSaleItem[];
+
+  // Totals (REQUIRED)
+  SubtotalSinImpuestos: number; // Subtotal before tax
+  TotalImpuestos: number;       // Total tax amount
+  TotalDescuentos?: number;     // Total discounts
+  TotalPropinas?: number;       // Total tips
+  Total: number;                // Grand total
+  Moneda?: string;              // Currency (default: MXN)
+
+  // Payment info
+  Pagos?: SRWebhookPayment[];   // Payment breakdown
+
+  // Sale type
+  TipoVenta?: string;           // Sale type (Mesa, Para Llevar, Domicilio)
+
+  // Additional metadata
+  NumeroComensales?: number;    // Guest count
+  Observaciones?: string;       // General notes
+  Metadata?: Record<string, unknown>; // Additional custom fields
+}
+
 /**
  * SoftRestaurant Recipe Ingredient with gramaje (weight/portion)
  * Maps to SR's "explosión de insumos" feature

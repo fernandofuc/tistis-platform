@@ -1,22 +1,28 @@
 // =====================================================
 // TIS TIS PLATFORM - FASE 3 Integration Tests
 // Tests for Migration 137: RPC Functions & Materialized Views
+//
+// NOTE: These are INTEGRATION tests that require a real Supabase connection.
+// They are skipped when NEXT_PUBLIC_SUPABASE_URL is not available.
 // =====================================================
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-describe('FASE 3 Migration 137 - RPC Functions', () => {
+// Skip tests if Supabase is not configured (CI/local without .env)
+const shouldRunIntegrationTests = Boolean(supabaseUrl && supabaseServiceKey);
+
+describe.skipIf(!shouldRunIntegrationTests)('FASE 3 Migration 137 - RPC Functions', () => {
   let supabase: SupabaseClient;
   let testTenantId: string;
   let testBranch1Id: string;
   let testBranch2Id: string;
 
   beforeAll(async () => {
-    supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
