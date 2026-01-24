@@ -40,6 +40,7 @@ export const CAPABILITY_DESCRIPTIONS: Record<Capability, string> = {
   orders: 'Tomar pedidos telefónicos',
   order_status: 'Consultar estado de pedidos',
   promotions: 'Informar sobre promociones activas',
+  delivery: 'Gestionar entregas a domicilio', // Added in v2.1 - Migration 156
 
   // Dental
   appointments: 'Gestionar citas',
@@ -84,6 +85,10 @@ export const TOOL_DESCRIPTIONS: Record<Tool, string> = {
   get_order_status: 'Consultar estado de pedido',
   calculate_delivery_time: 'Calcular tiempo de entrega',
   get_promotions: 'Obtener promociones activas',
+
+  // Restaurant - Delivery (Added in v2.1 - Migration 156)
+  calculate_delivery: 'Calcular cobertura y costo de delivery',
+  get_delivery_status: 'Consultar estado de entrega a domicilio',
 
   // Dental - Appointments
   check_appointment_availability: 'Verificar disponibilidad de citas',
@@ -144,6 +149,7 @@ export const RESTAURANT_CAPABILITIES: Record<AssistantTypeLevel, Capability[]> =
     'orders',
     'order_status',
     'promotions',
+    'delivery', // Added in v2.1 - Migration 156
     'faq',
   ],
 };
@@ -194,6 +200,9 @@ export const RESTAURANT_TOOLS: Record<AssistantTypeLevel, Tool[]> = {
     'get_order_status',
     'calculate_delivery_time',
     'get_promotions',
+    // Delivery tools (Added in v2.1 - Migration 156)
+    'calculate_delivery',
+    'get_delivery_status',
   ],
 };
 
@@ -308,6 +317,7 @@ export const CAPABILITY_TOOLS: Record<Capability, Tool[]> = {
   orders: ['create_order', 'modify_order', 'cancel_order'],
   order_status: ['get_order_status', 'calculate_delivery_time'],
   promotions: ['get_promotions'],
+  delivery: ['calculate_delivery', 'get_delivery_status'], // Added in v2.1 - Migration 156
 
   // Dental
   appointments: ['check_appointment_availability', 'create_appointment'],

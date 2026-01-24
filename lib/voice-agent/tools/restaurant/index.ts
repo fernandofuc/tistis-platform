@@ -20,5 +20,21 @@ export { getMenu } from './get-menu';
 export { createOrder } from './create-order';
 export { getOrderStatus } from './get-order-status';
 
+// Delivery Tools (added in v2.1 - Migration 156)
+export {
+  calculateDelivery,
+  calculateDeliveryToolDefinition,
+  type CalculateDeliveryParams,
+  type CalculateDeliveryResult,
+  type CalculateDeliveryContext,
+} from './calculate-delivery';
+export {
+  getDeliveryStatus,
+  getDeliveryStatusToolDefinition,
+  type GetDeliveryStatusParams,
+  type GetDeliveryStatusResult,
+  type GetDeliveryStatusContext,
+} from './get-delivery-status';
+
 // Promotion Tools
 export { getPromotions } from './get-promotions';

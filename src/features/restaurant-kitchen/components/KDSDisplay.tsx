@@ -4,16 +4,29 @@
 // TIS TIS PLATFORM - KDS Display Component
 // Main Kitchen Display System view with order grid
 // =====================================================
+//
+// SINCRONIZADO CON:
+// - SQL: supabase/migrations/156_DELIVERY_SYSTEM.sql (delivery extensions)
+// - Types: src/features/restaurant-kitchen/types/index.ts
+// - Components: DeliveryPanel.tsx, DeliveryNotifications.tsx
+// =====================================================
 
 import { useState, useMemo } from 'react';
 import { cn } from '@/shared/utils';
 import { KDSOrderCard } from './KDSOrderCard';
+import { DeliveryPanel } from './DeliveryPanel';
+import { DeliveryNotifications, DeliveryBanner, useDeliveryNotifications } from './DeliveryNotifications';
 import type {
   KDSOrderView,
   KDSStats,
   KitchenStationConfig,
   KitchenStation,
   OrderStatus,
+  KDSDeliveryOrderView,
+  KDSDeliveryStats,
+  DeliveryStatus,
+  DeliveryDriver,
+  DriverAssignmentResult,
 } from '../types';
 import {
   ORDER_STATUS_CONFIG,
@@ -36,9 +49,21 @@ interface KDSDisplayProps {
   onCancelItem?: (itemId: string) => void;
   onPriorityChange?: (orderId: string, priority: number) => void;
   onRefresh?: () => void;
+  // Delivery props
+  showDeliveryPanel?: boolean;
+  deliveryOrders?: KDSDeliveryOrderView[];
+  deliveryStats?: KDSDeliveryStats;
+  deliveryDrivers?: DeliveryDriver[];
+  deliveryLoading?: boolean;
+  onAssignDriver?: (orderId: string, driverId: string) => Promise<DriverAssignmentResult>;
+  onAutoAssignDriver?: (orderId: string) => Promise<DriverAssignmentResult>;
+  onUpdateDeliveryStatus?: (orderId: string, status: DeliveryStatus, notes?: string) => Promise<void>;
+  onMarkDeliveryReady?: (orderId: string) => Promise<void>;
+  onDeliveryRefresh?: () => Promise<void>;
+  deliverySoundEnabled?: boolean;
 }
 
-type ViewMode = 'all' | 'station' | 'status';
+type ViewMode = 'all' | 'station' | 'status' | 'delivery';
 type FilterStatus = 'all' | OrderStatus;
 
 // ======================
@@ -50,7 +75,12 @@ interface StatsBarProps {
   loading?: boolean;
 }
 
-function StatsBar({ stats, loading }: StatsBarProps) {
+interface StatsBarPropsExtended extends StatsBarProps {
+  deliveryStats?: KDSDeliveryStats;
+  showDeliveryStats?: boolean;
+}
+
+function StatsBar({ stats, loading, deliveryStats, showDeliveryStats }: StatsBarPropsExtended) {
   if (loading) {
     return (
       <div className="flex items-center gap-6 py-2 animate-pulse">
@@ -85,6 +115,26 @@ function StatsBar({ stats, loading }: StatsBarProps) {
         <span className="text-2xl font-bold text-slate-700">{stats.avg_prep_time}m</span>
         <span className="text-xs text-slate-600">Tiempo prom.</span>
       </div>
+
+      {/* Delivery Stats */}
+      {showDeliveryStats && deliveryStats && deliveryStats.total_active > 0 && (
+        <>
+          <div className="w-px h-8 bg-slate-300" />
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 rounded-lg whitespace-nowrap">
+            <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+            </svg>
+            <span className="text-2xl font-bold text-purple-700">{deliveryStats.total_active}</span>
+            <span className="text-xs text-purple-600">Delivery</span>
+          </div>
+          {deliveryStats.pending_assignment > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-100 rounded-lg whitespace-nowrap animate-pulse">
+              <span className="text-2xl font-bold text-amber-700">{deliveryStats.pending_assignment}</span>
+              <span className="text-xs text-amber-600">Sin asignar</span>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -102,6 +152,8 @@ interface FilterBarProps {
   onStatusChange: (status: FilterStatus) => void;
   stations: KitchenStationConfig[];
   onRefresh?: () => void;
+  showDeliveryTab?: boolean;
+  deliveryCount?: number;
 }
 
 function FilterBar({
@@ -113,6 +165,8 @@ function FilterBar({
   onStatusChange,
   stations,
   onRefresh,
+  showDeliveryTab,
+  deliveryCount = 0,
 }: FilterBarProps) {
   return (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 py-3 border-b border-slate-200">
@@ -146,6 +200,28 @@ function FilterBar({
           >
             Por Estado
           </button>
+          {showDeliveryTab && (
+            <button
+              onClick={() => onViewModeChange('delivery')}
+              className={cn(
+                'px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-all active:scale-95 whitespace-nowrap flex items-center gap-2',
+                viewMode === 'delivery' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-purple-50'
+              )}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+              </svg>
+              Delivery
+              {deliveryCount > 0 && (
+                <span className={cn(
+                  'px-1.5 py-0.5 text-xs font-bold rounded-full',
+                  viewMode === 'delivery' ? 'bg-white text-purple-600' : 'bg-purple-100 text-purple-700'
+                )}>
+                  {deliveryCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Station filter */}
@@ -275,10 +351,38 @@ export function KDSDisplay({
   onCancelItem,
   onPriorityChange,
   onRefresh,
+  // Delivery props
+  showDeliveryPanel = false,
+  deliveryOrders = [],
+  deliveryStats,
+  deliveryDrivers = [],
+  deliveryLoading = false,
+  onAssignDriver,
+  onAutoAssignDriver,
+  onUpdateDeliveryStatus,
+  onMarkDeliveryReady,
+  onDeliveryRefresh,
+  deliverySoundEnabled = true,
 }: KDSDisplayProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [selectedStation, setSelectedStation] = useState<KitchenStation | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<FilterStatus>('all');
+  const [showDeliveryBanner, setShowDeliveryBanner] = useState(true);
+
+  // Delivery notifications hook
+  const {
+    notifications,
+    dismissNotification,
+    dismissAll: dismissAllNotifications,
+  } = useDeliveryNotifications();
+
+  // Handle delivery order selection
+  const [selectedDeliveryOrderId, setSelectedDeliveryOrderId] = useState<string | null>(null);
+
+  // Contar órdenes de delivery pendientes de asignación
+  const pendingDeliveryCount = useMemo(() => {
+    return deliveryOrders.filter(o => o.delivery_status === 'pending_assignment').length;
+  }, [deliveryOrders]);
 
   // Filter orders based on current view mode
   const filteredOrders = useMemo(() => {
@@ -333,65 +437,128 @@ export function KDSDisplay({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Stats Bar */}
-      <StatsBar stats={stats} />
-
-      {/* Filter Bar */}
-      <FilterBar
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        selectedStation={selectedStation}
-        onStationChange={setSelectedStation}
-        selectedStatus={selectedStatus}
-        onStatusChange={setSelectedStatus}
-        stations={stations}
-        onRefresh={onRefresh}
-      />
-
-      {/* Orders Display */}
-      {viewMode === 'station' && ordersByStation ? (
-        <div className="space-y-6">
-          {Object.entries(ordersByStation).map(([station, stationOrders]) => {
-            const stationConfig = STATION_CONFIG[station as KitchenStation];
-            return (
-              <div key={station}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: stationConfig?.color || '#64748B' }}
-                  />
-                  <h3 className="font-semibold text-slate-900">
-                    {stationConfig?.label || station}
-                  </h3>
-                  <span className="text-sm text-slate-500">
-                    ({stationOrders.length} {stationOrders.length === 1 ? 'orden' : 'órdenes'})
-                  </span>
-                </div>
-                <OrderGrid
-                  orders={stationOrders}
-                  onBumpOrder={onBumpOrder}
-                  onRecallOrder={onRecallOrder}
-                  onStartItem={onStartItem}
-                  onBumpItem={onBumpItem}
-                  onCancelItem={onCancelItem}
-                  onPriorityChange={onPriorityChange}
-                />
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <OrderGrid
-          orders={filteredOrders}
-          onBumpOrder={onBumpOrder}
-          onRecallOrder={onRecallOrder}
-          onStartItem={onStartItem}
-          onBumpItem={onBumpItem}
-          onCancelItem={onCancelItem}
-          onPriorityChange={onPriorityChange}
+    <div className="relative">
+      {/* Delivery Banner (pendientes de asignación) */}
+      {showDeliveryPanel && (
+        <DeliveryBanner
+          show={showDeliveryBanner && pendingDeliveryCount > 0}
+          pendingCount={pendingDeliveryCount}
+          onDismiss={() => setShowDeliveryBanner(false)}
+          onViewAll={() => {
+            setViewMode('delivery');
+            setShowDeliveryBanner(false);
+          }}
         />
       )}
+
+      {/* Delivery Notifications Toast */}
+      {showDeliveryPanel && (
+        <DeliveryNotifications
+          notifications={notifications}
+          onDismiss={dismissNotification}
+          onDismissAll={dismissAllNotifications}
+          onNotificationClick={(notification) => {
+            setViewMode('delivery');
+            setSelectedDeliveryOrderId(notification.orderId);
+          }}
+          soundEnabled={deliverySoundEnabled}
+          position="top-right"
+          maxVisible={4}
+        />
+      )}
+
+      <div className={cn(
+        'space-y-4 transition-all duration-300',
+        showDeliveryBanner && pendingDeliveryCount > 0 && 'pt-16'
+      )}>
+        {/* Stats Bar */}
+        <StatsBar
+          stats={stats}
+          deliveryStats={deliveryStats}
+          showDeliveryStats={showDeliveryPanel}
+        />
+
+        {/* Filter Bar */}
+        <FilterBar
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          selectedStation={selectedStation}
+          onStationChange={setSelectedStation}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
+          stations={stations}
+          onRefresh={onRefresh}
+          showDeliveryTab={showDeliveryPanel}
+          deliveryCount={deliveryOrders.length}
+        />
+
+        {/* Content Area */}
+        {viewMode === 'delivery' && showDeliveryPanel ? (
+          // Delivery Panel View
+          <DeliveryPanel
+            orders={deliveryOrders}
+            stats={deliveryStats || {
+              pending_assignment: 0,
+              driver_assigned: 0,
+              in_transit: 0,
+              ready_for_pickup: 0,
+              total_active: 0,
+            }}
+            drivers={deliveryDrivers}
+            loading={deliveryLoading}
+            onAssignDriver={onAssignDriver || (async () => ({ success: false, message: 'No implementado' }))}
+            onAutoAssign={onAutoAssignDriver || (async () => ({ success: false, message: 'No implementado' }))}
+            onUpdateStatus={onUpdateDeliveryStatus || (async () => {})}
+            onMarkReady={onMarkDeliveryReady || (async () => {})}
+            onRefresh={onDeliveryRefresh || (async () => {})}
+            selectedOrderId={selectedDeliveryOrderId}
+            onSelectOrder={setSelectedDeliveryOrderId}
+          />
+        ) : viewMode === 'station' && ordersByStation ? (
+          // Station View
+          <div className="space-y-6">
+            {Object.entries(ordersByStation).map(([station, stationOrders]) => {
+              const stationConfig = STATION_CONFIG[station as KitchenStation];
+              return (
+                <div key={station}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: stationConfig?.color || '#64748B' }}
+                    />
+                    <h3 className="font-semibold text-slate-900">
+                      {stationConfig?.label || station}
+                    </h3>
+                    <span className="text-sm text-slate-500">
+                      ({stationOrders.length} {stationOrders.length === 1 ? 'orden' : 'órdenes'})
+                    </span>
+                  </div>
+                  <OrderGrid
+                    orders={stationOrders}
+                    onBumpOrder={onBumpOrder}
+                    onRecallOrder={onRecallOrder}
+                    onStartItem={onStartItem}
+                    onBumpItem={onBumpItem}
+                    onCancelItem={onCancelItem}
+                    onPriorityChange={onPriorityChange}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          // Default Grid View
+          <OrderGrid
+            orders={filteredOrders}
+            onBumpOrder={onBumpOrder}
+            onRecallOrder={onRecallOrder}
+            onStartItem={onStartItem}
+            onBumpItem={onBumpItem}
+            onCancelItem={onCancelItem}
+            onPriorityChange={onPriorityChange}
+          />
+        )}
+      </div>
     </div>
   );
 }

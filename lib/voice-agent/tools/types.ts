@@ -54,6 +54,7 @@ export type ToolCapability =
   | 'orders'
   | 'order_status'
   | 'promotions'
+  | 'delivery' // Added in v2.1 - Migration 156
   // Dental capabilities
   | 'appointments'
   | 'services_info'
@@ -70,6 +71,7 @@ export type ToolCategory =
   | 'appointment'
   | 'info'
   | 'order'
+  | 'delivery' // Added in v2.1 - Migration 156
   | 'escalation'
   | 'transfer'
   | 'call'

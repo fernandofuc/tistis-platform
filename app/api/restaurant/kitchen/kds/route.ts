@@ -2,6 +2,11 @@
 // TIS TIS PLATFORM - KDS Display API
 // GET: Get active orders formatted for KDS display
 // =====================================================
+//
+// SINCRONIZADO CON:
+// - SQL: supabase/migrations/156_DELIVERY_SYSTEM.sql (delivery extensions)
+// - Types: src/features/restaurant-kitchen/types/index.ts
+// =====================================================
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +18,7 @@ import {
   successResponse,
   isValidUUID,
 } from '@/src/lib/api/auth-helper';
+import type { DeliveryAddress } from '@/src/shared/types/delivery-types';
 
 // Valid kitchen stations
 const VALID_STATIONS = ['main', 'grill', 'fry', 'salad', 'sushi', 'pizza', 'dessert', 'bar', 'expeditor', 'prep', 'assembly', 'all'] as const;
@@ -38,7 +44,7 @@ export async function GET(request: NextRequest) {
       return errorResponse(`Estación inválida. Valores permitidos: ${VALID_STATIONS.join(', ')}`, 400);
     }
 
-    // Get active orders with items
+    // Get active orders with items (including delivery fields)
     const query = supabase
       .from('restaurant_orders')
       .select(`
@@ -54,6 +60,11 @@ export async function GET(request: NextRequest) {
         table_id,
         customer_notes,
         kitchen_notes,
+        delivery_status,
+        delivery_address,
+        delivery_instructions,
+        delivery_driver_id,
+        estimated_delivery_at,
         restaurant_tables(table_number),
         restaurant_order_items(
           id,
@@ -85,6 +96,27 @@ export async function GET(request: NextRequest) {
       return errorResponse('Error al obtener órdenes', 500);
     }
 
+    // Get driver info for delivery orders
+    const deliveryDriverIds = orders
+      ?.filter(o => o.delivery_driver_id)
+      .map(o => o.delivery_driver_id)
+      .filter((id, index, arr) => arr.indexOf(id) === index) || [];
+
+    let driversMap: Record<string, { full_name: string; phone: string }> = {};
+
+    if (deliveryDriverIds.length > 0) {
+      const { data: drivers } = await supabase
+        .from('delivery_drivers')
+        .select('id, full_name, phone')
+        .in('id', deliveryDriverIds);
+
+      if (drivers) {
+        driversMap = Object.fromEntries(
+          drivers.map(d => [d.id, { full_name: d.full_name, phone: d.phone }])
+        );
+      }
+    }
+
     // Transform to KDS view format
     const kdsOrders = orders?.map(order => {
       const items = order.restaurant_order_items || [];
@@ -103,6 +135,9 @@ export async function GET(request: NextRequest) {
         return null;
       }
 
+      // Get driver info for delivery orders
+      const driver = order.delivery_driver_id ? driversMap[order.delivery_driver_id] : null;
+
       return {
         order_id: order.id,
         tenant_id: order.tenant_id,
@@ -117,6 +152,14 @@ export async function GET(request: NextRequest) {
         table_number: (order.restaurant_tables as any)?.table_number || null,
         customer_notes: order.customer_notes,
         kitchen_notes: order.kitchen_notes,
+        // Delivery fields (sincronizado con migracion 156)
+        delivery_status: order.delivery_status || null,
+        delivery_address: order.delivery_address as DeliveryAddress | null,
+        delivery_instructions: order.delivery_instructions || null,
+        delivery_driver_id: order.delivery_driver_id || null,
+        delivery_driver_name: driver?.full_name || null,
+        delivery_driver_phone: driver?.phone || null,
+        estimated_delivery_at: order.estimated_delivery_at || null,
         items: filteredItems.map((item: any) => ({
           id: item.id,
           menu_item_name: item.menu_item_name,

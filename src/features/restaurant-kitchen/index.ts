@@ -11,6 +11,11 @@ export * from './services/kitchen.service';
 
 // Hooks
 export { useKitchen } from './hooks/useKitchen';
+export {
+  useDeliveryOrders,
+  useDeliveryNotificationsSubscription,
+  useDeliveryStats,
+} from './hooks/useDeliveryOrders';
 
 // Components
 export * from './components';

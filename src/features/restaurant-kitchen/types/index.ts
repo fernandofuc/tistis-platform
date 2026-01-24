@@ -2,6 +2,33 @@
 // TIS TIS PLATFORM - Restaurant Kitchen/KDS Types
 // Type definitions for the Kitchen Display System
 // =====================================================
+//
+// SINCRONIZADO CON:
+// - SQL: supabase/migrations/089_RESTAURANT_ORDERS_KDS.sql
+// - SQL: supabase/migrations/156_DELIVERY_SYSTEM.sql (delivery extensions)
+// - Types: src/shared/types/delivery-types.ts
+// =====================================================
+
+// Re-export delivery types para uso conveniente
+export {
+  type DeliveryStatus,
+  type DeliveryAddress as DeliveryAddressExtended,
+  type DeliveryDriver,
+  type DeliveryZone,
+  type DeliveryTrackingEvent,
+  type DeliveryCalculationResult,
+  type DriverAssignmentResult,
+  DELIVERY_STATUSES,
+  DELIVERY_STATUS_INFO,
+  DELIVERY_STATUS_TRANSITIONS,
+  isValidDeliveryStatus,
+  isValidStatusTransition,
+  formatDeliveryAddress,
+  formatShortAddress,
+} from '@/src/shared/types/delivery-types';
+
+// Import para uso interno
+import type { DeliveryAddress as DeliveryAddressExtendedInternal } from '@/src/shared/types/delivery-types';
 
 // ======================
 // ORDER TYPES
@@ -83,12 +110,24 @@ export interface RestaurantOrderItem {
 // ======================
 // ORDER
 // ======================
+
+// Import tipo extendido de delivery
+import type { DeliveryStatus } from '@/src/shared/types/delivery-types';
+
+/**
+ * Direccion de delivery simplificada (compatible con estructura anterior)
+ * Para direccion completa, usar DeliveryAddressExtended de delivery-types.ts
+ */
 export interface DeliveryAddress {
   street: string;
   number: string;
   apartment?: string;
   city: string;
   postal_code: string;
+  colony?: string;
+  reference?: string;
+  contact_phone?: string;
+  contact_name?: string;
   lat?: number;
   lng?: number;
 }
@@ -125,10 +164,18 @@ export interface RestaurantOrder {
   payment_status: PaymentStatus;
   payment_method: string | null;
   paid_at: string | null;
+  // Campos de delivery
   delivery_address: DeliveryAddress | null;
   delivery_instructions: string | null;
   delivery_fee: number | null;
-  driver_id: string | null;
+  driver_id: string | null; // Staff que tomo el pedido en mostrador (legacy)
+  // Campos adicionales de delivery (migracion 156)
+  delivery_driver_id: string | null; // Repartidor asignado para delivery
+  delivery_status: DeliveryStatus | null;
+  delivery_distance_km: number | null;
+  estimated_delivery_at: string | null;
+  actual_delivery_at: string | null;
+  delivery_failure_reason: string | null;
   customer_notes: string | null;
   kitchen_notes: string | null;
   internal_notes: string | null;
@@ -219,6 +266,14 @@ export interface KDSOrderView {
   kitchen_notes: string | null;
   items: KDSOrderItemView[];
   minutes_elapsed: number;
+  // Campos de delivery para KDS (sincronizado con migracion 156)
+  delivery_status?: DeliveryStatus | null;
+  delivery_address?: DeliveryAddress | null;
+  delivery_instructions?: string | null;
+  delivery_driver_id?: string | null;
+  delivery_driver_name?: string | null;
+  delivery_driver_phone?: string | null;
+  estimated_delivery_at?: string | null;
 }
 
 export interface KDSOrderItemView {
@@ -329,6 +384,78 @@ export interface KDSStats {
     avg_prep_time: number;
     count: number;
   }>;
+  // Estadisticas de delivery (sincronizado con migracion 156)
+  delivery_stats?: KDSDeliveryStats;
+}
+
+// ======================
+// DELIVERY KDS TYPES (FASE 3 - Integracion)
+// ======================
+
+/**
+ * Estadisticas de delivery para el KDS
+ */
+export interface KDSDeliveryStats {
+  pending_assignment: number;
+  driver_assigned: number;
+  in_transit: number;
+  ready_for_pickup: number;
+  total_active: number;
+}
+
+/**
+ * Vista de orden de delivery para el panel de KDS
+ * Usa DeliveryAddressExtendedInternal que tiene exterior_number (de delivery-types.ts)
+ * La direccion puede ser null si la orden no tiene direccion configurada
+ */
+export interface KDSDeliveryOrderView {
+  order_id: string;
+  tenant_id: string;
+  branch_id: string;
+  display_number: string;
+  order_status: OrderStatus;
+  delivery_status: DeliveryStatus;
+  priority: number;
+  ordered_at: string;
+  ready_at: string | null;
+  estimated_delivery_at: string | null;
+  // Direccion (usa tipo extendido con exterior_number, puede ser null)
+  delivery_address: DeliveryAddressExtendedInternal | null;
+  delivery_instructions: string | null;
+  // Cliente
+  customer_name: string | null;
+  customer_phone: string | null;
+  // Repartidor
+  delivery_driver_id: string | null;
+  driver_name: string | null;
+  driver_phone: string | null;
+  driver_vehicle_type: string | null;
+  // Financiero
+  total: number;
+  delivery_fee: number;
+  delivery_distance_km: number | null;
+  // Tiempo
+  minutes_elapsed: number;
+  minutes_until_delivery: number | null;
+  // Items resumidos
+  items_count: number;
+  items_summary: string;
+}
+
+/**
+ * Filtro para ordenes de delivery en KDS
+ */
+export type KDSDeliveryFilter = 'all' | 'pending_assignment' | 'ready_for_pickup' | 'driver_assigned' | 'in_transit';
+
+/**
+ * Configuracion del panel de delivery
+ */
+export interface KDSDeliveryPanelConfig {
+  position: 'left' | 'right' | 'bottom';
+  width: number;
+  autoRefreshInterval: number;
+  soundEnabled: boolean;
+  showDriverLocation: boolean;
 }
 
 // ======================

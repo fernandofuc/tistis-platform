@@ -4,6 +4,11 @@
 // TIS TIS PLATFORM - KDS Order Card Component
 // Individual order card for Kitchen Display System
 // =====================================================
+//
+// SINCRONIZADO CON:
+// - SQL: supabase/migrations/156_DELIVERY_SYSTEM.sql (delivery extensions)
+// - Types: src/features/restaurant-kitchen/types/index.ts
+// =====================================================
 
 import { useMemo, useCallback } from 'react';
 import { cn } from '@/shared/utils';
@@ -11,6 +16,8 @@ import type {
   KDSOrderView,
   KDSOrderItemView,
   OrderItemStatus,
+  DeliveryStatus,
+  DeliveryAddress,
 } from '../types';
 import {
   ORDER_TYPE_CONFIG,
@@ -18,6 +25,7 @@ import {
   ITEM_STATUS_CONFIG,
   STATION_CONFIG,
   PRIORITY_CONFIG,
+  DELIVERY_STATUS_INFO,
 } from '../types';
 
 // ======================
@@ -34,6 +42,7 @@ interface KDSOrderCardProps {
   onPriorityChange?: (orderId: string, priority: number) => void;
   compact?: boolean;
   showStation?: boolean;
+  showDeliveryDetails?: boolean;
 }
 
 // ======================
@@ -59,6 +68,151 @@ function getPriorityBorder(priority: number): string {
   const config = PRIORITY_CONFIG.find(p => p.value === priority);
   if (!config) return 'border-slate-200';
   return priority >= 4 ? 'border-l-4 border-l-orange-500' : 'border-slate-200';
+}
+
+/**
+ * Formatea direccion de delivery de forma compatible con ambos tipos
+ * (simplificado con 'number' y extendido con 'exterior_number')
+ */
+function formatDeliveryAddressShort(address: DeliveryAddress | null | undefined): string {
+  if (!address) return '';
+  // Handle both 'number' (simplified) and 'exterior_number' (extended) formats
+  const num = ('exterior_number' in address && address.exterior_number)
+    ? address.exterior_number
+    : ('number' in address && address.number)
+      ? address.number
+      : '';
+  const interior = ('apartment' in address && address.apartment)
+    ? ` Int. ${address.apartment}`
+    : '';
+  const colony = address.colony || '';
+  return `${address.street} #${num}${interior}${colony ? `, ${colony}` : ''}`;
+}
+
+// ======================
+// DELIVERY BADGE COMPONENT
+// ======================
+
+interface DeliveryBadgeProps {
+  status: DeliveryStatus;
+  driverName?: string | null;
+  compact?: boolean;
+}
+
+function DeliveryBadge({ status, driverName, compact }: DeliveryBadgeProps) {
+  const statusInfo = DELIVERY_STATUS_INFO[status];
+
+  return (
+    <div className={cn(
+      'flex items-center gap-2 px-2 py-1 rounded-lg',
+      statusInfo.bgColor
+    )}>
+      <svg className={cn('w-4 h-4', statusInfo.color)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+      </svg>
+      {!compact && (
+        <span className={cn('text-xs font-medium', statusInfo.color)}>
+          {statusInfo.label}
+        </span>
+      )}
+      {driverName && !compact && (
+        <>
+          <span className="text-slate-300">•</span>
+          <span className={cn('text-xs', statusInfo.color)}>{driverName}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ======================
+// DELIVERY INFO SECTION
+// ======================
+
+interface DeliveryInfoProps {
+  order: KDSOrderView;
+}
+
+function DeliveryInfo({ order }: DeliveryInfoProps) {
+  if (order.order_type !== 'delivery' || !order.delivery_status) return null;
+
+  const statusInfo = DELIVERY_STATUS_INFO[order.delivery_status];
+
+  return (
+    <div className="px-4 py-2 bg-purple-50 border-b border-purple-100">
+      {/* Status & Driver */}
+      <div className="flex items-center justify-between mb-2">
+        <div className={cn(
+          'flex items-center gap-2 px-2 py-1 rounded-lg',
+          statusInfo.bgColor
+        )}>
+          <svg className={cn('w-4 h-4', statusInfo.color)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+          </svg>
+          <span className={cn('text-xs font-medium', statusInfo.color)}>
+            {statusInfo.label}
+          </span>
+        </div>
+
+        {order.delivery_driver_name ? (
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-purple-200 rounded-full flex items-center justify-center">
+              <svg className="w-3 h-3 text-purple-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <span className="text-xs text-purple-700 font-medium">
+              {order.delivery_driver_name}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-amber-600 font-medium animate-pulse">
+            Sin repartidor
+          </span>
+        )}
+      </div>
+
+      {/* Address */}
+      {order.delivery_address && (
+        <div className="flex items-start gap-2">
+          <svg className="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="text-xs text-purple-700">
+            {formatDeliveryAddressShort(order.delivery_address)}
+          </p>
+        </div>
+      )}
+
+      {/* Instructions */}
+      {order.delivery_instructions && (
+        <div className="flex items-start gap-2 mt-1">
+          <svg className="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-xs text-purple-600 italic">
+            {order.delivery_instructions}
+          </p>
+        </div>
+      )}
+
+      {/* ETA */}
+      {order.estimated_delivery_at && (
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-purple-100">
+          <svg className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-xs text-purple-700">
+            ETA: {new Date(order.estimated_delivery_at).toLocaleTimeString('es-MX', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ======================
@@ -201,10 +355,13 @@ export function KDSOrderCard({
   onPriorityChange,
   compact = false,
   showStation = true,
+  showDeliveryDetails = true,
 }: KDSOrderCardProps) {
   const orderTypeConfig = ORDER_TYPE_CONFIG[order.order_type];
   const statusConfig = ORDER_STATUS_CONFIG[order.order_status];
   const elapsedMinutes = Math.floor(order.minutes_elapsed);
+  const isDeliveryOrder = order.order_type === 'delivery';
+  const needsDeliveryAttention = isDeliveryOrder && order.delivery_status === 'pending_assignment';
 
   const pendingItems = useMemo(
     () => order.items?.filter(i => i.status === 'pending') || [],
@@ -236,22 +393,34 @@ export function KDSOrderCard({
         'bg-white rounded-xl shadow-sm border overflow-hidden',
         getPriorityBorder(order.priority),
         order.priority >= 4 && 'ring-2 ring-orange-200',
-        canBump && 'ring-2 ring-green-300'
+        canBump && 'ring-2 ring-green-300',
+        needsDeliveryAttention && 'ring-2 ring-purple-300 animate-pulse'
       )}
     >
       {/* Header */}
       <div
         className={cn(
           'px-4 py-3 flex items-center justify-between',
-          orderTypeConfig.color,
+          isDeliveryOrder ? 'bg-purple-600' : orderTypeConfig.color,
           'text-white'
         )}
       >
         <div className="flex items-center gap-3">
+          {/* Delivery truck icon */}
+          {isDeliveryOrder && (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+            </svg>
+          )}
           <span className="text-2xl font-bold">{order.display_number}</span>
-          {order.table_number && (
+          {order.table_number && !isDeliveryOrder && (
             <span className="bg-white/20 px-2 py-0.5 rounded text-sm">
               Mesa {order.table_number}
+            </span>
+          )}
+          {isDeliveryOrder && (
+            <span className="bg-white/20 px-2 py-0.5 rounded text-sm">
+              DELIVERY
             </span>
           )}
         </div>
@@ -261,6 +430,19 @@ export function KDSOrderCard({
           {order.priority >= 4 && (
             <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold animate-pulse">
               URGENTE
+            </span>
+          )}
+
+          {/* Delivery status quick badge */}
+          {isDeliveryOrder && order.delivery_status && (
+            <span className={cn(
+              'text-xs px-2 py-0.5 rounded-full font-medium',
+              order.delivery_status === 'pending_assignment' && 'bg-amber-400 text-amber-900',
+              order.delivery_status === 'driver_assigned' && 'bg-blue-400 text-blue-900',
+              order.delivery_status === 'picked_up' && 'bg-indigo-400 text-indigo-900',
+              order.delivery_status === 'in_transit' && 'bg-purple-400 text-purple-900',
+            )}>
+              {DELIVERY_STATUS_INFO[order.delivery_status]?.label}
             </span>
           )}
 
@@ -288,6 +470,11 @@ export function KDSOrderCard({
           </span>
         )}
       </div>
+
+      {/* Delivery Info Section */}
+      {showDeliveryDetails && isDeliveryOrder && (
+        <DeliveryInfo order={order} />
+      )}
 
       {/* Notes */}
       {(order.customer_notes || order.kitchen_notes) && (
