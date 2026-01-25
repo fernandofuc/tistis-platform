@@ -2,15 +2,52 @@
 
 import { useEffect } from 'react';
 
+// =====================================================
+// TIS TIS PLATFORM - Application Error Boundary
+// FASE 9 - Production Error Handling
+// =====================================================
+
 interface ErrorProps {
   error: Error & { digest?: string };
   reset: () => void;
 }
 
+/**
+ * Report error to monitoring service
+ * In production, this would send to Sentry, LogRocket, etc.
+ */
+async function reportError(error: Error & { digest?: string }) {
+  // Only report in production
+  if (process.env.NODE_ENV !== 'production') return;
+
+  try {
+    // POST to internal error tracking endpoint
+    await fetch('/api/errors/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: error.message,
+        digest: error.digest,
+        stack: error.stack?.slice(0, 1000), // Limit stack trace size
+        url: typeof window !== 'undefined' ? window.location.href : null,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        timestamp: new Date().toISOString(),
+      }),
+    }).catch(() => {
+      // Silently fail if error reporting fails
+    });
+  } catch {
+    // Never let error reporting break the app
+  }
+}
+
 export default function Error({ error, reset }: ErrorProps) {
   useEffect(() => {
-    // Log error to console in development
+    // Log error to console
     console.error('Application error:', error);
+
+    // Report to monitoring in production
+    reportError(error);
   }, [error]);
 
   return (
@@ -43,18 +80,20 @@ export default function Error({ error, reset }: ErrorProps) {
           Ha ocurrido un error inesperado. Por favor intenta de nuevo.
         </p>
 
-        {/* Error Details (only in development) */}
+        {/* Error Details (development: full details, production: just ID) */}
         {process.env.NODE_ENV === 'development' && error.message && (
           <div className="mb-6 p-4 bg-red-50 rounded-lg text-left">
             <p className="text-sm font-mono text-red-700 break-all">
               {error.message}
             </p>
-            {error.digest && (
-              <p className="text-xs text-red-500 mt-2">
-                Error ID: {error.digest}
-              </p>
-            )}
           </div>
+        )}
+
+        {/* Error ID (always shown for support reference) */}
+        {error.digest && (
+          <p className="mb-6 text-xs text-slate-500">
+            Código de error: <code className="bg-slate-100 px-2 py-1 rounded">{error.digest}</code>
+          </p>
         )}
 
         {/* Actions */}

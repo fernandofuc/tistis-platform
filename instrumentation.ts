@@ -1,11 +1,20 @@
 /**
  * TIS TIS Platform - Instrumentation
+ * FASE 9 - Deployment Optimized
  *
  * Este archivo se ejecuta al iniciar la aplicación Next.js.
  * Lo usamos para validar configuración y preparar servicios.
  *
+ * Environment Variables:
+ * - SKIP_ENV_VALIDATION: Skip validation during CI/CD builds
+ * - DEBUG_ENV: Show detailed environment variable summary
+ * - NEXT_RUNTIME: Set by Next.js (nodejs, edge)
+ *
  * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
+
+// Track startup time for metrics
+const startupTimestamp = Date.now();
 
 export async function register() {
   // Solo ejecutar en Node.js (no en Edge runtime)
@@ -15,13 +24,40 @@ export async function register() {
 }
 
 async function onServerStart() {
-  console.log('🚀 [TIS TIS] Starting server...');
-  console.log(`📍 Environment: ${process.env.NODE_ENV}`);
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProduction = nodeEnv === 'production';
+  const skipValidation = process.env.SKIP_ENV_VALIDATION === 'true';
+
+  console.log('');
+  console.log('================================================');
+  console.log('  TIS TIS Platform - Server Starting');
+  console.log('================================================');
+  console.log(`  Environment: ${nodeEnv}`);
+  console.log(`  Runtime:     ${process.env.NEXT_RUNTIME || 'nodejs'}`);
+  console.log(`  Timestamp:   ${new Date().toISOString()}`);
+  console.log('================================================');
+  console.log('');
+
+  // Skip validation if explicitly requested (useful for CI/CD builds)
+  if (skipValidation) {
+    console.log('⏭️  [TIS TIS] Skipping environment validation (SKIP_ENV_VALIDATION=true)');
+    return;
+  }
 
   // Validar variables de entorno
   await validateEnvironmentVariables();
 
-  console.log('✅ [TIS TIS] Server initialization complete');
+  // Log startup metrics
+  const startupDuration = Date.now() - startupTimestamp;
+  console.log('');
+  console.log('================================================');
+  console.log('  TIS TIS Platform - Server Ready');
+  console.log('================================================');
+  console.log(`  Startup time:  ${startupDuration}ms`);
+  console.log(`  Memory usage:  ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+  console.log(`  Health check:  /api/health`);
+  console.log('================================================');
+  console.log('');
 }
 
 async function validateEnvironmentVariables() {
