@@ -94,11 +94,14 @@ function countRules(categories: (StyleInstructionCategory | TypeInstructionCateg
   return categories.reduce((sum, cat) => sum + cat.rules.length, 0);
 }
 
+import { countTokensSync } from '@/src/shared/lib/token-counter';
+
 /**
- * Estima tokens aproximados (1 token ≈ 4 caracteres en español)
+ * Estima tokens aproximados usando el servicio centralizado
+ * @see /src/shared/lib/token-counter.ts
  */
 function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  return countTokensSync(text);
 }
 
 // ======================

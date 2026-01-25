@@ -1232,7 +1232,7 @@ interface AssemblyTriggerParams {
   proposal_id?: string;
 }
 
-async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
+async function triggerAssemblyEngine(params: AssemblyTriggerParams): Promise<void> {
   logger.info('Starting micro-app provisioning', {
     clientId: params.client_id,
     plan: params.plan,
@@ -1267,9 +1267,10 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
       logger.error('Assembly Engine failed', {
         status: response.status,
         clientId: params.client_id,
+        error: errorData,
       });
 
-      // Notify team of assembly failure (non-blocking)
+      // Notify team of assembly failure
       const supabase = getSupabaseClient();
       await supabase.from('notification_queue').insert({
         type: 'assembly_failed',
@@ -1283,7 +1284,9 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
         priority: 'urgent'
       });
 
-      return;
+      // CRITICAL: Throw error to trigger Stripe webhook retry
+      // This ensures micro-app gets provisioned even if first attempt fails
+      throw new Error(`Assembly Engine failed with status ${response.status}: ${JSON.stringify(errorData)}`);
     }
 
     const result = await response.json();
@@ -1297,7 +1300,14 @@ async function triggerAssemblyEngine(params: AssemblyTriggerParams) {
     // No external workflow trigger needed
 
   } catch (error) {
-    logger.error('Unexpected error in Assembly Engine trigger', {}, error as Error);
+    logger.error('Critical error in Assembly Engine trigger', {
+      clientId: params.client_id,
+      subscriptionId: params.subscription_id,
+    }, error as Error);
+
+    // CRITICAL: Re-throw error to make webhook handler fail
+    // This ensures Stripe retries the webhook for micro-app provisioning
+    throw error;
   }
 }
 

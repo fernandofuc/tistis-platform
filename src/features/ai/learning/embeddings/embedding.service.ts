@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
 import type { EmbeddingConfig, EmbeddingResult } from '../types';
+import { countTokensSync } from '@/src/shared/lib/token-counter';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -292,8 +293,8 @@ export class EmbeddingService {
   }
 
   private estimateTokens(text: string): number {
-    // Rough estimate: ~4 characters per token
-    return Math.ceil(text.length / 4);
+    // Use centralized token counter for accurate estimation
+    return countTokensSync(text);
   }
 
   private async getFromCache(hash: string): Promise<number[] | null> {

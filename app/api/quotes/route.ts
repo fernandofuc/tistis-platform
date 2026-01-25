@@ -114,7 +114,14 @@ export async function GET(request: NextRequest) {
     let effectiveTenantId: string;
 
     if (isServiceCall) {
-      effectiveTenantId = requestedTenantId || 'a0000000-0000-0000-0000-000000000001';
+      // Service calls MUST provide tenant_id - no default fallback for security
+      if (!requestedTenantId) {
+        return NextResponse.json(
+          { error: 'Service calls require tenant_id parameter' },
+          { status: 400 }
+        );
+      }
+      effectiveTenantId = requestedTenantId;
     } else {
       if (requestedTenantId && requestedTenantId !== userTenantId) {
         return NextResponse.json(
@@ -206,7 +213,14 @@ export async function POST(request: NextRequest) {
     let effectiveTenantId: string;
 
     if (isServiceCall) {
-      effectiveTenantId = body.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+      // Service calls MUST provide tenant_id - no default fallback for security
+      if (!body.tenant_id) {
+        return NextResponse.json(
+          { error: 'Service calls require tenant_id in request body' },
+          { status: 400 }
+        );
+      }
+      effectiveTenantId = body.tenant_id;
     } else {
       if (body.tenant_id && body.tenant_id !== userTenantId) {
         return NextResponse.json(

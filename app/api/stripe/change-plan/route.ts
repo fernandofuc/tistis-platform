@@ -345,6 +345,56 @@ export async function POST(request: NextRequest) {
 
     logger.debug('Plan change direction', { isUpgrade, isDowngrade });
 
+    // CRITICAL: Validate branch count for downgrades
+    // User cannot downgrade to a plan that doesn't support their current branch count
+    if (isDowngrade) {
+      const newPlanConfig = getPlanConfig(newPlan);
+      const maxBranchesInNewPlan = newPlanConfig?.branchLimit || 1;
+
+      // Count current branches for this tenant
+      const { count: branchCount, error: branchCountError } = await supabaseAdmin
+        .from('branches')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', userRole.tenant_id)
+        .eq('is_active', true);
+
+      if (branchCountError) {
+        logger.error('Error counting branches', { error: branchCountError });
+        return NextResponse.json(
+          { error: 'Error al verificar sucursales' },
+          { status: 500 }
+        );
+      }
+
+      const currentBranchCount = branchCount || 1;
+
+      if (currentBranchCount > maxBranchesInNewPlan) {
+        logger.warn('Downgrade blocked due to branch count', {
+          currentBranchCount,
+          maxBranchesInNewPlan,
+          newPlan,
+        });
+
+        return NextResponse.json(
+          {
+            error: `No puedes cambiar al plan ${newPlanConfig?.displayName || newPlan} porque tienes ${currentBranchCount} sucursales activas y ese plan solo permite ${maxBranchesInNewPlan}.`,
+            code: 'BRANCH_LIMIT_EXCEEDED',
+            details: {
+              currentBranches: currentBranchCount,
+              planLimit: maxBranchesInNewPlan,
+              suggestion: 'Por favor, desactiva algunas sucursales antes de hacer el downgrade.',
+            },
+          },
+          { status: 400 }
+        );
+      }
+
+      logger.debug('Branch validation passed for downgrade', {
+        currentBranchCount,
+        maxBranchesInNewPlan,
+      });
+    }
+
     // Check if this is a real Stripe subscription (starts with 'sub_')
     const isRealStripeSubscription = subscription.stripe_subscription_id?.startsWith('sub_');
 

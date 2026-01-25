@@ -71,10 +71,13 @@ export interface TokenEstimate {
 // CONSTANTS
 // ======================
 
+import { countTokensSync, estimateTokens as estimateTokensLib } from '@/src/shared/lib/token-counter';
+
 /**
  * Factor de conversión caracteres → tokens
  * GPT y modelos similares: ~4 caracteres = 1 token
  * Usamos 3.5 para ser más conservadores (mejor subestimar que pasarse)
+ * @deprecated Use countTokensSync from token-counter.ts instead
  */
 const CHARS_PER_TOKEN = 3.5;
 
@@ -131,11 +134,12 @@ const INSTRUCTION_TYPE_PRIORITY: Record<string, number> = {
 // ======================
 
 /**
- * Estima tokens de un texto
+ * Estima tokens de un texto usando el servicio centralizado
+ * @see /src/shared/lib/token-counter.ts for accurate counting
  */
 function estimateTokens(text: string | undefined | null): number {
   if (!text) return 0;
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+  return countTokensSync(text);
 }
 
 /**

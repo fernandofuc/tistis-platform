@@ -50,6 +50,9 @@ import {
 // MEJORA-3.4: Embedding Cache
 import { getEmbeddingCacheService } from './embedding-cache.service';
 
+// MEJORA-3.6: Retry with Circuit Breaker
+import { withEmbeddingRetry, getEmbeddingCircuitBreaker } from '@/src/shared/lib/retry-helper';
+
 // ======================
 // TYPES
 // ======================
@@ -196,11 +199,19 @@ class EmbeddingServiceClass {
   /**
    * Genera embedding para un texto dado
    * MEJORA-3.4: Utiliza caché para reducir latencia y costos
+   * MEJORA-3.6: Retry con exponential backoff y circuit breaker
    */
   async generateEmbedding(text: string): Promise<EmbeddingResult> {
     // Truncar texto si es muy largo
     const truncatedText =
       text.length > MAX_TEXT_LENGTH ? text.substring(0, MAX_TEXT_LENGTH) : text;
+
+    // MEJORA-3.6: Check circuit breaker state
+    const circuitBreaker = getEmbeddingCircuitBreaker();
+    if (!circuitBreaker.isAvailable()) {
+      console.warn('[embedding] Circuit breaker open, using fallback');
+      throw new Error('Embedding service temporarily unavailable');
+    }
 
     try {
       // MEJORA-3.4: Usar caché de embeddings
@@ -209,13 +220,15 @@ class EmbeddingServiceClass {
         truncatedText,
         EMBEDDING_MODEL,
         async () => {
-          // Generar embedding si no está en caché
-          const response = await this.openai.embeddings.create({
-            model: EMBEDDING_MODEL,
-            input: truncatedText,
-            dimensions: EMBEDDING_DIMENSIONS,
+          // MEJORA-3.6: Usar retry con circuit breaker para llamadas a OpenAI
+          return await withEmbeddingRetry(async () => {
+            const response = await this.openai.embeddings.create({
+              model: EMBEDDING_MODEL,
+              input: truncatedText,
+              dimensions: EMBEDDING_DIMENSIONS,
+            });
+            return response.data[0].embedding;
           });
-          return response.data[0].embedding;
         }
       );
 
@@ -236,6 +249,7 @@ class EmbeddingServiceClass {
   /**
    * Genera embeddings para múltiples textos en batch
    * Más eficiente que llamar generateEmbedding múltiples veces
+   * MEJORA-3.6: Retry con exponential backoff y circuit breaker
    */
   async generateEmbeddingsBatch(texts: string[]): Promise<EmbeddingResult[]> {
     // Truncar textos largos
@@ -243,11 +257,21 @@ class EmbeddingServiceClass {
       text.length > MAX_TEXT_LENGTH ? text.substring(0, MAX_TEXT_LENGTH) : text
     );
 
+    // MEJORA-3.6: Check circuit breaker state
+    const circuitBreaker = getEmbeddingCircuitBreaker();
+    if (!circuitBreaker.isAvailable()) {
+      console.warn('[embedding] Circuit breaker open for batch, service unavailable');
+      throw new Error('Embedding service temporarily unavailable');
+    }
+
     try {
-      const response = await this.openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: truncatedTexts,
-        dimensions: EMBEDDING_DIMENSIONS,
+      // MEJORA-3.6: Usar retry con circuit breaker
+      const response = await withEmbeddingRetry(async () => {
+        return await this.openai.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: truncatedTexts,
+          dimensions: EMBEDDING_DIMENSIONS,
+        });
       });
 
       const tokensPerItem = Math.ceil(response.usage.total_tokens / texts.length);

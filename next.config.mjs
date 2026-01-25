@@ -123,7 +123,7 @@ const nextConfig = {
       },
 
       // ----------------------
-      // API Routes - No cache (dynamic)
+      // API Routes - No cache (dynamic) + CORS
       // ----------------------
       {
         source: '/api/:path*',
@@ -147,6 +147,27 @@ const nextConfig = {
           {
             key: 'Expires',
             value: '0',
+          },
+          // CORS headers for API routes
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization, X-Requested-With, Accept, X-Internal-API-Key, X-Health-Token, X-Request-ID',
+          },
+          {
+            key: 'Access-Control-Expose-Headers',
+            value: 'X-Request-ID, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset',
+          },
+          {
+            key: 'Access-Control-Max-Age',
+            value: '86400',
+          },
+          {
+            key: 'Vary',
+            value: 'Origin',
           },
         ],
       },

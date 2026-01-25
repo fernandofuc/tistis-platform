@@ -16,6 +16,7 @@ import {
 } from '../../state';
 import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
 import { SafetyResilienceService } from '../../services/safety-resilience.service';
+import { countTokensSync } from '@/src/shared/lib/token-counter';
 
 // ======================
 // SPRINT 1 FIX: LÍMITES DE RECURSOS POR AGENTE
@@ -363,10 +364,10 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
       // P29 FIX: Append safety disclaimer if not already included in response
       response = this.appendSafetyDisclaimer(response, state);
 
-      // Estimar tokens (LangChain no siempre proporciona usage)
-      const estimatedTokens = Math.ceil(
-        (systemPrompt.length + state.current_message.length + response.length) / 4
-      );
+      // Estimar tokens usando servicio centralizado
+      const estimatedTokens = countTokensSync(systemPrompt) +
+        countTokensSync(state.current_message) +
+        countTokensSync(response);
 
       return { response, tokens: estimatedTokens };
     } catch (error) {
@@ -471,8 +472,8 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
     // V7.1: Track timing for observability
     const startTime = Date.now();
 
-    // SPRINT 1: Estimar tokens del prompt inicial
-    totalTokens += Math.ceil(systemPrompt.length / 4);
+    // SPRINT 1: Estimar tokens del prompt inicial usando servicio centralizado
+    totalTokens += countTokensSync(systemPrompt);
 
     try {
       // Agentic loop: ejecutar hasta que el LLM responda sin tool calls
@@ -501,11 +502,9 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
 
         const result = await llmWithTools.invoke(messages);
 
-        // Estimar tokens de esta iteración
-        const iterationTokens = Math.ceil(
-          (typeof result.content === 'string' ? result.content.length : 0) / 4
-        );
-        totalTokens += iterationTokens;
+        // Estimar tokens de esta iteración usando servicio centralizado
+        const contentStr = typeof result.content === 'string' ? result.content : '';
+        totalTokens += countTokensSync(contentStr);
 
         // Si no hay tool calls, tenemos la respuesta final
         if (!result.tool_calls || result.tool_calls.length === 0) {
@@ -565,7 +564,7 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
               }
 
               // Estimar tokens de la respuesta de la tool
-              totalTokens += Math.ceil(toolContent.length / 4);
+              totalTokens += countTokensSync(toolContent);
 
               messages.push(new ToolMsg({
                 content: toolContent,

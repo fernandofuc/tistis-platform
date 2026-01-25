@@ -44,6 +44,7 @@ import {
   type ResponseStyleKey,
   type AssistantTypeKey,
 } from '@/src/shared/config/prompt-instruction-compiler';
+import { countTokensSync } from '@/src/shared/lib/token-counter';
 import {
   truncateKBToTokenBudget,
   getTokenBudgetSummary,
@@ -2076,7 +2077,7 @@ export async function generateAndCachePrompt(
       result.prompt, // El system_prompt es el mismo que el generated_prompt por ahora
       sourceDataHash,
       result.model,
-      Math.ceil(result.prompt.length / 4), // Estimación aproximada de tokens
+      countTokensSync(result.prompt), // Estimación de tokens usando servicio centralizado
       result.validation // Pass validation result for P5 fix
     );
 
@@ -2846,8 +2847,8 @@ ${compiledInstructions.fullInstructionText}`
     channelRulesSection,
   ].filter(s => s.trim() !== '').join('\n\n---\n\n');
 
-  // Estimar tokens (~4 chars por token en español)
-  const tokenEstimate = Math.ceil(fullPrompt.length / 4);
+  // Estimar tokens usando servicio centralizado
+  const tokenEstimate = countTokensSync(fullPrompt);
 
   console.log(`[MinimalPrompt] Generated minimal prompt: ${tokenEstimate} tokens estimated (${fullPrompt.length} chars)`);
 
