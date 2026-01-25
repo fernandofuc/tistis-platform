@@ -21,6 +21,7 @@ import type {
 } from '../types';
 import { formatAckResponse } from '../response-formatters';
 import { databaseError } from '../error-handler';
+import { VoiceAgentService } from '@/src/features/voice-agent/services/voice-agent.service';
 
 // =====================================================
 // TYPES
@@ -186,7 +187,7 @@ export async function handleEndOfCall(
       // Don't fail - we want to acknowledge the webhook
     }
 
-    // Log usage if enabled
+    // Log usage if enabled (legacy system)
     if (options.logUsage !== false && durationSeconds > 0) {
       await logCallUsage(
         supabase,
@@ -196,6 +197,41 @@ export async function handleEndOfCall(
         cost,
         options.costPerMinute
       );
+    }
+
+    // Record minute usage for Voice Minute Limits system (Growth plan)
+    if (durationSeconds > 0) {
+      try {
+        const minuteResult = await VoiceAgentService.recordCallMinutes(
+          call.tenant_id,
+          call.id,
+          durationSeconds,
+          {
+            vapi_call_id: vapiCallId,
+            ended_reason: endedReason,
+            outcome,
+            recording_url: recordingUrl || undefined,
+          }
+        );
+
+        if (minuteResult.success) {
+          console.log(
+            `[End of Call] Minute usage recorded`,
+            JSON.stringify({
+              callId: call.id,
+              durationSeconds,
+              isOverage: minuteResult.isOverage,
+              chargeCentavos: minuteResult.chargeCentavos,
+              alertTriggered: minuteResult.alertTriggered,
+            })
+          );
+        } else if (minuteResult.error) {
+          console.warn('[End of Call] Failed to record minute usage:', minuteResult.error);
+        }
+      } catch (minuteError) {
+        // Don't fail the handler if minute recording fails
+        console.warn('[End of Call] Exception recording minute usage:', minuteError);
+      }
     }
 
     // Update tenant metrics

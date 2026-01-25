@@ -1,38 +1,13 @@
 // =====================================================
 // TIS TIS PLATFORM - Vision Analysis Service
-// Uses Gemini Vision to analyze images
+// Uses Gemini 3.0 Flash for image analysis
+// Unified with the main Gemini service
+// Now with caching to reduce API costs
 // =====================================================
 
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { geminiService } from './gemini.service';
+import { visionCacheService } from './vision-cache.service';
 import type { VisionAnalysis } from '../types';
-
-// =====================================================
-// LAZY INITIALIZATION
-// =====================================================
-
-let _genAI: GoogleGenerativeAI | null = null;
-let _visionModel: GenerativeModel | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!_genAI) {
-    const apiKey = process.env.GOOGLE_AI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GOOGLE_AI_API_KEY environment variable is not set');
-    }
-    _genAI = new GoogleGenerativeAI(apiKey);
-  }
-  return _genAI;
-}
-
-function getVisionModel(): GenerativeModel {
-  if (!_visionModel) {
-    const genAI = getGenAI();
-    _visionModel = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp',
-    });
-  }
-  return _visionModel;
-}
 
 // =====================================================
 // ANALYSIS PROMPTS BY CONTEXT
@@ -154,6 +129,10 @@ export interface AnalyzeImageInput {
   mimeType: string;
   context: AnalysisContext;
   additionalContext?: string;
+  /** Tenant ID for caching - if provided, results are cached */
+  tenantId?: string;
+  /** Skip cache lookup (still stores result in cache) */
+  skipCache?: boolean;
 }
 
 // =====================================================
@@ -250,9 +229,50 @@ export class VisionService {
 
   /**
    * Analyze an image and extract structured data
+   * Uses Gemini 3.0 Flash for vision analysis
+   * Results are cached to reduce API costs
    */
   async analyzeImage(input: AnalyzeImageInput): Promise<VisionAnalysis> {
-    const { imageUrl, imageBase64, mimeType, context, additionalContext } = input;
+    const {
+      imageUrl,
+      imageBase64,
+      mimeType,
+      context,
+      additionalContext,
+      tenantId,
+      skipCache = false,
+    } = input;
+
+    // Prepare image data first (needed for cache key)
+    let base64Data: string;
+    try {
+      if (imageBase64) {
+        base64Data = imageBase64;
+      } else if (imageUrl) {
+        base64Data = await fetchImageAsBase64(imageUrl);
+      } else {
+        throw new Error('Either imageUrl or imageBase64 is required');
+      }
+    } catch (error) {
+      console.error('[VisionService] Error preparing image:', error);
+      return {
+        description: 'No se pudo cargar la imagen',
+        extractedData: {},
+        confidence: 0,
+        suggestions: ['Verifica que la URL de la imagen sea accesible'],
+      };
+    }
+
+    // Check cache if tenantId is provided and skipCache is false
+    if (tenantId && !skipCache && !additionalContext) {
+      // Note: We don't cache when additionalContext is provided
+      // because it makes the analysis unique
+      const cachedResult = await visionCacheService.get(base64Data, context, tenantId);
+      if (cachedResult) {
+        console.log('[VisionService] Returning cached analysis');
+        return cachedResult;
+      }
+    }
 
     // Get appropriate prompt
     let prompt = getPromptForContext(context);
@@ -266,45 +286,46 @@ export class VisionService {
     }
 
     try {
-      const model = getVisionModel();
-
-      // Prepare image data
-      let base64Data: string;
-      if (imageBase64) {
-        base64Data = imageBase64;
-      } else if (imageUrl) {
-        base64Data = await fetchImageAsBase64(imageUrl);
-      } else {
-        throw new Error('Either imageUrl or imageBase64 is required');
-      }
-
-      // Generate content with image
-      const result = await model.generateContent([
+      // Use the unified Gemini service for vision
+      const result = await geminiService.generateFromImage({
         prompt,
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType,
-          },
-        },
-      ]);
+        imageBase64: base64Data,
+        mimeType,
+        temperature: 0.2, // Lower temperature for more consistent extraction
+        maxOutputTokens: 2000,
+      });
 
-      const responseText = result.response.text();
+      // Parse JSON response
+      const parsed = geminiService.parseJsonResponse<{
+        type: string;
+        confidence: number;
+        description: string;
+        items?: unknown[];
+        promotion?: unknown;
+        extractedData?: Record<string, unknown>;
+        suggestions?: string[];
+      }>(result.text);
 
-      // Parse JSON response - handle markdown-wrapped JSON
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      if (!parsed) {
         throw new Error('No JSON found in vision response');
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      return {
+      const analysis: VisionAnalysis = {
         description: parsed.description || 'Imagen analizada',
         extractedData: normalizeExtractedData(parsed),
         confidence: Math.min(1, Math.max(0, parsed.confidence || 0.7)),
         suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       };
+
+      // Store in cache if tenantId is provided and no additionalContext
+      if (tenantId && !additionalContext && analysis.confidence > 0.5) {
+        // Only cache high-confidence results
+        visionCacheService.set(base64Data, context, tenantId, analysis).catch((err) => {
+          console.warn('[VisionService] Failed to cache result:', err);
+        });
+      }
+
+      return analysis;
     } catch (error) {
       console.error('[VisionService] Error analyzing image:', error);
 
@@ -358,22 +379,18 @@ export class VisionService {
    */
   async autoAnalyze(imageUrl: string, mimeType: string): Promise<VisionAnalysis> {
     try {
-      const model = getVisionModel();
       const base64 = await fetchImageAsBase64(imageUrl);
 
-      // First, detect the type
-      const detectResult = await model.generateContent([
-        DETECT_TYPE_PROMPT,
-        {
-          inlineData: {
-            data: base64,
-            mimeType,
-          },
-        },
-      ]);
+      // First, detect the type using Gemini
+      const detectResult = await geminiService.generateFromImage({
+        prompt: DETECT_TYPE_PROMPT,
+        imageBase64: base64,
+        mimeType,
+        temperature: 0.1, // Very low for classification
+        maxOutputTokens: 100,
+      });
 
-      const detectText = detectResult.response.text();
-      const typeMatch = detectText.match(/"type":\s*"(\w+)"/);
+      const typeMatch = detectResult.text.match(/"type":\s*"(\w+)"/);
       const detectedType = (typeMatch?.[1] || 'general') as AnalysisContext;
 
       // Validate detected type

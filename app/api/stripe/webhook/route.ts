@@ -7,6 +7,7 @@ import { emailService } from '@/src/lib/email';
 import { provisionTenant } from '@/lib/provisioning';
 import { getPlanConfig, PLAN_CONFIG } from '@/src/shared/config/plans';
 import { createComponentLogger } from '@/src/shared/lib';
+import { voiceSyncService } from '@/src/features/voice-agent/services/voice-sync.service';
 
 // Create logger for Stripe webhook
 const logger = createComponentLogger('stripe-webhook');
@@ -224,6 +225,12 @@ export async function POST(req: NextRequest) {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
         await handleInvoicePaymentSucceeded(invoice);
+        break;
+      }
+
+      case 'invoice.paid': {
+        const invoice = event.data.object as Stripe.Invoice;
+        await handleInvoicePaid(invoice);
         break;
       }
 
@@ -862,6 +869,31 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         .update({ tenant_id: provisionResult.tenant_id })
         .eq('id', client.id);
       logger.info('Client linked to tenant', { clientId: client.id, tenantId: provisionResult.tenant_id });
+
+      // ============================================
+      // 🎙️ SYNC VOICE LIMITS FOR NEW TENANT
+      // Enable voice features if plan supports it
+      // ============================================
+      try {
+        const voiceSyncResult = await voiceSyncService.handlePlanUpgrade(
+          provisionResult.tenant_id,
+          validatedPlan,
+          customerId
+        );
+
+        if (voiceSyncResult.success) {
+          logger.info('Voice limits synced for new tenant', {
+            tenantId: provisionResult.tenant_id,
+            voiceEnabled: voiceSyncResult.voiceEnabled,
+            includedMinutes: voiceSyncResult.includedMinutes,
+          });
+        } else {
+          logger.warn('Voice sync warning', { message: voiceSyncResult.message });
+        }
+      } catch (voiceError) {
+        logger.warn('Non-critical: Voice sync failed', {}, voiceError as Error);
+        // Don't throw - voice sync is non-critical
+      }
     }
 
     // 📧 Enviar email con credenciales de acceso
@@ -1097,6 +1129,32 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           .update({ plan: detectedPlan, updated_at: new Date().toISOString() })
           .eq('id', clientData.tenant_id);
         logger.info('Tenant plan updated', { plan: detectedPlan, tenantId: clientData.tenant_id });
+
+        // ============================================
+        // 🎙️ SYNC VOICE LIMITS ON PLAN CHANGE
+        // Enables/disables voice based on new plan
+        // ============================================
+        try {
+          const customerId = subscription.customer as string;
+          const voiceSyncResult = await voiceSyncService.syncVoiceLimits({
+            tenantId: clientData.tenant_id,
+            plan: detectedPlan,
+            stripeCustomerId: customerId,
+          });
+
+          if (voiceSyncResult.success) {
+            logger.info('Voice limits synced on plan change', {
+              tenantId: clientData.tenant_id,
+              voiceEnabled: voiceSyncResult.voiceEnabled,
+              includedMinutes: voiceSyncResult.includedMinutes,
+            });
+          } else {
+            logger.warn('Voice sync warning', { message: voiceSyncResult.message });
+          }
+        } catch (voiceError) {
+          logger.warn('Non-critical: Voice sync failed on plan change', {}, voiceError as Error);
+          // Don't throw - voice sync is non-critical
+        }
       }
     }
   }
@@ -1316,6 +1374,50 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       if (periodEnd) {
         nextBillingDate = new Date(periodEnd * 1000).toISOString();
       }
+
+      // ============================================
+      // 🎙️ RESET VOICE USAGE FOR NEW BILLING PERIOD
+      // This ensures minutes reset at the start of each period
+      // ============================================
+      if (periodStart && periodEnd && sub?.plan === 'growth') {
+        try {
+          // Get tenant_id from subscription -> client
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('client_id')
+            .eq('stripe_subscription_id', subscriptionId as string)
+            .single();
+
+          if (subData?.client_id) {
+            const { data: clientData } = await supabase
+              .from('clients')
+              .select('tenant_id')
+              .eq('id', subData.client_id)
+              .single();
+
+            if (clientData?.tenant_id) {
+              const resetResult = await voiceSyncService.resetUsageForNewPeriod({
+                tenantId: clientData.tenant_id,
+                billingPeriodStart: new Date(periodStart * 1000).toISOString(),
+                billingPeriodEnd: new Date(periodEnd * 1000).toISOString(),
+              });
+
+              if (resetResult.success) {
+                logger.info('Voice usage reset for new billing period', {
+                  tenantId: clientData.tenant_id,
+                  previousMinutes: resetResult.previousPeriodMinutes,
+                  newPeriodId: resetResult.newPeriodId,
+                });
+              } else {
+                logger.warn('Voice usage reset warning', { message: resetResult.message });
+              }
+            }
+          }
+        } catch (voiceError) {
+          logger.warn('Non-critical: Voice usage reset failed', {}, voiceError as Error);
+          // Don't throw - voice reset is non-critical
+        }
+      }
     } catch (err) {
       logger.warn('Error fetching Stripe subscription', { subscriptionId });
 
@@ -1486,6 +1588,41 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     },
     priority: 'high'
   });
+}
+
+// ============================================
+// VOICE OVERAGE PAYMENT HANDLER
+// ============================================
+
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  logger.info('Invoice paid - checking for voice overage items', {
+    invoiceId: invoice.id,
+    customerId: invoice.customer,
+  });
+
+  // Check if this invoice contains voice overage items
+  const hasVoiceOverage = invoice.lines?.data.some(
+    (line) => line.metadata?.type === 'voice_overage'
+  );
+
+  if (!hasVoiceOverage) {
+    logger.debug('No voice overage items in invoice', { invoiceId: invoice.id });
+    return;
+  }
+
+  // Process payment confirmation for voice overage
+  try {
+    const { voiceBillingService } = await import('@/src/features/voice-agent/services/voice-billing.service');
+    await voiceBillingService.handlePaymentConfirmation(invoice.id);
+    logger.info('Voice overage payment processed', { invoiceId: invoice.id });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Failed to process voice overage payment', {
+      invoiceId: invoice.id,
+      error: errorMessage,
+    });
+    // Don't throw - this is non-critical and shouldn't fail the webhook
+  }
 }
 
 // ============================================

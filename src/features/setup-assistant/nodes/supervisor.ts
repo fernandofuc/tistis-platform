@@ -1,25 +1,16 @@
 // =====================================================
 // TIS TIS PLATFORM - Setup Assistant Supervisor
 // Detects user intent and routes to appropriate handler
+// Now powered by Gemini 3.0 Flash for unified AI
 // =====================================================
 
-import { ChatOpenAI } from '@langchain/openai';
+import { geminiService } from '../services/gemini.service';
 import type { SetupAssistantStateType, SetupIntent } from '../state/setup-state';
 import { getConfiguredModules } from '../state/setup-state';
 
-// Lazy-initialized model instance
-let _supervisorModel: ChatOpenAI | null = null;
-
-function getSupervisorModel(): ChatOpenAI {
-  if (!_supervisorModel) {
-    _supervisorModel = new ChatOpenAI({
-      model: 'gpt-4o-mini',
-      temperature: 0.3,
-      maxTokens: 500,
-    });
-  }
-  return _supervisorModel;
-}
+// =====================================================
+// INTENT DETECTION PROMPT
+// =====================================================
 
 const INTENT_DETECTION_PROMPT = `Eres un detector de intenciones para un asistente de configuración de negocio TIS TIS.
 
@@ -57,6 +48,10 @@ Responde SOLO con un JSON válido (sin markdown):
   "reasoning": "Breve explicación"
 }`;
 
+// =====================================================
+// SUPERVISOR NODE
+// =====================================================
+
 export async function supervisorNode(
   state: SetupAssistantStateType
 ): Promise<Partial<SetupAssistantStateType>> {
@@ -80,19 +75,24 @@ export async function supervisorNode(
     .replace('{user_message}', state.currentMessage);
 
   try {
-    const model = getSupervisorModel();
-    const response = await model.invoke(prompt);
-    const content = typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+    // Use Gemini 2.5 Flash for intent detection
+    const response = await geminiService.generateText({
+      prompt,
+      temperature: 0.2, // Low temperature for consistent classification
+      maxOutputTokens: 500,
+    });
 
-    // Parse JSON response - handle both clean JSON and markdown-wrapped JSON
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
+    // Parse JSON response
+    const parsed = geminiService.parseJsonResponse<{
+      intent: string;
+      confidence: number;
+      extracted_entities: Record<string, unknown>;
+      reasoning: string;
+    }>(response.text);
+
+    if (!parsed) {
+      throw new Error('Failed to parse intent detection response');
     }
-
-    const parsed = JSON.parse(jsonMatch[0]);
 
     // Validate intent is a known type
     const validIntents: SetupIntent[] = [
@@ -101,7 +101,7 @@ export async function supervisorNode(
       'help', 'confirm', 'cancel', 'unknown',
     ];
 
-    const detectedIntent = validIntents.includes(parsed.intent)
+    const detectedIntent = validIntents.includes(parsed.intent as SetupIntent)
       ? parsed.intent as SetupIntent
       : 'unknown';
 
@@ -109,8 +109,8 @@ export async function supervisorNode(
       detectedIntent,
       intentConfidence: Math.min(1, Math.max(0, parsed.confidence || 0)),
       extractedData: parsed.extracted_entities || {},
-      inputTokens: response.usage_metadata?.input_tokens || 0,
-      outputTokens: response.usage_metadata?.output_tokens || 0,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     };
   } catch (error) {
     console.error('[SetupAssistant] Supervisor error:', error);

@@ -19,8 +19,11 @@ import type {
   VoiceProvider,
   TranscriptionProvider,
   AIModel,
+  CheckMinuteLimitResult,
 } from '../types';
 import { VAPIApiService } from './vapi-api.service';
+import { MinuteLimitService } from './minute-limit.service';
+import { MinuteAlertService } from './minute-alerts.service';
 
 // =====================================================
 // SUPABASE CLIENT
@@ -990,6 +993,162 @@ export async function canAccessVoiceAgent(tenantId: string): Promise<{
 }
 
 // =====================================================
+// MINUTE LIMITS INTEGRATION
+// =====================================================
+
+/**
+ * Validar si una llamada está permitida
+ * Combina validación de plan + límites de minutos
+ *
+ * CRÍTICO: Llamar ANTES de procesar cada llamada entrante
+ */
+export async function validateCallAllowed(tenantId: string): Promise<{
+  allowed: boolean;
+  reason?: string;
+  limitCheck?: CheckMinuteLimitResult;
+}> {
+  // 1. Verificar acceso al plan
+  const planAccess = await canAccessVoiceAgent(tenantId);
+
+  if (!planAccess.canAccess) {
+    return {
+      allowed: false,
+      reason: planAccess.reason || 'Voice Agent no disponible en tu plan.',
+    };
+  }
+
+  // 2. Verificar límites de minutos
+  const limitCheck = await MinuteLimitService.checkMinuteLimit(tenantId);
+
+  if (!limitCheck.can_proceed) {
+    const reason = limitCheck.block_reason
+      || limitCheck.error
+      || 'Límite de minutos excedido.';
+
+    console.log('[VoiceAgentService] Call blocked:', {
+      tenantId,
+      reason,
+      policy: limitCheck.policy,
+      usage_percent: limitCheck.usage_percent,
+    });
+
+    return {
+      allowed: false,
+      reason,
+      limitCheck,
+    };
+  }
+
+  return {
+    allowed: true,
+    limitCheck,
+  };
+}
+
+/**
+ * Registrar uso de minutos después de una llamada
+ * Incluye envío de alertas si se alcanzan umbrales
+ *
+ * CRÍTICO: Llamar DESPUÉS de cada llamada completada
+ */
+export async function recordCallMinutes(
+  tenantId: string,
+  callId: string,
+  durationSeconds: number,
+  callMetadata?: Record<string, unknown>
+): Promise<{
+  success: boolean;
+  error?: string;
+  isOverage?: boolean;
+  chargeCentavos?: number;
+  alertTriggered?: number | null;
+}> {
+  // Validar que la duración es positiva
+  if (durationSeconds <= 0) {
+    console.warn('[VoiceAgentService] Skipping 0-duration call:', callId);
+    return { success: true }; // No error, just skip
+  }
+
+  const result = await MinuteLimitService.recordMinuteUsage(
+    tenantId,
+    callId,
+    durationSeconds,
+    callMetadata
+  );
+
+  if (!result.success) {
+    console.error('[VoiceAgentService] Error recording minutes:', result.error);
+    return {
+      success: false,
+      error: result.error,
+    };
+  }
+
+  // Si hay alerta que enviar
+  if (result.alert_threshold_triggered) {
+    console.log('[VoiceAgentService] Alert threshold reached:', result.alert_threshold_triggered);
+
+    // Obtener configuración para saber si alertas están habilitadas
+    const limits = await MinuteLimitService.getMinuteLimits(tenantId);
+
+    if (limits?.email_alerts_enabled) {
+      // Enviar alerta en background (no bloquear)
+      MinuteAlertService.checkAndSendAlert(
+        tenantId,
+        result.alert_threshold_triggered,
+        true
+      ).catch((err) => {
+        console.error('[VoiceAgentService] Error sending alert:', err);
+      });
+    }
+  }
+
+  // Si se bloqueó por max_overage_charge
+  if (result.is_blocked) {
+    console.warn('[VoiceAgentService] Tenant blocked after call:', tenantId);
+
+    // Enviar alerta de bloqueo en background
+    MinuteAlertService.sendBlockedAlert(
+      tenantId,
+      'Has alcanzado el límite máximo de cargos por excedentes.'
+    ).catch((err) => {
+      console.error('[VoiceAgentService] Error sending blocked alert:', err);
+    });
+  }
+
+  return {
+    success: true,
+    isOverage: result.is_overage,
+    chargeCentavos: result.charge_centavos,
+    alertTriggered: result.alert_threshold_triggered,
+  };
+}
+
+/**
+ * Obtener resumen de uso de minutos para dashboard
+ */
+export async function getMinuteUsageSummary(tenantId: string) {
+  return MinuteLimitService.getUsageSummary(tenantId);
+}
+
+/**
+ * Obtener configuración de límites de minutos
+ */
+export async function getMinuteLimits(tenantId: string) {
+  return MinuteLimitService.getMinuteLimits(tenantId);
+}
+
+/**
+ * Actualizar configuración de límites
+ */
+export async function updateMinuteLimits(
+  tenantId: string,
+  updates: Parameters<typeof MinuteLimitService.updateMinuteLimits>[1]
+) {
+  return MinuteLimitService.updateMinuteLimits(tenantId, updates);
+}
+
+// =====================================================
 // EXPORTS
 // =====================================================
 
@@ -1014,7 +1173,7 @@ export const VoiceAgentService = {
   getCallDetails,
   getCallMessages,
 
-  // Usage
+  // Usage (Legacy)
   getUsageSummary,
 
   // VAPI
@@ -1022,4 +1181,11 @@ export const VoiceAgentService = {
 
   // Access
   canAccessVoiceAgent,
+
+  // Minute Limits (NEW)
+  validateCallAllowed,
+  recordCallMinutes,
+  getMinuteUsageSummary,
+  getMinuteLimits,
+  updateMinuteLimits,
 };

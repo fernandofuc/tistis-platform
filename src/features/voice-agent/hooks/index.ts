@@ -7,3 +7,9 @@ export type { VapiCallStatus, VapiTranscript, UseVapiWebClientOptions } from './
 
 export { useMicrophonePermission } from './useMicrophonePermission';
 export type { MicrophonePermissionState, UseMicrophonePermissionReturn } from './useMicrophonePermission';
+
+// FASE 4.5: Voice Usage Hook
+export { useVoiceUsage } from './useVoiceUsage';
+
+// FASE 9: Real-time Voice Usage Hook
+export { useVoiceUsageRealtime } from './useVoiceUsageRealtime';

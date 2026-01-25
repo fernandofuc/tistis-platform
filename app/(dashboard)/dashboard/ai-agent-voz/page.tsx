@@ -38,6 +38,9 @@ import {
   VoiceAgentWizard,
   CallDetailModal,
   AssistantTypeSelector,
+  // Voice Minute Limits components
+  VoiceUsageCard,
+  UsageHistoryTable,
   // Centralized icons
   PhoneIcon,
   PhoneCallIcon,
@@ -63,6 +66,7 @@ import {
   BookIcon,
   BarChartIcon,
 } from '@/src/features/voice-agent/components';
+import { useVoiceUsage } from '@/src/features/voice-agent/hooks';
 
 // Dashboard components
 import { MetricsDashboard } from '@/components/voice-agent/dashboard/MetricsDashboard';
@@ -1277,7 +1281,7 @@ function CallHistoryTab({
 }
 
 // ======================
-// ANALYTICS TAB - Metrics Dashboard
+// ANALYTICS TAB - Metrics Dashboard + Voice Usage
 // ======================
 
 function AnalyticsTab({
@@ -1304,8 +1308,125 @@ function AnalyticsTab({
   onPageChange: (page: number) => void;
   onRefreshMetrics: () => void;
 }) {
+  // Voice usage hook for minute limits
+  const {
+    usage,
+    isLoadingUsage,
+    usageError,
+    updatePolicy,
+    history,
+    isLoadingHistory,
+    pagination: historyPagination,
+    fetchHistory,
+    refetchUsage,
+  } = useVoiceUsage({ autoFetch: true });
+
+  const [showUsageHistory, setShowUsageHistory] = useState(false);
+
+  // Fetch history when modal opens
+  const handleViewHistory = () => {
+    setShowUsageHistory(true);
+    fetchHistory(0);
+  };
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showUsageHistory) {
+        setShowUsageHistory(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showUsageHistory]);
+
   return (
-    <div>
+    <div className="space-y-6">
+      {/* Error state for usage data */}
+      {usageError && (
+        <div
+          role="alert"
+          className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3"
+        >
+          <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <AlertIcon className="w-4 h-4 text-red-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Error al cargar datos de uso</p>
+            <p className="text-xs text-red-600">{usageError}</p>
+          </div>
+          <button
+            onClick={() => refetchUsage()}
+            className="px-3 py-2.5 min-h-[44px] text-sm font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {/* Voice Minute Usage Card */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <VoiceUsageCard
+            usage={usage}
+            isLoading={isLoadingUsage}
+            onPolicyUpdate={async (policy) => {
+              const success = await updatePolicy(policy);
+              if (!success) {
+                throw new Error('Error al actualizar política');
+              }
+            }}
+            onViewHistory={handleViewHistory}
+          />
+        </div>
+
+        {/* Quick info cards */}
+        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                <BarChartIcon className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Período actual</p>
+                {isLoadingUsage ? (
+                  <div className="h-7 w-24 bg-slate-200 rounded animate-pulse" />
+                ) : (
+                  <p className="text-lg font-bold text-slate-900">
+                    {usage ? `${usage.total_calls} llamadas` : '—'}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Llamadas realizadas este ciclo de facturación
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                <ClockIcon className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Duración promedio</p>
+                {isLoadingUsage ? (
+                  <div className="h-7 w-20 bg-slate-200 rounded animate-pulse" />
+                ) : (
+                  <p className="text-lg font-bold text-slate-900">
+                    {usage ? `${usage.avg_call_duration.toFixed(1)} min` : '—'}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Tiempo promedio por llamada
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Metrics Dashboard */}
       <MetricsDashboard
         metrics={metricsData.metrics}
         callsByDay={metricsData.callsByDay}
@@ -1321,6 +1442,54 @@ function AnalyticsTab({
         onPageChange={onPageChange}
         onRefresh={onRefreshMetrics}
       />
+
+      {/* Usage History Modal */}
+      <AnimatePresence>
+        {showUsageHistory && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowUsageHistory(false)}
+            aria-hidden="true"
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="usage-history-modal-title"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 id="usage-history-modal-title" className="text-lg font-bold text-slate-900">
+                  Historial de Uso de Minutos
+                </h3>
+                <button
+                  onClick={() => setShowUsageHistory(false)}
+                  className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-slate-100 rounded-lg transition-colors"
+                  aria-label="Cerrar historial de uso"
+                >
+                  <svg className="w-5 h-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[calc(80vh-60px)]">
+                <UsageHistoryTable
+                  transactions={history}
+                  isLoading={isLoadingHistory}
+                  pagination={historyPagination}
+                  onPageChange={(offset) => fetchHistory(offset)}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

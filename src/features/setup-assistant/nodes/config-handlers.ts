@@ -1,25 +1,12 @@
 // =====================================================
 // TIS TIS PLATFORM - Setup Assistant Config Handlers
 // Specialized nodes for each configuration type
+// Now powered by Gemini 2.5 Flash for unified AI
 // =====================================================
 
-import { ChatOpenAI } from '@langchain/openai';
+import { geminiService } from '../services/gemini.service';
 import type { SetupAssistantStateType } from '../state/setup-state';
 import type { MessageAction, ActionType } from '../types';
-
-// Lazy-initialized model instance for config handlers
-let _configHandlerModel: ChatOpenAI | null = null;
-
-function getConfigHandlerModel(): ChatOpenAI {
-  if (!_configHandlerModel) {
-    _configHandlerModel = new ChatOpenAI({
-      model: 'gpt-4o-mini',
-      temperature: 0.4,
-      maxTokens: 1500,
-    });
-  }
-  return _configHandlerModel;
-}
 
 // Valid action types for validation
 const VALID_ACTION_TYPES: ActionType[] = ['create', 'update', 'delete', 'configure'];
@@ -40,13 +27,9 @@ interface ParsedResponse {
 }
 
 function parseModelResponse(content: string): ParsedResponse {
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-  } catch {
-    // If JSON parsing fails, use the content as response
+  const parsed = geminiService.parseJsonResponse<ParsedResponse>(content);
+  if (parsed) {
+    return parsed;
   }
   return { response: content, actions: [] };
 }
@@ -124,20 +107,20 @@ export async function generalSetupNode(
     .replace('{extracted_data}', JSON.stringify(state.extractedData));
 
   try {
-    const model = getConfigHandlerModel();
-    const response = await model.invoke(prompt);
-    const content = typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+    const response = await geminiService.generateText({
+      prompt,
+      temperature: 0.4,
+      maxOutputTokens: 1500,
+    });
 
-    const parsed = parseModelResponse(content);
+    const parsed = parseModelResponse(response.text);
     const actions = mapActions(parsed.actions, 'general');
 
     return {
       response: parsed.response,
       pendingActions: actions,
-      inputTokens: response.usage_metadata?.input_tokens || 0,
-      outputTokens: response.usage_metadata?.output_tokens || 0,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     };
   } catch (error) {
     console.error('[SetupAssistant] General setup error:', error);
@@ -203,20 +186,20 @@ export async function loyaltyConfigNode(
     .replace('{extracted_data}', JSON.stringify(state.extractedData));
 
   try {
-    const model = getConfigHandlerModel();
-    const response = await model.invoke(prompt);
-    const content = typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+    const response = await geminiService.generateText({
+      prompt,
+      temperature: 0.4,
+      maxOutputTokens: 1500,
+    });
 
-    const parsed = parseModelResponse(content);
+    const parsed = parseModelResponse(response.text);
     const actions = mapActions(parsed.actions, 'loyalty');
 
     return {
       response: parsed.response,
       pendingActions: actions,
-      inputTokens: response.usage_metadata?.input_tokens || 0,
-      outputTokens: response.usage_metadata?.output_tokens || 0,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     };
   } catch (error) {
     console.error('[SetupAssistant] Loyalty config error:', error);
@@ -297,20 +280,20 @@ export async function servicesConfigNode(
       : 'No hay imagen analizada');
 
   try {
-    const model = getConfigHandlerModel();
-    const response = await model.invoke(prompt);
-    const content = typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+    const response = await geminiService.generateText({
+      prompt,
+      temperature: 0.4,
+      maxOutputTokens: 2000, // Higher for services with many items
+    });
 
-    const parsed = parseModelResponse(content);
+    const parsed = parseModelResponse(response.text);
     const actions = mapActions(parsed.actions, 'services');
 
     return {
       response: parsed.response,
       pendingActions: actions,
-      inputTokens: response.usage_metadata?.input_tokens || 0,
-      outputTokens: response.usage_metadata?.output_tokens || 0,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     };
   } catch (error) {
     console.error('[SetupAssistant] Services config error:', error);
@@ -375,20 +358,20 @@ export async function knowledgeBaseNode(
     .replace('{extracted_data}', JSON.stringify(state.extractedData));
 
   try {
-    const model = getConfigHandlerModel();
-    const response = await model.invoke(prompt);
-    const content = typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+    const response = await geminiService.generateText({
+      prompt,
+      temperature: 0.4,
+      maxOutputTokens: 1500,
+    });
 
-    const parsed = parseModelResponse(content);
+    const parsed = parseModelResponse(response.text);
     const actions = mapActions(parsed.actions, 'knowledge_base');
 
     return {
       response: parsed.response,
       pendingActions: actions,
-      inputTokens: response.usage_metadata?.input_tokens || 0,
-      outputTokens: response.usage_metadata?.output_tokens || 0,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     };
   } catch (error) {
     console.error('[SetupAssistant] Knowledge base error:', error);
@@ -454,20 +437,20 @@ export async function agentsConfigNode(
     .replace('{extracted_data}', JSON.stringify(state.extractedData));
 
   try {
-    const model = getConfigHandlerModel();
-    const response = await model.invoke(prompt);
-    const content = typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+    const response = await geminiService.generateText({
+      prompt,
+      temperature: 0.4,
+      maxOutputTokens: 1500,
+    });
 
-    const parsed = parseModelResponse(content);
+    const parsed = parseModelResponse(response.text);
     const actions = mapActions(parsed.actions, 'agents');
 
     return {
       response: parsed.response,
       pendingActions: actions,
-      inputTokens: response.usage_metadata?.input_tokens || 0,
-      outputTokens: response.usage_metadata?.output_tokens || 0,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     };
   } catch (error) {
     console.error('[SetupAssistant] Agents config error:', error);
@@ -534,20 +517,20 @@ export async function promotionsConfigNode(
       : 'No hay imagen analizada');
 
   try {
-    const model = getConfigHandlerModel();
-    const response = await model.invoke(prompt);
-    const content = typeof response.content === 'string'
-      ? response.content
-      : JSON.stringify(response.content);
+    const response = await geminiService.generateText({
+      prompt,
+      temperature: 0.4,
+      maxOutputTokens: 1500,
+    });
 
-    const parsed = parseModelResponse(content);
+    const parsed = parseModelResponse(response.text);
     const actions = mapActions(parsed.actions, 'promotions');
 
     return {
       response: parsed.response,
       pendingActions: actions,
-      inputTokens: response.usage_metadata?.input_tokens || 0,
-      outputTokens: response.usage_metadata?.output_tokens || 0,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     };
   } catch (error) {
     console.error('[SetupAssistant] Promotions config error:', error);

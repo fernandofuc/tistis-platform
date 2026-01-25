@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Setup Assistant Graph
 // LangGraph workflow for the setup assistant
+// Now with checkpointing for session recovery
 // =====================================================
 
 import { StateGraph, END, START } from '@langchain/langgraph';
@@ -16,6 +17,7 @@ import {
   helpNode,
 } from '../nodes/config-handlers';
 import { executorNode } from '../nodes/executor';
+import { getCheckpointer } from '../services/checkpointer.service';
 
 // =====================================================
 // ROUTING FUNCTIONS
@@ -140,7 +142,9 @@ export function buildSetupAssistantGraph() {
     // executor -> END
     .addEdge('executor', END);
 
-  return workflow.compile();
+  // Compile with checkpointer for session recovery
+  const checkpointer = getCheckpointer();
+  return workflow.compile({ checkpointer });
 }
 
 // =====================================================
@@ -151,7 +155,7 @@ let _setupAssistantGraph: ReturnType<typeof buildSetupAssistantGraph> | null = n
 
 export function getSetupAssistantGraph() {
   if (!_setupAssistantGraph) {
-    console.log('[SetupAssistant] Compiling graph (first time)...');
+    console.log('[SetupAssistant] Compiling graph with checkpointing...');
     _setupAssistantGraph = buildSetupAssistantGraph();
   }
   return _setupAssistantGraph;
@@ -165,10 +169,80 @@ export function invalidateSetupGraphCache(): void {
   console.log('[SetupAssistant] Graph cache invalidated');
 }
 
-// Export graph directly for convenience
+// =====================================================
+// GRAPH INVOCATION WITH CHECKPOINTING
+// =====================================================
+
+export interface InvokeConfig {
+  /** Conversation ID - used as thread_id for checkpointing */
+  conversationId: string;
+  /** Optional checkpoint ID to resume from */
+  checkpointId?: string;
+}
+
+/**
+ * Export graph with checkpointing support
+ * Uses conversationId as thread_id for state persistence
+ */
 export const setupAssistantGraph = {
-  invoke: async (initialState: Partial<SetupAssistantStateType>) => {
+  /**
+   * Invoke the graph with automatic checkpointing
+   * State is persisted to Supabase after each node execution
+   */
+  invoke: async (
+    initialState: Partial<SetupAssistantStateType>,
+    config?: InvokeConfig
+  ) => {
     const graph = getSetupAssistantGraph();
-    return graph.invoke(initialState);
+
+    // If no config provided, invoke without checkpointing
+    if (!config) {
+      return graph.invoke(initialState);
+    }
+
+    // Invoke with thread configuration for checkpointing
+    return graph.invoke(initialState, {
+      configurable: {
+        thread_id: config.conversationId,
+        checkpoint_id: config.checkpointId,
+      },
+    });
+  },
+
+  /**
+   * Get the latest state for a conversation from checkpoint
+   * Returns null if no checkpoint exists
+   */
+  getState: async (conversationId: string) => {
+    const graph = getSetupAssistantGraph();
+    try {
+      const state = await graph.getState({
+        configurable: {
+          thread_id: conversationId,
+        },
+      });
+      return state;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Get state history for a conversation
+   */
+  getStateHistory: async function* (conversationId: string, limit = 10) {
+    const graph = getSetupAssistantGraph();
+    const config = {
+      configurable: {
+        thread_id: conversationId,
+      },
+    };
+
+    let count = 0;
+    for await (const state of graph.getStateHistory(config)) {
+      if (count >= limit) break;
+      yield state;
+      count++;
+    }
   },
 };

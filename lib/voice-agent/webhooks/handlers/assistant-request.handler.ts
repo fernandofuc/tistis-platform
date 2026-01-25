@@ -33,6 +33,7 @@ import {
   configNotFoundError,
   databaseError,
 } from '../error-handler';
+import { VoiceAgentService } from '@/src/features/voice-agent/services/voice-agent.service';
 
 // =====================================================
 // TYPES
@@ -153,6 +154,65 @@ export async function handleAssistantRequest(
     }
 
     context.voiceConfigId = voiceConfig.id;
+
+    // 2.5. Validate minute limits (only for Growth plan tenants)
+    const limitValidation = await VoiceAgentService.validateCallAllowed(tenantId);
+
+    if (!limitValidation.allowed) {
+      console.warn(
+        `[Assistant Request] Call blocked by minute limits`,
+        JSON.stringify({
+          tenantId,
+          reason: limitValidation.reason,
+          policy: limitValidation.limitCheck?.policy,
+          usagePercent: limitValidation.limitCheck?.usage_percent,
+        })
+      );
+
+      // Return a polite rejection message for the caller
+      return {
+        response: formatAssistantRequestResponse(
+          formatAssistantConfig(
+            {
+              assistantName: voiceConfig.assistant_name,
+              firstMessage: 'Lo sentimos, nuestro servicio de asistencia por voz no está disponible en este momento. Por favor, intenta más tarde o comunícate por otros medios.',
+              firstMessageMode: 'assistant_speaks_first',
+              voiceId: voiceConfig.voice_id,
+              voiceProvider: 'elevenlabs',
+              voiceModel: 'eleven_multilingual_v2',
+              voiceStability: 0.5,
+              voiceSimilarityBoost: 0.75,
+              transcriptionProvider: 'deepgram',
+              transcriptionModel: 'nova-2',
+              transcriptionLanguage: 'es',
+              waitSeconds: 0.6,
+              onPunctuationSeconds: 0.2,
+              onNoPunctuationSeconds: 1.2,
+              endCallPhrases: [],
+              endCallMessage: '',
+              recordingEnabled: false,
+              hipaaEnabled: false,
+              silenceTimeoutSeconds: 5, // Terminar rápido
+              maxDurationSeconds: 30,   // Máximo 30 segundos
+            },
+            { useServerSideResponse: false } // No procesamos mensajes adicionales
+          ),
+          {
+            tenant_id: tenantId,
+            blocked_reason: limitValidation.reason || 'minute_limit_exceeded',
+            mode: 'limit_exceeded',
+          }
+        ),
+        statusCode: 200, // VAPI espera 200, no error codes
+        shouldLog: true,
+        metadata: {
+          tenantId,
+          blocked: true,
+          reason: limitValidation.reason,
+          policy: limitValidation.limitCheck?.policy,
+        },
+      };
+    }
 
     // 3. Create or update call record
     const callId = await createOrUpdateCall(

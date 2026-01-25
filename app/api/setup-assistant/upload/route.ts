@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Setup Assistant File Upload
 // POST: Upload file for analysis
+// Now with server-side image validation (magic numbers)
 // =====================================================
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ import {
   rateLimitExceeded,
 } from '@/src/shared/lib/rate-limit';
 import type { UploadResponse } from '@/src/features/setup-assistant';
+import { imageValidatorService } from '@/src/features/setup-assistant/services/image-validator.service';
 
 // Configuration
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -133,6 +135,51 @@ export async function POST(request: NextRequest) {
 
     // Read file content
     const buffer = await file.arrayBuffer();
+
+    // =====================================================
+    // SERVER-SIDE VALIDATION (Magic Number + Dimensions)
+    // =====================================================
+
+    // Only validate image files (skip PDFs and text)
+    if (file.type.startsWith('image/')) {
+      const validationResult = await imageValidatorService.validateImage(
+        buffer,
+        file.type,
+        {
+          maxFileSize: MAX_FILE_SIZE,
+          allowedMimeTypes: ALLOWED_MIME_TYPES.filter(t => t.startsWith('image/')),
+          maxWidth: 8192,
+          maxHeight: 8192,
+          minWidth: 10,
+          minHeight: 10,
+        }
+      );
+
+      if (!validationResult.valid) {
+        console.warn('[SetupAssistant] Image validation failed:', validationResult.errors);
+        return NextResponse.json(
+          {
+            error: 'Image validation failed',
+            code: 'INVALID_IMAGE',
+            details: validationResult.errors,
+            metadata: validationResult.metadata,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Log warnings but allow upload
+      if (validationResult.warnings.length > 0) {
+        console.warn('[SetupAssistant] Image validation warnings:', validationResult.warnings);
+      }
+
+      // Log validated metadata
+      console.log('[SetupAssistant] Image validated:', {
+        format: validationResult.metadata?.format,
+        dimensions: `${validationResult.metadata?.width}x${validationResult.metadata?.height}`,
+        size: validationResult.metadata?.fileSize,
+      });
+    }
 
     // Upload to Supabase Storage using admin client
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage

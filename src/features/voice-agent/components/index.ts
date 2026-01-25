@@ -30,5 +30,14 @@ export { CapabilityBadge, CapabilityBadgeCompact } from './CapabilityBadge';
 export { CapabilitiesGrid, CapabilitiesComparison } from './CapabilitiesGrid';
 export { TypeComparisonModal } from './TypeComparisonModal';
 
+// FASE 4: Voice Minute Limits UI Components
+export { VoiceUsageCard } from './VoiceUsageCard';
+export { UsageProgressBar } from './UsageProgressBar';
+export { OveragePolicyModal } from './OveragePolicyModal';
+export { UsageHistoryTable } from './UsageHistoryTable';
+
+// FASE 9: Real-time Voice Usage Dashboard
+export { VoiceUsageDashboard } from './VoiceUsageDashboard';
+
 // Icons
 export * from './VoiceAgentIcons';

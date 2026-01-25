@@ -126,3 +126,16 @@ export {
   type RateLimitConfig,
   type RateLimitResult,
 } from './rate-limit-migration';
+
+// Retry Utilities (Exponential Backoff)
+export {
+  withRetry,
+  withStripeRetry,
+  retryOrThrow,
+  createRetryWrapper,
+  isStripeErrorRetryable,
+  isDefaultRetryable,
+  STRIPE_RETRY_CONFIG,
+  type RetryConfig,
+  type RetryResult,
+} from './retry';
