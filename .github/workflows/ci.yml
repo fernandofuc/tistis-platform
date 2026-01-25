@@ -1,0 +1,254 @@
+# =====================================================
+# TIS TIS PLATFORM - CI/CD Pipeline
+# FASE 9 - Deployment (Bucle Agéntico v2)
+# =====================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ======================
+  # QUALITY CHECKS
+  # ======================
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run TypeScript check
+        run: npm run typecheck
+
+      - name: Run ESLint
+        run: npm run lint
+
+  # ======================
+  # UNIT TESTS
+  # ======================
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run Vitest tests
+        run: npm run test:vitest -- --coverage
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ======================
+  # BUILD VALIDATION
+  # ======================
+  build:
+    name: Build Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [quality, test-unit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build application
+        run: npm run build
+        env:
+          # Increase memory for large builds
+          NODE_OPTIONS: '--max-old-space-size=4096'
+          # Mock environment variables for build
+          NEXT_PUBLIC_SUPABASE_URL: https://mock.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: mock-anon-key
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_mock
+          NEXT_PUBLIC_APP_URL: https://tistis.app
+          SKIP_ENV_VALIDATION: 'true'
+
+      - name: Check bundle size
+        run: |
+          echo "=== Build Output Size ==="
+          du -sh .next/
+          echo ""
+          echo "=== Static Files ==="
+          du -sh .next/static/ 2>/dev/null || echo "No static directory"
+          echo ""
+          echo "=== Server Files ==="
+          du -sh .next/server/ 2>/dev/null || echo "No server directory"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            .next/
+            !.next/cache/
+          retention-days: 1
+
+  # ======================
+  # SECURITY SCAN
+  # ======================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high || true
+        continue-on-error: true
+
+      - name: Check for secrets in code
+        run: |
+          echo "Checking for potential secrets..."
+          # Comprehensive pattern check for common secrets
+          PATTERNS=(
+            'sk_live_'           # Stripe live secret key
+            'pk_live_'           # Stripe live publishable key
+            'whsec_'             # Stripe webhook secret
+            'sk-ant-api'         # Anthropic API key
+            'AIzaSy'             # Google API key
+            'ghp_'               # GitHub personal token
+            'ghs_'               # GitHub server token
+            'github_pat_'        # GitHub fine-grained PAT
+            'eyJhbGciOi'         # JWT tokens (base64)
+            'AKIA'               # AWS access key
+            'sbp_'               # Supabase service key prefix
+          )
+
+          FOUND=0
+          for pattern in "${PATTERNS[@]}"; do
+            if grep -rE "$pattern" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.json" --exclude-dir=node_modules --exclude-dir=.next --exclude="package-lock.json" . 2>/dev/null; then
+              echo "WARNING: Pattern '$pattern' found in code!"
+              FOUND=1
+            fi
+          done
+
+          if [ $FOUND -eq 1 ]; then
+            echo ""
+            echo "ERROR: Potential secrets detected in codebase!"
+            exit 1
+          else
+            echo "No secrets detected in code."
+          fi
+
+      - name: Check for .env files committed
+        run: |
+          if git ls-files | grep -E '\.env$|\.env\.local$|\.env\.production$'; then
+            echo "ERROR: Environment files should not be committed!"
+            exit 1
+          fi
+          echo "No .env files in repository."
+
+  # ======================
+  # DEPLOYMENT STATUS
+  # ======================
+  deploy-check:
+    name: Deployment Ready
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build, security]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "================================================"
+          echo "  TIS TIS Platform - Deployment Ready"
+          echo "================================================"
+          echo ""
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Author: ${{ github.actor }}"
+          echo "Time:   $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo ""
+          echo "All checks passed!"
+          echo "Ready for deployment to Vercel."
+          echo ""
+          echo "================================================"
+
+      - name: Create deployment marker
+        run: |
+          cat > deployment-marker.json << EOF
+          {
+            "status": "approved",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "author": "${{ github.actor }}",
+            "checks": {
+              "quality": "passed",
+              "tests": "passed",
+              "build": "passed",
+              "security": "passed"
+            }
+          }
+          EOF
+
+      - name: Upload deployment marker
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-marker
+          path: deployment-marker.json
+          retention-days: 30

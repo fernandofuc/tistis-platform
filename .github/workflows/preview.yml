@@ -1,0 +1,68 @@
+# =====================================================
+# TIS TIS PLATFORM - Preview Deployment Workflow
+# Triggered on PR for preview environment
+# FASE 9 - Deployment
+# =====================================================
+
+name: Preview Deployment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  preview-check:
+    name: Preview Build Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Build preview
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://mock.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: mock-anon-key
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_mock
+          NEXT_PUBLIC_APP_URL: https://preview.tistis.app
+          SKIP_ENV_VALIDATION: true
+
+      - name: Comment PR with preview status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `### Preview Build Status
+
+            | Check | Status |
+            |-------|--------|
+            | TypeScript | ✅ Passed |
+            | Build | ✅ Passed |
+
+            **Commit:** \`${{ github.sha }}\`
+
+            > Preview will be deployed automatically by Vercel.
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
