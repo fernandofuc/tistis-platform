@@ -3,6 +3,11 @@
 // Types for WhatsApp Business API integration
 // =====================================================
 
+import type { AIPersonality, ChannelConnection } from '@/src/features/settings/types/channels.types';
+
+// Re-export ChannelConnection from canonical source
+export type { ChannelConnection };
+
 // ======================
 // WEBHOOK PAYLOAD TYPES
 // ======================
@@ -298,7 +303,7 @@ export interface AIResponseJobPayload {
   channel: 'whatsapp' | 'instagram' | 'facebook' | 'tiktok';
   channel_connection_id?: string;
   // Per-channel AI configuration
-  ai_personality_override?: 'professional' | 'professional_friendly' | 'casual' | 'formal' | null;
+  ai_personality_override?: AIPersonality | null;
   custom_instructions_override?: string | null;
   is_first_message?: boolean; // To determine which delay to use
 }
@@ -316,44 +321,6 @@ export interface SendMessageJobPayload {
 // ======================
 // CHANNEL CONNECTION TYPES
 // ======================
-
-export interface ChannelConnection {
-  id: string;
-  tenant_id: string;
-  branch_id: string | null;
-  channel: 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'webchat';
-  status: 'pending' | 'configuring' | 'connected' | 'disconnected' | 'error' | 'suspended';
-  ai_enabled: boolean;
-
-  // Multi-account support
-  account_number?: 1 | 2;
-  account_name?: string;
-  is_personal_brand?: boolean;
-
-  // Per-channel AI configuration
-  ai_personality_override?: 'professional' | 'professional_friendly' | 'casual' | 'formal' | null;
-  first_message_delay_seconds?: number;
-  subsequent_message_delay_seconds?: number;
-  custom_instructions_override?: string | null;
-
-  // WhatsApp specific
-  whatsapp_phone_number_id?: string;
-  whatsapp_business_account_id?: string;
-  whatsapp_access_token?: string;
-  whatsapp_verify_token?: string;
-  webhook_secret?: string;
-
-  // Instagram specific
-  instagram_page_id?: string;
-  instagram_account_id?: string;
-  instagram_access_token?: string;
-
-  // Facebook specific
-  facebook_page_id?: string;
-  facebook_access_token?: string;
-
-  // TikTok specific
-  tiktok_client_key?: string;
-  tiktok_client_secret?: string;
-  tiktok_access_token?: string;
-}
+// NOTE: ChannelConnection is now imported and re-exported from
+// @/src/features/settings/types/channels.types.ts
+// This ensures a single source of truth for this type.

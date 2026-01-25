@@ -6,6 +6,7 @@
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import { BaseMessage } from '@langchain/core/messages';
 import type { AIIntent, AISignal } from '@/src/shared/types/whatsapp';
+import type { ResponseStyleKey } from '@/src/shared/config/response-style-instructions';
 
 // ======================
 // TYPES FOR STATE
@@ -42,7 +43,7 @@ export interface TenantInfo {
     system_prompt: string;
     model: string;
     temperature: number;
-    response_style: 'professional' | 'professional_friendly' | 'casual' | 'formal';
+    response_style: ResponseStyleKey;
     max_response_length: number;
     enable_scoring: boolean;
     auto_escalate_keywords: string[];
@@ -186,6 +187,51 @@ export interface BookingResult {
   confirmation_message?: string;
   error?: string;
   suggestion?: string;
+}
+
+/**
+ * SPRINT 3: Orden pendiente de confirmación
+ * Cuando el AI detecta items con buena confianza, los guarda aquí
+ * antes de pedir confirmación al usuario
+ */
+export interface PendingOrder {
+  /** Items parseados del mensaje */
+  items: Array<{
+    menu_item_id?: string;
+    name: string;
+    quantity: number;
+    unit_price?: number;
+    matched_confidence: number;
+    modifiers?: string[];
+    special_instructions?: string;
+  }>;
+
+  /** Tipo de orden detectado */
+  order_type: 'pickup' | 'delivery' | 'dine_in';
+
+  /** Hora de pickup mencionada */
+  pickup_time?: string;
+
+  /** Instrucciones especiales */
+  special_instructions?: string;
+
+  /** Subtotal calculado */
+  subtotal: number;
+
+  /** Impuestos (16% IVA) */
+  tax_amount: number;
+
+  /** Total calculado */
+  total: number;
+
+  /** Confianza general del parsing */
+  confidence_score: number;
+
+  /** Timestamp de cuando se creó */
+  created_at: string;
+
+  /** ID del branch seleccionado */
+  branch_id?: string;
 }
 
 /**
@@ -431,6 +477,49 @@ export interface BusinessContext {
     /** Última sincronización exitosa */
     last_sync_at?: string;
   };
+
+  // =====================================================
+  // AI LEARNING CONTEXT - Patrones aprendidos del negocio
+  // Sprint 3: Conecta ai_learning table con supervisor
+  // =====================================================
+
+  /**
+   * Contexto de aprendizaje del negocio
+   * Patrones extraídos automáticamente de conversaciones anteriores
+   * Usado por el supervisor para mejorar routing y detección de intenciones
+   */
+  learning_context?: {
+    /** Servicios más solicitados con frecuencia */
+    topServiceRequests: Array<{
+      service: string;
+      frequency: number;
+    }>;
+
+    /** Objeciones comunes detectadas */
+    commonObjections: Array<{
+      objection: string;
+      frequency: number;
+    }>;
+
+    /** Preferencias de horario de los clientes */
+    schedulingPreferences: Array<{
+      preference: string;
+      frequency: number;
+    }>;
+
+    /** Puntos de dolor comunes (síntomas, problemas) */
+    painPoints: Array<{
+      pain: string;
+      frequency: number;
+    }>;
+
+    /** Vocabulario aprendido específico del negocio */
+    learnedVocabulary: Array<{
+      term: string;
+      meaning: string;
+      category: string;
+    }>;
+  };
 }
 
 /**
@@ -612,6 +701,16 @@ export const TISTISAgentState = Annotation.Root({
     default: () => null,
   }),
 
+  /**
+   * SPRINT 3: Orden pendiente de confirmación
+   * Se llena cuando el AI detecta items con buena confianza
+   * Espera confirmación del usuario antes de crear la orden
+   */
+  pending_order: Annotation<PendingOrder | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
+
   /** Cambios al score del lead */
   score_change: Annotation<number>({
     reducer: (prev, next) => prev + next,
@@ -770,6 +869,7 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
     routing_reason: '',
     booking_result: null,
     order_result: null,
+    pending_order: null, // SPRINT 3: Orden pendiente de confirmación
     score_change: 0,
     lead_fields_updated: [],
     final_response: '',

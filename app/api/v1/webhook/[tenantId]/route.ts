@@ -1,9 +1,11 @@
 // =====================================================
 // TIS TIS PLATFORM - Webhook Endpoint
 // Receives incoming webhook events from external systems
+// With Zod Validation (Sprint 3)
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import {
   authenticateAPIKey,
   createAPIKeyErrorResponse,
@@ -15,20 +17,30 @@ import {
   createRateLimitExceededResponse,
 } from '@/src/shared/lib/api-key-rate-limit';
 import { logRequest } from '@/src/shared/lib/api-key-logger';
+import {
+  validateSchema,
+  validatePathParams,
+} from '@/src/lib/api/zod-validation';
+import { webhookTenantParamSchema } from '@/src/shared/schemas';
 import type { APIScope } from '@/src/features/api-settings/types';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
 // ======================
-// TYPES
+// ZOD SCHEMAS
 // ======================
 
-interface WebhookPayload {
-  event: string;
-  data: Record<string, unknown>;
-  timestamp?: string;
-}
+/**
+ * Webhook payload schema with strict validation
+ */
+const webhookPayloadSchema = z.object({
+  event: z.string().min(1, 'Event es requerido').max(100, 'Event muy largo'),
+  data: z.record(z.unknown()),
+  timestamp: z.string().datetime().optional(),
+});
+
+type WebhookPayload = z.infer<typeof webhookPayloadSchema>;
 
 // ======================
 // HELPER FUNCTIONS
@@ -39,17 +51,6 @@ function getClientIP(request: NextRequest): string | undefined {
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
     undefined
-  );
-}
-
-function isValidWebhookPayload(body: unknown): body is WebhookPayload {
-  if (!body || typeof body !== 'object') return false;
-  const payload = body as Record<string, unknown>;
-  return (
-    typeof payload.event === 'string' &&
-    payload.event.length > 0 &&
-    typeof payload.data === 'object' &&
-    payload.data !== null
   );
 }
 
@@ -65,7 +66,17 @@ export async function POST(
   const startTime = Date.now();
   const ipAddress = getClientIP(request);
   const userAgent = request.headers.get('user-agent') || undefined;
-  const { tenantId } = await params;
+  const resolvedParams = await params;
+
+  // Validate tenantId path param with Zod
+  const paramValidation = validatePathParams(resolvedParams, webhookTenantParamSchema);
+  if (!paramValidation.success) {
+    return NextResponse.json(
+      { error: 'Invalid tenant ID format', code: 'INVALID_TENANT_ID', details: paramValidation.errors },
+      { status: 400 }
+    );
+  }
+  const { tenantId } = paramValidation.data;
 
   // 1. Authenticate API Key
   const auth = await authenticateAPIKey(request, {
@@ -153,8 +164,9 @@ export async function POST(
       );
     }
 
-    // 5. Validate webhook payload
-    if (!isValidWebhookPayload(body)) {
+    // 5. Validate webhook payload with Zod
+    const payloadValidation = validateSchema(webhookPayloadSchema, body);
+    if (!payloadValidation.success) {
       logRequest({
         keyId: auth.keyId!,
         tenantId: auth.tenantId!,
@@ -170,14 +182,18 @@ export async function POST(
       return addRateLimitHeaders(
         NextResponse.json(
           {
-            error: 'Invalid webhook payload. Required: { event: string, data: object }',
+            error: 'Invalid webhook payload',
             code: 'INVALID_PAYLOAD',
+            details: payloadValidation.errors,
           },
           { status: 400 }
         ),
         rateLimit
       );
     }
+
+    // Use validated payload (type-safe)
+    const validatedPayload = payloadValidation.data;
 
     // 6. Store webhook event in database
     const supabase = createAPIKeyAuthenticatedClient();
@@ -187,8 +203,8 @@ export async function POST(
       .insert({
         tenant_id: tenantId,
         api_key_id: auth.keyId,
-        event_type: body.event,
-        payload: body.data,
+        event_type: validatedPayload.event,
+        payload: validatedPayload.data,
         source_ip: ipAddress,
         received_at: new Date().toISOString(),
         status: 'pending',
@@ -218,7 +234,7 @@ export async function POST(
           NextResponse.json(
             {
               received: true,
-              event: body.event,
+              event: validatedPayload.event,
               message: 'Webhook received (storage pending setup)',
             },
             { status: 202 }
@@ -265,7 +281,7 @@ export async function POST(
       NextResponse.json({
         received: true,
         id: webhookEvent.id,
-        event: body.event,
+        event: validatedPayload.event,
       }),
       rateLimit
     );
@@ -301,7 +317,17 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ tenantId: string }> }
 ) {
-  const { tenantId } = await params;
+  const resolvedParams = await params;
+
+  // Validate tenantId path param with Zod
+  const paramValidation = validatePathParams(resolvedParams, webhookTenantParamSchema);
+  if (!paramValidation.success) {
+    return NextResponse.json(
+      { error: 'Invalid tenant ID format', code: 'INVALID_TENANT_ID' },
+      { status: 400 }
+    );
+  }
+  const { tenantId } = paramValidation.data;
 
   // Require authentication to prevent tenant enumeration
   const auth = await authenticateAPIKey(request, {
@@ -327,7 +353,7 @@ export async function GET(
     expected_payload: {
       event: 'string (required)',
       data: 'object (required)',
-      timestamp: 'string (optional)',
+      timestamp: 'string (optional, ISO 8601)',
     },
   });
 }

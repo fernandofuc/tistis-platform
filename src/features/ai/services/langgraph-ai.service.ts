@@ -34,6 +34,7 @@ import {
 import { PromptSanitizer } from './prompt-sanitizer.service';
 import { getProfileForAI } from './agent-profile.service';
 import type { ProfileType } from '@/src/shared/config/agent-templates';
+import type { ResponseStyleKey } from '@/src/shared/config/response-style-instructions';
 
 // ======================
 // LEARNING + LOYALTY CONTEXT TYPES
@@ -413,7 +414,7 @@ async function loadTenantContext(
       system_prompt: finalSystemPrompt,
       model: (aiConfig?.model as string) || 'gpt-5-mini',
       temperature: (aiConfig?.temperature as number) || 0.7,
-      response_style: responseStyle as 'professional' | 'professional_friendly' | 'casual' | 'formal',
+      response_style: responseStyle as ResponseStyleKey,
       max_response_length: (aiConfig?.max_response_length as number) || 300,
       enable_scoring: (aiConfig?.enable_scoring as boolean) ?? true,
       auto_escalate_keywords: (aiConfig?.auto_escalate_keywords as string[]) || [],
@@ -524,6 +525,9 @@ async function loadConversationContext(
  *
  * IMPORTANTE: Usa el RPC que ya tiene toda la lógica de carga optimizada
  * Para restaurantes: También carga el menú completo con categorías
+ *
+ * SPRINT 3: Ahora incluye learning_context con patrones aprendidos
+ * para mejorar la detección de intenciones en el supervisor
  */
 async function loadBusinessContext(tenantId: string): Promise<BusinessContext | null> {
   const supabase = createServerClient();
@@ -609,15 +613,18 @@ async function loadBusinessContext(tenantId: string): Promise<BusinessContext | 
     }
   };
 
-  const [coreResult, externalResult, menuResult] = await Promise.all([
+  // SPRINT 3: Cargar learning context en paralelo para usar en supervisor
+  const [coreResult, externalResult, menuResult, learningResult] = await Promise.all([
     supabase.rpc('get_tenant_ai_context', { p_tenant_id: tenantId }),
     loadExternalData(),
     loadRestaurantMenu(),
+    loadLearningContext(tenantId), // SPRINT 3: Learning patterns para supervisor
   ]);
 
   const { data, error } = coreResult;
   const externalData = externalResult?.data;
   const menuData = menuResult;
+  const learningData = learningResult;
 
   if (error || !data) {
     console.error('[LangGraph AI] Error loading business context via RPC:', error);
@@ -828,6 +835,18 @@ async function loadBusinessContext(tenantId: string): Promise<BusinessContext | 
       }>) || [],
       external_appointments_count: externalData.external_appointments_count as number | undefined,
       last_sync_at: externalData.last_sync_at as string | undefined,
+    } : undefined,
+
+    // =====================================================
+    // SPRINT 3: AI LEARNING CONTEXT - Patrones aprendidos
+    // Usado por el supervisor para mejorar routing y detección
+    // =====================================================
+    learning_context: learningData ? {
+      topServiceRequests: learningData.topServiceRequests || [],
+      commonObjections: learningData.commonObjections || [],
+      schedulingPreferences: learningData.schedulingPreferences || [],
+      painPoints: learningData.painPoints || [],
+      learnedVocabulary: learningData.learnedVocabulary || [],
     } : undefined,
   };
 }

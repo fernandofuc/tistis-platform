@@ -11,6 +11,7 @@ export {
   type ExtractedData,
   type BookingResult,
   type OrderResult,
+  type PendingOrder, // SPRINT 3: Orden pendiente de confirmación
   type BusinessContext,
   type AgentTrace,
   type ControlFlags,

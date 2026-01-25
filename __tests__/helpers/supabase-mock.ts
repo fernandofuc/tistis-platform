@@ -64,11 +64,10 @@ export interface ChainableQueryMock {
   single: Mock<() => ChainableQueryMock>;
   maybeSingle: Mock<() => ChainableQueryMock>;
 
-  // Promise-like interface
-  then: Mock<(
-    resolve: (value: QueryResult) => void,
-    reject?: (error: unknown) => void
-  ) => Promise<QueryResult>>;
+  // Promise-like interface - allows chaining with await
+  then: Mock<{
+    <T>(resolve?: (value: QueryResult) => T, reject?: (error: unknown) => T): Promise<T | QueryResult>;
+  }>;
 
   // Internal state
   _result: QueryResult;
@@ -172,9 +171,16 @@ export function createSupabaseMock(config: SupabaseMockConfig = {}): SupabaseMoc
       maybeSingle: vi.fn(() => chain),
 
       // Promise-like - THIS IS KEY
-      then: vi.fn((resolve, reject) => {
-        return Promise.resolve(chain._result).then(resolve, reject);
-      }),
+      // FIX: Return QueryResult directly instead of passing through resolve callback
+      then: vi.fn(<T>(
+        resolve?: (value: QueryResult) => T,
+        reject?: (error: unknown) => T
+      ): Promise<T | QueryResult> => {
+        if (resolve) {
+          return Promise.resolve(chain._result).then(resolve, reject);
+        }
+        return Promise.resolve(chain._result);
+      }) as ChainableQueryMock['then'],
     };
 
     // Make each method return a fresh chain that's also thenable

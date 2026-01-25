@@ -3,6 +3,8 @@
 // =====================================================
 
 export * from './database';
+export * from './unified-assistant-types';
+export * from './delivery-types';
 
 // ======================
 // API TYPES
@@ -165,4 +167,75 @@ export interface ToastMessage {
   title: string;
   message?: string;
   duration?: number;
+}
+
+// ======================
+// SUPABASE QUERY BUILDER TYPES
+// Sprint 2: Replace 'any' with specific types
+// ======================
+
+/**
+ * Generic type for Supabase query results
+ */
+export interface SupabaseQueryResult<T> {
+  data: T | null;
+  error: { message: string; code?: string; details?: string } | null;
+  count?: number | null;
+  status: number;
+  statusText: string;
+}
+
+/**
+ * Minimal chainable query builder interface
+ *
+ * NOTE: This is intentionally minimal to:
+ * 1. Allow flexible mocking in tests
+ * 2. Be compatible with Supabase's actual PostgrestFilterBuilder
+ * 3. Provide type safety for the essential .eq() method used in branch filtering
+ *
+ * The index signature allows additional Supabase methods without requiring
+ * them all to be defined explicitly.
+ *
+ * @example
+ * ```typescript
+ * function applyFilter<T>(query: SupabaseQueryBuilder<T>): SupabaseQueryBuilder<T> {
+ *   return query.eq('branch_id', branchId);
+ * }
+ * ```
+ */
+export interface SupabaseQueryBuilder<T = unknown> {
+  // Essential filter method for branch filtering
+  eq: (column: string, value: unknown) => SupabaseQueryBuilder<T>;
+
+  // Allow any other methods from Supabase query builders
+  // This provides flexibility for tests and compatibility with Supabase types
+  // Note: Index signature uses 'any' intentionally for Supabase compatibility
+  [key: string]: unknown;
+}
+
+/**
+ * Type alias for backward compatibility
+ * Use this in function parameters where you need a generic query builder
+ */
+export type QueryBuilder<T = unknown> = SupabaseQueryBuilder<T>;
+
+/**
+ * Server action result type for Supabase operations
+ */
+export interface SupabaseActionResult<T> {
+  data: T | null;
+  error: string | null;
+  success: boolean;
+}
+
+/**
+ * Supabase client interface (minimal for typing)
+ */
+export interface SupabaseClientInterface {
+  from: (table: string) => SupabaseQueryBuilder<unknown>;
+  rpc: (fn: string, params?: Record<string, unknown>) => Promise<SupabaseQueryResult<unknown>>;
+  auth: {
+    getSession: () => Promise<{ data: { session: unknown }; error: unknown }>;
+    getUser: () => Promise<{ data: { user: unknown }; error: unknown }>;
+  };
 }

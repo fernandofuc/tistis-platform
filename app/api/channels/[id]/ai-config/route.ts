@@ -187,7 +187,7 @@ export async function PUT(
     } = body;
 
     // Validate personality if provided
-    const validPersonalities = ['professional', 'professional_friendly', 'casual', 'formal'];
+    const validPersonalities = ['professional', 'professional_friendly', 'formal'];
     if (ai_personality_override && !validPersonalities.includes(ai_personality_override)) {
       return NextResponse.json({ error: 'Personalidad de IA inválida' }, { status: 400 });
     }

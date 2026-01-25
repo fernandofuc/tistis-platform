@@ -96,10 +96,39 @@ interface ChainableMockOptions {
   countResult?: { count: number; error: null } | { count: null; error: { message: string } };
 }
 
+// Type for chainable Supabase mock with all query methods
+interface ChainableSupabaseMock {
+  from: Mock;
+  select: Mock;
+  eq: Mock;
+  neq: Mock;
+  gt: Mock;
+  gte: Mock;
+  lt: Mock;
+  lte: Mock;
+  like: Mock;
+  ilike: Mock;
+  is: Mock;
+  in: Mock;
+  not: Mock;
+  or: Mock;
+  filter: Mock;
+  order: Mock;
+  limit: Mock;
+  range: Mock;
+  single: Mock;
+  maybeSingle: Mock;
+  setOrdersResult: (result: QueryResult) => void;
+  setDriversResult: (result: QueryResult) => void;
+  auth: {
+    getSession: Mock;
+  };
+}
+
 /**
  * Creates a fully chainable Supabase mock that handles complex query chains
  */
-function createChainableSupabaseMock(options: ChainableMockOptions = {}) {
+function createChainableSupabaseMock(options: ChainableMockOptions = {}): ChainableSupabaseMock {
   const {
     ordersResult = { data: [mockOrder], error: null },
     driversResult = { data: [], error: null },
@@ -163,6 +192,7 @@ function createChainableSupabaseMock(options: ChainableMockOptions = {}) {
 
   const chain = createChain();
 
+  // Cast to ChainableSupabaseMock for proper type inference
   return {
     ...chain,
     // Expose mock manipulation methods
@@ -179,7 +209,7 @@ function createChainableSupabaseMock(options: ChainableMockOptions = {}) {
         error: null,
       }),
     },
-  };
+  } as ChainableSupabaseMock;
 }
 
 // ======================

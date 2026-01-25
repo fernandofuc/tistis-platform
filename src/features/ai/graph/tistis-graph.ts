@@ -489,6 +489,12 @@ function stateToCheckpoint(
       agent_trace: state.agent_trace,
       control: state.control,
       errors: state.errors,
+      // SPRINT 3: Persistir estado de órdenes pendientes
+      pending_order: state.pending_order,
+      order_result: state.order_result,
+      // También persistir otros datos importantes
+      extracted_data: state.extracted_data,
+      booking_result: state.booking_result,
     },
     channel_versions: {},
     versions_seen: {},
@@ -651,6 +657,33 @@ export async function getCheckpointState(
     const safeIntent = (val: unknown): AIIntent | undefined =>
       isAIIntent(val) ? val : undefined;
 
+    // SPRINT 3: Type guard para PendingOrder
+    const isValidPendingOrder = (val: unknown): val is TISTISAgentStateType['pending_order'] =>
+      val !== null &&
+      typeof val === 'object' &&
+      'items' in val &&
+      'order_type' in val &&
+      'total' in val &&
+      Array.isArray((val as Record<string, unknown>).items);
+
+    // Type guard para OrderResult
+    const isValidOrderResult = (val: unknown): val is TISTISAgentStateType['order_result'] =>
+      val !== null &&
+      typeof val === 'object' &&
+      'success' in val &&
+      typeof (val as Record<string, unknown>).success === 'boolean';
+
+    // Type guard para BookingResult
+    const isValidBookingResult = (val: unknown): val is TISTISAgentStateType['booking_result'] =>
+      val !== null &&
+      typeof val === 'object' &&
+      'success' in val &&
+      typeof (val as Record<string, unknown>).success === 'boolean';
+
+    // Type guard para ExtractedData
+    const isValidExtractedData = (val: unknown): val is TISTISAgentStateType['extracted_data'] =>
+      val !== null && typeof val === 'object';
+
     return {
       messages,
       current_message: safeString(channelValues.current_message) || '',
@@ -663,6 +696,11 @@ export async function getCheckpointState(
       agent_trace: safeAgentTrace(channelValues.agent_trace),
       control: isValidControl(channelValues.control) ? channelValues.control : undefined,
       errors: safeStringArray(channelValues.errors),
+      // SPRINT 3: Restaurar estado de órdenes pendientes
+      pending_order: isValidPendingOrder(channelValues.pending_order) ? channelValues.pending_order : undefined,
+      order_result: isValidOrderResult(channelValues.order_result) ? channelValues.order_result : undefined,
+      booking_result: isValidBookingResult(channelValues.booking_result) ? channelValues.booking_result : undefined,
+      extracted_data: isValidExtractedData(channelValues.extracted_data) ? channelValues.extracted_data : undefined,
     };
   } catch (error) {
     console.error('[Graph] Error retrieving checkpoint:', error);
@@ -738,6 +776,8 @@ export interface GraphExecutionResult {
   processing_time_ms: number;
   agents_used: string[];
   booking_result?: TISTISAgentStateType['booking_result'];
+  order_result?: TISTISAgentStateType['order_result']; // SPRINT 3
+  pending_order?: TISTISAgentStateType['pending_order']; // SPRINT 3
   errors?: string[];
 }
 
@@ -786,6 +826,9 @@ export async function executeGraph(
           tokens_used: 0,
           processing_time_ms: Date.now() - startTime,
           agents_used: checkpointState.agent_trace?.map((t) => t.agent_name) || [],
+          booking_result: checkpointState.booking_result, // SPRINT 3
+          order_result: checkpointState.order_result, // SPRINT 3
+          pending_order: checkpointState.pending_order, // SPRINT 3
           errors: checkpointState.errors,
         };
       }
@@ -844,6 +887,8 @@ export async function executeGraph(
       processing_time_ms: processingTime,
       agents_used: finalState.agent_trace?.map((t) => t.agent_name) || [],
       booking_result: finalState.booking_result,
+      order_result: finalState.order_result, // SPRINT 3
+      pending_order: finalState.pending_order, // SPRINT 3
       errors: finalState.errors,
     };
   } catch (error) {
@@ -866,6 +911,9 @@ export async function executeGraph(
             tokens_used: 0,
             processing_time_ms: processingTime,
             agents_used: checkpointState.agent_trace?.map((t) => t.agent_name) || [],
+            booking_result: checkpointState.booking_result, // SPRINT 3
+            order_result: checkpointState.order_result, // SPRINT 3
+            pending_order: checkpointState.pending_order, // SPRINT 3
             errors: ['Recovered from checkpoint after error'],
           };
         }

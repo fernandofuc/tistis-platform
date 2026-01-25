@@ -153,11 +153,11 @@ export async function validateBranchOwnership(
  * query = applyBranchFilter(query, branchId, 'leads');
  * ```
  */
-export function applyBranchFilter<T>(
-  query: any, // SupabaseQueryBuilder
+export function applyBranchFilter<Q extends { eq: (column: string, value: unknown) => Q }>(
+  query: Q,
   branchId: string | null,
   tableName: string
-): any {
+): Q {
   // List of tables that support branch filtering
   const BRANCH_FILTERABLE_TABLES = [
     'leads',

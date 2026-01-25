@@ -253,8 +253,7 @@ export function ConversationPreview({
         <p className="text-xs text-slate-500 text-center">
           Vista previa del estilo <span className="font-semibold text-slate-700">{
             style === 'professional' ? 'Profesional' :
-            style === 'professional_friendly' ? 'Profesional Cálido' :
-            style === 'casual' ? 'Casual' : 'Muy Formal'
+            style === 'professional_friendly' ? 'Profesional Cálido' : 'Muy Formal'
           }</span>
         </p>
       </div>

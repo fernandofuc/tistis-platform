@@ -4,7 +4,7 @@
 // =====================================================
 
 import { createServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
@@ -44,7 +44,7 @@ export async function createServerClientWithCookies() {
 // It tries Authorization header first (from client-side fetch), then falls back to cookies
 export async function getUserFromRequest(request: NextRequest): Promise<{
   user: { id: string; email?: string } | null;
-  supabase: any;
+  supabase: SupabaseClient;
   error?: string;
 }> {
   const authHeader = request.headers.get('authorization');

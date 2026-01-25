@@ -136,6 +136,23 @@ export interface TemplateVariables {
     validUntil?: string;
   }>;
 
+  // === Delivery Configuration (added in v2.1 - Migration 156) ===
+  /** Whether delivery is enabled for this tenant */
+  deliveryEnabled?: boolean;
+  /** Delivery configuration */
+  deliveryConfig?: {
+    /** Maximum delivery radius in km */
+    maxRadiusKm: number;
+    /** Delivery fee */
+    deliveryFee: number;
+    /** Minimum order amount for delivery */
+    minimumOrderAmount?: number;
+    /** Estimated delivery time in minutes */
+    estimatedTimeMinutes: number;
+  };
+  /** Currency for price formatting */
+  currency?: string;
+
   // === Dental-specific ===
   /** Services offered */
   services?: Array<{
@@ -230,6 +247,17 @@ export interface TemplateBusinessContext {
     durationMinutes?: number;
     category?: string;
   }>;
+
+  // === Delivery Configuration (added in v2.1 - Migration 156) ===
+  /** Whether delivery is enabled */
+  deliveryEnabled?: boolean;
+  /** Delivery configuration from service_options */
+  deliveryConfig?: {
+    maxRadiusKm: number;
+    deliveryFee: number;
+    minimumOrderAmount?: number;
+    estimatedTimeMinutes: number;
+  };
 
   // === Staff ===
   staff: Array<{

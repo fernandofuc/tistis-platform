@@ -47,6 +47,7 @@ export type Capability =
   | 'orders'
   | 'order_status'
   | 'promotions'
+  | 'delivery' // Added in v2.1 - Migration 156
   // Dental capabilities
   | 'appointments'
   | 'services_info'
@@ -69,7 +70,8 @@ export type RestaurantCapability =
   | 'recommendations'
   | 'orders'
   | 'order_status'
-  | 'promotions';
+  | 'promotions'
+  | 'delivery'; // Added in v2.1 - Migration 156
 
 /**
  * Capabilities specific to dental vertical
@@ -116,6 +118,9 @@ export type Tool =
   | 'get_order_status'
   | 'calculate_delivery_time'
   | 'get_promotions'
+  // Restaurant - Delivery tools (Added in v2.1 - Migration 156)
+  | 'calculate_delivery'
+  | 'get_delivery_status'
   // Dental tools
   | 'check_appointment_availability'
   | 'create_appointment'
@@ -148,6 +153,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   'orders',
   'order_status',
   'promotions',
+  'delivery', // Added in v2.1 - Migration 156
   // Dental
   'appointments',
   'services_info',
@@ -182,6 +188,9 @@ export const ALL_TOOLS: Tool[] = [
   'get_order_status',
   'calculate_delivery_time',
   'get_promotions',
+  // Restaurant - Delivery (Added in v2.1 - Migration 156)
+  'calculate_delivery',
+  'get_delivery_status',
   // Dental
   'check_appointment_availability',
   'create_appointment',

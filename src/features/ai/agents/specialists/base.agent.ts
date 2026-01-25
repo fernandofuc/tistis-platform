@@ -18,6 +18,21 @@ import { DEFAULT_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
 import { SafetyResilienceService } from '../../services/safety-resilience.service';
 
 // ======================
+// SPRINT 1 FIX: LÍMITES DE RECURSOS POR AGENTE
+// Previene loops infinitos y consumo excesivo de tokens
+// ======================
+const AGENT_RESOURCE_LIMITS = {
+  /** Máximo de iteraciones del loop de tool calling */
+  MAX_TOOL_ITERATIONS: 5,
+  /** Máximo de tool calls TOTALES por ejecución del agente */
+  MAX_TOTAL_TOOL_CALLS: 10,
+  /** Máximo de tokens estimados por ejecución del agente */
+  MAX_TOKENS_PER_EXECUTION: 4000,
+  /** Máximo de caracteres en respuesta de tool (previene tool responses gigantes) */
+  MAX_TOOL_RESPONSE_LENGTH: 8000,
+} as const;
+
+// ======================
 // TYPES
 // ======================
 
@@ -42,6 +57,14 @@ export interface AgentResult {
   escalation_reason?: string;
   tokens_used?: number;
   error?: string;
+  /**
+   * SPRINT 3: Actualizaciones de estado a aplicar
+   * Usado por el ordering agent para guardar pending_order
+   */
+  state_updates?: Partial<{
+    pending_order: import('../../state').PendingOrder | null;
+    order_result: import('../../state').OrderResult | null;
+  }>;
 }
 
 // ======================
@@ -147,7 +170,6 @@ export abstract class BaseAgent {
       const styleDescriptions: Record<string, string> = {
         professional: 'profesional y directo',
         professional_friendly: 'profesional pero cálido y amigable',
-        casual: 'informal y cercano',
         formal: 'muy formal y respetuoso',
       };
       const style = tenant?.ai_config?.response_style || 'professional';
@@ -365,16 +387,22 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
    * - Soporta múltiples iteraciones de tool calls
    * - RAG habilitado via search_knowledge_base
    *
+   * SPRINT 1 FIX: Límites de recursos implementados:
+   * - Máximo de iteraciones de tool calling
+   * - Máximo de tool calls totales
+   * - Máximo de tokens estimados
+   * - Truncado de respuestas de tools muy largas
+   *
    * @param state Estado actual del grafo
    * @param tools Array de DynamicStructuredTool de LangChain
    * @param additionalContext Contexto adicional para el system prompt
-   * @param maxIterations Máximo de iteraciones de tool calling (default: 3)
+   * @param maxIterations Máximo de iteraciones de tool calling (default: MAX_TOOL_ITERATIONS)
    */
   protected async callLLMWithTools(
     state: TISTISAgentStateType,
     tools: import('@langchain/core/tools').DynamicStructuredTool[],
     additionalContext?: string,
-    maxIterations: number = 3
+    maxIterations: number = AGENT_RESOURCE_LIMITS.MAX_TOOL_ITERATIONS
   ): Promise<{ response: string; tokens: number; toolCalls: string[] }> {
     // P23 FIX: Check for incomplete configuration
     const safetyAnalysis = state.safety_analysis;
@@ -409,6 +437,7 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
     const toolCallsLog: string[] = [];
     let totalTokens = 0;
     let iterations = 0;
+    let totalToolCalls = 0; // SPRINT 1: Contador de tool calls totales
 
     // Import messages types once, outside the loop for efficiency
     const { AIMessage: AIMsg, ToolMessage: ToolMsg } = await import('@langchain/core/messages');
@@ -416,10 +445,33 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
     // V7.1: Track timing for observability
     const startTime = Date.now();
 
+    // SPRINT 1: Estimar tokens del prompt inicial
+    totalTokens += Math.ceil(systemPrompt.length / 4);
+
     try {
       // Agentic loop: ejecutar hasta que el LLM responda sin tool calls
       while (iterations < maxIterations) {
         iterations++;
+
+        // SPRINT 1 FIX: Verificar límite de tokens ANTES de llamar al LLM
+        if (totalTokens >= AGENT_RESOURCE_LIMITS.MAX_TOKENS_PER_EXECUTION) {
+          console.warn(`[${this.config.name}] Token limit reached (${totalTokens}/${AGENT_RESOURCE_LIMITS.MAX_TOKENS_PER_EXECUTION})`);
+          return {
+            response: 'Procesé mucha información. Para una respuesta más completa, ¿podrías especificar qué necesitas exactamente?',
+            tokens: totalTokens,
+            toolCalls: toolCallsLog,
+          };
+        }
+
+        // SPRINT 1 FIX: Verificar límite de tool calls totales
+        if (totalToolCalls >= AGENT_RESOURCE_LIMITS.MAX_TOTAL_TOOL_CALLS) {
+          console.warn(`[${this.config.name}] Total tool calls limit reached (${totalToolCalls}/${AGENT_RESOURCE_LIMITS.MAX_TOTAL_TOOL_CALLS})`);
+          return {
+            response: 'Realicé varias búsquedas para responder tu consulta. ¿Hay algo específico que necesites saber?',
+            tokens: totalTokens,
+            toolCalls: toolCallsLog,
+          };
+        }
 
         const result = await llmWithTools.invoke(messages);
 
@@ -456,7 +508,20 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
           const toolName = toolCall.name;
           const toolArgs = toolCall.args;
 
-          console.log(`[${this.config.name}] Tool call: ${toolName}(${JSON.stringify(toolArgs)})`);
+          // SPRINT 1: Incrementar contador de tool calls
+          totalToolCalls++;
+
+          // SPRINT 1: Verificar límite antes de ejecutar
+          if (totalToolCalls > AGENT_RESOURCE_LIMITS.MAX_TOTAL_TOOL_CALLS) {
+            console.warn(`[${this.config.name}] Skipping tool call ${toolName} - limit exceeded`);
+            messages.push(new ToolMsg({
+              content: JSON.stringify({ error: 'Límite de herramientas alcanzado' }),
+              tool_call_id: toolCall.id || toolName,
+            }));
+            continue;
+          }
+
+          console.log(`[${this.config.name}] Tool call #${totalToolCalls}: ${toolName}(${JSON.stringify(toolArgs).substring(0, 100)})`);
           toolCallsLog.push(toolName);
 
           // Encontrar y ejecutar la tool
@@ -464,8 +529,20 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
           if (tool) {
             try {
               const toolResult = await tool.invoke(toolArgs);
+              let toolContent = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
+
+              // SPRINT 1 FIX: Truncar respuestas de tools muy largas
+              if (toolContent.length > AGENT_RESOURCE_LIMITS.MAX_TOOL_RESPONSE_LENGTH) {
+                console.warn(`[${this.config.name}] Truncating tool response from ${toolContent.length} to ${AGENT_RESOURCE_LIMITS.MAX_TOOL_RESPONSE_LENGTH} chars`);
+                toolContent = toolContent.substring(0, AGENT_RESOURCE_LIMITS.MAX_TOOL_RESPONSE_LENGTH) +
+                  '\n\n[... respuesta truncada por ser muy larga ...]';
+              }
+
+              // Estimar tokens de la respuesta de la tool
+              totalTokens += Math.ceil(toolContent.length / 4);
+
               messages.push(new ToolMsg({
-                content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+                content: toolContent,
                 tool_call_id: toolCall.id || toolName,
               }));
             } catch (toolError) {
@@ -487,10 +564,10 @@ NO inventes información. Si no la tienes, usa la herramienta correspondiente.`;
 
       // Si llegamos aquí, alcanzamos max iterations
       const duration = Date.now() - startTime;
-      console.warn(`[${this.config.name}] Max iterations (${maxIterations}) reached in ${duration}ms | tools=${toolCallsLog.join(', ')}`);
+      console.warn(`[${this.config.name}] Max iterations (${maxIterations}) reached in ${duration}ms | tools=${toolCallsLog.join(', ')} | totalToolCalls=${totalToolCalls} | tokens≈${totalTokens}`);
 
       return {
-        response: 'Estoy teniendo dificultades para procesar tu solicitud. ¿Podrías reformularla?',
+        response: 'Estoy teniendo dificultades para procesar tu solicitud. ¿Podrías reformularla de manera más específica?',
         tokens: totalTokens,
         toolCalls: toolCallsLog,
       };
@@ -671,6 +748,17 @@ Usa las herramientas disponibles para obtener información cuando sea necesario.
 
         if (result.error) {
           stateUpdate.errors = [result.error];
+        }
+
+        // SPRINT 3: Aplicar actualizaciones de estado del agente
+        // Usado por ordering agent para guardar pending_order
+        if (result.state_updates) {
+          if (result.state_updates.pending_order !== undefined) {
+            stateUpdate.pending_order = result.state_updates.pending_order;
+          }
+          if (result.state_updates.order_result !== undefined) {
+            stateUpdate.order_result = result.state_updates.order_result;
+          }
         }
 
         console.log(`[${this.config.name}] Completed in ${Date.now() - startTime}ms`);
@@ -1154,12 +1242,11 @@ export function buildFullBusinessContext(
   const styleDescriptions: Record<string, string> = {
     professional: 'profesional y directo',
     professional_friendly: 'profesional pero cálido y amigable',
-    casual: 'informal y cercano',
     formal: 'muy formal y respetuoso',
   };
 
   const style = tenant?.ai_config?.response_style || 'professional';
-  const styleDesc = styleDescriptions[style] || 'profesional y amable';
+  const styleDesc = styleDescriptions[style] || 'profesional y directo';
   const maxLength = tenant?.ai_config?.max_response_length || 300;
 
   context += '\n# INSTRUCCIONES DE RESPUESTA\n';

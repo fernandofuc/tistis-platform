@@ -29,8 +29,6 @@ const DEFAULT_MESSAGES: Record<string, Record<string, string>> = {
       'Hola, gracias por llamar a {business}. Soy {name}, tu asistente virtual. ¿En qué puedo ayudarte hoy? Puedo asistirte con reservaciones, información del menú, o responder cualquier pregunta que tengas.',
     professional:
       'Buenas tardes, ha llamado a {business}. Soy {name}. ¿En qué puedo servirle?',
-    casual:
-      '¡Hola! Bienvenido a {business}. Soy {name}. ¿Qué tal? ¿Buscas hacer una reservación o quieres saber del menú?',
     formal:
       'Bienvenido a {business}. Mi nombre es {name} y estoy a sus órdenes. ¿En qué puedo asistirle el día de hoy?',
   },
@@ -39,8 +37,6 @@ const DEFAULT_MESSAGES: Record<string, Record<string, string>> = {
       'Hola, gracias por llamar a {business}. Soy {name}, tu asistente virtual. ¿En qué puedo ayudarte? Puedo asistirte con citas, información sobre nuestros servicios, o resolver cualquier duda.',
     professional:
       'Buenas tardes, ha llamado a {business}. Soy {name}. ¿En qué puedo servirle?',
-    casual:
-      '¡Hola! Gracias por llamar a {business}. Soy {name}. ¿Cómo te puedo ayudar hoy?',
     formal:
       'Bienvenido a {business}. Mi nombre es {name} y estoy a sus órdenes. ¿En qué puedo asistirle?',
   },
@@ -69,12 +65,6 @@ const PERSONALITY_OPTIONS: PersonalityOption[] = [
     name: 'Profesional',
     description: 'Formal y directo, ideal para negocios corporativos',
     icon: '👔',
-  },
-  {
-    id: 'casual',
-    name: 'Casual',
-    description: 'Relajado y amigable, genera confianza rápidamente',
-    icon: '🎉',
   },
   {
     id: 'formal',

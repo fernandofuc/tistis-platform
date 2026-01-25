@@ -8,7 +8,7 @@
 // =====================================================
 
 export type VoiceStatus = 'inactive' | 'configuring' | 'active' | 'suspended' | 'error';
-export type VoicePersonality = 'professional' | 'professional_friendly' | 'casual' | 'formal';
+export type VoicePersonality = 'professional' | 'professional_friendly' | 'formal';
 export type FirstMessageMode = 'assistant_speaks_first' | 'wait_for_user';
 export type VoiceProvider = 'elevenlabs' | 'google' | 'azure' | 'openai';
 export type TranscriptionProvider = 'deepgram' | 'google' | 'azure' | 'whisper';

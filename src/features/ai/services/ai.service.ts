@@ -655,11 +655,10 @@ function buildSystemPrompt(tenant: TenantAIContext): string {
   const styleDescriptions: Record<string, string> = {
     professional: 'profesional y directo',
     professional_friendly: 'profesional pero cálido y amigable',
-    casual: 'informal y cercano',
     formal: 'muy formal y respetuoso',
   };
 
-  const styleDesc = styleDescriptions[ai_config.response_style] || 'profesional y amable';
+  const styleDesc = styleDescriptions[ai_config.response_style] || 'profesional y directo';
 
   systemPrompt += `\n# INSTRUCCIONES DE RESPUESTA\n`;
   systemPrompt += `- Responde de manera ${styleDesc}\n`;

@@ -1,11 +1,19 @@
 // =====================================================
 // TIS TIS PLATFORM - Single Lead API Route
+// With Zod Validation (Sprint 3)
 // =====================================================
 
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedContext, isAuthError, createAuthErrorResponse } from '@/src/shared/lib/auth-helper';
+import {
+  validateRequest,
+  validatePathParams,
+  checkValidation,
+  validationErrorResponse,
+} from '@/src/lib/api/zod-validation';
+import { leadUpdateSchema, leadIdParamSchema } from '@/src/shared/schemas';
 
 // ======================
 // GET - Fetch single lead
@@ -22,7 +30,14 @@ export async function GET(
     }
 
     const { client: supabase, tenantId } = authContext;
-    const { id } = await params;
+    const resolvedParams = await params;
+
+    // Validate path params with Zod
+    const paramValidation = validatePathParams(resolvedParams, leadIdParamSchema);
+    const paramResult = checkValidation(paramValidation);
+    if (paramResult instanceof NextResponse) return paramResult;
+
+    const { id } = paramResult;
 
     const { data, error } = await supabase
       .from('leads')
@@ -76,21 +91,32 @@ export async function PATCH(
     }
 
     const { client: supabase, tenantId } = authContext;
-    const { id } = await params;
-    const body = await request.json();
+    const resolvedParams = await params;
 
-    // Fields allowed for update
+    // Validate path params with Zod
+    const paramValidation = validatePathParams(resolvedParams, leadIdParamSchema);
+    const paramResult = checkValidation(paramValidation);
+    if (paramResult instanceof NextResponse) return paramResult;
+
+    const { id } = paramResult;
+
+    // Validate request body with Zod
+    const bodyValidation = await validateRequest(request, leadUpdateSchema);
+    const body = checkValidation(bodyValidation);
+    if (body instanceof NextResponse) return body;
+
+    // Build update data from validated body (Zod already filters and validates fields)
+    const updateData: Record<string, unknown> = {};
     const allowedFields = [
-      'first_name', 'last_name', 'full_name', 'email', 'status', 'classification', 'score',
-      'source', 'interested_services', 'branch_id', 'assigned_staff_id',
-      'notes', 'tags', 'custom_fields'
+      'name', 'phone', 'email', 'status', 'classification',
+      'source', 'branch_id', 'assigned_staff_id', 'interested_services',
+      'notes', 'custom_fields', 'last_contact_at', 'next_followup_at'
     ];
 
-    // Filter only allowed fields
-    const updateData: Record<string, unknown> = {};
     for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
+      const value = body[field as keyof typeof body];
+      if (value !== undefined) {
+        updateData[field] = value;
       }
     }
 
@@ -160,7 +186,14 @@ export async function DELETE(
     }
 
     const { client: supabase, tenantId, user } = authContext;
-    const { id } = await params;
+    const resolvedParams = await params;
+
+    // Validate path params with Zod
+    const paramValidation = validatePathParams(resolvedParams, leadIdParamSchema);
+    const paramResult = checkValidation(paramValidation);
+    if (paramResult instanceof NextResponse) return paramResult;
+
+    const { id } = paramResult;
 
     // First verify the lead belongs to this tenant
     const { data: existingLead, error: checkError } = await supabase
@@ -240,17 +273,35 @@ export async function POST(
       return createAuthErrorResponse(authContext);
     }
 
-    // FIX: Added user to destructuring for p_restored_by parameter
     const { client: supabase, tenantId, user } = authContext;
-    const { id } = await params;
-    const body = await request.json();
+    const resolvedParams = await params;
+
+    // Validate path params with Zod
+    const paramValidation = validatePathParams(resolvedParams, leadIdParamSchema);
+    const paramResult = checkValidation(paramValidation);
+    if (paramResult instanceof NextResponse) return paramResult;
+
+    const { id } = paramResult;
+
+    // Parse body for action
+    let body: { action?: string };
+    try {
+      body = await request.json();
+    } catch {
+      return validationErrorResponse([{
+        field: 'body',
+        message: 'JSON invalido en el cuerpo de la peticion',
+        code: 'INVALID_JSON'
+      }]);
+    }
 
     // Check if this is a restore action
     if (body.action !== 'restore') {
-      return NextResponse.json(
-        { error: 'Invalid action. Use action: "restore"' },
-        { status: 400 }
-      );
+      return validationErrorResponse([{
+        field: 'action',
+        message: 'Accion invalida. Use action: "restore"',
+        code: 'invalid_literal'
+      }]);
     }
 
     // First verify the lead belongs to this tenant

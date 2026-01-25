@@ -39,7 +39,7 @@ interface AIConfig {
   tenant_id: string;
   ai_enabled: boolean;
   ai_model?: string;
-  ai_personality: 'professional' | 'professional_friendly' | 'casual' | 'formal';
+  ai_personality: 'professional' | 'professional_friendly' | 'formal';
   ai_temperature: number;
   max_tokens: number;
   custom_instructions?: string;

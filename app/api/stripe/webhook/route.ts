@@ -108,31 +108,67 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event;
 
   // ============================================
-  // FIX 3: STRIPE_WEBHOOK_SECRET obligatorio en producción
+  // SPRINT 1 FIX: STRIPE_WEBHOOK_SECRET SIEMPRE OBLIGATORIO
+  // Cambio de política: Ahora es obligatorio en TODOS los entornos
+  // para prevenir que se despliegue accidentalmente sin verificación
   // ============================================
   const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+  const isStaging = process.env.VERCEL_ENV === 'preview';
+  const isLocalhost = process.env.NEXT_PUBLIC_URL?.includes('localhost') || false;
 
-  if (isProduction && !process.env.STRIPE_WEBHOOK_SECRET) {
-    logger.error('STRIPE_WEBHOOK_SECRET is required in production', { isProduction });
-    return NextResponse.json({ error: 'Webhook configuration error' }, { status: 500 });
+  // CRÍTICO: Webhook secret es obligatorio en producción y staging
+  if ((isProduction || isStaging) && !process.env.STRIPE_WEBHOOK_SECRET) {
+    logger.error('STRIPE_WEBHOOK_SECRET is REQUIRED in production/staging', {
+      isProduction,
+      isStaging,
+      vercelEnv: process.env.VERCEL_ENV,
+    });
+    return NextResponse.json({
+      error: 'Webhook configuration error: STRIPE_WEBHOOK_SECRET not configured',
+      code: 'WEBHOOK_SECRET_MISSING'
+    }, { status: 500 });
+  }
+
+  // En localhost sin secret: advertir pero permitir (solo desarrollo local)
+  if (!process.env.STRIPE_WEBHOOK_SECRET && !isLocalhost) {
+    logger.error('STRIPE_WEBHOOK_SECRET not configured and not running on localhost');
+    return NextResponse.json({
+      error: 'Webhook configuration error',
+      code: 'WEBHOOK_SECRET_REQUIRED'
+    }, { status: 500 });
   }
 
   try {
-    // Verify webhook signature if secret is configured
+    // Verify webhook signature - SIEMPRE si el secret está configurado
     if (process.env.STRIPE_WEBHOOK_SECRET) {
       event = stripe.webhooks.constructEvent(
         body,
         signature,
         process.env.STRIPE_WEBHOOK_SECRET
       );
-    } else {
-      // For LOCAL testing only - NOT production
-      logger.warn('Running without signature verification (development only)');
+      logger.debug('Webhook signature verified successfully');
+    } else if (isLocalhost) {
+      // SOLO permitido en localhost para desarrollo local
+      logger.warn('⚠️ Running WITHOUT signature verification - LOCALHOST ONLY');
       event = JSON.parse(body) as Stripe.Event;
+
+      // Verificar que el evento tenga estructura básica válida
+      if (!event.id || !event.type || !event.data) {
+        logger.error('Invalid webhook event structure');
+        return NextResponse.json({ error: 'Invalid event structure' }, { status: 400 });
+      }
+    } else {
+      // Nunca debería llegar aquí por las validaciones anteriores
+      logger.error('Unexpected state: No webhook secret and not localhost');
+      return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
     }
   } catch (err: unknown) {
     const error = err as Error;
-    logger.error('Webhook signature verification failed', { errorMessage: error.message });
+    logger.error('Webhook signature verification failed', {
+      errorMessage: error.message,
+      signatureProvided: !!signature,
+      secretConfigured: !!process.env.STRIPE_WEBHOOK_SECRET,
+    });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -591,9 +627,13 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   }
 
   // ============================================
-  // FIX 2: Crear cliente si no existe (race condition prevention)
+  // FIX 2: RACE CONDITION PREVENTION - Use UPSERT
+  // This prevents duplicate client creation when checkout.session.completed
+  // and customer.subscription.created webhooks arrive simultaneously
   // ============================================
-  let { data: client } = await supabase
+
+  // First, try to get existing client
+  let { data: existingClient } = await supabase
     .from('clients')
     .select('id, metadata')
     .ilike('contact_email', customerEmail)
@@ -610,7 +650,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
   if (!finalPlan || !isValidPlan(finalPlan)) {
     // Try to get plan from client.metadata (set by checkout handler)
-    const clientMetadataPlan = client?.metadata?.plan;
+    const clientMetadataPlan = existingClient?.metadata?.plan;
     if (clientMetadataPlan && isValidPlan(clientMetadataPlan)) {
       finalPlan = clientMetadataPlan;
       logger.debug('Got plan from client.metadata', { plan: finalPlan });
@@ -624,33 +664,64 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     logger.warn('Invalid plan, using essentials', { invalidPlan: finalPlan });
   }
 
-  if (!client) {
-    logger.warn('Client not found, creating now (race condition fallback)');
+  // ============================================
+  // SPRINT 1 FIX: Use UPSERT to prevent race condition duplicates
+  // If client exists: update metadata with new plan info
+  // If client doesn't exist: create new client
+  //
+  // NOTE: Uses partial unique index idx_clients_email_unique_no_tenant
+  // which only applies when tenant_id IS NULL (initial signup).
+  // Email must be lowercase (enforced at application level).
+  // ============================================
+  let client: { id: string; metadata: Record<string, unknown> | null } | null = existingClient;
 
-    // Create client if checkout.session.completed hasn't created it yet
-    const { data: newClient, error: createClientError } = await supabase
+  if (!client) {
+    logger.info('Client not found, using UPSERT to create atomically');
+
+    // Use UPSERT with onConflict to handle race conditions
+    // Note: This requires a UNIQUE constraint on contact_email (case-insensitive)
+    const { data: upsertedClient, error: upsertError } = await supabase
       .from('clients')
-      .insert({
+      .upsert({
         contact_email: customerEmail,
         contact_name: customerName || (customer as Stripe.Customer).name || 'Cliente',
         business_name: customerName || (customer as Stripe.Customer).name || 'Negocio',
         status: 'active',
         locations_count: branches ? parseInt(branches) : 1,
+        stripe_customer_id: customerId, // Link Stripe customer
         metadata: {
           plan: validatedPlan,
-          created_by: 'subscription_webhook_fallback',
+          created_by: 'subscription_webhook',
+          stripe_customer_id: customerId,
         },
+      }, {
+        onConflict: 'contact_email',
+        ignoreDuplicates: false // Update if exists
       })
       .select('id, metadata')
       .single();
 
-    if (createClientError || !newClient) {
-      logger.error('Failed to create client', { error: createClientError?.message });
-      throw new Error(`Failed to create client: ${createClientError?.message || 'Unknown error'}`);
-    }
+    if (upsertError) {
+      // If UPSERT fails due to constraint, try to fetch existing client
+      logger.warn('UPSERT failed, attempting to fetch existing client', { error: upsertError.message });
 
-    client = newClient;
-    logger.info('Client created via fallback', { clientId: client.id });
+      const { data: retryClient } = await supabase
+        .from('clients')
+        .select('id, metadata')
+        .ilike('contact_email', customerEmail)
+        .single();
+
+      if (retryClient) {
+        client = retryClient;
+        logger.info('Found existing client after UPSERT conflict', { clientId: client.id });
+      } else {
+        logger.error('Failed to create or find client', { error: upsertError.message });
+        throw new Error(`Failed to create client: ${upsertError.message}`);
+      }
+    } else {
+      client = upsertedClient;
+      logger.info('Client created/updated via UPSERT', { clientId: client?.id });
+    }
   }
 
   // Calculate total monthly amount from all line items

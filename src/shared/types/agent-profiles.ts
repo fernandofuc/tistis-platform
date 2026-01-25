@@ -98,9 +98,11 @@ export interface GetProfilesResponse {
 
 /**
  * Perfil con información de canales conectados
+ * NOTE: channels uses ProfileChannelBinding (simplified channel info),
+ * NOT the full ChannelConnection from channels.types.ts
  */
 export interface AgentProfileWithChannels extends AgentProfile {
-  channels: ChannelConnection[];
+  channels: ProfileChannelBinding[];
   voice_config?: VoiceConfigSummary;
 }
 
@@ -117,8 +119,10 @@ export interface VoiceConfigSummary {
 
 /**
  * Conexión de canal vinculada a un perfil
+ * NOTE: Renamed from ChannelConnection to avoid confusion with
+ * the main ChannelConnection type in channels.types.ts
  */
-export interface ChannelConnection {
+export interface ProfileChannelBinding {
   channel_id: string;
   channel_type: 'whatsapp' | 'instagram' | 'messenger' | 'webchat' | 'tiktok' | 'facebook';
   channel_identifier?: string;
@@ -127,6 +131,12 @@ export interface ChannelConnection {
   account_number: 1 | 2;
   profile_id: string | null;
 }
+
+/**
+ * @deprecated Use ProfileChannelBinding instead
+ * Kept for backward compatibility
+ */
+export type ChannelConnection = ProfileChannelBinding;
 
 // ======================
 // UI COMPONENT TYPES

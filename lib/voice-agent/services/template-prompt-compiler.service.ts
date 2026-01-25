@@ -325,7 +325,7 @@ export class TemplatePromptCompilerService {
 
     // Load tenant, branches, services, and staff in parallel
     const [tenantResult, branchesResult, servicesResult, staffResult] = await Promise.all([
-      supabase.from('tenants').select('name, vertical').eq('id', tenantId).single(),
+      supabase.from('tenants').select('name, vertical, service_options').eq('id', tenantId).single(),
       supabase.from('branches')
         .select('name, address, city, phone, operating_hours, is_headquarters')
         .eq('tenant_id', tenantId)
@@ -349,6 +349,20 @@ export class TemplatePromptCompilerService {
     const branches = branchesResult.data || [];
     const services = servicesResult.data || [];
     const staff = staffResult.data || [];
+
+    // Extract delivery configuration from service_options (Migration 156)
+    const serviceOptions = tenant?.service_options as {
+      delivery_enabled?: boolean;
+      delivery_config?: {
+        max_radius_km?: number;
+        delivery_fee?: number;
+        minimum_order_amount?: number;
+        estimated_time_minutes?: number;
+      };
+    } | null;
+
+    const deliveryEnabled = serviceOptions?.delivery_enabled ?? false;
+    const deliveryConfig = serviceOptions?.delivery_config;
 
     return {
       tenantId,
@@ -376,6 +390,14 @@ export class TemplatePromptCompilerService {
         specialty: s.specialty || undefined,
         title: this.getRoleTitle(s.role),
       })),
+      // Delivery configuration (added in v2.1 - Migration 156)
+      deliveryEnabled,
+      deliveryConfig: deliveryEnabled && deliveryConfig ? {
+        maxRadiusKm: deliveryConfig.max_radius_km ?? 5,
+        deliveryFee: deliveryConfig.delivery_fee ?? 0,
+        minimumOrderAmount: deliveryConfig.minimum_order_amount,
+        estimatedTimeMinutes: deliveryConfig.estimated_time_minutes ?? 30,
+      } : undefined,
     };
   }
 
@@ -458,6 +480,11 @@ export class TemplatePromptCompilerService {
       // Vertical-specific
       doctors: assistantType.vertical === 'dental' ? doctors : undefined,
       services: assistantType.vertical === 'dental' ? services : undefined,
+
+      // Delivery configuration (added in v2.1 - Migration 156)
+      deliveryEnabled: businessContext.deliveryEnabled,
+      deliveryConfig: businessContext.deliveryConfig,
+      currency: 'MXN',
     };
   }
 

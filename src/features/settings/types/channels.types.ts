@@ -10,7 +10,7 @@
 export type ChannelType = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok';
 export type ConnectionStatus = 'pending' | 'configuring' | 'connected' | 'disconnected' | 'error' | 'suspended';
 export type AccountNumber = 1 | 2;
-export type AIPersonality = 'professional' | 'professional_friendly' | 'casual' | 'formal';
+export type AIPersonality = 'professional' | 'professional_friendly' | 'formal';
 
 // ======================
 // CHANNEL CONNECTION
@@ -194,13 +194,6 @@ export const PERSONALITY_METADATA: Record<AIPersonality, PersonalityMetadata> = 
     description: 'Balance perfecto entre profesionalismo y calidez',
     example: '¡Hola! Tu cita está confirmada para el 15 de enero a las 10:00 AM. ¡Te esperamos!',
     emoji: '😊',
-  },
-  casual: {
-    id: 'casual',
-    name: 'Casual',
-    description: 'Relajado y cercano, ideal para marcas personales',
-    example: '¡Hey! Ya quedó tu cita para el 15 a las 10am. Nos vemos pronto 👋',
-    emoji: '✌️',
   },
   formal: {
     id: 'formal',

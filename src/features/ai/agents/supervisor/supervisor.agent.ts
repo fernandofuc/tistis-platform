@@ -50,7 +50,22 @@ interface SafetyAnalysisResult {
 }
 
 // ======================
-// INTENT DETECTION (Rule-based para velocidad)
+// TYPES FOR LEARNING CONTEXT
+// ======================
+
+/**
+ * SPRINT 3: Contexto de aprendizaje para mejorar detección de intenciones
+ */
+interface LearningContext {
+  topServiceRequests?: Array<{ service: string; frequency: number }>;
+  commonObjections?: Array<{ objection: string; frequency: number }>;
+  schedulingPreferences?: Array<{ preference: string; frequency: number }>;
+  painPoints?: Array<{ pain: string; frequency: number }>;
+  learnedVocabulary?: Array<{ term: string; meaning: string; category: string }>;
+}
+
+// ======================
+// INTENT DETECTION (Rule-based + Learning patterns)
 // ======================
 
 /**
@@ -116,6 +131,120 @@ function detectIntentRuleBased(message: string): AIIntent {
   }
 
   return 'UNKNOWN';
+}
+
+/**
+ * SPRINT 3: Detecta la intención usando patrones aprendidos
+ *
+ * Esta función se ejecuta DESPUÉS de detectIntentRuleBased
+ * para mejorar la detección usando patrones del negocio específico.
+ *
+ * @param message - Mensaje del usuario
+ * @param learningContext - Contexto de aprendizaje del negocio
+ * @returns Intent mejorado o null si no hay mejora
+ */
+function detectIntentWithLearning(
+  message: string,
+  learningContext: LearningContext | null | undefined
+): { intent: AIIntent | null; reason: string | null } {
+  if (!learningContext) {
+    return { intent: null, reason: null };
+  }
+
+  const messageLower = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Helper para normalizar texto (quitar acentos)
+  const normalize = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // 1. Detectar servicios mencionados usando vocabulario aprendido
+  // Si el mensaje menciona un servicio específico del negocio, probablemente es PRICE_INQUIRY o BOOK_APPOINTMENT
+  if (learningContext.topServiceRequests && learningContext.topServiceRequests.length > 0) {
+    for (const { service } of learningContext.topServiceRequests.slice(0, 10)) {
+      // Normalizar términos del servicio para comparación sin acentos
+      const serviceTerms = normalize(service).split(/\s+/);
+      const serviceFound = serviceTerms.some(term =>
+        term.length >= 4 && messageLower.includes(term)
+      );
+
+      if (serviceFound) {
+        // Si menciona el servicio con palabras de precio, es PRICE_INQUIRY
+        // NOTA: messageLower ya está normalizado (sin acentos), así que usamos versiones sin acento
+        if (/\b(precio|costo|cuanto|vale|valor)\b/.test(messageLower)) {
+          return {
+            intent: 'PRICE_INQUIRY',
+            reason: `Learned service "${service}" mentioned with price inquiry`
+          };
+        }
+        // Si menciona el servicio con palabras de reserva, es BOOK_APPOINTMENT
+        if (/\b(cita|agendar|reservar|turno|cuando)\b/.test(messageLower)) {
+          return {
+            intent: 'BOOK_APPOINTMENT',
+            reason: `Learned service "${service}" mentioned with booking intent`
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Detectar objeciones comunes para manejar retention
+  if (learningContext.commonObjections && learningContext.commonObjections.length > 0) {
+    for (const { objection } of learningContext.commonObjections.slice(0, 5)) {
+      // Normalizar términos de objeción para comparación sin acentos
+      const objectionTerms = normalize(objection).split(/\s+/);
+      const objectionFound = objectionTerms.filter(t => t.length >= 4)
+        .some(term => messageLower.includes(term));
+
+      if (objectionFound) {
+        // Objeciones comunes detectadas - esto puede informar al pricing agent
+        return {
+          intent: 'PRICE_INQUIRY',
+          reason: `Learned objection pattern: "${objection}"`
+        };
+      }
+    }
+  }
+
+  // 3. Detectar dolor/síntomas usando painPoints aprendidos (para dentales/médicos)
+  if (learningContext.painPoints && learningContext.painPoints.length > 0) {
+    for (const { pain } of learningContext.painPoints.slice(0, 5)) {
+      // Normalizar términos de dolor para comparación sin acentos
+      const painTerms = normalize(pain).split(/\s+/);
+      const painFound = painTerms.filter(t => t.length >= 4)
+        .some(term => messageLower.includes(term));
+
+      if (painFound) {
+        return {
+          intent: 'PAIN_URGENT',
+          reason: `Learned pain pattern: "${pain}"`
+        };
+      }
+    }
+  }
+
+  // 4. Usar vocabulario aprendido para mejorar detección
+  if (learningContext.learnedVocabulary && learningContext.learnedVocabulary.length > 0) {
+    for (const { term, category } of learningContext.learnedVocabulary.slice(0, 20)) {
+      // Normalizar término para comparación sin acentos
+      if (messageLower.includes(normalize(term))) {
+        // Mapear categoría de vocabulario a intent
+        switch (category) {
+          case 'symptom':
+          case 'urgency':
+            return { intent: 'PAIN_URGENT', reason: `Learned vocabulary: "${term}" (${category})` };
+          case 'procedure':
+          case 'service':
+            return { intent: 'FAQ', reason: `Learned vocabulary: "${term}" (${category})` };
+          case 'time':
+          case 'scheduling_preference':
+            return { intent: 'BOOK_APPOINTMENT', reason: `Learned vocabulary: "${term}" (${category})` };
+          case 'payment':
+            return { intent: 'PRICE_INQUIRY', reason: `Learned vocabulary: "${term}" (${category})` };
+        }
+      }
+    }
+  }
+
+  return { intent: null, reason: null };
 }
 
 /**
@@ -304,7 +433,19 @@ export async function supervisorNode(
 
   try {
     // 1. Detectar intención (rule-based, ultra rápido)
-    const intent = detectIntentRuleBased(state.current_message);
+    let intent = detectIntentRuleBased(state.current_message);
+    let learningEnhancedReason: string | null = null;
+
+    // SPRINT 3: Si la intención base es UNKNOWN o FAQ, intentar mejorar con learning patterns
+    const learningContext = state.business_context?.learning_context;
+    if ((intent === 'UNKNOWN' || intent === 'FAQ') && learningContext) {
+      const learningResult = detectIntentWithLearning(state.current_message, learningContext);
+      if (learningResult.intent) {
+        console.log(`[Supervisor] SPRINT 3: Intent enhanced by learning: ${intent} -> ${learningResult.intent}`);
+        intent = learningResult.intent;
+        learningEnhancedReason = learningResult.reason;
+      }
+    }
 
     // 2. Detectar señales de scoring
     const signals = detectSignals(state.current_message, state.business_context);
@@ -501,18 +642,20 @@ export async function supervisorNode(
     };
 
     // 8. Crear traza del agente
+    // SPRINT 3: Incluir información sobre si la intención fue mejorada por learning
+    const learningTag = learningEnhancedReason ? ' [LEARNING]' : '';
     const trace: AgentTrace = addAgentTrace(
       state,
       {
         agent_name: agentName,
         input_summary: `Message: "${state.current_message.substring(0, 50)}..."`,
-        output_summary: `Intent: ${intent}, Next: ${nextAgent}${emergencyResult.isEmergency ? ' [EMERGENCY]' : ''}`,
-        decision: `Routing to ${nextAgent} because ${intent}${emergencyResult.isEmergency ? ` (Emergency: ${emergencyResult.emergencyType})` : ''}`,
+        output_summary: `Intent: ${intent}, Next: ${nextAgent}${emergencyResult.isEmergency ? ' [EMERGENCY]' : ''}${learningTag}`,
+        decision: `Routing to ${nextAgent} because ${intent}${emergencyResult.isEmergency ? ` (Emergency: ${emergencyResult.emergencyType})` : ''}${learningEnhancedReason ? ` (Learning: ${learningEnhancedReason})` : ''}`,
         duration_ms: Date.now() - startTime,
       }
     );
 
-    console.log(`[Supervisor] Intent: ${intent}, Next agent: ${nextAgent}, Score change: ${totalScoreChange}`);
+    console.log(`[Supervisor] Intent: ${intent}, Next agent: ${nextAgent}, Score change: ${totalScoreChange}${learningEnhancedReason ? `, Learning: ${learningEnhancedReason}` : ''}`);
 
     // 9. Retornar actualizaciones al estado
     return {

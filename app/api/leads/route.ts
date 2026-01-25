@@ -1,11 +1,19 @@
 // =====================================================
 // TIS TIS PLATFORM - Leads API Route
+// With Zod Validation (Sprint 3)
 // =====================================================
 
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import {
+  validateRequest,
+  validateQueryParams,
+  checkValidation,
+  validationErrorResponse,
+} from '@/src/lib/api/zod-validation';
+import { leadCreateSchema, leadListQuerySchema } from '@/src/shared/schemas';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -63,24 +71,31 @@ export async function GET(request: NextRequest) {
     }
 
     const { client: supabase, tenantId } = authContext;
-    const { searchParams } = new URL(request.url);
 
-    // Parse query params with security limits and NaN protection
-    const parsedPage = parseInt(searchParams.get('page') || '1', 10);
-    const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
-    const parsedPageSize = parseInt(searchParams.get('pageSize') || '20', 10);
-    const pageSize = Math.min(isNaN(parsedPageSize) || parsedPageSize < 1 ? 20 : parsedPageSize, 100); // Max 100
-    const classification = searchParams.get('classification');
-    const status = searchParams.get('status');
-    const search = searchParams.get('search');
+    // Validate query parameters with Zod
+    const queryValidation = validateQueryParams(request, leadListQuerySchema);
+    if (!queryValidation.success) {
+      return validationErrorResponse(queryValidation.errors);
+    }
+
+    const {
+      page,
+      pageSize,
+      search,
+      classification,
+      status,
+      sortBy: requestedSortBy,
+      sortOrder,
+    } = queryValidation.data;
+
+    // Additional params not in standard schema
+    const { searchParams } = new URL(request.url);
     const includeDeleted = searchParams.get('include_deleted') === 'true';
-    const onlyDeleted = searchParams.get('only_deleted') === 'true'; // For trash view
+    const onlyDeleted = searchParams.get('only_deleted') === 'true';
 
     // Allowlist of valid sort columns (prevent SQL injection)
     const ALLOWED_SORT_COLUMNS = ['score', 'created_at', 'status', 'classification', 'first_name', 'last_name', 'full_name', 'updated_at', 'deleted_at'];
-    const requestedSortBy = searchParams.get('sortBy') || 'score';
-    const sortBy = ALLOWED_SORT_COLUMNS.includes(requestedSortBy) ? requestedSortBy : 'score';
-    const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const sortBy = requestedSortBy && ALLOWED_SORT_COLUMNS.includes(requestedSortBy) ? requestedSortBy : 'score';
 
     // Build query - use authenticated user's tenant
     let query = supabase
@@ -166,17 +181,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { client: supabase, tenantId } = authContext;
-    const body = await request.json();
 
-    // Validate required fields
-    if (!body.phone) {
-      return NextResponse.json(
-        { error: 'Phone is required' },
-        { status: 400 }
-      );
-    }
+    // Validate request body with Zod
+    const validation = await validateRequest(request, leadCreateSchema);
+    const validationResult = checkValidation(validation);
+    if (validationResult instanceof NextResponse) return validationResult;
 
-    // Normalize phone
+    const body = validationResult;
+
+    // Normalize phone (already validated by Zod)
     let normalizedPhone = body.phone.replace(/[^\d+]/g, '');
     if (normalizedPhone.length === 10) {
       normalizedPhone = `+52${normalizedPhone}`;

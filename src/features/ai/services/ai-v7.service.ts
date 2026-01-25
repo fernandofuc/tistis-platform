@@ -38,6 +38,7 @@ import {
 import { PromptSanitizer } from './prompt-sanitizer.service';
 import { getProfileForAI } from './agent-profile.service';
 import type { ProfileType } from '@/src/shared/config/agent-templates';
+import type { ResponseStyleKey } from '@/src/shared/config/response-style-instructions';
 // MEJORA-1.1: PII Detection Service
 import { getPIIDetectionService, type PIIDetectionResult } from '@/src/shared/lib/pii-detection.service';
 // MEJORA-1.2: LLM Output Sanitizer
@@ -357,7 +358,7 @@ async function loadTenantContext(
       system_prompt: finalSystemPrompt,
       model: (aiConfig?.model as string) || 'gpt-5-mini',
       temperature: (aiConfig?.temperature as number) || 0.7,
-      response_style: responseStyle as 'professional' | 'professional_friendly' | 'casual' | 'formal',
+      response_style: responseStyle as ResponseStyleKey,
       max_response_length: (aiConfig?.max_response_length as number) || 300,
       enable_scoring: (aiConfig?.enable_scoring as boolean) ?? true,
       auto_escalate_keywords: (aiConfig?.auto_escalate_keywords as string[]) || [],

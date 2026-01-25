@@ -1291,7 +1291,7 @@ function buildCompiledInstructionsSection(
    **Personalidad configurada:** ${styleKey}
    **Vertical del negocio:** ${vertical}
 
-   - Mantén un tono ${styleKey === 'casual' ? 'informal y cercano' : styleKey === 'formal' ? 'muy formal y respetuoso' : 'profesional pero cálido'}
+   - Mantén un tono ${styleKey === 'formal' ? 'muy formal y respetuoso' : styleKey === 'professional' ? 'profesional y directo' : 'profesional pero cálido'}
    ${channel === 'voice' ? '- Usa muletillas conversacionales naturales para que suene humano' : '- NO uses muletillas de voz (es texto escrito)'}
    ${channel === 'voice' ? '- Las respuestas deben ser CONCISAS (2-3 oraciones por turno)' : '- Las respuestas pueden ser más detalladas (es texto, pueden releerlo)'}
    ${channel === 'voice' ? '- NUNCA uses emojis (es una llamada de voz)' : '- Solo usa emojis funcionales: ✅ ❌ 📍 📞 ⏰ 📅'}
@@ -2332,8 +2332,8 @@ function buildFallbackPrompt(
 
 ## Tu Identidad
 Eres ${context.assistantName || 'el asistente virtual'} de ${context.tenantName}.
-${context.assistantPersonality === 'casual' ? 'Usa un tono informal y cercano.' :
-  context.assistantPersonality === 'formal' ? 'Mantén un tono muy formal y respetuoso.' :
+${context.assistantPersonality === 'formal' ? 'Mantén un tono muy formal y respetuoso.' :
+  context.assistantPersonality === 'professional' ? 'Mantén un tono profesional y directo.' :
   'Mantén un tono profesional pero cálido.'}
 
 ## Servicios Disponibles

@@ -557,12 +557,12 @@ export function createBranchFilterContext(auth: APIKeyAuthResult): BranchFilterC
  * query = applyAutomaticBranchFilter(query, auth, 'leads', queryBranchId);
  * ```
  */
-export function applyAutomaticBranchFilter<T>(
-  query: any, // SupabaseQueryBuilder
+export function applyAutomaticBranchFilter<Q extends { eq: (column: string, value: unknown) => Q }>(
+  query: Q,
   auth: APIKeyAuthResult,
   tableName: string,
   queryParamBranchId?: string | null
-): any {
+): Q {
   // Lista de tablas con soporte de branch filtering
   const BRANCH_FILTERABLE_TABLES = [
     'leads',

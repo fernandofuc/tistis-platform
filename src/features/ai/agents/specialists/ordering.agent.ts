@@ -11,10 +11,89 @@
 // =====================================================
 
 import { BaseAgent, type AgentResult } from './base.agent';
-import type { TISTISAgentStateType, OrderResult } from '../../state';
+import type { TISTISAgentStateType, OrderResult, PendingOrder } from '../../state';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { SafetyResilienceService } from '../../services/safety-resilience.service';
 import { createToolsForAgent } from '../../tools';
+
+// ======================
+// SPRINT 3: ORDER CONFIRMATION UTILITIES
+// ======================
+
+/**
+ * Normaliza texto quitando acentos para comparación
+ */
+function normalizeText(text: string): string {
+  return text.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Detecta si el mensaje del usuario es una confirmación de orden
+ */
+function isOrderConfirmation(message: string): boolean {
+  const confirmPatterns = [
+    // Patrones sin acentos porque normalizamos el mensaje
+    /^(si|yes|ok|okay|okey|dale|va|perfecto|listo|correcto|confirmado?|de acuerdo|adelante)$/i,
+    /\b(confirmo|confirmar|acepto|aceptar|procede|prosigue)\b/i,
+    /\b(es correcto|esta bien|eso es)\b/i,
+    /^(👍|✅|✔️|ok)$/,
+  ];
+
+  const messageNormalized = normalizeText(message);
+  return confirmPatterns.some(pattern => pattern.test(messageNormalized));
+}
+
+/**
+ * Detecta si el mensaje del usuario quiere cancelar la orden
+ */
+function isOrderCancellation(message: string): boolean {
+  const cancelPatterns = [
+    // Patrones sin acentos porque normalizamos el mensaje
+    /\b(cancela|cancelar|no quiero|mejor no|nada|olvida|olvidalo)\b/i,
+    /^(no|nel|nop|nope)$/i,
+  ];
+
+  const messageNormalized = normalizeText(message);
+  return cancelPatterns.some(pattern => pattern.test(messageNormalized));
+}
+
+/**
+ * Detecta si el mensaje del usuario quiere modificar la orden
+ */
+function isOrderModification(message: string): boolean {
+  const modifyPatterns = [
+    // Patrones sin acentos porque normalizamos el mensaje
+    /\b(cambiar?|modificar?|agregar?|quitar?|sin|extra|tambien|ademas|mas)\b/i,
+    /\b(en vez de|en lugar de|mejor)\b/i,
+  ];
+
+  const messageNormalized = normalizeText(message);
+  return modifyPatterns.some(pattern => pattern.test(messageNormalized));
+}
+
+/**
+ * Genera el mensaje de resumen para confirmación
+ */
+function generateConfirmationSummary(pendingOrder: PendingOrder): string {
+  const itemsList = pendingOrder.items
+    .map((item: PendingOrder['items'][number]) => `- ${item.quantity}x ${item.name} ($${(item.unit_price || 0).toFixed(2)} c/u)`)
+    .join('\n');
+
+  const orderTypeLabel = pendingOrder.order_type === 'delivery' ? 'a domicilio'
+    : pendingOrder.order_type === 'dine_in' ? 'para comer aquí'
+    : 'para recoger';
+
+  // Usar formato compatible con WhatsApp (*negrita* en lugar de **negrita**)
+  return `¿Confirmamos tu pedido ${orderTypeLabel}?
+
+${itemsList}
+
+Subtotal: $${pendingOrder.subtotal.toFixed(2)}
+IVA (16%): $${pendingOrder.tax_amount.toFixed(2)}
+*Total: $${pendingOrder.total.toFixed(2)}*
+
+Responde "sí" para confirmar o dime si quieres hacer algún cambio.`;
+}
 
 // ======================
 // TYPES
@@ -615,6 +694,121 @@ Tú: "Tu pedido está confirmado. Número de orden: #023. Estará listo en aprox
     const menuCategories = business?.menu_categories || [];
 
     // =====================================================
+    // SPRINT 3: VERIFICAR SI HAY ORDEN PENDIENTE DE CONFIRMACIÓN
+    // =====================================================
+    const pendingOrder = state.pending_order;
+
+    if (pendingOrder) {
+      console.log(`[Ordering Agent] SPRINT 3: Pending order found, checking user response`);
+
+      // IMPORTANTE: Verificar modificación ANTES de confirmación
+      // porque "sí, también quiero papas" contiene tanto confirmación como modificación
+      // En ese caso, la intención es modificar (agregar), no solo confirmar
+      const wantsToModify = isOrderModification(state.current_message);
+      const wantsToConfirm = isOrderConfirmation(state.current_message);
+      const wantsToCancel = isOrderCancellation(state.current_message);
+
+      // Si quiere modificar (incluso si también dice "sí"), procesar como modificación
+      if (wantsToModify) {
+        console.log(`[Ordering Agent] SPRINT 3: User wants to MODIFY order`);
+        const tools = createToolsForAgent(this.config.name, state);
+        const modifyContext = `
+NOTA: El cliente tenía un pedido pendiente:
+${pendingOrder.items.map(i => `- ${i.quantity}x ${i.name}`).join('\n')}
+
+Ahora quiere hacer cambios. Ayúdale a modificar el pedido según lo que dice.
+Usa get_menu_items si necesitas verificar disponibilidad o precios.`;
+
+        const result = await this.callLLMWithTools(state, tools, modifyContext);
+        return {
+          response: result.response,
+          tokens_used: result.tokens,
+          state_updates: { pending_order: null }, // Limpiar para re-parsear
+        };
+      }
+
+      // Verificar si el usuario cancela
+      if (wantsToCancel) {
+        console.log(`[Ordering Agent] SPRINT 3: Order CANCELLED by user`);
+        return {
+          response: 'Entendido, he cancelado el pedido. Si deseas ordenar algo más tarde, solo dímelo.',
+          tokens_used: 0,
+          state_updates: { pending_order: null },
+        };
+      }
+
+      // Verificar si el usuario confirma (sin modificaciones)
+      if (wantsToConfirm) {
+        console.log(`[Ordering Agent] SPRINT 3: Order CONFIRMED by user`);
+
+        // Crear la orden con los datos del pending_order
+        const parsedOrder = {
+          items: pendingOrder.items.map(item => ({
+            menu_item_id: item.menu_item_id,
+            name: item.name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            matched_confidence: item.matched_confidence,
+            modifiers: item.modifiers,
+            special_instructions: item.special_instructions,
+          })),
+          order_type: pendingOrder.order_type,
+          pickup_time: pendingOrder.pickup_time,
+          special_instructions: pendingOrder.special_instructions,
+          confidence_score: pendingOrder.confidence_score,
+          needs_clarification: false,
+        };
+
+        const branchId = pendingOrder.branch_id || lead?.preferred_branch_id || business?.branches?.[0]?.id;
+
+        if (!branchId || !tenant) {
+          return {
+            response: 'Ocurrió un error al procesar tu pedido. Por favor intenta de nuevo.',
+            tokens_used: 0,
+            state_updates: { pending_order: null },
+          };
+        }
+
+        const orderResult = await createOrder(
+          tenant.tenant_id,
+          branchId,
+          lead?.lead_id,
+          state.conversation?.conversation_id || '',
+          parsedOrder,
+          state.channel || 'whatsapp'
+        );
+
+        // Limpiar pending_order después de crear
+        if (orderResult.success) {
+          return {
+            response: orderResult.confirmation_message!,
+            tokens_used: 0,
+            state_updates: {
+              pending_order: null,
+              order_result: orderResult,
+            },
+          };
+        } else {
+          return {
+            response: `Hubo un problema al crear tu pedido: ${orderResult.error}. ¿Deseas intentar de nuevo?`,
+            tokens_used: 0,
+            state_updates: { pending_order: null },
+          };
+        }
+      }
+
+      // Si no es confirmación, cancelación ni modificación, mostrar resumen de nuevo
+      console.log(`[Ordering Agent] SPRINT 3: Unclear response, showing summary again`);
+      return {
+        response: generateConfirmationSummary(pendingOrder),
+        tokens_used: 0,
+      };
+    }
+    // =====================================================
+    // END SPRINT 3 PENDING ORDER CHECK
+    // =====================================================
+
+    // =====================================================
     // REVISIÓN 5.1 P1 FIX: VERIFICAR ALERGIAS ANTES DE PEDIDO
     // =====================================================
     const safetyAnalysis = state.safety_analysis;
@@ -682,7 +876,10 @@ Tú: "Tu pedido está confirmado. Número de orden: #023. Estará listo en aprox
     // El LLM usará Tool Calling para sugerencias si necesita clarificación
     const parsedOrder = parseOrderFromMessage(state.current_message, menuItems);
 
-    // If we detected items with good confidence, try to create the order
+    // =====================================================
+    // SPRINT 3: Si detectamos items con buena confianza, crear pending_order
+    // y pedir confirmación EN VEZ de crear la orden directamente
+    // =====================================================
     if (parsedOrder.items.length > 0 && parsedOrder.confidence_score >= 0.6 && !parsedOrder.needs_clarification) {
       // Get branch (use first one if not specified)
       const branchId = lead?.preferred_branch_id || business?.branches?.[0]?.id;
@@ -698,32 +895,44 @@ Tú: "Tu pedido está confirmado. Número de orden: #023. Estará listo en aprox
         return { response: result.response, tokens_used: result.tokens };
       }
 
-      // Create the order with channel from state
-      const orderResult = await createOrder(
-        tenant.tenant_id,
-        branchId,
-        lead?.lead_id,
-        state.conversation?.conversation_id || '',
-        parsedOrder,
-        state.channel || 'whatsapp'
+      // SPRINT 3: Calcular totales para el pending_order
+      const subtotal = parsedOrder.items.reduce(
+        (sum, item) => sum + (item.unit_price || 0) * item.quantity,
+        0
       );
+      const taxAmount = subtotal * 0.16; // 16% IVA
+      const total = subtotal + taxAmount;
 
-      if (orderResult.success) {
-        // Return the confirmation message
-        return {
-          response: orderResult.confirmation_message!,
-          tokens_used: 0,
-        };
-      } else {
-        // Order failed, use V7 Tool Calling to handle gracefully
-        const tools = createToolsForAgent(this.config.name, state);
-        const result = await this.callLLMWithTools(
-          state,
-          tools,
-          `\nNOTA: Hubo un problema al crear el pedido: ${orderResult.error}. Discúlpate y usa get_menu_items para sugerir alternativas.`
-        );
-        return { response: result.response, tokens_used: result.tokens };
-      }
+      // SPRINT 3: Crear pending_order en lugar de crear la orden directamente
+      const newPendingOrder: PendingOrder = {
+        items: parsedOrder.items.map(item => ({
+          menu_item_id: item.menu_item_id,
+          name: item.name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          matched_confidence: item.matched_confidence,
+          modifiers: item.modifiers,
+          special_instructions: item.special_instructions,
+        })),
+        order_type: parsedOrder.order_type,
+        pickup_time: parsedOrder.pickup_time,
+        special_instructions: parsedOrder.special_instructions,
+        subtotal,
+        tax_amount: taxAmount,
+        total,
+        confidence_score: parsedOrder.confidence_score,
+        created_at: new Date().toISOString(),
+        branch_id: branchId,
+      };
+
+      console.log(`[Ordering Agent] SPRINT 3: Created pending_order with ${parsedOrder.items.length} items, total: $${total.toFixed(2)}`);
+
+      // Retornar mensaje de confirmación y guardar pending_order en estado
+      return {
+        response: generateConfirmationSummary(newPendingOrder),
+        tokens_used: 0,
+        state_updates: { pending_order: newPendingOrder },
+      };
     }
 
     // =====================================================

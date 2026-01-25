@@ -459,12 +459,12 @@ function getCacheKey(
 }
 
 /**
- * Pre-compila todas las 48 combinaciones (4 estilos × 6 tipos × 2 canales)
+ * Pre-compila todas las 36 combinaciones (3 estilos × 6 tipos × 2 canales)
  */
 export function precompileAllCombinations(): CompiledInstructionsCache {
   const cache: CompiledInstructionsCache = new Map();
 
-  const styles: ResponseStyleKey[] = ['professional', 'professional_friendly', 'casual', 'formal'];
+  const styles: ResponseStyleKey[] = ['professional', 'professional_friendly', 'formal'];
   // Tipos de asistente: 2 de negocio + 4 de personal (incluyendo aliases)
   const types: AssistantTypeKey[] = [
     'full',               // Negocio: completo

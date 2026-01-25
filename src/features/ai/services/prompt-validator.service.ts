@@ -67,18 +67,10 @@ const FILLER_PHRASES_BY_PERSONALITY: Record<string, string[]> = {
     'Bueno',
     'Entiendo',
   ],
-  casual: [
-    'Mmm',
-    'Órale',
-    'Bueno',
-    'Claro',
-    'Déjame ver',
-    'Pues',
-  ],
 };
 
-// Emojis permitidos (solo funcionales)
-const ALLOWED_EMOJIS = ['✅', '❌', '📍', '📞', '⏰', '📅'];
+// Emojis permitidos (solo funcionales mínimos)
+const ALLOWED_EMOJIS = ['✅', '❌', '📍'];
 
 // Emojis prohibidos (caritas e informales)
 const FORBIDDEN_EMOJIS = [

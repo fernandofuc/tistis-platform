@@ -151,11 +151,11 @@ function generateCacheKey(
  * });
  * ```
  */
-export async function getCachedBranchQuery<T = any>(
+export async function getCachedBranchQuery<T = unknown>(
   table: string,
   options: BranchQueryOptions,
   customCacheConfig?: CacheConfig
-): Promise<{ data: T[] | null; error: any; count: number | null }> {
+): Promise<{ data: T[] | null; error: { message: string; code?: string } | null; count: number | null }> {
   // Get cache configuration
   const cacheConfig = customCacheConfig || TABLE_CACHE_CONFIG[table] || {
     revalidate: CACHE_STRATEGIES.conservative,

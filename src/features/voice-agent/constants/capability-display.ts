@@ -27,6 +27,7 @@ export const CAPABILITY_DISPLAY_NAMES: Record<Capability, string> = {
   orders: 'Pedidos',
   order_status: 'Estado de pedidos',
   promotions: 'Promociones',
+  delivery: 'Delivery',
 
   // Dental
   appointments: 'Citas',
@@ -52,6 +53,7 @@ export const CAPABILITY_DESCRIPTIONS: Record<Capability, string> = {
   orders: 'Tomar pedidos telefónicos para llevar o delivery',
   order_status: 'Consultar el estado de pedidos en curso',
   promotions: 'Informar sobre ofertas y promociones activas',
+  delivery: 'Gestionar entregas a domicilio y rastreo',
 
   // Dental
   appointments: 'Agendar nuevas citas dentales',
@@ -81,6 +83,7 @@ export const CAPABILITY_ICONS: Record<Capability, string> = {
   orders: 'ShoppingBag',
   order_status: 'Package',
   promotions: 'Tag',
+  delivery: 'Truck',
 
   // Dental
   appointments: 'Calendar',
@@ -125,7 +128,7 @@ export const RESTAURANT_CAPABILITY_CATEGORIES: CapabilityCategory[] = [
     id: 'orders',
     name: 'Pedidos',
     icon: 'ShoppingBag',
-    capabilities: ['orders', 'order_status', 'promotions'],
+    capabilities: ['orders', 'order_status', 'promotions', 'delivery'],
   },
   {
     id: 'support',
