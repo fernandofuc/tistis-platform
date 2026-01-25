@@ -239,3 +239,239 @@ export interface SupabaseClientInterface {
     getUser: () => Promise<{ data: { user: unknown }; error: unknown }>;
   };
 }
+
+// ======================
+// SECURE BOOKING TYPES
+// Phase 7: UI/Dashboard - Booking States System
+// ======================
+
+/**
+ * Booking Hold Status Type
+ * Maps to: booking_holds.status
+ */
+export type BookingHoldStatus = 'active' | 'converted' | 'expired' | 'released';
+
+/**
+ * Confirmation Status Type
+ * Maps to: appointments.confirmation_status, restaurant_orders.confirmation_status
+ */
+export type ConfirmationStatus = 'not_required' | 'pending' | 'confirmed' | 'expired';
+
+/**
+ * Deposit Status Type
+ * Maps to: booking_deposits.status
+ */
+export type DepositStatus = 'not_required' | 'required' | 'pending' | 'paid' | 'forfeited' | 'refunded' | 'applied';
+
+/**
+ * Customer Trust Level based on score
+ */
+export type TrustLevel = 'trusted' | 'standard' | 'cautious' | 'high_risk';
+
+/**
+ * Combined Booking State for UI
+ */
+export type BookingCombinedState =
+  | 'hold_active'
+  | 'pending_confirmation'
+  | 'pending_deposit'
+  | 'confirmed'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'no_show'
+  | 'cancelled';
+
+/**
+ * Table Reservation State (Restaurant vertical)
+ */
+export type TableReservationState = 'hold' | 'reserved' | 'pending_confirmation' | 'seated' | 'available';
+
+/**
+ * Booking Hold - Temporary slot reservation during voice/chat
+ */
+export interface BookingHold {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  customer_phone: string;
+  customer_name: string | null;
+  slot_datetime: string;
+  duration_minutes: number;
+  status: BookingHoldStatus;
+  hold_type: 'voice_call' | 'chat_session' | 'manual';
+  session_id: string | null;
+  expires_at: string;
+  release_reason: string | null;
+  released_at: string | null;
+  converted_to_appointment_id: string | null;
+  converted_to_order_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Customer Trust Score
+ */
+export interface CustomerTrustScore {
+  id: string;
+  tenant_id: string;
+  customer_phone: string;
+  trust_score: number;
+  no_shows: number;
+  no_pickups: number;
+  late_cancellations: number;
+  confirmed_no_response: number;
+  total_bookings: number;
+  completed_bookings: number;
+  on_time_pickups: number;
+  is_vip: boolean;
+  is_blocked: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Booking Confirmation Record
+ */
+export interface BookingConfirmation {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  confirmation_type: 'voice_to_message' | 'reminder_24h' | 'reminder_2h' | 'deposit_required' | 'custom';
+  appointment_id: string | null;
+  order_id: string | null;
+  customer_phone: string;
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'responded' | 'expired' | 'failed';
+  customer_response: 'confirmed' | 'cancelled' | 'need_change' | 'other' | null;
+  sent_via: 'whatsapp' | 'sms' | 'email' | null;
+  auto_action_on_expire: 'cancel' | 'keep' | 'notify_staff';
+  auto_action_executed: boolean;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Appointment with Secure Booking fields
+ */
+export interface AppointmentWithBookingState {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  lead_id: string;
+  staff_id: string | null;
+  service_id: string | null;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled';
+  confirmation_status: ConfirmationStatus | null;
+  deposit_status: DepositStatus | null;
+  deposit_amount_cents: number | null;
+  customer_trust_score_at_booking: number | null;
+  created_from_hold_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Relations (when joined)
+  leads?: {
+    full_name: string | null;
+    phone: string | null;
+  };
+  services?: {
+    name: string;
+  };
+  staff?: {
+    full_name: string;
+  };
+  branches?: {
+    name: string;
+  };
+  booking_holds?: BookingHold;
+}
+
+/**
+ * Calendar Tab Type for the reservation/calendar page
+ */
+export type CalendarTabKey = 'agenda' | 'estados';
+
+/**
+ * Booking state filter options for Estados tab
+ */
+export interface BookingStateFilters {
+  status?: string[];
+  confirmationStatus?: ConfirmationStatus[];
+  depositStatus?: DepositStatus[];
+  trustLevel?: TrustLevel[];
+  dateFrom?: string;
+  dateTo?: string;
+  hasActiveHold?: boolean;
+}
+
+/**
+ * Aggregated booking statistics for Estados tab
+ */
+export interface BookingStateStats {
+  totalBookings: number;
+  pendingConfirmation: number;
+  pendingDeposit: number;
+  confirmed: number;
+  activeHolds: number;
+  noShows: number;
+  cancelled: number;
+  completed: number;
+}
+
+/**
+ * Props for booking state indicator component
+ */
+export interface BookingStateIndicatorProps {
+  appointmentStatus: string;
+  confirmationStatus?: ConfirmationStatus | null;
+  depositStatus?: DepositStatus | null;
+  trustScore?: number | null;
+  hasActiveHold?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+  showLabel?: boolean;
+}
+
+/**
+ * Utility function to get trust level from score
+ */
+export function getTrustLevelFromScore(score: number): TrustLevel {
+  if (score >= 80) return 'trusted';
+  if (score >= 50) return 'standard';
+  if (score >= 30) return 'cautious';
+  return 'high_risk';
+}
+
+/**
+ * Utility function to determine combined booking state
+ */
+export function getCombinedBookingState(
+  appointmentStatus: string,
+  confirmationStatus?: ConfirmationStatus | null,
+  depositStatus?: DepositStatus | null,
+  hasActiveHold?: boolean
+): BookingCombinedState {
+  if (hasActiveHold) return 'hold_active';
+  if (depositStatus === 'required' || depositStatus === 'pending') return 'pending_deposit';
+  if (confirmationStatus === 'pending') return 'pending_confirmation';
+
+  switch (appointmentStatus) {
+    case 'confirmed':
+      return 'confirmed';
+    case 'scheduled':
+      return 'scheduled';
+    case 'in_progress':
+      return 'in_progress';
+    case 'completed':
+      return 'completed';
+    case 'no_show':
+      return 'no_show';
+    case 'cancelled':
+      return 'cancelled';
+    default:
+      return 'scheduled';
+  }
+}

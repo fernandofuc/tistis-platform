@@ -71,6 +71,20 @@ export {
 } from './common';
 
 // =====================================================
+// SECURE BOOKING TOOL EXPORTS (v2.2)
+// =====================================================
+
+export {
+  checkCustomerTrust,
+  createSecureHold,
+  releaseSecureHold,
+  convertHoldToBooking,
+  checkSecureAvailability,
+  secureCreateAppointment,
+  secureCreateReservation,
+} from './secure-booking';
+
+// =====================================================
 // TOOL REGISTRATION
 // =====================================================
 
@@ -106,6 +120,17 @@ import {
   endCall,
   requestInvoice,
 } from './common';
+
+// Secure Booking tools (v2.2)
+import {
+  checkCustomerTrust,
+  createSecureHold,
+  releaseSecureHold,
+  convertHoldToBooking,
+  checkSecureAvailability,
+  secureCreateAppointment,
+  secureCreateReservation,
+} from './secure-booking';
 
 /**
  * Initialize and register all tools
@@ -151,6 +176,17 @@ export function initializeTools(): void {
   toolRegistry.register(getBusinessHours);
   toolRegistry.register(endCall);
   toolRegistry.register(requestInvoice);
+
+  // Register Secure Booking tools (v2.2 - available for all types with secure_booking capability)
+  toolRegistry.register(checkCustomerTrust);
+  toolRegistry.register(createSecureHold);
+  toolRegistry.register(releaseSecureHold);
+  toolRegistry.register(convertHoldToBooking);
+  toolRegistry.register(checkSecureAvailability);
+
+  // Register Secure Enhanced Booking tools (v2.2)
+  toolRegistry.register(secureCreateAppointment);
+  toolRegistry.register(secureCreateReservation);
 
   console.log(`[Tools] Initialized ${toolRegistry.getToolNames().length} tools`);
 }

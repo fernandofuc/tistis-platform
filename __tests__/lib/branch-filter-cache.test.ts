@@ -16,19 +16,14 @@ import {
   type CacheStrategy,
 } from '@/src/shared/lib/branch-filter-cache';
 
-// Mock Next.js cache module (both static and dynamic imports)
-// Using default export pattern to handle dynamic import
-vi.mock('next/cache', () => {
-  const mockRevalidateTag = vi.fn();
-  return {
-    default: {
-      unstable_cache: vi.fn((fn: any) => fn),
-      revalidateTag: mockRevalidateTag,
-    },
-    unstable_cache: vi.fn((fn: any) => fn),
-    revalidateTag: mockRevalidateTag,
-  };
-});
+// Mock Next.js cache module
+// The source code now uses safeRevalidateTag which detects test environment,
+// but we still mock next/cache for unstable_cache functionality
+vi.mock('next/cache', () => ({
+  __esModule: true,
+  unstable_cache: vi.fn((fn: (...args: unknown[]) => unknown) => fn),
+  revalidateTag: vi.fn(),
+}));
 
 // Mock Supabase client
 const mockSupabaseQuery = {

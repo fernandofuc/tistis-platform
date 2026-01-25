@@ -1,27 +1,31 @@
 // =====================================================
 // TIS TIS PLATFORM - Setup Assistant Service Tests
 // Sprint 5: AI Setup Assistant
+// Migrated to Vitest
 // =====================================================
 
+import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
 import {
   SetupAssistantService,
   setupAssistantService,
   ProcessMessageInput,
 } from '../../services/setup-assistant.service';
-import { setupAssistantGraph } from '../../graph';
 
 // Mock the graph
-jest.mock('../../graph', () => ({
+vi.mock('../../graph', () => ({
   setupAssistantGraph: {
-    invoke: jest.fn(),
+    invoke: vi.fn(),
   },
 }));
 
+// Import after mock
+import { setupAssistantGraph } from '../../graph';
+
 describe('SetupAssistantService', () => {
-  const mockInvoke = setupAssistantGraph.invoke as jest.Mock;
+  const mockInvoke = setupAssistantGraph.invoke as Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // ======================

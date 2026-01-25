@@ -21,6 +21,9 @@ import {
   processHighPriorityPatterns,
   queueMessageForLearning,
 } from '@/src/features/ai/services/message-learning.service';
+// FASE 5: Booking confirmation integration
+import { confirmationSenderService } from '@/src/features/secure-booking/services/confirmation-sender.service';
+import { detectResponseFromText } from '@/src/features/secure-booking/services/booking-confirmation.service';
 
 // ======================
 // TYPES
@@ -569,6 +572,7 @@ async function saveIncomingMessageFallback(
 /**
  * Procesa actualizaciones de estado de mensajes (sent, delivered, read)
  * FIXED: Uses RPC function with proper tenant validation to prevent cross-tenant leakage
+ * FASE 5: Also updates booking confirmation status
  */
 export async function processStatusUpdate(
   tenantId: string,
@@ -619,6 +623,26 @@ export async function processStatusUpdate(
 
   if (updateResult.updated) {
     console.log(`[WhatsApp] Message ${updateResult.message_id} status: ${internalStatus}`);
+  }
+
+  // FASE 5: Update booking confirmation status if applicable
+  // This tracks delivery and read status for confirmation messages
+  // SECURITY FIX: Pass tenantId to prevent cross-tenant updates
+  try {
+    if (internalStatus === 'delivered') {
+      const updated = await confirmationSenderService.markAsDelivered(tenantId, status.id);
+      if (updated) {
+        console.log(`[WhatsApp] Booking confirmation marked as delivered: ${status.id}`);
+      }
+    } else if (internalStatus === 'read') {
+      const updated = await confirmationSenderService.markAsRead(tenantId, status.id);
+      if (updated) {
+        console.log(`[WhatsApp] Booking confirmation marked as read: ${status.id}`);
+      }
+    }
+  } catch (confirmationError) {
+    // Don't fail the status update if confirmation update fails
+    console.warn('[WhatsApp] Failed to update booking confirmation status:', confirmationError);
   }
 
   // Log errors for debugging
@@ -983,6 +1007,8 @@ export async function processWhatsAppWebhook(
  * REVISIÓN 5.4:
  * - G-I1: Debouncing de mensajes rápidos
  * - G-I10: Límite de longitud de mensaje entrante
+ *
+ * FASE 5: Booking confirmation response detection
  */
 async function processIncomingMessage(
   context: TenantContext,
@@ -1006,6 +1032,58 @@ async function processIncomingMessage(
   console.log(
     `[WhatsApp] Processing message from ${parsedMessage.phoneNormalized}: "${parsedMessage.content.substring(0, 50)}..."`
   );
+
+  // FASE 5: Check for pending booking confirmation BEFORE other processing
+  // This allows quick responses like "1" or "si" to be handled as confirmation responses
+  let confirmationHandled = false;
+  try {
+    const pendingConfirmation = await confirmationSenderService.findPendingForPhone(
+      context.tenant_id,
+      parsedMessage.phoneNormalized
+    );
+
+    if (pendingConfirmation) {
+      // Try to detect a response from the message text
+      const detectedResponse = detectResponseFromText(parsedMessage.content);
+
+      if (detectedResponse) {
+        console.log(
+          `[WhatsApp] FASE 5: Detected confirmation response "${detectedResponse}" from ${parsedMessage.phoneNormalized}`
+        );
+
+        const result = await confirmationSenderService.processResponse({
+          tenantId: context.tenant_id,  // SECURITY: Tenant isolation
+          confirmationId: pendingConfirmation.id,
+          response: detectedResponse,
+          rawResponse: parsedMessage.content,
+        });
+
+        if (result.success) {
+          confirmationHandled = true;
+          console.log(
+            `[WhatsApp] FASE 5: Booking confirmation ${pendingConfirmation.id} ${detectedResponse} ` +
+            `(reference: ${pendingConfirmation.reference_type}/${pendingConfirmation.reference_id})`
+          );
+
+          // Send a thank you message based on the response
+          const thankYouMessage = getConfirmationThankYouMessage(detectedResponse, context.tenant_name);
+          if (thankYouMessage) {
+            await sendWhatsAppMessage(
+              context.channel_connection,
+              parsedMessage.phoneNormalized,
+              thankYouMessage
+            );
+          }
+        }
+      }
+    }
+  } catch (confirmationError) {
+    // Don't fail message processing if confirmation check fails
+    console.warn('[WhatsApp] FASE 5: Error checking booking confirmation:', confirmationError);
+  }
+
+  // If we handled this as a confirmation response, still save the message but skip AI
+  // The confirmation flow handles the business logic
 
   // 2. Buscar o crear lead
   const lead = await findOrCreateLead(
@@ -1098,10 +1176,11 @@ async function processIncomingMessage(
   }
 
   // 6. Encolar trabajo de AI si está habilitado
+  // FASE 5: Skip AI if this was a confirmation response (already handled)
   let aiJobQueued = false;
   let aiJobDebounced = false;
 
-  if (context.ai_enabled) {
+  if (context.ai_enabled && !confirmationHandled) {
     const conn = context.channel_connection;
 
     // REVISIÓN 5.4 G-I1: Verificar debouncing antes de encolar
@@ -1140,13 +1219,46 @@ async function processIncomingMessage(
       );
       aiJobQueued = true;
     }
+  } else if (confirmationHandled) {
+    console.log(`[WhatsApp] FASE 5: AI job skipped - message was a booking confirmation response`);
   }
 
   console.log(
     `[WhatsApp] Message processed: lead=${lead.id}, conv=${conversation.id}, msg=${messageId}, ` +
     `vertical=${context.tenant_vertical}, ai_queued=${aiJobQueued}, ai_debounced=${aiJobDebounced}` +
-    (detectedHighPriorityAction ? `, priority_action=${detectedHighPriorityAction}` : '')
+    (detectedHighPriorityAction ? `, priority_action=${detectedHighPriorityAction}` : '') +
+    (confirmationHandled ? ', confirmation_handled=true' : '')
   );
+}
+
+// ======================
+// FASE 5: CONFIRMATION THANK YOU MESSAGES
+// ======================
+
+/**
+ * Generates a thank you message based on the confirmation response
+ */
+function getConfirmationThankYouMessage(
+  response: 'confirmed' | 'cancelled' | 'need_change' | 'other',
+  businessName: string
+): string | null {
+  switch (response) {
+    case 'confirmed':
+      return `✅ ¡Gracias! Tu cita ha sido confirmada.\n\nTe esperamos en ${businessName}. Si tienes alguna pregunta, no dudes en escribirnos.`;
+
+    case 'cancelled':
+      return `❌ Tu cita ha sido cancelada.\n\n¿Deseas reagendar? Escríbenos cuando quieras hacer una nueva cita en ${businessName}.`;
+
+    case 'need_change':
+      return `🔄 Entendido, deseas cambiar tu cita.\n\nUn momento, te ayudaremos a reagendarla. ¿Cuál es la nueva fecha y hora que te conviene?`;
+
+    case 'other':
+      // For 'other' responses, let the AI handle it
+      return null;
+
+    default:
+      return null;
+  }
 }
 
 // ======================

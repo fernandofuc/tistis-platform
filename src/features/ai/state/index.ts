@@ -12,6 +12,7 @@ export {
   type BookingResult,
   type OrderResult,
   type PendingOrder, // SPRINT 3: Orden pendiente de confirmación
+  type SecureBookingContext, // Secure Booking v2.2
   type BusinessContext,
   type AgentTrace,
   type ControlFlags,

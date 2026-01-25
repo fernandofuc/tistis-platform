@@ -48,15 +48,22 @@ vi.mock('@supabase/supabase-js', () => ({
   })),
 }));
 
-// Mock logger
-vi.mock('@/src/shared/lib', () => ({
-  createComponentLogger: vi.fn(() => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  })),
-}));
+// Mock shared lib with logger and retry utilities
+vi.mock('@/src/shared/lib', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/src/shared/lib')>();
+  return {
+    ...actual,
+    createComponentLogger: vi.fn(() => ({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    })),
+    // Use actual withStripeRetry for realistic testing
+    withStripeRetry: actual.withStripeRetry,
+    withRetry: actual.withRetry,
+  };
+});
 
 // ======================
 // TEST DATA

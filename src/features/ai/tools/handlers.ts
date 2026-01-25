@@ -41,8 +41,15 @@ import type {
   LoyaltyReward,
   MembershipInfo,
   RewardRedemptionResult,
+  // Secure Booking types (v2.2 - FASE 4)
+  CustomerTrustResult,
+  BookingHoldResult,
+  SecureAvailabilityResult,
+  HoldConversionResult,
+  SecureBookingResult,
 } from './definitions';
 import { createServerClient } from '@/src/shared/lib/supabase';
+import crypto from 'crypto';
 // V7.1: Static imports para mejor performance (elimina dynamic imports)
 import { getAvailableSlots } from '../services/appointment-booking.service';
 import { EmbeddingService } from '../services/embedding.service';
@@ -53,6 +60,48 @@ import {
   type ToolCall,
   type AnomalyDetectionResult,
 } from '@/src/shared/lib/tool-anomaly-detection.service';
+
+// ======================
+// SECURE UTILITIES
+// ======================
+
+/**
+ * Generates a cryptographically secure confirmation code
+ * Uses crypto.randomBytes instead of Math.random for security
+ * @param prefix - Prefix for the code (e.g., 'RES', 'APT')
+ * @param length - Length of the random part (default 6)
+ */
+function generateSecureConfirmationCode(prefix: string, length: number = 6): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excludes ambiguous chars (I, O, 0, 1)
+  const randomBytes = crypto.randomBytes(length);
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += chars.charAt(randomBytes[i] % chars.length);
+  }
+  return `${prefix}-${code}`;
+}
+
+/**
+ * Validates date format (YYYY-MM-DD) and checks if it's a valid date
+ */
+function isValidDateFormat(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return false;
+  }
+  const parsed = new Date(date);
+  return !isNaN(parsed.getTime()) && date === parsed.toISOString().split('T')[0];
+}
+
+/**
+ * Validates time format (HH:MM) and checks if it's a valid time
+ */
+function isValidTimeFormat(time: string): boolean {
+  if (!/^\d{2}:\d{2}$/.test(time)) {
+    return false;
+  }
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
 
 // ======================
 // RAG CONFIGURATION
@@ -1577,6 +1626,1250 @@ export async function handleRedeemReward(
 }
 
 // ======================
+// SECURE BOOKING HANDLERS (v2.2 - FASE 4)
+// Handlers para verificación de confianza y holds
+// ======================
+
+/**
+ * Handler: check_customer_trust
+ * Verifica el score de confianza del cliente antes de booking
+ */
+export async function handleCheckCustomerTrust(
+  params: { phone_number?: string },
+  context: ToolContext
+): Promise<CustomerTrustResult | { error: string }> {
+  const { tenant_id, lead_id, lead } = context;
+
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  const supabase = createServerClient();
+  const phoneNumber = params.phone_number || lead?.phone || '';
+
+  try {
+    // Get tenant vertical
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('vertical')
+      .eq('id', tenant_id)
+      .single();
+
+    const vertical = tenant?.vertical || 'restaurant';
+
+    // Get booking policy thresholds
+    const { data: policy } = await supabase
+      .from('vertical_booking_policies')
+      .select('trust_threshold_confirmation, trust_threshold_deposit, deposit_amount_cents')
+      .eq('tenant_id', tenant_id)
+      .eq('vertical', vertical)
+      .eq('is_active', true)
+      .order('is_default', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const thresholdConfirmation = policy?.trust_threshold_confirmation ?? 80;
+    const thresholdDeposit = policy?.trust_threshold_deposit ?? 30;
+    const depositAmountCents = policy?.deposit_amount_cents ?? 10000;
+
+    // Get customer trust score via RPC
+    const { data: trustResult, error: trustError } = await supabase.rpc('get_customer_trust_score', {
+      p_tenant_id: tenant_id,
+      p_lead_id: lead_id || null,
+      p_phone_number: phoneNumber.replace(/\D/g, ''),
+    });
+
+    if (trustError) {
+      console.error('[check_customer_trust] RPC error:', trustError);
+      // Fallback to default values
+    }
+
+    const trustScore = trustResult?.trust_score ?? 70;
+    const isVip = trustResult?.is_vip ?? false;
+    const isBlocked = trustResult?.is_blocked ?? false;
+    const noShowCount = trustResult?.no_show_count ?? 0;
+    const completedAppointments = trustResult?.completed_appointments ?? 0;
+    const blockReason = trustResult?.block_reason;
+
+    // Determine trust level
+    let trustLevel: CustomerTrustResult['trust_level'];
+    if (isBlocked) {
+      trustLevel = 'blocked';
+    } else if (isVip) {
+      trustLevel = 'vip';
+    } else if (trustScore >= 80) {
+      trustLevel = 'trusted';
+    } else if (trustScore >= 50) {
+      trustLevel = 'normal';
+    } else {
+      trustLevel = 'risky';
+    }
+
+    // Determine recommended action
+    let recommendedAction: CustomerTrustResult['recommended_action'];
+    let depositRequired = false;
+    if (isBlocked) {
+      recommendedAction = 'blocked';
+    } else if (trustScore >= thresholdConfirmation) {
+      recommendedAction = 'proceed';
+    } else if (trustScore >= thresholdDeposit) {
+      recommendedAction = 'require_confirmation';
+    } else {
+      recommendedAction = 'require_deposit';
+      depositRequired = true;
+    }
+
+    // Generate appropriate message
+    let message = '';
+    if (isBlocked) {
+      message = `Lo siento, no podemos procesar tu reservación en este momento. ${blockReason || 'Por favor contacta directamente al negocio.'}`;
+    } else if (isVip) {
+      message = '¡Bienvenido! Como cliente VIP, tu reservación está pre-aprobada.';
+    } else if (recommendedAction === 'proceed') {
+      message = '¡Perfecto! Podemos proceder con tu reservación.';
+    } else if (recommendedAction === 'require_confirmation') {
+      message = 'Por favor confirma los detalles de tu reservación para continuar.';
+    } else {
+      const depositAmount = (depositAmountCents / 100).toFixed(2);
+      message = `Para confirmar tu reservación se requiere un depósito de $${depositAmount} MXN.`;
+    }
+
+    return {
+      success: true,
+      trust_score: trustScore,
+      trust_level: trustLevel,
+      recommended_action: recommendedAction,
+      is_vip: isVip,
+      is_blocked: isBlocked,
+      block_reason: blockReason,
+      no_show_count: noShowCount,
+      completed_appointments: completedAppointments,
+      deposit_required: depositRequired,
+      deposit_amount_cents: depositRequired ? depositAmountCents : undefined,
+      message,
+    };
+  } catch (error) {
+    console.error('[check_customer_trust] Error:', error);
+    return {
+      success: true,
+      trust_score: 70,
+      trust_level: 'normal',
+      recommended_action: 'proceed',
+      is_vip: false,
+      is_blocked: false,
+      no_show_count: 0,
+      completed_appointments: 0,
+      deposit_required: false,
+      message: 'Podemos proceder con tu reservación.',
+    };
+  }
+}
+
+/**
+ * Handler: create_booking_hold
+ * Crea un hold temporal en un slot de reservación
+ *
+ * @param existingTrustCheck - Optional pre-computed trust check to avoid duplicate calls
+ */
+export async function handleCreateBookingHold(
+  params: {
+    date: string;
+    time: string;
+    duration_minutes?: number;
+    branch_id?: string;
+    service_id?: string;
+    staff_id?: string;
+    hold_type?: 'appointment' | 'reservation';
+  },
+  context: ToolContext,
+  existingTrustCheck?: CustomerTrustResult
+): Promise<BookingHoldResult | { error: string }> {
+  const { tenant_id, lead_id, lead, business_context } = context;
+
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  // Validate date/time formats
+  if (!isValidDateFormat(params.date)) {
+    return { error: 'Formato de fecha inválido. Use YYYY-MM-DD.' };
+  }
+  if (!isValidTimeFormat(params.time)) {
+    return { error: 'Formato de hora inválido. Use HH:MM.' };
+  }
+
+  const supabase = createServerClient();
+  const durationMinutes = params.duration_minutes || 60;
+  const holdType = params.hold_type || 'appointment';
+
+  try {
+    // Calculate slot times
+    const slotDatetime = new Date(`${params.date}T${params.time}`);
+    const endDatetime = new Date(slotDatetime.getTime() + durationMinutes * 60 * 1000);
+
+    // Validate future date
+    if (slotDatetime <= new Date()) {
+      return {
+        success: false,
+        requires_deposit: false,
+        confirmation_message: '',
+        error: 'La fecha y hora debe ser en el futuro',
+      };
+    }
+
+    // Get branch
+    let branchId = params.branch_id;
+    if (!branchId && business_context?.branches?.[0]) {
+      branchId = business_context.branches[0].id;
+    }
+
+    // Get tenant vertical for policy lookup
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('vertical')
+      .eq('id', tenant_id)
+      .single();
+
+    const vertical = tenant?.vertical || 'restaurant';
+
+    // Get booking policy
+    const { data: policy } = await supabase
+      .from('vertical_booking_policies')
+      .select('hold_duration_minutes, trust_threshold_confirmation, trust_threshold_deposit, deposit_amount_cents')
+      .eq('tenant_id', tenant_id)
+      .eq('vertical', vertical)
+      .eq('is_active', true)
+      .order('is_default', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const holdDurationMinutes = policy?.hold_duration_minutes ?? 15;
+    const expiresAt = new Date(Date.now() + holdDurationMinutes * 60 * 1000);
+
+    // Use existing trust check if provided, otherwise fetch
+    let trustCheck: CustomerTrustResult;
+    if (existingTrustCheck) {
+      trustCheck = existingTrustCheck;
+    } else {
+      const trustResult = await handleCheckCustomerTrust({}, context);
+      if ('error' in trustResult && typeof trustResult.error === 'string' && !('success' in trustResult)) {
+        return {
+          success: false,
+          requires_deposit: false,
+          confirmation_message: '',
+          error: trustResult.error,
+        };
+      }
+      trustCheck = trustResult as CustomerTrustResult;
+    }
+
+    if (trustCheck.is_blocked) {
+      return {
+        success: false,
+        requires_deposit: false,
+        confirmation_message: '',
+        error: 'No se puede crear el hold para este cliente',
+      };
+    }
+
+    const requiresDeposit = trustCheck.recommended_action === 'require_deposit';
+
+    // Try RPC first
+    const { data: holdResult, error: rpcError } = await supabase.rpc('create_booking_hold', {
+      p_tenant_id: tenant_id,
+      p_branch_id: branchId || null,
+      p_lead_id: lead_id || null,
+      p_phone_number: lead?.phone?.replace(/\D/g, '') || '',
+      p_hold_type: holdType,
+      p_slot_datetime: slotDatetime.toISOString(),
+      p_end_datetime: endDatetime.toISOString(),
+      p_duration_minutes: durationMinutes,
+      p_service_id: params.service_id || null,
+      p_source: 'messaging',
+      p_source_call_id: null,
+      p_metadata: {
+        trust_score_at_hold: trustCheck.trust_score,
+        vertical,
+        lead_name: lead?.name,
+        staff_id: params.staff_id || null,
+      },
+    });
+
+    if (!rpcError && holdResult?.success) {
+      const formattedDate = new Date(params.date).toLocaleDateString('es-MX', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+
+      return {
+        success: true,
+        hold_id: holdResult.hold_id,
+        expires_at: holdResult.expires_at || expiresAt.toISOString(),
+        slot_datetime: slotDatetime.toISOString(),
+        requires_deposit: requiresDeposit,
+        deposit_amount_cents: requiresDeposit ? trustCheck.deposit_amount_cents : undefined,
+        trust_score_at_hold: trustCheck.trust_score,
+        confirmation_message: `Se ha reservado el horario ${formattedDate} a las ${params.time} por ${holdDurationMinutes} minutos. ${requiresDeposit ? 'Se requiere depósito para confirmar.' : 'Por favor confirma para completar tu reservación.'}`,
+      };
+    }
+
+    // Fallback to direct insert
+    const { data: insertedHold, error: insertError } = await supabase
+      .from('booking_holds')
+      .insert({
+        tenant_id,
+        branch_id: branchId || null,
+        lead_id: lead_id || null,
+        phone_number: lead?.phone?.replace(/\D/g, '') || '',
+        hold_type: holdType,
+        slot_datetime: slotDatetime.toISOString(),
+        end_datetime: endDatetime.toISOString(),
+        expires_at: expiresAt.toISOString(),
+        status: 'active',
+        trust_score_at_hold: trustCheck.trust_score,
+        requires_deposit: requiresDeposit,
+        deposit_amount_cents: requiresDeposit ? trustCheck.deposit_amount_cents : null,
+        service_id: params.service_id || null,
+        source: 'messaging',
+        metadata: {
+          vertical,
+          lead_name: lead?.name,
+          staff_id: params.staff_id || null,
+        },
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('[create_booking_hold] Insert error:', insertError);
+      return {
+        success: false,
+        requires_deposit: false,
+        confirmation_message: '',
+        error: insertError.message,
+      };
+    }
+
+    const formattedDate = new Date(params.date).toLocaleDateString('es-MX', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+
+    return {
+      success: true,
+      hold_id: insertedHold.id,
+      expires_at: expiresAt.toISOString(),
+      slot_datetime: slotDatetime.toISOString(),
+      requires_deposit: requiresDeposit,
+      deposit_amount_cents: requiresDeposit ? trustCheck.deposit_amount_cents : undefined,
+      trust_score_at_hold: trustCheck.trust_score,
+      confirmation_message: `Se ha reservado el horario ${formattedDate} a las ${params.time} por ${holdDurationMinutes} minutos. ${requiresDeposit ? 'Se requiere depósito para confirmar.' : 'Por favor confirma para completar tu reservación.'}`,
+    };
+  } catch (error) {
+    console.error('[create_booking_hold] Error:', error);
+    return {
+      success: false,
+      requires_deposit: false,
+      confirmation_message: '',
+      error: error instanceof Error ? error.message : 'Error al crear el hold',
+    };
+  }
+}
+
+/**
+ * Handler: release_booking_hold
+ * Libera un hold activo
+ */
+export async function handleReleaseBookingHold(
+  params: { hold_id: string; reason?: string },
+  context: ToolContext
+): Promise<{ success: boolean; message: string } | { error: string }> {
+  const { tenant_id } = context;
+
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(params.hold_id)) {
+      return { error: 'ID de hold inválido' };
+    }
+
+    const { error } = await supabase
+      .from('booking_holds')
+      .update({
+        status: 'released',
+        released_at: new Date().toISOString(),
+        release_reason: params.reason || 'customer_cancelled',
+      })
+      .eq('id', params.hold_id)
+      .eq('tenant_id', tenant_id)
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('[release_booking_hold] Update error:', error);
+      return { error: 'No se pudo liberar el hold' };
+    }
+
+    return {
+      success: true,
+      message: 'El horario ha sido liberado. Puedes elegir otro horario si lo deseas.',
+    };
+  } catch (error) {
+    console.error('[release_booking_hold] Error:', error);
+    return { error: error instanceof Error ? error.message : 'Error al liberar el hold' };
+  }
+}
+
+/**
+ * Handler: check_secure_availability
+ * Verifica disponibilidad considerando holds activos
+ */
+export async function handleCheckSecureAvailability(
+  params: {
+    date?: string;
+    time?: string;
+    duration_minutes?: number;
+    branch_id?: string;
+    include_alternatives?: boolean;
+  },
+  context: ToolContext
+): Promise<SecureAvailabilityResult | { error: string }> {
+  const { tenant_id, business_context } = context;
+
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  const supabase = createServerClient();
+  const durationMinutes = params.duration_minutes || 60;
+  const includeAlternatives = params.include_alternatives ?? true;
+
+  // Use provided date or default to today
+  const targetDate = params.date || new Date().toISOString().split('T')[0];
+
+  try {
+    // Get branch
+    let branchId = params.branch_id;
+    let branchName = 'Sucursal principal';
+    if (!branchId && business_context?.branches?.[0]) {
+      branchId = business_context.branches[0].id;
+      branchName = business_context.branches[0].name;
+    } else if (branchId && business_context?.branches) {
+      const branch = business_context.branches.find(b => b.id === branchId);
+      if (branch) branchName = branch.name;
+    }
+
+    // If specific time is requested, check that slot
+    if (params.time) {
+      const slotStart = new Date(`${targetDate}T${params.time}`);
+      const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60 * 1000);
+
+      // Validate future date
+      if (slotStart <= new Date()) {
+        return {
+          success: true,
+          available: false,
+          unavailable_reason: 'past_time',
+          requested_slot: {
+            date: targetDate,
+            time: params.time,
+            duration_minutes: durationMinutes,
+          },
+          message: 'El horario solicitado ya pasó. Por favor elige un horario futuro.',
+        };
+      }
+
+      // Check for active holds that overlap
+      const { data: overlappingHolds } = await supabase
+        .from('booking_holds')
+        .select('id')
+        .eq('tenant_id', tenant_id)
+        .eq('status', 'active')
+        .lt('slot_datetime', slotEnd.toISOString())
+        .gt('end_datetime', slotStart.toISOString())
+        .limit(1);
+
+      // Check for existing appointments that overlap
+      // Overlap condition: existing.start < newEnd AND existing.end > newStart
+      const slotStartTime = params.time; // HH:MM format
+      const slotEndTime = slotEnd.toTimeString().slice(0, 5); // HH:MM format
+
+      const { data: overlappingAppointments } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('tenant_id', tenant_id)
+        .eq('date', targetDate)
+        .in('status', ['pending', 'confirmed'])
+        .lt('start_time', slotEndTime) // existing starts before new ends
+        .gt('end_time', slotStartTime) // existing ends after new starts
+        .limit(1);
+
+      const hasOverlap = (overlappingHolds && overlappingHolds.length > 0) ||
+                         (overlappingAppointments && overlappingAppointments.length > 0);
+
+      if (hasOverlap) {
+        // Find alternatives if requested
+        let alternativeSlots: Array<{ date: string; time: string; branch_name?: string }> = [];
+
+        if (includeAlternatives) {
+          // Get slots for the rest of the day
+          const realSlots = await getAvailableSlots(
+            tenant_id,
+            branchId,
+            undefined,
+            undefined,
+            targetDate,
+            5
+          );
+
+          alternativeSlots = realSlots.map(slot => ({
+            date: slot.date,
+            time: slot.time,
+            branch_name: slot.branch_name,
+          }));
+        }
+
+        return {
+          success: true,
+          available: false,
+          unavailable_reason: overlappingHolds?.length ? 'held' : 'booked',
+          requested_slot: {
+            date: targetDate,
+            time: params.time,
+            duration_minutes: durationMinutes,
+          },
+          alternative_slots: alternativeSlots.length > 0 ? alternativeSlots : undefined,
+          active_holds_in_range: overlappingHolds?.length || 0,
+          message: `El horario ${params.time} no está disponible${alternativeSlots.length > 0 ? '. Te sugiero estas alternativas.' : '. Por favor elige otro horario.'}`,
+        };
+      }
+
+      // Slot is available
+      return {
+        success: true,
+        available: true,
+        requested_slot: {
+          date: targetDate,
+          time: params.time,
+          duration_minutes: durationMinutes,
+        },
+        message: `El horario ${params.time} del ${new Date(targetDate).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })} está disponible.`,
+      };
+    }
+
+    // No specific time requested - return available slots
+    const realSlots = await getAvailableSlots(
+      tenant_id,
+      branchId,
+      undefined,
+      undefined,
+      targetDate,
+      10
+    );
+
+    if (realSlots.length === 0) {
+      return {
+        success: true,
+        available: false,
+        unavailable_reason: 'no_slots',
+        message: `No hay horarios disponibles para ${new Date(targetDate).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}. ¿Te gustaría ver disponibilidad para otro día?`,
+      };
+    }
+
+    return {
+      success: true,
+      available: true,
+      alternative_slots: realSlots.map(slot => ({
+        date: slot.date,
+        time: slot.time,
+        branch_name: slot.branch_name,
+      })),
+      message: `Hay ${realSlots.length} horarios disponibles. ¿Cuál prefieres?`,
+    };
+  } catch (error) {
+    console.error('[check_secure_availability] Error:', error);
+    return { error: error instanceof Error ? error.message : 'Error al verificar disponibilidad' };
+  }
+}
+
+/**
+ * Handler: convert_hold_to_booking
+ * Convierte un hold activo en una reservación confirmada
+ */
+export async function handleConvertHoldToBooking(
+  params: {
+    hold_id: string;
+    customer_name?: string;
+    customer_email?: string;
+    special_requests?: string;
+    notes?: string;
+  },
+  context: ToolContext
+): Promise<HoldConversionResult | { error: string }> {
+  const { tenant_id, lead } = context;
+
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(params.hold_id)) {
+      return {
+        success: false,
+        booking_type: 'appointment',
+        confirmation_message: '',
+        error: 'ID de hold inválido',
+      };
+    }
+
+    // Get hold details
+    const { data: hold, error: holdError } = await supabase
+      .from('booking_holds')
+      .select('*')
+      .eq('id', params.hold_id)
+      .eq('tenant_id', tenant_id)
+      .single();
+
+    if (holdError || !hold) {
+      return {
+        success: false,
+        booking_type: 'appointment',
+        confirmation_message: '',
+        error: 'No se encontró el hold. Es posible que haya expirado.',
+      };
+    }
+
+    if (hold.status !== 'active') {
+      const statusMessages: Record<string, string> = {
+        converted: 'Este hold ya fue convertido a una reservación.',
+        expired: 'Este hold ha expirado. ¿Te gustaría elegir otro horario?',
+        released: 'Este hold fue cancelado. ¿Te gustaría iniciar una nueva reservación?',
+      };
+      return {
+        success: false,
+        booking_type: 'appointment',
+        confirmation_message: '',
+        error: statusMessages[hold.status] || 'El hold no está activo.',
+      };
+    }
+
+    // Check if hold has expired
+    if (new Date(hold.expires_at) < new Date()) {
+      await supabase
+        .from('booking_holds')
+        .update({ status: 'expired' })
+        .eq('id', params.hold_id);
+
+      return {
+        success: false,
+        booking_type: 'appointment',
+        confirmation_message: '',
+        error: 'Tu hold ha expirado. ¿Te gustaría intentar de nuevo?',
+      };
+    }
+
+    // Check deposit requirement
+    if (hold.requires_deposit && !hold.deposit_paid) {
+      const depositAmount = ((hold.deposit_amount_cents || 10000) / 100).toFixed(2);
+      return {
+        success: false,
+        booking_type: 'appointment',
+        confirmation_message: '',
+        error: `Se requiere un depósito de $${depositAmount} MXN para completar tu reservación.`,
+      };
+    }
+
+    // Get tenant vertical
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('vertical')
+      .eq('id', tenant_id)
+      .single();
+
+    const isRestaurant = tenant?.vertical === 'restaurant';
+    const bookingType = hold.hold_type === 'reservation' || isRestaurant ? 'reservation' : 'appointment';
+
+    // Extract datetime
+    const slotDate = new Date(hold.slot_datetime);
+    const date = slotDate.toISOString().split('T')[0];
+    const time = slotDate.toTimeString().slice(0, 5);
+
+    // Generate cryptographically secure confirmation code
+    const confirmationCode = generateSecureConfirmationCode(isRestaurant ? 'RES' : 'APT');
+
+    const customerName = params.customer_name || lead?.name || hold.metadata?.customer_name || 'Cliente';
+    const phoneNumber = hold.phone_number || lead?.phone;
+
+    let bookingId: string;
+
+    if (bookingType === 'reservation') {
+      const { data: reservation, error: insertError } = await supabase
+        .from('reservations')
+        .insert({
+          tenant_id,
+          branch_id: hold.branch_id || null,
+          date,
+          time,
+          party_size: hold.metadata?.party_size || 2,
+          customer_name: customerName,
+          customer_phone: phoneNumber,
+          customer_email: params.customer_email || null,
+          special_requests: params.special_requests || null,
+          confirmation_code: confirmationCode,
+          status: 'confirmed',
+          source: 'messaging',
+          hold_id: params.hold_id,
+          trust_score_at_booking: hold.trust_score_at_hold,
+          created_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error('[convert_hold_to_booking] Reservation insert error:', insertError);
+        return {
+          success: false,
+          booking_type: 'reservation',
+          confirmation_message: '',
+          error: 'Hubo un problema al crear tu reservación. Por favor intenta de nuevo.',
+        };
+      }
+
+      bookingId = reservation.id;
+    } else {
+      const endSlot = new Date(hold.end_datetime);
+      const endTime = endSlot.toTimeString().slice(0, 5);
+
+      const { data: appointment, error: insertError } = await supabase
+        .from('appointments')
+        .insert({
+          tenant_id,
+          branch_id: hold.branch_id || null,
+          date,
+          start_time: time,
+          end_time: endTime,
+          patient_name: customerName,
+          patient_phone: phoneNumber,
+          patient_email: params.customer_email || null,
+          service_id: hold.service_id || null,
+          staff_id: hold.metadata?.staff_id || null,
+          notes: params.notes || params.special_requests || null,
+          confirmation_code: confirmationCode,
+          status: 'confirmed',
+          source: 'messaging',
+          hold_id: params.hold_id,
+          trust_score_at_booking: hold.trust_score_at_hold,
+          created_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error('[convert_hold_to_booking] Appointment insert error:', insertError);
+        return {
+          success: false,
+          booking_type: 'appointment',
+          confirmation_message: '',
+          error: 'Hubo un problema al crear tu cita. Por favor intenta de nuevo.',
+        };
+      }
+
+      bookingId = appointment.id;
+    }
+
+    // Update hold status
+    await supabase
+      .from('booking_holds')
+      .update({
+        status: 'converted',
+        converted_at: new Date().toISOString(),
+        converted_to_id: bookingId,
+        converted_to_type: bookingType,
+      })
+      .eq('id', params.hold_id);
+
+    // Update trust score (reward)
+    if (hold.lead_id) {
+      await supabase.rpc('update_trust_score', {
+        p_lead_id: hold.lead_id,
+        p_delta: 2,
+        p_reason: 'booking_completed',
+        p_reference_id: bookingId,
+      });
+    }
+
+    // Format confirmation message
+    const formattedDate = new Date(date).toLocaleDateString('es-MX', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+
+    const bookingTypeStr = bookingType === 'reservation' ? 'reservación' : 'cita';
+
+    return {
+      success: true,
+      booking_id: bookingId,
+      confirmation_code: confirmationCode,
+      booking_type: bookingType,
+      date_time: `${date} ${time}`,
+      confirmation_message: `¡Tu ${bookingTypeStr} está confirmada para el ${formattedDate} a las ${time}! Tu código de confirmación es ${confirmationCode}. Te enviaremos un recordatorio antes de tu ${bookingTypeStr}.`,
+    };
+  } catch (error) {
+    console.error('[convert_hold_to_booking] Error:', error);
+    return {
+      success: false,
+      booking_type: 'appointment',
+      confirmation_message: '',
+      error: error instanceof Error ? error.message : 'Error al completar la reservación',
+    };
+  }
+}
+
+/**
+ * Handler: secure_create_appointment
+ * Crea una cita con verificación de trust integrada (dental/clínica)
+ */
+export async function handleSecureCreateAppointment(
+  params: {
+    date: string;
+    time: string;
+    service_id?: string;
+    branch_id?: string;
+    staff_id?: string;
+    notes?: string;
+    skip_trust_check?: boolean;
+  },
+  context: ToolContext
+): Promise<SecureBookingResult | { error: string }> {
+  const { tenant_id, lead_id, lead, business_context } = context;
+
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  // Validate date/time formats
+  if (!isValidDateFormat(params.date)) {
+    return { error: 'Formato de fecha inválido. Use YYYY-MM-DD.' };
+  }
+  if (!isValidTimeFormat(params.time)) {
+    return { error: 'Formato de hora inválido. Use HH:MM.' };
+  }
+
+  // Calculate duration from service or use default
+  let durationMinutes = 60; // Default
+  if (params.service_id && business_context?.services) {
+    const service = business_context.services.find(s => s.id === params.service_id);
+    if (service?.duration_minutes) {
+      durationMinutes = service.duration_minutes;
+    }
+  }
+
+  try {
+    // Step 1: Check trust (unless skipped for VIPs)
+    let trustCheck: CustomerTrustResult | null = null;
+    if (!params.skip_trust_check) {
+      const trustResult = await handleCheckCustomerTrust({}, context);
+      if ('error' in trustResult && typeof trustResult.error === 'string') {
+        return { error: trustResult.error };
+      }
+      trustCheck = trustResult as CustomerTrustResult;
+
+      if (trustCheck.is_blocked) {
+        return {
+          success: false,
+          deposit_required: false,
+          confirmation_message: '',
+          error: trustCheck.message,
+          error_code: 'BLOCKED',
+        };
+      }
+    }
+
+    // Step 2: Check availability
+    const availabilityCheck = await handleCheckSecureAvailability(
+      {
+        date: params.date,
+        time: params.time,
+        duration_minutes: durationMinutes,
+        branch_id: params.branch_id,
+        include_alternatives: true,
+      },
+      context
+    );
+
+    if ('error' in availabilityCheck && typeof availabilityCheck.error === 'string') {
+      return { error: availabilityCheck.error };
+    }
+
+    const secureAvailability = availabilityCheck as SecureAvailabilityResult;
+
+    if (!secureAvailability.available) {
+      return {
+        success: false,
+        deposit_required: false,
+        confirmation_message: secureAvailability.message,
+        error: secureAvailability.unavailable_reason === 'held' ? 'Este horario está siendo reservado por otro cliente.' : 'Este horario no está disponible.',
+        error_code: secureAvailability.unavailable_reason === 'held' ? 'SLOT_HELD' : 'NO_AVAILABILITY',
+      };
+    }
+
+    // Step 3: If deposit required, create hold and return
+    if (trustCheck?.deposit_required) {
+      const holdResult = await handleCreateBookingHold(
+        {
+          date: params.date,
+          time: params.time,
+          duration_minutes: durationMinutes,
+          branch_id: params.branch_id,
+          service_id: params.service_id,
+          staff_id: params.staff_id,
+          hold_type: 'appointment',
+        },
+        context,
+        trustCheck // Pass existing trust check to avoid duplicate call
+      );
+
+      if ('error' in holdResult && typeof holdResult.error === 'string') {
+        return { error: holdResult.error };
+      }
+
+      const depositHoldResult = holdResult as BookingHoldResult;
+
+      return {
+        success: false,
+        hold_id: depositHoldResult.hold_id,
+        deposit_required: true,
+        deposit_amount_cents: depositHoldResult.deposit_amount_cents ?? trustCheck.deposit_amount_cents,
+        deposit_status: 'pending',
+        trust_score_at_booking: trustCheck.trust_score,
+        confirmation_message: depositHoldResult.confirmation_message,
+        error_code: 'DEPOSIT_REQUIRED',
+      };
+    }
+
+    // Step 4: Create hold then convert immediately
+    const holdResult = await handleCreateBookingHold(
+      {
+        date: params.date,
+        time: params.time,
+        duration_minutes: durationMinutes,
+        branch_id: params.branch_id,
+        service_id: params.service_id,
+        staff_id: params.staff_id,
+        hold_type: 'appointment',
+      },
+      context,
+      trustCheck || undefined // Pass existing trust check to avoid duplicate call
+    );
+
+    if ('error' in holdResult && typeof holdResult.error === 'string') {
+      return { error: holdResult.error };
+    }
+
+    const validHoldResult = holdResult as BookingHoldResult;
+    if (!validHoldResult.success || !validHoldResult.hold_id) {
+      return { error: validHoldResult.error || 'No se pudo crear el hold' };
+    }
+
+    // Step 5: Convert hold to booking
+    const conversionResult = await handleConvertHoldToBooking(
+      {
+        hold_id: validHoldResult.hold_id,
+        notes: params.notes,
+      },
+      context
+    );
+
+    if ('error' in conversionResult && typeof conversionResult.error === 'string') {
+      // Release the hold on failure
+      await handleReleaseBookingHold({ hold_id: validHoldResult.hold_id, reason: 'conversion_failed' }, context);
+      return { error: conversionResult.error };
+    }
+
+    const validConversion = conversionResult as HoldConversionResult;
+    if (!validConversion.success) {
+      await handleReleaseBookingHold({ hold_id: validHoldResult.hold_id, reason: 'conversion_failed' }, context);
+      return { error: validConversion.error || 'No se pudo completar la cita' };
+    }
+
+    // Get service and branch names for response
+    let serviceName: string | undefined;
+    let branchName: string | undefined;
+    let staffName: string | undefined;
+
+    if (params.service_id && business_context?.services) {
+      const service = business_context.services.find(s => s.id === params.service_id);
+      if (service) serviceName = service.name;
+    }
+
+    if (params.branch_id && business_context?.branches) {
+      const branch = business_context.branches.find(b => b.id === params.branch_id);
+      if (branch) branchName = branch.name;
+    } else if (business_context?.branches?.[0]) {
+      branchName = business_context.branches[0].name;
+    }
+
+    if (params.staff_id && business_context?.staff) {
+      const staff = business_context.staff.find(s => s.id === params.staff_id);
+      if (staff) staffName = staff.name;
+    }
+
+    return {
+      success: true,
+      booking_id: validConversion.booking_id,
+      confirmation_code: validConversion.confirmation_code,
+      scheduled_at: `${params.date} ${params.time}`,
+      branch_name: branchName,
+      service_name: serviceName,
+      staff_name: staffName,
+      trust_score_at_booking: trustCheck?.trust_score,
+      deposit_required: false,
+      deposit_status: 'not_required',
+      confirmation_message: validConversion.confirmation_message,
+    };
+  } catch (error) {
+    console.error('[secure_create_appointment] Error:', error);
+    return { error: error instanceof Error ? error.message : 'Error al crear la cita' };
+  }
+}
+
+/**
+ * Handler: secure_create_reservation
+ * Crea una reservación de restaurante con verificación de trust
+ */
+export async function handleSecureCreateReservation(
+  params: {
+    date: string;
+    time: string;
+    party_size: number;
+    branch_id?: string;
+    special_requests?: string;
+    skip_trust_check?: boolean;
+  },
+  context: ToolContext
+): Promise<SecureBookingResult | { error: string }> {
+  const { tenant_id, lead, business_context } = context;
+
+  if (!tenant_id) {
+    return { error: 'No se pudo identificar el negocio' };
+  }
+
+  // Validate date/time formats
+  if (!isValidDateFormat(params.date)) {
+    return { error: 'Formato de fecha inválido. Use YYYY-MM-DD.' };
+  }
+  if (!isValidTimeFormat(params.time)) {
+    return { error: 'Formato de hora inválido. Use HH:MM.' };
+  }
+
+  // Validate party_size
+  if (!params.party_size || params.party_size < 1 || params.party_size > 50) {
+    return { error: 'Número de personas inválido. Debe ser entre 1 y 50.' };
+  }
+
+  try {
+    // Step 1: Check trust (unless skipped)
+    let trustCheck: CustomerTrustResult | null = null;
+    if (!params.skip_trust_check) {
+      const trustResult = await handleCheckCustomerTrust({}, context);
+      if ('error' in trustResult && typeof trustResult.error === 'string') {
+        return { error: trustResult.error };
+      }
+      trustCheck = trustResult as CustomerTrustResult;
+
+      if (trustCheck.is_blocked) {
+        return {
+          success: false,
+          deposit_required: false,
+          confirmation_message: '',
+          error: trustCheck.message,
+          error_code: 'BLOCKED',
+        };
+      }
+    }
+
+    // Step 2: Check availability
+    const availabilityCheck = await handleCheckSecureAvailability(
+      {
+        date: params.date,
+        time: params.time,
+        duration_minutes: 90, // Reservations typically 90 min
+        branch_id: params.branch_id,
+        include_alternatives: true,
+      },
+      context
+    );
+
+    if ('error' in availabilityCheck && typeof availabilityCheck.error === 'string') {
+      return { error: availabilityCheck.error };
+    }
+
+    const secureAvailability = availabilityCheck as SecureAvailabilityResult;
+
+    if (!secureAvailability.available) {
+      return {
+        success: false,
+        deposit_required: false,
+        confirmation_message: secureAvailability.message,
+        error: secureAvailability.unavailable_reason === 'held' ? 'Esta mesa está siendo reservada por otro cliente.' : 'Este horario no está disponible.',
+        error_code: secureAvailability.unavailable_reason === 'held' ? 'SLOT_HELD' : 'NO_AVAILABILITY',
+      };
+    }
+
+    // Step 3: If deposit required, create hold and return
+    if (trustCheck?.deposit_required) {
+      const supabase = createServerClient();
+
+      // Create hold with party_size in metadata
+      const slotDatetime = new Date(`${params.date}T${params.time}`);
+      const endDatetime = new Date(slotDatetime.getTime() + 90 * 60 * 1000);
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      let branchId = params.branch_id;
+      if (!branchId && business_context?.branches?.[0]) {
+        branchId = business_context.branches[0].id;
+      }
+
+      const { data: insertedHold, error: insertError } = await supabase
+        .from('booking_holds')
+        .insert({
+          tenant_id,
+          branch_id: branchId || null,
+          lead_id: context.lead_id || null,
+          phone_number: lead?.phone?.replace(/\D/g, '') || '',
+          hold_type: 'reservation',
+          slot_datetime: slotDatetime.toISOString(),
+          end_datetime: endDatetime.toISOString(),
+          expires_at: expiresAt.toISOString(),
+          status: 'active',
+          trust_score_at_hold: trustCheck.trust_score,
+          requires_deposit: true,
+          deposit_amount_cents: trustCheck.deposit_amount_cents,
+          source: 'messaging',
+          metadata: {
+            party_size: params.party_size,
+            special_requests: params.special_requests,
+            lead_name: lead?.name,
+          },
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        return { error: 'No se pudo reservar la mesa temporalmente' };
+      }
+
+      const depositAmountCents = trustCheck.deposit_amount_cents || 10000;
+      const depositAmount = (depositAmountCents / 100).toFixed(2);
+
+      return {
+        success: false,
+        hold_id: insertedHold.id,
+        deposit_required: true,
+        deposit_amount_cents: depositAmountCents,
+        deposit_status: 'pending',
+        party_size: params.party_size,
+        trust_score_at_booking: trustCheck.trust_score,
+        confirmation_message: `Para confirmar tu reservación para ${params.party_size} personas el ${new Date(params.date).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })} a las ${params.time}, se requiere un depósito de $${depositAmount} MXN.`,
+        error_code: 'DEPOSIT_REQUIRED',
+      };
+    }
+
+    // Step 4: Create hold with party_size
+    const supabase = createServerClient();
+    const slotDatetime = new Date(`${params.date}T${params.time}`);
+    const endDatetime = new Date(slotDatetime.getTime() + 90 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    let branchId = params.branch_id;
+    let branchName: string | undefined;
+    if (!branchId && business_context?.branches?.[0]) {
+      branchId = business_context.branches[0].id;
+      branchName = business_context.branches[0].name;
+    } else if (branchId && business_context?.branches) {
+      const branch = business_context.branches.find(b => b.id === branchId);
+      if (branch) branchName = branch.name;
+    }
+
+    const { data: insertedHold, error: holdInsertError } = await supabase
+      .from('booking_holds')
+      .insert({
+        tenant_id,
+        branch_id: branchId || null,
+        lead_id: context.lead_id || null,
+        phone_number: lead?.phone?.replace(/\D/g, '') || '',
+        hold_type: 'reservation',
+        slot_datetime: slotDatetime.toISOString(),
+        end_datetime: endDatetime.toISOString(),
+        expires_at: expiresAt.toISOString(),
+        status: 'active',
+        trust_score_at_hold: trustCheck?.trust_score || 70,
+        requires_deposit: false,
+        source: 'messaging',
+        metadata: {
+          party_size: params.party_size,
+          special_requests: params.special_requests,
+          lead_name: lead?.name,
+        },
+      })
+      .select('id')
+      .single();
+
+    if (holdInsertError || !insertedHold) {
+      return { error: 'No se pudo reservar la mesa' };
+    }
+
+    // Step 5: Convert hold to reservation
+    const conversionResult = await handleConvertHoldToBooking(
+      {
+        hold_id: insertedHold.id,
+        special_requests: params.special_requests,
+      },
+      context
+    );
+
+    if ('error' in conversionResult && typeof conversionResult.error === 'string') {
+      await handleReleaseBookingHold({ hold_id: insertedHold.id, reason: 'conversion_failed' }, context);
+      return { error: conversionResult.error };
+    }
+
+    const validConversion = conversionResult as HoldConversionResult;
+    if (!validConversion.success) {
+      await handleReleaseBookingHold({ hold_id: insertedHold.id, reason: 'conversion_failed' }, context);
+      return { error: validConversion.error || 'No se pudo completar la reservación' };
+    }
+
+    return {
+      success: true,
+      booking_id: validConversion.booking_id,
+      confirmation_code: validConversion.confirmation_code,
+      scheduled_at: `${params.date} ${params.time}`,
+      branch_name: branchName,
+      party_size: params.party_size,
+      trust_score_at_booking: trustCheck?.trust_score,
+      deposit_required: false,
+      deposit_status: 'not_required',
+      confirmation_message: validConversion.confirmation_message,
+    };
+  } catch (error) {
+    console.error('[secure_create_reservation] Error:', error);
+    return { error: error instanceof Error ? error.message : 'Error al crear la reservación' };
+  }
+}
+
+// ======================
 // MEJORA-1.4: ANOMALY DETECTION WRAPPER
 // ======================
 
@@ -1671,6 +2964,14 @@ export const toolHandlers = {
   get_available_rewards: handleGetAvailableRewards,
   get_membership_info: handleGetMembershipInfo,
   redeem_reward: handleRedeemReward,
+  // Secure Booking tools (v2.2 - FASE 4)
+  check_customer_trust: handleCheckCustomerTrust,
+  create_booking_hold: handleCreateBookingHold,
+  release_booking_hold: handleReleaseBookingHold,
+  check_secure_availability: handleCheckSecureAvailability,
+  convert_hold_to_booking: handleConvertHoldToBooking,
+  secure_create_appointment: handleSecureCreateAppointment,
+  secure_create_reservation: handleSecureCreateReservation,
 };
 
 export default toolHandlers;

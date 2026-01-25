@@ -786,8 +786,8 @@ describe('Validation Arrays', () => {
     });
 
     it('should have correct total count', () => {
-      // 5 shared + 6 restaurant + 6 dental = 17
-      expect(ALL_CAPABILITIES).toHaveLength(17);
+      // 5 shared + 7 restaurant (includes 'delivery' added in v2.1) + 6 dental = 18
+      expect(ALL_CAPABILITIES).toHaveLength(18);
     });
 
     it('should not have duplicates', () => {

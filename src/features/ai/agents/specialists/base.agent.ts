@@ -58,12 +58,38 @@ export interface AgentResult {
   tokens_used?: number;
   error?: string;
   /**
-   * SPRINT 3: Actualizaciones de estado a aplicar
-   * Usado por el ordering agent para guardar pending_order
+   * SPRINT 3 + SECURE BOOKING v2.2: Actualizaciones de estado a aplicar
+   *
+   * ARQUITECTURA CORRECTA DE LANGGRAPH:
+   * En lugar de mutar el estado directamente (state.secure_booking.xxx = value),
+   * los agentes DEBEN retornar las actualizaciones aquí para que el nodo
+   * las aplique correctamente a través de los reducers del estado.
+   *
+   * Esto asegura:
+   * - Inmutabilidad del estado durante la ejecución
+   * - Correcta aplicación de reducers
+   * - Trazabilidad de cambios de estado
    */
   state_updates?: Partial<{
     pending_order: import('../../state').PendingOrder | null;
     order_result: import('../../state').OrderResult | null;
+    /**
+     * Secure Booking v2.2: Estado de verificación de trust y holds
+     *
+     * ARQUITECTURA DEL REDUCER (Shallow Merge):
+     * El reducer de secure_booking usa: `(prev, next) => ({ ...prev, ...next })`
+     *
+     * Esto significa que puedes enviar actualizaciones parciales:
+     * - Campos escalares (trust_verified, customer_confirmed): Solo envía el delta
+     *   Ejemplo: `{ trust_verified: true }` → se mezcla con el estado existente
+     *
+     * - Arrays (active_holds): Envía el array COMPLETO (se reemplaza, no se concatena)
+     *   Ejemplo: `{ active_holds: [...existingHolds, newHold] }`
+     *
+     * - Objetos anidados (customer_trust): Envía el objeto COMPLETO (se reemplaza)
+     *   Ejemplo: `{ customer_trust: { ...allTrustFields } }`
+     */
+    secure_booking: Partial<import('../../state').SecureBookingContext>;
   }>;
 }
 
@@ -750,14 +776,27 @@ Usa las herramientas disponibles para obtener información cuando sea necesario.
           stateUpdate.errors = [result.error];
         }
 
-        // SPRINT 3: Aplicar actualizaciones de estado del agente
+        // SPRINT 3 + SECURE BOOKING v2.2: Aplicar actualizaciones de estado del agente
         // Usado por ordering agent para guardar pending_order
+        // Usado por booking agents para actualizar secure_booking context
         if (result.state_updates) {
           if (result.state_updates.pending_order !== undefined) {
             stateUpdate.pending_order = result.state_updates.pending_order;
           }
           if (result.state_updates.order_result !== undefined) {
             stateUpdate.order_result = result.state_updates.order_result;
+          }
+          // SECURE BOOKING v2.2: Aplicar actualizaciones de secure_booking
+          // El reducer usa shallow merge: (prev, next) => ({ ...prev, ...next })
+          // Esto permite pasar actualizaciones parciales que se mezclan con el estado existente
+          //
+          // OPTIMIZACIÓN:
+          // - Campos escalares (trust_verified, customer_confirmed): solo enviar el delta
+          // - Arrays (active_holds): enviar el array completo (se reemplaza, no concatena)
+          // - Objetos anidados (customer_trust): enviar el objeto completo (se reemplaza)
+          if (result.state_updates.secure_booking !== undefined) {
+            // Type assertion: el reducer maneja parciales correctamente en runtime
+            stateUpdate.secure_booking = result.state_updates.secure_booking as import('../../state').SecureBookingContext;
           }
         }
 

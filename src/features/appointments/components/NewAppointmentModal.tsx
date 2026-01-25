@@ -81,6 +81,28 @@ interface RestaurantTable {
   status: string;
 }
 
+/**
+ * Appointment insert data shape for Supabase
+ * Uses explicit types instead of Record<string, any>
+ */
+interface AppointmentInsertData {
+  tenant_id: string;
+  branch_id: string;
+  lead_id: string | null;
+  patient_id: string | null;
+  staff_id: string | null;
+  service_id: string | null;
+  scheduled_at: string;
+  end_time: string;
+  duration_minutes: number;
+  status: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled';
+  notes: string | null;
+  confirmation_status: 'not_required' | 'pending' | 'confirmed' | 'expired';
+  // Restaurant-specific optional fields
+  party_size?: number;
+  reservation_type?: string;
+}
+
 // Restaurant occasion types
 const OCCASION_TYPES = [
   { value: 'regular', label: 'Comida regular' },
@@ -153,6 +175,11 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
     </svg>
   ),
+  shield: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  ),
 };
 
 // ======================
@@ -217,6 +244,9 @@ export function NewAppointmentModal({
   const [selectedTableId, setSelectedTableId] = useState('');
   const [occasionType, setOccasionType] = useState('regular');
   const [specialRequests, setSpecialRequests] = useState('');
+
+  // Secure Booking - Confirmation state (Phase 7)
+  const [requireConfirmation, setRequireConfirmation] = useState(false);
 
   // Default duration: 30 min for dental/clinic, 120 min for restaurant
   const defaultDuration = isRestaurant ? 120 : 30;
@@ -510,7 +540,7 @@ export function NewAppointmentModal({
         appointmentLeadId = selectedLeadId;
       }
 
-      const appointmentData: Record<string, any> = {
+      const appointmentData: AppointmentInsertData = {
         tenant_id: tenant.id,
         branch_id: selectedBranchIdLocal,
         lead_id: appointmentLeadId,
@@ -522,13 +552,14 @@ export function NewAppointmentModal({
         duration_minutes: duration,
         status: 'scheduled',
         notes: notes || null,
+        // Secure Booking - Confirmation status (Phase 7)
+        confirmation_status: requireConfirmation ? 'pending' : 'not_required',
+        // Restaurant-specific fields (optional)
+        ...(isRestaurant && {
+          party_size: partySize,
+          reservation_type: occasionType,
+        }),
       };
-
-      // Add restaurant-specific fields
-      if (isRestaurant) {
-        appointmentData.party_size = partySize;
-        appointmentData.reservation_type = occasionType;
-      }
 
       const { data: appointmentResult, error: insertError } = await supabase
         .from('appointments')
@@ -597,6 +628,9 @@ export function NewAppointmentModal({
     setSelectedTableId('');
     setOccasionType('regular');
     setSpecialRequests('');
+
+    // Reset confirmation state
+    setRequireConfirmation(false);
   }
 
   function handleClose() {
@@ -833,8 +867,9 @@ export function NewAppointmentModal({
 
             {/* Time Picker */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Hora</label>
+              <label htmlFor="scheduled-time" className="block text-xs font-medium text-gray-500 mb-1.5">Hora</label>
               <select
+                id="scheduled-time"
                 value={scheduledTime}
                 onChange={(e) => setScheduledTime(e.target.value)}
                 required
@@ -847,7 +882,7 @@ export function NewAppointmentModal({
               >
                 {TIME_SLOTS.map((time) => (
                   <option key={time} value={time}>
-                    {time.replace(':', ':')} hrs
+                    {time} hrs
                   </option>
                 ))}
               </select>
@@ -988,8 +1023,9 @@ export function NewAppointmentModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Service Select */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Tipo de servicio</label>
+              <label htmlFor="service-type" className="block text-xs font-medium text-gray-500 mb-1.5">Tipo de servicio</label>
               <select
+                id="service-type"
                 value={selectedServiceId}
                 onChange={(e) => setSelectedServiceId(e.target.value)}
                 className={cn(
@@ -1015,8 +1051,9 @@ export function NewAppointmentModal({
 
             {/* Duration */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Duración</label>
+              <label htmlFor="duration-select" className="block text-xs font-medium text-gray-500 mb-1.5">Duración</label>
               <select
+                id="duration-select"
                 value={duration}
                 onChange={(e) => setDuration(parseInt(e.target.value))}
                 className={cn(
@@ -1141,6 +1178,61 @@ export function NewAppointmentModal({
           />
         </div>
 
+        {/* Section: Estado de Confirmación (Phase 7 - Secure Booking) */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <span className="text-amber-500">{icons.shield}</span>
+            <span>Estado de {isRestaurant ? 'Reservación' : 'Cita'}</span>
+          </div>
+
+          <div className={cn(
+            'p-4 rounded-xl border transition-all duration-200',
+            requireConfirmation
+              ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800'
+              : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700'
+          )}>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <div className="relative flex items-center justify-center mt-0.5">
+                <input
+                  type="checkbox"
+                  checked={requireConfirmation}
+                  onChange={(e) => setRequireConfirmation(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className={cn(
+                  'w-5 h-5 rounded border-2 transition-all duration-200',
+                  requireConfirmation
+                    ? 'bg-amber-500 border-amber-500'
+                    : 'bg-white border-gray-300 dark:bg-gray-700 dark:border-gray-600'
+                )}>
+                  {requireConfirmation && (
+                    <svg className="w-full h-full text-white p-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1">
+                <p className={cn(
+                  'font-medium text-sm',
+                  requireConfirmation ? 'text-amber-800 dark:text-amber-300' : 'text-gray-700 dark:text-gray-300'
+                )}>
+                  Requerir confirmación del cliente
+                </p>
+                <p className={cn(
+                  'text-xs mt-0.5',
+                  requireConfirmation ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'
+                )}>
+                  {requireConfirmation
+                    ? `Se enviará un mensaje para confirmar la ${isRestaurant ? 'reservación' : 'cita'}. El estado será "Pendiente Confirmar" hasta que responda.`
+                    : `La ${isRestaurant ? 'reservación' : 'cita'} se creará como "Programada" sin requerir confirmación adicional.`
+                  }
+                </p>
+              </div>
+            </label>
+          </div>
+        </div>
+
         {/* Summary Card */}
         {(scheduledDate && scheduledTime) && (
           <div className={cn(
@@ -1210,6 +1302,16 @@ export function NewAppointmentModal({
                   <p className="font-medium text-gray-900">{selectedService.name}</p>
                 </div>
               )}
+              {/* Confirmation Status */}
+              <div className="col-span-2">
+                <span className="text-gray-500">Estado:</span>
+                <p className={cn(
+                  'font-medium',
+                  requireConfirmation ? 'text-amber-600' : 'text-green-600'
+                )}>
+                  {requireConfirmation ? 'Pendiente de Confirmación' : 'Programada'}
+                </p>
+              </div>
             </div>
           </div>
         )}

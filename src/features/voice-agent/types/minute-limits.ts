@@ -36,6 +36,10 @@ export interface VoiceMinuteLimits {
 }
 
 export interface VoiceMinuteLimitsInput {
+  /** Minutos incluidos en el plan (actualizable por upgrade) */
+  included_minutes?: number;
+  /** Precio por minuto de overage en centavos */
+  overage_price_centavos?: number;
   overage_policy?: OveragePolicy;
   max_overage_charge_centavos?: number;
   alert_thresholds?: number[];

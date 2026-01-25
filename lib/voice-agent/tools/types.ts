@@ -61,7 +61,11 @@ export type ToolCapability =
   | 'doctor_info'
   | 'insurance_info'
   | 'appointment_management'
-  | 'emergencies';
+  | 'emergencies'
+  // Secure Booking capabilities (v2.2 - FASE 3)
+  | 'secure_booking'
+  | 'trust_verification'
+  | 'booking_holds';
 
 /**
  * Tool categories for organization
@@ -77,7 +81,8 @@ export type ToolCategory =
   | 'call'
   | 'utility'
   | 'billing'
-  | 'promotion';
+  | 'promotion'
+  | 'secure_booking'; // Added in v2.2 - Secure Booking Integration
 
 /**
  * Assistant types that a tool can be enabled for
@@ -829,5 +834,278 @@ export interface InsuranceInfoResult extends ToolResult {
       contactPhone?: string;
     }>;
     totalAccepted?: number;
+  };
+}
+
+// =====================================================
+// SECURE BOOKING TYPES (v2.2 - FASE 3)
+// =====================================================
+
+/**
+ * Trust level classification for customers
+ */
+export type TrustLevel = 'vip' | 'trusted' | 'normal' | 'risky' | 'blocked';
+
+/**
+ * Booking action based on trust verification
+ */
+export type TrustAction =
+  | 'proceed' // Trust is high enough, proceed normally
+  | 'require_confirmation' // Need explicit confirmation
+  | 'require_deposit' // Need deposit payment
+  | 'blocked'; // Customer is blocked
+
+/**
+ * Hold status for secure booking slots
+ */
+export type HoldStatus = 'active' | 'converted' | 'expired' | 'released';
+
+/**
+ * Parameters for check_customer_trust tool
+ */
+export interface CheckCustomerTrustParams {
+  /** Customer phone number (primary identifier) */
+  customerPhone: string;
+  /** Lead ID if known */
+  leadId?: string;
+  /** Vertical for policy lookup */
+  vertical?: 'dental' | 'restaurant' | 'medical' | 'beauty' | 'veterinary' | 'gym' | 'clinic';
+}
+
+/**
+ * Result for customer trust verification
+ */
+export interface CustomerTrustResult extends ToolResult {
+  data?: {
+    /** Current trust score (0-100) */
+    trustScore: number;
+    /** Trust level classification */
+    trustLevel: TrustLevel;
+    /** Recommended action based on policy */
+    action: TrustAction;
+    /** Whether customer is VIP */
+    isVip: boolean;
+    /** Whether customer is blocked */
+    isBlocked: boolean;
+    /** Block reason if applicable */
+    blockReason?: string;
+    /** Block expiration date if applicable */
+    blockExpiresAt?: string;
+    /** Number of no-shows in last 90 days */
+    recentNoShows?: number;
+    /** Number of successful completions in last 90 days */
+    recentCompletions?: number;
+    /** If deposit required, the amount in cents */
+    depositAmountCents?: number;
+    /** Lead ID if found or created */
+    leadId?: string;
+  };
+}
+
+/**
+ * Parameters for create_secure_hold tool
+ */
+export interface CreateSecureHoldParams {
+  /** Date for the booking (YYYY-MM-DD) */
+  date: string;
+  /** Time for the booking (HH:MM) */
+  time: string;
+  /** Duration in minutes */
+  durationMinutes?: number;
+  /** Customer phone number */
+  customerPhone: string;
+  /** Customer name */
+  customerName?: string;
+  /** Lead ID if known */
+  leadId?: string;
+  /** Service ID for appointments */
+  serviceId?: string;
+  /** Type of hold */
+  holdType?: 'reservation' | 'appointment' | 'order';
+  /** Vertical for policy */
+  vertical?: 'dental' | 'restaurant' | 'medical' | 'beauty' | 'veterinary' | 'gym' | 'clinic';
+  /** Additional metadata */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Result for secure hold creation
+ */
+export interface SecureHoldResult extends ToolResult {
+  data?: {
+    /** Hold ID */
+    holdId: string;
+    /** Slot start datetime (ISO) */
+    slotDatetime: string;
+    /** Slot end datetime (ISO) */
+    endDatetime: string;
+    /** When the hold expires (ISO) */
+    expiresAt: string;
+    /** Minutes until expiration */
+    expiresInMinutes: number;
+    /** Customer trust score at time of hold */
+    trustScoreAtHold: number;
+    /** Whether deposit is required */
+    requiresDeposit: boolean;
+    /** Deposit amount if required */
+    depositAmountCents?: number;
+    /** Whether confirmation is required */
+    requiresConfirmation: boolean;
+  };
+}
+
+/**
+ * Parameters for check_secure_availability tool
+ */
+export interface CheckSecureAvailabilityParams {
+  /** Date to check (YYYY-MM-DD) */
+  date: string;
+  /** Time to check (HH:MM) */
+  time?: string;
+  /** Duration needed in minutes */
+  durationMinutes?: number;
+  /** Party size (for reservations) */
+  partySize?: number;
+  /** Service type (for appointments) */
+  serviceType?: string;
+  /** Staff/Doctor ID if specific */
+  staffId?: string;
+  /** Whether to include alternative slots */
+  includeAlternatives?: boolean;
+}
+
+/**
+ * Result for secure availability check
+ */
+export interface SecureAvailabilityResult extends ToolResult {
+  data?: {
+    /** Whether the requested slot is available */
+    available: boolean;
+    /** Reason if not available */
+    unavailableReason?: 'booked' | 'held' | 'outside_hours' | 'holiday' | 'no_capacity';
+    /** Requested slot details */
+    requestedSlot?: {
+      date: string;
+      time: string;
+      durationMinutes: number;
+    };
+    /** Alternative available slots if requested */
+    alternativeSlots?: Array<{
+      date: string;
+      time: string;
+      staffId?: string;
+      staffName?: string;
+    }>;
+    /** Active holds that may affect availability */
+    activeHoldsCount?: number;
+  };
+}
+
+/**
+ * Parameters for release_secure_hold tool
+ */
+export interface ReleaseSecureHoldParams {
+  /** Hold ID to release */
+  holdId: string;
+  /** Reason for release */
+  reason?: 'customer_cancelled' | 'timeout' | 'staff_cancelled' | 'other';
+}
+
+/**
+ * Result for hold release
+ */
+export interface ReleaseHoldResult extends ToolResult {
+  data?: {
+    /** Whether hold was released */
+    released: boolean;
+    /** Hold ID that was released */
+    holdId: string;
+    /** Previous status */
+    previousStatus: HoldStatus;
+  };
+}
+
+/**
+ * Parameters for convert_hold_to_booking tool
+ */
+export interface ConvertHoldToBookingParams {
+  /** Hold ID to convert */
+  holdId: string;
+  /** Additional booking details */
+  customerName?: string;
+  customerEmail?: string;
+  specialRequests?: string;
+  notes?: string;
+  /** Deposit payment ID if required */
+  depositPaymentId?: string;
+}
+
+/**
+ * Result for hold to booking conversion
+ */
+export interface ConvertHoldResult extends ToolResult {
+  data?: {
+    /** Whether conversion succeeded */
+    converted: boolean;
+    /** Resulting booking ID (appointment or reservation) */
+    bookingId: string;
+    /** Confirmation code */
+    confirmationCode: string;
+    /** Type of booking created */
+    bookingType: 'appointment' | 'reservation';
+    /** Final date and time */
+    dateTime: string;
+  };
+}
+
+/**
+ * Parameters for secure_create_appointment tool (enhanced version)
+ */
+export interface SecureCreateAppointmentParams extends CreateAppointmentParams {
+  /** Skip trust verification (for VIPs or pre-verified) */
+  skipTrustCheck?: boolean;
+  /** Pre-verified trust score */
+  verifiedTrustScore?: number;
+  /** Hold ID if slot was pre-held */
+  holdId?: string;
+}
+
+/**
+ * Parameters for secure_create_reservation tool (enhanced version)
+ */
+export interface SecureCreateReservationParams extends CreateReservationParams {
+  /** Skip trust verification */
+  skipTrustCheck?: boolean;
+  /** Pre-verified trust score */
+  verifiedTrustScore?: number;
+  /** Hold ID if slot was pre-held */
+  holdId?: string;
+}
+
+/**
+ * Combined secure booking result with trust info
+ */
+export interface SecureBookingResult extends ToolResult {
+  data?: {
+    // From BookingResult
+    reservationId?: string;
+    appointmentId?: string;
+    confirmationCode?: string;
+    dateTime?: string;
+    estimatedDuration?: number;
+    // Appointment-specific fields
+    date?: string;
+    time?: string;
+    endTime?: string;
+    doctorId?: string;
+    doctorName?: string;
+    serviceName?: string;
+    // Reservation-specific fields
+    partySize?: number;
+    // Secure booking fields
+    trustScoreAtBooking?: number;
+    depositRequired?: boolean;
+    depositStatus?: 'pending' | 'paid' | 'refunded' | 'not_required';
+    convertedFromHoldId?: string;
   };
 }

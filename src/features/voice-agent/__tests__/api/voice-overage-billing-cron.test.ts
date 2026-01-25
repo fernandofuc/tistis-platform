@@ -68,10 +68,9 @@ describe('Voice Overage Billing Cron - /api/cron/voice-overage-billing', () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Reset env
-    process.env = { ...originalEnv };
-    process.env.CRON_SECRET = 'test-cron-secret';
-    process.env.NODE_ENV = 'production';
+    // Reset env using vitest stubEnv for type-safe environment manipulation
+    vi.stubEnv('CRON_SECRET', 'test-cron-secret');
+    vi.stubEnv('NODE_ENV', 'production');
 
     // Default mock responses
     mockResetMonthlyUsage.mockResolvedValue({ tenantsProcessed: 0 });
@@ -95,7 +94,7 @@ describe('Voice Overage Billing Cron - /api/cron/voice-overage-billing', () => {
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.unstubAllEnvs();
     vi.resetAllMocks();
   });
 
@@ -135,8 +134,8 @@ describe('Voice Overage Billing Cron - /api/cron/voice-overage-billing', () => {
 
     it('should return 401 when CRON_SECRET not configured in production', async () => {
       vi.resetModules();
-      process.env.CRON_SECRET = '';
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('CRON_SECRET', '');
+      vi.stubEnv('NODE_ENV', 'production');
 
       const cronModule = await import('@/app/api/cron/voice-overage-billing/route');
       const request = createRequestWithAuth(
@@ -150,8 +149,8 @@ describe('Voice Overage Billing Cron - /api/cron/voice-overage-billing', () => {
 
     it('should allow request without secret in development when CRON_SECRET not set', async () => {
       vi.resetModules();
-      delete process.env.CRON_SECRET;
-      process.env.NODE_ENV = 'development';
+      vi.unstubAllEnvs();
+      vi.stubEnv('NODE_ENV', 'development');
 
       const cronModule = await import('@/app/api/cron/voice-overage-billing/route');
       const request = createRequestWithAuth('/api/cron/voice-overage-billing');
@@ -366,7 +365,7 @@ describe('Voice Overage Billing Cron - /api/cron/voice-overage-billing', () => {
 
   describe('POST Method (Development Testing)', () => {
     it('should return 405 in production', async () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       vi.resetModules();
 
       const cronModule = await import('@/app/api/cron/voice-overage-billing/route');
@@ -383,8 +382,8 @@ describe('Voice Overage Billing Cron - /api/cron/voice-overage-billing', () => {
 
     it('should execute GET logic in development', async () => {
       vi.resetModules();
-      process.env.NODE_ENV = 'development';
-      process.env.CRON_SECRET = 'test-cron-secret';
+      vi.stubEnv('NODE_ENV', 'development');
+      vi.stubEnv('CRON_SECRET', 'test-cron-secret');
 
       const cronModule = await import('@/app/api/cron/voice-overage-billing/route');
       const request = createRequestWithAuth(

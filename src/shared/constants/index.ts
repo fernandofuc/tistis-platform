@@ -181,3 +181,82 @@ export const COLORS = {
   error: '#EF4444',
   info: '#3B82F6',
 } as const;
+
+// ======================
+// SECURE BOOKING STATES
+// Phase 7: UI/Dashboard - Booking States System
+// ======================
+
+/**
+ * Booking Hold Status - Temporary reservation during voice call/chat
+ * Maps to: booking_holds.status in 167_SECURE_BOOKING_SYSTEM.sql
+ */
+export const BOOKING_HOLD_STATUSES = [
+  { value: 'active', label: 'Hold Activo', color: 'amber', icon: 'clock', description: 'Reservación temporal en progreso' },
+  { value: 'converted', label: 'Convertido', color: 'green', icon: 'check', description: 'Convertido a cita/reservación' },
+  { value: 'expired', label: 'Expirado', color: 'gray', icon: 'timer-off', description: 'Hold expiró sin conversión' },
+  { value: 'released', label: 'Liberado', color: 'slate', icon: 'x', description: 'Liberado manualmente' },
+] as const;
+
+/**
+ * Confirmation Status - Customer confirmation state for bookings
+ * Maps to: appointments.confirmation_status, restaurant_orders.confirmation_status
+ */
+export const CONFIRMATION_STATUSES = [
+  { value: 'not_required', label: 'No Requerida', color: 'slate', icon: 'minus', description: 'Cliente de confianza' },
+  { value: 'pending', label: 'Pendiente', color: 'amber', icon: 'clock', description: 'Esperando confirmación' },
+  { value: 'confirmed', label: 'Confirmada', color: 'green', icon: 'check', description: 'Cliente confirmó' },
+  { value: 'expired', label: 'Expirada', color: 'red', icon: 'alert', description: 'Expiró sin respuesta' },
+] as const;
+
+/**
+ * Deposit Status - Payment deposit state for high-risk bookings
+ * Maps to: booking_deposits.status
+ */
+export const DEPOSIT_STATUSES = [
+  { value: 'not_required', label: 'No Requerido', color: 'slate', icon: 'minus', description: 'Sin depósito necesario' },
+  { value: 'required', label: 'Requerido', color: 'amber', icon: 'dollar', description: 'Depósito pendiente' },
+  { value: 'pending', label: 'Procesando', color: 'blue', icon: 'loader', description: 'Pago en proceso' },
+  { value: 'paid', label: 'Pagado', color: 'green', icon: 'check', description: 'Depósito recibido' },
+  { value: 'forfeited', label: 'Perdido', color: 'red', icon: 'x', description: 'No-show, depósito retenido' },
+  { value: 'refunded', label: 'Reembolsado', color: 'purple', icon: 'refresh', description: 'Depósito devuelto' },
+  { value: 'applied', label: 'Aplicado', color: 'emerald', icon: 'check-double', description: 'Aplicado al servicio' },
+] as const;
+
+/**
+ * Customer Trust Levels - Based on trust_score thresholds
+ * Used for visual indicators in UI
+ */
+export const TRUST_LEVELS = [
+  { value: 'trusted', label: 'Cliente Confiable', minScore: 80, color: 'green', icon: 'shield-check' },
+  { value: 'standard', label: 'Cliente Estándar', minScore: 50, color: 'blue', icon: 'user' },
+  { value: 'cautious', label: 'Requiere Confirmación', minScore: 30, color: 'amber', icon: 'alert-triangle' },
+  { value: 'high_risk', label: 'Alto Riesgo', minScore: 0, color: 'red', icon: 'shield-alert' },
+] as const;
+
+/**
+ * Combined Booking State - For UI display purposes
+ * Combines appointment/order status with confirmation and deposit status
+ */
+export const BOOKING_COMBINED_STATES = [
+  { value: 'hold_active', label: 'En Proceso', color: 'amber', priority: 1, description: 'Reservación temporal activa' },
+  { value: 'pending_confirmation', label: 'Pendiente Confirmar', color: 'orange', priority: 2, description: 'Esperando confirmación del cliente' },
+  { value: 'pending_deposit', label: 'Pendiente Depósito', color: 'yellow', priority: 3, description: 'Esperando pago de depósito' },
+  { value: 'confirmed', label: 'Confirmado', color: 'green', priority: 4, description: 'Reservación confirmada' },
+  { value: 'scheduled', label: 'Programado', color: 'blue', priority: 5, description: 'Cita programada' },
+  { value: 'in_progress', label: 'En Progreso', color: 'indigo', priority: 6, description: 'Servicio en curso' },
+  { value: 'completed', label: 'Completado', color: 'emerald', priority: 7, description: 'Servicio completado' },
+  { value: 'no_show', label: 'No Asistió', color: 'red', priority: 8, description: 'Cliente no se presentó' },
+  { value: 'cancelled', label: 'Cancelado', color: 'gray', priority: 9, description: 'Reservación cancelada' },
+] as const;
+
+/**
+ * Restaurant-specific Table Reservation States
+ */
+export const TABLE_RESERVATION_STATES = [
+  { value: 'hold', label: 'Hold Temporal', color: 'amber', description: 'Mesa reservada temporalmente' },
+  { value: 'reserved', label: 'Reservada', color: 'blue', description: 'Mesa reservada y confirmada' },
+  { value: 'pending_confirmation', label: 'Sin Confirmar', color: 'orange', description: 'Reservación sin confirmación' },
+  { value: 'seated', label: 'Ocupada', color: 'green', description: 'Clientes sentados' },
+  { value: 'available', label: 'Disponible', color: 'slate', description: 'Mesa libre' },
+] as const;

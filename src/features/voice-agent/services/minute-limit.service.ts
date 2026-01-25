@@ -88,6 +88,18 @@ export async function updateMinuteLimits(
     return null;
   }
 
+  // Validar included_minutes (debe ser positivo)
+  if (updates.included_minutes !== undefined && updates.included_minutes < 0) {
+    console.error('[MinuteLimitService] Invalid included_minutes:', updates.included_minutes);
+    return null;
+  }
+
+  // Validar overage_price_centavos (debe ser no-negativo)
+  if (updates.overage_price_centavos !== undefined && updates.overage_price_centavos < 0) {
+    console.error('[MinuteLimitService] Invalid overage_price_centavos:', updates.overage_price_centavos);
+    return null;
+  }
+
   // Validar alert_thresholds
   if (updates.alert_thresholds) {
     const validThresholds = updates.alert_thresholds.every(

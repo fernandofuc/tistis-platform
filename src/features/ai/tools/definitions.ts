@@ -216,6 +216,92 @@ export const RedeemRewardSchema = z.object({
 });
 
 // ======================
+// SECURE BOOKING SCHEMAS (v2.2 - FASE 4)
+// Herramientas para verificación de confianza y holds
+// ======================
+
+/**
+ * Schema para check_customer_trust
+ * Verifica el score de confianza del cliente
+ */
+export const CheckCustomerTrustSchema = z.object({
+  phone_number: z.string().optional().describe('Teléfono del cliente (opcional, usa lead_id del contexto si no se proporciona)'),
+});
+
+/**
+ * Schema para create_booking_hold
+ * Crea un hold temporal en un slot de reservación
+ */
+export const CreateBookingHoldSchema = z.object({
+  date: z.string().describe('Fecha del slot en formato YYYY-MM-DD'),
+  time: z.string().describe('Hora del slot en formato HH:MM'),
+  duration_minutes: z.number().optional().default(60).describe('Duración en minutos (default: 60)'),
+  branch_id: z.string().optional().describe('ID de sucursal (opcional)'),
+  service_id: z.string().optional().describe('ID de servicio (opcional)'),
+  hold_type: z.enum(['appointment', 'reservation']).optional().default('appointment').describe('Tipo de hold'),
+});
+
+/**
+ * Schema para release_booking_hold
+ * Libera un hold activo
+ */
+export const ReleaseBookingHoldSchema = z.object({
+  hold_id: z.string().describe('ID del hold a liberar'),
+  reason: z.string().optional().describe('Razón de la liberación'),
+});
+
+/**
+ * Schema para check_secure_availability
+ * Verifica disponibilidad considerando holds activos
+ */
+export const CheckSecureAvailabilitySchema = z.object({
+  date: z.string().optional().describe('Fecha a verificar en formato YYYY-MM-DD'),
+  time: z.string().optional().describe('Hora específica a verificar en formato HH:MM'),
+  duration_minutes: z.number().optional().default(60).describe('Duración del servicio'),
+  branch_id: z.string().optional().describe('ID de sucursal'),
+  include_alternatives: z.boolean().optional().default(true).describe('Incluir alternativas si no hay disponibilidad'),
+});
+
+/**
+ * Schema para convert_hold_to_booking
+ * Convierte un hold activo en una reservación/cita confirmada
+ */
+export const ConvertHoldToBookingSchema = z.object({
+  hold_id: z.string().describe('ID del hold a convertir'),
+  customer_name: z.string().optional().describe('Nombre del cliente (si no se proporcionó antes)'),
+  customer_email: z.string().email().optional().describe('Email del cliente'),
+  special_requests: z.string().optional().describe('Solicitudes especiales'),
+  notes: z.string().optional().describe('Notas adicionales'),
+});
+
+/**
+ * Schema para secure_create_appointment
+ * Crea una cita con verificación de trust integrada
+ */
+export const SecureCreateAppointmentSchema = z.object({
+  date: z.string().describe('Fecha de la cita en formato YYYY-MM-DD'),
+  time: z.string().describe('Hora de la cita en formato HH:MM'),
+  service_id: z.string().optional().describe('ID del servicio'),
+  branch_id: z.string().optional().describe('ID de la sucursal'),
+  staff_id: z.string().optional().describe('ID del especialista'),
+  notes: z.string().optional().describe('Notas adicionales'),
+  skip_trust_check: z.boolean().optional().default(false).describe('Saltar verificación de trust (solo VIPs)'),
+});
+
+/**
+ * Schema para secure_create_reservation
+ * Crea una reservación de restaurante con verificación de trust
+ */
+export const SecureCreateReservationSchema = z.object({
+  date: z.string().describe('Fecha de la reservación en formato YYYY-MM-DD'),
+  time: z.string().describe('Hora de la reservación en formato HH:MM'),
+  party_size: z.number().min(1).max(20).describe('Número de personas'),
+  branch_id: z.string().optional().describe('ID de la sucursal'),
+  special_requests: z.string().optional().describe('Solicitudes especiales'),
+  skip_trust_check: z.boolean().optional().default(false).describe('Saltar verificación de trust'),
+});
+
+// ======================
 // TOOL RESPONSE TYPES
 // ======================
 
@@ -449,6 +535,87 @@ export interface RewardRedemptionResult {
 }
 
 // ======================
+// SECURE BOOKING RESPONSE TYPES (v2.2 - FASE 4)
+// ======================
+
+export interface CustomerTrustResult {
+  success: boolean;
+  trust_score: number;
+  trust_level: 'vip' | 'trusted' | 'normal' | 'risky' | 'blocked';
+  recommended_action: 'proceed' | 'require_confirmation' | 'require_deposit' | 'blocked';
+  is_vip: boolean;
+  is_blocked: boolean;
+  block_reason?: string;
+  no_show_count: number;
+  completed_appointments: number;
+  deposit_required: boolean;
+  deposit_amount_cents?: number;
+  message: string;
+  error?: string;
+}
+
+export interface BookingHoldResult {
+  success: boolean;
+  hold_id?: string;
+  expires_at?: string;
+  slot_datetime?: string;
+  requires_deposit: boolean;
+  deposit_amount_cents?: number;
+  trust_score_at_hold?: number;
+  confirmation_message: string;
+  error?: string;
+}
+
+export interface SecureAvailabilityResult {
+  success: boolean;
+  available: boolean;
+  unavailable_reason?: string;
+  requested_slot?: {
+    date: string;
+    time: string;
+    duration_minutes: number;
+  };
+  alternative_slots?: Array<{
+    date: string;
+    time: string;
+    branch_name?: string;
+  }>;
+  active_holds_in_range?: number;
+  message: string;
+  error?: string;
+}
+
+export interface HoldConversionResult {
+  success: boolean;
+  booking_id?: string;
+  confirmation_code?: string;
+  booking_type: 'appointment' | 'reservation';
+  date_time?: string;
+  confirmation_message: string;
+  error?: string;
+}
+
+export interface SecureBookingResult {
+  success: boolean;
+  booking_id?: string;
+  confirmation_code?: string;
+  scheduled_at?: string;
+  branch_name?: string;
+  service_name?: string;
+  staff_name?: string;
+  party_size?: number;
+  trust_score_at_booking?: number;
+  deposit_required: boolean;
+  /** Monto del depósito en centavos (para DEPOSIT_REQUIRED) */
+  deposit_amount_cents?: number;
+  deposit_status?: 'pending' | 'paid' | 'refunded' | 'not_required';
+  hold_id?: string;
+  confirmation_message: string;
+  error?: string;
+  error_code?: 'DEPOSIT_REQUIRED' | 'BLOCKED' | 'NO_AVAILABILITY' | 'SLOT_HELD';
+}
+
+// ======================
 // TOOL NAMES (Constants)
 // ======================
 
@@ -476,6 +643,14 @@ export const TOOL_NAMES = {
   GET_AVAILABLE_REWARDS: 'get_available_rewards',
   GET_MEMBERSHIP_INFO: 'get_membership_info',
   REDEEM_REWARD: 'redeem_reward',
+  // Secure Booking tools (v2.2 - FASE 4)
+  CHECK_CUSTOMER_TRUST: 'check_customer_trust',
+  CREATE_BOOKING_HOLD: 'create_booking_hold',
+  RELEASE_BOOKING_HOLD: 'release_booking_hold',
+  CHECK_SECURE_AVAILABILITY: 'check_secure_availability',
+  CONVERT_HOLD_TO_BOOKING: 'convert_hold_to_booking',
+  SECURE_CREATE_APPOINTMENT: 'secure_create_appointment',
+  SECURE_CREATE_RESERVATION: 'secure_create_reservation',
 } as const;
 
 export type ToolName = typeof TOOL_NAMES[keyof typeof TOOL_NAMES];
@@ -508,6 +683,14 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   [TOOL_NAMES.GET_AVAILABLE_REWARDS]: 'Obtiene las recompensas disponibles para canjear con puntos. Usa esta tool cuando el cliente pregunte qué puede canjear o qué premios hay.',
   [TOOL_NAMES.GET_MEMBERSHIP_INFO]: 'Obtiene información de la membresía del cliente (plan, beneficios, fecha de vencimiento). Usa esta tool cuando pregunten por su membresía.',
   [TOOL_NAMES.REDEEM_REWARD]: 'Canjea una recompensa usando los puntos del cliente. Usa esta tool cuando el cliente confirme que quiere canjear una recompensa específica.',
+  // Secure Booking tools (v2.2 - FASE 4)
+  [TOOL_NAMES.CHECK_CUSTOMER_TRUST]: 'Verifica el score de confianza del cliente antes de crear una reservación. Usa esta tool al inicio del proceso de booking para determinar si se requiere depósito o confirmación adicional.',
+  [TOOL_NAMES.CREATE_BOOKING_HOLD]: 'Crea un hold temporal (15 min) en un slot de reservación mientras el cliente confirma. Usa esta tool después de que el cliente elija un horario pero antes de confirmar definitivamente.',
+  [TOOL_NAMES.RELEASE_BOOKING_HOLD]: 'Libera un hold activo si el cliente cancela o cambia de opinión. Usa esta tool cuando el cliente decida no continuar con la reservación.',
+  [TOOL_NAMES.CHECK_SECURE_AVAILABILITY]: 'Verifica disponibilidad considerando holds activos de otros usuarios. Usa esta tool para obtener slots realmente disponibles sin conflictos.',
+  [TOOL_NAMES.CONVERT_HOLD_TO_BOOKING]: 'Convierte un hold activo en una reservación confirmada. Usa esta tool cuando el cliente confirme definitivamente su reservación.',
+  [TOOL_NAMES.SECURE_CREATE_APPOINTMENT]: 'Crea una cita con verificación de trust integrada. Usa esta tool para dental/clínica cuando quieras crear la cita verificando el historial del cliente.',
+  [TOOL_NAMES.SECURE_CREATE_RESERVATION]: 'Crea una reservación de restaurante con verificación de trust. Usa esta tool para restaurante cuando quieras reservar verificando el historial del cliente.',
 };
 
 // ======================
@@ -536,6 +719,12 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_STAFF_INFO,
     TOOL_NAMES.CREATE_APPOINTMENT,
     TOOL_NAMES.UPDATE_LEAD_INFO,
+    // Secure Booking tools (v2.2)
+    TOOL_NAMES.CHECK_CUSTOMER_TRUST,
+    TOOL_NAMES.CREATE_BOOKING_HOLD,
+    TOOL_NAMES.RELEASE_BOOKING_HOLD,
+    TOOL_NAMES.CHECK_SECURE_AVAILABILITY,
+    TOOL_NAMES.CONVERT_HOLD_TO_BOOKING,
   ],
 
   booking_dental: [
@@ -546,6 +735,13 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_STAFF_INFO,
     TOOL_NAMES.CREATE_APPOINTMENT,
     TOOL_NAMES.UPDATE_LEAD_INFO,
+    // Secure Booking tools (v2.2)
+    TOOL_NAMES.CHECK_CUSTOMER_TRUST,
+    TOOL_NAMES.CREATE_BOOKING_HOLD,
+    TOOL_NAMES.RELEASE_BOOKING_HOLD,
+    TOOL_NAMES.CHECK_SECURE_AVAILABILITY,
+    TOOL_NAMES.CONVERT_HOLD_TO_BOOKING,
+    TOOL_NAMES.SECURE_CREATE_APPOINTMENT,
   ],
 
   booking_restaurant: [
@@ -553,6 +749,13 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_BRANCH_INFO,
     TOOL_NAMES.CREATE_APPOINTMENT,
     TOOL_NAMES.UPDATE_LEAD_INFO,
+    // Secure Booking tools (v2.2)
+    TOOL_NAMES.CHECK_CUSTOMER_TRUST,
+    TOOL_NAMES.CREATE_BOOKING_HOLD,
+    TOOL_NAMES.RELEASE_BOOKING_HOLD,
+    TOOL_NAMES.CHECK_SECURE_AVAILABILITY,
+    TOOL_NAMES.CONVERT_HOLD_TO_BOOKING,
+    TOOL_NAMES.SECURE_CREATE_RESERVATION,
   ],
 
   booking_medical: [
@@ -703,6 +906,14 @@ const toolDefinitions = {
   CreateOrderSchema,
   CheckItemAvailabilitySchema,
   GetActivePromotionsSchema,
+  // Secure Booking Schemas (v2.2 - FASE 4)
+  CheckCustomerTrustSchema,
+  CreateBookingHoldSchema,
+  ReleaseBookingHoldSchema,
+  CheckSecureAvailabilitySchema,
+  ConvertHoldToBookingSchema,
+  SecureCreateAppointmentSchema,
+  SecureCreateReservationSchema,
 };
 
 export default toolDefinitions;

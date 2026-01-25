@@ -4,8 +4,33 @@
 // Target: >70% cache hit rate, <80ms P95 latency
 // =====================================================
 
-import { unstable_cache } from 'next/cache';
+import { unstable_cache, revalidateTag as nextRevalidateTag } from 'next/cache';
 import { createAPIKeyAuthenticatedClient } from './api-key-auth';
+
+// ======================
+// CACHE INVALIDATION HELPER
+// ======================
+
+/**
+ * Safe wrapper for revalidateTag that handles test environments and edge cases.
+ * Next.js revalidateTag throws when called outside of a proper server context.
+ *
+ * @param tag - Cache tag to invalidate
+ */
+function safeRevalidateTag(tag: string): void {
+  // Skip in test environment (Vitest/Jest)
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+    return;
+  }
+
+  try {
+    nextRevalidateTag(tag);
+  } catch (error) {
+    // Log warning but don't throw - cache invalidation failure shouldn't crash the app
+    // This can happen when called outside Next.js server context (e.g., scripts, workers)
+    console.warn(`[Cache] Failed to revalidate tag "${tag}":`, error instanceof Error ? error.message : error);
+  }
+}
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ======================
@@ -356,10 +381,8 @@ export async function getCachedLowStockItems(
  * ```
  */
 export async function invalidateBranchCache(tags: string[]): Promise<void> {
-  const { revalidateTag } = await import('next/cache');
-
   for (const tag of tags) {
-    revalidateTag(tag);
+    safeRevalidateTag(tag);
   }
 }
 

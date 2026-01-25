@@ -17,6 +17,8 @@ import type { Appointment, Lead, Staff, Service, Branch } from '@/src/shared/typ
 // ======================
 // TYPES
 // ======================
+
+// Full relations (fetched internally by the component)
 interface AppointmentWithRelations extends Appointment {
   leads?: Lead;
   staff?: Staff;
@@ -24,8 +26,15 @@ interface AppointmentWithRelations extends Appointment {
   branches?: Branch;
 }
 
+/**
+ * Props for AppointmentDetailPanel
+ * Note: The appointment prop can have partial relation data.
+ * The component fetches full data on open, so the initial prop
+ * only needs to contain the appointment ID for the fetch.
+ */
 interface AppointmentDetailPanelProps {
-  appointment: AppointmentWithRelations | null;
+  // Accept base Appointment type - component fetches full relations internally
+  appointment: Appointment | AppointmentWithRelations | null;
   isOpen: boolean;
   onClose: () => void;
   onStatusChange?: (appointmentId: string, newStatus: string) => void;
@@ -229,7 +238,9 @@ export function AppointmentDetailPanel({
       setFullData(data as AppointmentWithRelations);
     } catch (err) {
       console.error('Error fetching appointment details:', err);
-      setFullData(appointment);
+      // Fallback to passed appointment data (may have partial or no relations)
+      // The displayData logic below handles missing relations safely
+      setFullData(appointment as unknown as AppointmentWithRelations);
     } finally {
       setLoading(false);
     }
@@ -253,8 +264,9 @@ export function AppointmentDetailPanel({
 
       if (error) throw error;
 
-      // Update local state
-      setFullData((prev) => prev ? { ...prev, status: newStatus as any } : null);
+      // Update local state with properly typed status
+      type AppointmentStatus = 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled';
+      setFullData((prev) => prev ? { ...prev, status: newStatus as AppointmentStatus } : null);
       onStatusChange?.(appointment.id, newStatus);
     } catch (err) {
       console.error('Error updating status:', err);
@@ -272,21 +284,25 @@ export function AppointmentDetailPanel({
     }
   }, [isOpen, onClose]);
 
-  const displayData = fullData || appointment;
+  // Display data: use fullData if available (has complete relations), otherwise fall back to appointment
+  // Cast to AppointmentWithRelations to access relation properties safely
+  const displayData = (fullData || appointment) as AppointmentWithRelations | null;
   const lead = displayData?.leads;
   const staff = displayData?.staff;
   const service = displayData?.services;
   const branch = displayData?.branches;
 
-  // Debug: log staff data (v2 - with FK fix)
-  console.log('🔍 Appointment Detail v2:', {
-    timestamp: new Date().toISOString(),
-    staff_id: displayData?.staff_id,
-    staff: staff,
-    service_id: displayData?.service_id,
-    service: service,
-    hasFullData: !!fullData
-  });
+  // Debug logging (development only)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 Appointment Detail v2:', {
+      timestamp: new Date().toISOString(),
+      staff_id: displayData?.staff_id,
+      staff: staff,
+      service_id: displayData?.service_id,
+      service: service,
+      hasFullData: !!fullData
+    });
+  }
 
   const statusInfo = displayData?.status ? statusColors[displayData.status] || statusColors.scheduled : statusColors.scheduled;
   const statusLabel = APPOINTMENT_STATUSES.find((s) => s.value === displayData?.status)?.label || displayData?.status;
@@ -339,6 +355,7 @@ export function AppointmentDetailPanel({
                 <div className="flex items-center gap-3">
                   <button
                     onClick={onClose}
+                    aria-label="Cerrar panel"
                     className={cn(
                       'p-2 -ml-2 rounded-full',
                       'text-gray-400 hover:text-gray-600',

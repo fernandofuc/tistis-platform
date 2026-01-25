@@ -33,3 +33,19 @@ export {
   getTemplateFileName,
   getPersonalityFileName,
 } from './template-prompt-compiler.types';
+
+// =====================================================
+// VOICE SECURE BOOKING SERVICE (v2.2)
+// =====================================================
+
+export {
+  VoiceSecureBookingService,
+  createVoiceSecureBookingService,
+} from './voice-secure-booking.service';
+
+export type {
+  SecureBookingContext,
+  TrustVerificationResult,
+  HoldCreationResult,
+  BookingConversionResult,
+} from './voice-secure-booking.service';

@@ -1,24 +1,26 @@
 // =====================================================
 // TIS TIS PLATFORM - Usage Service Tests
 // Sprint 5: AI Setup Assistant
+// Migrated to Vitest
 // =====================================================
 
+import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
 import { UsageService, usageService } from '../../services/usage.service';
 import { createServerClient } from '@/src/shared/lib/supabase';
 
 // Mock Supabase
-jest.mock('@/src/shared/lib/supabase', () => ({
-  createServerClient: jest.fn(),
+vi.mock('@/src/shared/lib/supabase', () => ({
+  createServerClient: vi.fn(),
 }));
 
 describe('UsageService', () => {
   const mockSupabase = {
-    rpc: jest.fn(),
+    rpc: vi.fn(),
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    (createServerClient as jest.Mock).mockReturnValue(mockSupabase);
+    vi.clearAllMocks();
+    (createServerClient as Mock).mockReturnValue(mockSupabase);
   });
 
   // ======================

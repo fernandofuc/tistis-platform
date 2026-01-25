@@ -189,6 +189,102 @@ export interface BookingResult {
   suggestion?: string;
 }
 
+// =====================================================
+// SECURE BOOKING TYPES (v2.2 - FASE 4)
+// Sistema de verificación de confianza y holds
+// =====================================================
+
+/**
+ * Nivel de confianza del cliente
+ */
+export type CustomerTrustLevel = 'vip' | 'trusted' | 'normal' | 'risky' | 'blocked';
+
+/**
+ * Acción requerida basada en trust score
+ */
+export type TrustAction = 'proceed' | 'require_confirmation' | 'require_deposit' | 'blocked';
+
+/**
+ * Estado de un hold activo
+ */
+export type HoldStatus = 'active' | 'converted' | 'expired' | 'released';
+
+/**
+ * Información de verificación de trust del cliente
+ */
+export interface CustomerTrustInfo {
+  /** Score de confianza (0-100) */
+  trust_score: number;
+  /** Nivel de confianza */
+  trust_level: CustomerTrustLevel;
+  /** Acción recomendada */
+  recommended_action: TrustAction;
+  /** Si es cliente VIP */
+  is_vip: boolean;
+  /** Si está bloqueado */
+  is_blocked: boolean;
+  /** Razón del bloqueo */
+  block_reason?: string;
+  /** Número de no-shows históricos */
+  no_show_count: number;
+  /** Número de citas completadas */
+  completed_appointments: number;
+  /** Si requiere depósito */
+  deposit_required: boolean;
+  /** Monto del depósito en centavos */
+  deposit_amount_cents?: number;
+}
+
+/**
+ * Información de un hold activo en la sesión
+ */
+export interface ActiveHoldInfo {
+  /** ID del hold */
+  hold_id: string;
+  /** Fecha y hora del slot reservado */
+  slot_datetime: string;
+  /** Fecha y hora de fin del slot */
+  end_datetime: string;
+  /** Fecha de expiración del hold */
+  expires_at: string;
+  /** Si requiere depósito */
+  requires_deposit: boolean;
+  /** Monto del depósito */
+  deposit_amount_cents?: number;
+  /** Trust score al momento del hold */
+  trust_score_at_hold: number;
+  /** Tipo de hold */
+  hold_type: 'appointment' | 'reservation';
+  /** Vertical del negocio */
+  vertical: 'dental' | 'restaurant';
+}
+
+/**
+ * Contexto completo de Secure Booking para la sesión
+ */
+export interface SecureBookingContext {
+  /** Si el sistema de secure booking está habilitado */
+  enabled: boolean;
+  /** Información de trust del cliente actual */
+  customer_trust?: CustomerTrustInfo;
+  /** Holds activos en esta sesión */
+  active_holds: ActiveHoldInfo[];
+  /** Si ya se verificó el trust en esta sesión */
+  trust_verified: boolean;
+  /** Timestamp de última verificación */
+  last_trust_check?: string;
+  /** Si el cliente confirmó explícitamente la reserva */
+  customer_confirmed: boolean;
+  /** Configuración de políticas del tenant */
+  booking_policy?: {
+    trust_threshold_confirmation: number;
+    trust_threshold_deposit: number;
+    deposit_amount_cents: number;
+    require_deposit_below_trust: boolean;
+    hold_duration_minutes: number;
+  };
+}
+
 /**
  * SPRINT 3: Orden pendiente de confirmación
  * Cuando el AI detecta items con buena confianza, los guarda aquí
@@ -622,6 +718,17 @@ export const TISTISAgentState = Annotation.Root({
     default: () => null,
   }),
 
+  /** Contexto de Secure Booking (v2.2 - FASE 4) */
+  secure_booking: Annotation<SecureBookingContext>({
+    reducer: (prev, next) => ({ ...prev, ...next }),
+    default: () => ({
+      enabled: false,
+      active_holds: [],
+      trust_verified: false,
+      customer_confirmed: false,
+    }),
+  }),
+
   // =====================================================
   // MENSAJE ACTUAL Y ANÁLISIS
   // =====================================================
@@ -858,6 +965,12 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
     conversation: null,
     business_context: null,
     loyalty: null,
+    secure_booking: {
+      enabled: false,
+      active_holds: [],
+      trust_verified: false,
+      customer_confirmed: false,
+    },
     current_message: '',
     channel: 'whatsapp',
     detected_intent: 'UNKNOWN',

@@ -13,6 +13,17 @@ import type {
   WebhookHandlerContext,
 } from '@/lib/voice-agent/webhooks/types';
 
+// Mock VoiceAgentService - must be before imports that use it
+vi.mock('@/src/features/voice-agent/services/voice-agent.service', () => ({
+  VoiceAgentService: {
+    validateCallAllowed: vi.fn().mockResolvedValue({
+      allowed: true,
+      reason: null,
+      limitCheck: null,
+    }),
+  },
+}));
+
 // Mock Supabase
 const mockSupabase = {
   from: vi.fn().mockReturnThis(),

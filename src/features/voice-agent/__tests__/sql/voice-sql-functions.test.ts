@@ -12,7 +12,27 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// ======================
+// TEST TYPES
+// ======================
+
+/**
+ * Type for RPC calls in tests - allows any function name and args
+ * since we're mocking the Supabase client anyway.
+ * Uses 'any' for data to allow flexible testing without strict typing
+ * on mocked responses.
+ */
+type TestRpcFn = (
+  fn: string,
+  args?: Record<string, unknown>
+) => Promise<{ data: any; error: { message: string } | null }>;
+
+/** Test Supabase client with flexible RPC typing */
+interface TestSupabaseClient extends Omit<SupabaseClient, 'rpc'> {
+  rpc: TestRpcFn;
+}
 
 // ======================
 // MOCKS
@@ -72,12 +92,12 @@ function setupMockChain() {
 // ======================
 
 describe('Voice SQL Functions - RPC Calls', () => {
-  let supabase: ReturnType<typeof createClient>;
+  let supabase: TestSupabaseClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
     setupMockChain();
-    supabase = createClient('http://test.supabase.co', 'test-key');
+    supabase = createClient('http://test.supabase.co', 'test-key') as unknown as TestSupabaseClient;
   });
 
   afterEach(() => {
@@ -138,8 +158,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         p_tenant_id: tenantId,
       });
 
-      expect(data.can_proceed).toBe(false);
-      expect(data.error_code).toBe('TENANT_NOT_FOUND');
+      expect(data!.can_proceed).toBe(false);
+      expect(data!.error_code).toBe('TENANT_NOT_FOUND');
     });
 
     it('should return blocked status when policy is block and limit exceeded', async () => {
@@ -161,8 +181,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         p_tenant_id: tenantId,
       });
 
-      expect(data.can_proceed).toBe(false);
-      expect(data.error_code).toBe('LIMIT_EXCEEDED_BLOCK_POLICY');
+      expect(data!.can_proceed).toBe(false);
+      expect(data!.error_code).toBe('LIMIT_EXCEEDED_BLOCK_POLICY');
     });
 
     it('should return plan not eligible for non-Growth plans', async () => {
@@ -179,8 +199,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         p_tenant_id: tenantId,
       });
 
-      expect(data.can_proceed).toBe(false);
-      expect(data.error_code).toBe('PLAN_NOT_ELIGIBLE');
+      expect(data!.can_proceed).toBe(false);
+      expect(data!.error_code).toBe('PLAN_NOT_ELIGIBLE');
     });
   });
 
@@ -221,8 +241,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
       const { data, error } = await supabase.rpc('record_minute_usage', params);
 
       expect(mockRpc).toHaveBeenCalledWith('record_minute_usage', params);
-      expect(data.success).toBe(true);
-      expect(data.minutes_recorded).toBe(4);
+      expect(data!.success).toBe(true);
+      expect(data!.minutes_recorded).toBe(4);
       expect(error).toBeNull();
     });
 
@@ -244,8 +264,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
 
       const { data } = await supabase.rpc('record_minute_usage', params);
 
-      expect(data.success).toBe(false);
-      expect(data.error_code).toBe('INVALID_INPUT');
+      expect(data!.success).toBe(false);
+      expect(data!.error_code).toBe('INVALID_INPUT');
     });
 
     it('should calculate overage correctly', async () => {
@@ -277,10 +297,10 @@ describe('Voice SQL Functions - RPC Calls', () => {
 
       const { data } = await supabase.rpc('record_minute_usage', params);
 
-      expect(data.is_overage).toBe(true);
-      expect(data.minutes_to_overage).toBe(3);
-      expect(data.charge_centavos).toBe(1050);
-      expect(data.alert_threshold_triggered).toBe(100);
+      expect(data!.is_overage).toBe(true);
+      expect(data!.minutes_to_overage).toBe(3);
+      expect(data!.charge_centavos).toBe(1050);
+      expect(data!.alert_threshold_triggered).toBe(100);
     });
 
     it('should reject usage when tenant is blocked', async () => {
@@ -302,8 +322,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
 
       const { data } = await supabase.rpc('record_minute_usage', params);
 
-      expect(data.success).toBe(false);
-      expect(data.error_code).toBe('TENANT_BLOCKED');
+      expect(data!.success).toBe(false);
+      expect(data!.error_code).toBe('TENANT_BLOCKED');
     });
   });
 
@@ -363,8 +383,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
       expect(mockRpc).toHaveBeenCalledWith('get_minute_usage_summary', {
         p_tenant_id: tenantId,
       });
-      expect(data.included_minutes).toBe(200);
-      expect(data.usage_percent).toBe(75);
+      expect(data!.included_minutes).toBe(200);
+      expect(data!.usage_percent).toBe(75);
       expect(error).toBeNull();
     });
 
@@ -381,7 +401,7 @@ describe('Voice SQL Functions - RPC Calls', () => {
         p_tenant_id: tenantId,
       });
 
-      expect(data.error_code).toBe('ACCESS_DENIED');
+      expect(data!.error_code).toBe('ACCESS_DENIED');
     });
   });
 
@@ -411,8 +431,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
       );
 
       expect(mockRpc).toHaveBeenCalledWith('update_minute_limit_policy', params);
-      expect(data.success).toBe(true);
-      expect(data.new_policy).toBe('block');
+      expect(data!.success).toBe(true);
+      expect(data!.new_policy).toBe('block');
       expect(error).toBeNull();
     });
 
@@ -435,8 +455,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         params
       );
 
-      expect(data.success).toBe(false);
-      expect(data.error_code).toBe('INVALID_POLICY');
+      expect(data!.success).toBe(false);
+      expect(data!.error_code).toBe('INVALID_POLICY');
     });
 
     it('should unblock periods when changing to charge policy', async () => {
@@ -459,8 +479,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         params
       );
 
-      expect(data.success).toBe(true);
-      expect(data.periods_unblocked).toBe(2);
+      expect(data!.success).toBe(true);
+      expect(data!.periods_unblocked).toBe(2);
     });
 
     it('should deny access to non-admin users', async () => {
@@ -482,8 +502,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         params
       );
 
-      expect(data.success).toBe(false);
-      expect(data.error_code).toBe('ACCESS_DENIED');
+      expect(data!.success).toBe(false);
+      expect(data!.error_code).toBe('ACCESS_DENIED');
     });
   });
 
@@ -527,8 +547,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         'get_tenants_pending_overage_billing',
         expect.any(Object)
       );
-      expect(data).toHaveLength(2);
-      expect(data[0].overage_minutes).toBe(50);
+      expect(data!).toHaveLength(2);
+      expect(data![0].overage_minutes).toBe(50);
       expect(error).toBeNull();
     });
 
@@ -572,8 +592,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
       expect(mockRpc).toHaveBeenCalledWith('get_current_overage_preview', {
         p_tenant_id: tenantId,
       });
-      expect(data[0].overage_minutes).toBe(15);
-      expect(data[0].overage_charges_centavos).toBe(5250);
+      expect(data![0].overage_minutes).toBe(15);
+      expect(data![0].overage_charges_centavos).toBe(5250);
       expect(error).toBeNull();
     });
   });
@@ -601,8 +621,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
       const { data, error } = await supabase.rpc('mark_overage_as_billed', params);
 
       expect(mockRpc).toHaveBeenCalledWith('mark_overage_as_billed', params);
-      expect(data.success).toBe(true);
-      expect(data.transactions_updated).toBe(5);
+      expect(data!.success).toBe(true);
+      expect(data!.transactions_updated).toBe(5);
       expect(error).toBeNull();
     });
 
@@ -623,8 +643,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
 
       const { data } = await supabase.rpc('mark_overage_as_billed', params);
 
-      expect(data.success).toBe(false);
-      expect(data.error_code).toBe('USAGE_NOT_FOUND');
+      expect(data!.success).toBe(false);
+      expect(data!.error_code).toBe('USAGE_NOT_FOUND');
     });
   });
 
@@ -646,8 +666,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
       const { data, error } = await supabase.rpc('reset_monthly_voice_usage');
 
       expect(mockRpc).toHaveBeenCalledWith('reset_monthly_voice_usage');
-      expect(data.success).toBe(true);
-      expect(data.tenants_processed).toBe(15);
+      expect(data!.success).toBe(true);
+      expect(data!.tenants_processed).toBe(15);
       expect(error).toBeNull();
     });
 
@@ -663,8 +683,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
 
       const { data } = await supabase.rpc('reset_monthly_voice_usage');
 
-      expect(data.success).toBe(true);
-      expect(data.tenants_processed).toBe(0);
+      expect(data!.success).toBe(true);
+      expect(data!.tenants_processed).toBe(0);
     });
   });
 
@@ -719,8 +739,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
       );
 
       expect(mockRpc).toHaveBeenCalledWith('get_voice_billing_history', params);
-      expect(data).toHaveLength(2);
-      expect(data[0].total_minutes_used).toBe(250);
+      expect(data!).toHaveLength(2);
+      expect(data![0].total_minutes_used).toBe(250);
       expect(error).toBeNull();
     });
 
@@ -739,7 +759,7 @@ describe('Voice SQL Functions - RPC Calls', () => {
       const { error } = await supabase.rpc('get_voice_billing_history', params);
 
       expect(error).toBeDefined();
-      expect(error.message).toContain('Access denied');
+      expect(error!.message).toContain('Access denied');
     });
   });
 
@@ -773,8 +793,8 @@ describe('Voice SQL Functions - RPC Calls', () => {
         'update_overage_payment_status',
         params
       );
-      expect(data.success).toBe(true);
-      expect(data.records_updated).toBe(1);
+      expect(data!.success).toBe(true);
+      expect(data!.records_updated).toBe(1);
       expect(error).toBeNull();
     });
   });
