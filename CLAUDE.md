@@ -4,9 +4,9 @@
 
 TIS TIS Platform es un sistema SaaS multi-tenant de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API, y automatizacion de procesos multi-canal. Especializado en verticales como clinicas dentales, restaurantes, y consultorios medicos.
 
-**Version:** 4.6.0
+**Version:** 4.7.0
 **Estado:** Produccion
-**Ultima actualizacion:** 29 de Diciembre, 2025
+**Ultima actualizacion:** 25 de Enero, 2026
 
 ---
 
@@ -73,7 +73,11 @@ tistis-platform/
 │   │   │   └── types/            # DashboardStats
 │   │   │
 │   │   ├── settings/             # Configuracion
-│   │   │   └── components/       # KnowledgeBase, ChannelConnections, etc.
+│   │   │   ├── components/       # KnowledgeBase, ChannelConnections, AdminChannelSection
+│   │   │   ├── services/         # notificationService, paymentsService
+│   │   │   ├── hooks/            # useChannels
+│   │   │   ├── types/            # channels.types
+│   │   │   └── index.ts          # Barrel exports
 │   │   │
 │   │   ├── leads/                # Gestion de leads
 │   │   ├── appointments/         # Citas y calendario
@@ -294,6 +298,276 @@ Discovery API → Pricing → Checkout → Provisioning → useTenant → useVer
 
 ---
 
+## Admin Channel System (v4.7.0 - FASE 1-6)
+
+### Descripcion
+
+Sistema de comunicacion B2B que permite a clientes empresariales (ESVA Dental, cadenas de restaurantes, etc.) interactuar con sus instancias TIS TIS via WhatsApp y Telegram. Permite consultar analytics, configurar servicios, recibir alertas y ejecutar acciones operativas en tiempo real.
+
+### Progreso de Implementacion
+
+| FASE | Descripcion | Estado | Version |
+|------|-------------|--------|---------|
+| **FASE 1-5** | Backend: RPC, servicios, tipos, migraciones, API endpoints | Completado | v4.7.0 |
+| **FASE 6** | UI Dashboard: Vinculacion de dispositivos en Notificaciones | Completado | v4.7.0 |
+| **FASE 7** | Admin Chat Interface (Widget conversacional) | Pendiente | v4.8.0 |
+| **FASE 8** | Alertas automáticas y notificaciones programadas | Pendiente | v4.8.0 |
+
+### Casos de Uso
+
+| Caso | Descripcion | Canal |
+|------|-------------|-------|
+| **Daily Summary** | Resumen diario de leads, citas y ventas | WhatsApp/Telegram |
+| **Analytics Query** | "Cuantos leads hoy?" "Ventas de esta semana?" | WhatsApp/Telegram |
+| **Configuration** | Cambiar horarios, precios, servicios | WhatsApp/Telegram |
+| **Alerts** | Notificacion de leads calientes, inventario bajo | WhatsApp/Telegram |
+| **Operations** | Ver citas de hoy, leads pendientes, escalaciones | WhatsApp/Telegram |
+
+### Arquitectura de Datos (FASE 1)
+
+```
+admin_channel_users (Usuarios vinculados)
+├── Link Code (vinculacion via SMS/codigo)
+├── Status (pending, active, suspended, blocked)
+├── Permissions (view_analytics, configure, receive_notifications)
+└── Rate Limiting (mensajes/hora, mensajes/dia)
+
+admin_channel_conversations (Flujos por usuario)
+├── Current Intent (tipo de solicitud)
+├── Pending Action (confirmacion pendiente)
+├── Context (datos de negocio cargados)
+└── LangGraph State
+
+admin_channel_messages (Historial)
+├── Detected Intent (analytics_daily_summary, config_prices, etc.)
+├── Extracted Data (valores, servicios mencionados)
+├── Actions Executed (cambios realizados)
+└── Token Usage (para billing)
+
+admin_channel_notifications (Alertas)
+├── Type (daily_summary, weekly_digest, hot_lead, low_inventory, etc.)
+├── Channel (WhatsApp, Telegram, o ambos)
+├── Status (pending, sent, delivered, read, failed)
+└── Scheduling (programadas, recurrentes)
+
+admin_channel_audit_log (Auditoria completa)
+├── Action (create_user, verify_code, send_message, etc.)
+├── Status (success, error)
+└── Metadata (IPs, cambios realizados, etc.)
+```
+
+### RPCs Implementados
+
+| RPC | Proposito |
+|-----|-----------|
+| `generate_admin_link_code(tenant_id, staff_id?)` | Genera codigo vinculacion (6 digitos, 15 min TTL) |
+| `verify_admin_link_code(code, phone?, telegram_id?, telegram_user?)` | Verifica codigo y activa usuario |
+| `get_admin_channel_user(tenant_id, phone_or_telegram)` | Obtiene usuario con datos de tenant |
+| `update_admin_rate_limit(user_id)` | Incrementa contadores rate limit |
+| `get_or_create_admin_conversation(user_id, channel)` | Crea o recupera conversacion activa |
+| `save_admin_message(conversation_id, role, content, intent, extracted_data)` | Guarda mensaje y detecta intent |
+
+### Intents Detectables
+
+**Analytics:**
+- `analytics_daily_summary` - Resumen del dia
+- `analytics_weekly_summary` - Resumen de la semana
+- `analytics_monthly_summary` - Resumen del mes
+- `analytics_sales` - Consultas de ventas
+- `analytics_leads` - Metricas de leads
+- `analytics_revenue` - Ingresos
+
+**Configuration:**
+- `config_services` - Gestionar servicios
+- `config_prices` - Cambiar precios
+- `config_hours` - Modificar horarios
+- `config_staff` - Gestionar personal
+- `config_promotions` - Crear promociones
+
+**Operations:**
+- `operation_appointments_today` - Citas de hoy
+- `operation_pending_leads` - Leads pendientes
+- `operation_escalations` - Escalaciones activas
+- `operation_inventory_check` - Verificar inventario
+
+**Notifications:**
+- `notification_settings` - Configurar alertas
+- `notification_pause` - Pausar notificaciones
+- `notification_resume` - Reanudar notificaciones
+
+### Feature Folder Structure
+
+```
+src/features/admin-channel/
+├── types/
+│   ├── db-rows.types.ts          # Tipos SQL (snake_case)
+│   ├── application.types.ts      # Tipos app (camelCase)
+│   ├── converters.ts             # DB ↔ App converters
+│   ├── api.types.ts              # Request/Response types
+│   ├── constants.ts              # Metadatos, errores
+│   └── index.ts                  # Barrel exports
+├── services/
+│   ├── admin-channel.service.ts  # Logica core (singleton)
+│   └── index.ts                  # Barrel exports
+├── components/
+│   ├── AdminChannelSection.tsx   # UI Vinculacion dispositivos (FASE 6)
+│   ├── LinkCodeGenerator.tsx     # Generador de codigos (FASE 7)
+│   ├── AdminChat.tsx             # Chat widget (FASE 7)
+│   └── NotificationSettings.tsx  # Config alertas (FASE 8)
+├── hooks/                        # (FASE 7)
+│   ├── useAdminChannel.ts
+│   └── useAdminNotifications.ts
+└── index.ts                      # Public API exports
+```
+
+### Servicios Disponibles (v4.7.0)
+
+```typescript
+// User Management
+generateLinkCode(tenantId, staffId?): Promise<GenerateLinkCodeResult>
+verifyLinkCode(code, phone?, telegramId?, telegramUsername?): Promise<VerifyLinkCodeResult>
+getAdminChannelUser(tenantId, phoneOrTelegram): Promise<AdminChannelUserWithTenant>
+
+// Conversations
+getOrCreateConversation(userId, channel): Promise<GetOrCreateConversationResult>
+
+// Messages
+saveMessage(conversationId, role, content, intent, extractedData): Promise<void>
+getConversationMessages(conversationId, limit?): Promise<AdminChannelMessage[]>
+
+// Rate Limiting
+updateRateLimit(userId): Promise<RateLimitResult>
+checkRateLimit(userId): Promise<RateLimitResult>
+
+// Notifications
+createNotification(tenantId, userId, type, content, channel): Promise<void>
+getNotifications(userId, limit?): Promise<AdminChannelNotification[]>
+```
+
+### FASE 6 - UI Dashboard Admin Channel (v4.7.0)
+
+#### Componente: AdminChannelSection
+
+Ubicación: `/src/features/settings/components/AdminChannelSection.tsx`
+
+Componente React que proporciona interfaz de usuario para vincular y gestionar dispositivos WhatsApp y Telegram personales en la sección de Notificaciones del Dashboard.
+
+**Características:**
+
+- Visualización de dispositivos vinculados por canal (WhatsApp/Telegram)
+- Generación de códigos de vinculación (6 dígitos, 15 minutos TTL)
+- Desvinculación de dispositivos con confirmación
+- Visualización de permisos y estadísticas de usuario
+- Mostrador de código con contador de tiempo restante
+- Instrucciones contextuales para cada canal
+- Dark mode completo
+- Responsivo (mobile-first)
+- Estado de carga e manejo de errores
+
+**Sub-componentes Internos:**
+
+| Componente | Responsabilidad |
+|------------|-----------------|
+| `LinkedAccountCard` | Tarjeta de dispositivo vinculado activo |
+| `AddChannelCard` | Botón/tarjeta para agregar nuevo dispositivo |
+| `LinkCodeDisplay` | Mostrador del código con instrucciones |
+| `StatusBadge` | Badge de estado del usuario (active, pending, etc.) |
+
+**Estados Visuales:**
+
+```
+- Loading: Spinner circular mientras se cargan dispositivos
+- Empty: Tarjetas "Vincular WhatsApp/Telegram" cuando no hay dispositivos
+- Active: Tarjeta de dispositivo con estatus "Activo"
+- Generating: Mostrador de código con botón de refrescar
+- Error: Banner rojo con mensaje de error y opción cerrar
+```
+
+**API Endpoints Utilizados:**
+
+| Endpoint | Metodo | Descripcion |
+|----------|--------|-------------|
+| `/api/admin-channel/link` | POST | Genera nuevo código de vinculación |
+| `/api/admin-channel/link` | GET | Obtiene lista de usuarios vinculados |
+| `/api/admin-channel/link?userId=xxx` | DELETE | Desvincula dispositivo |
+
+**Tipos Utilizados:**
+
+```typescript
+interface LinkedUser {
+  id: string;
+  phone_normalized: string | null;
+  telegram_user_id: string | null;
+  telegram_username: string | null;
+  status: 'pending' | 'active' | 'suspended' | 'unlinked';
+  linked_at: string | null;
+  can_view_analytics: boolean;
+  can_configure: boolean;
+  can_receive_notifications: boolean;
+  messages_today: number;
+  last_message_at: string | null;
+  staff?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  } | null;
+}
+
+interface LinkCode {
+  code: string;
+  expiresAt: string;
+  instructions: {
+    whatsapp: string;
+    telegram: string;
+  };
+}
+```
+
+**Integración en Página de Configuración:**
+
+El componente se integra en el tab "Notificaciones" de `/app/(dashboard)/dashboard/settings/page.tsx`:
+
+```typescript
+{activeTab === 'notifications' && (
+  <Card variant="bordered">
+    {/* ... Secciones In-App, Email, WhatsApp ... */}
+
+    {/* Admin Channel Section (nueva) */}
+    <AdminChannelSection />
+
+    {/* Save Button */}
+    <div className="flex justify-center sm:justify-end pt-4 border-t">
+      <Button onClick={handleSaveNotifications}>
+        Guardar Preferencias
+      </Button>
+    </div>
+  </Card>
+)}
+```
+
+**Flujo de Usuario:**
+
+1. Usuario navega a Settings > Notificaciones
+2. Ve sección "Admin Channel" con opción de vincular WhatsApp/Telegram
+3. Presiona botón "Vincular WhatsApp" o "Vincular Telegram"
+4. Se genera código de 6 dígitos con expiración de 15 minutos
+5. Se muestra código con instrucciones de envío
+6. Usuario puede copiar código o regenerarlo
+7. Una vez vinculado, aparece dispositivo activo en lista
+8. Puede desvincularse con confirmación
+
+**Estilos y Temas:**
+
+- Usa colores de canal: Verde para WhatsApp, Azul para Telegram
+- Color coral de TIS TIS para elementos interactivos
+- Backgrounds adaptables al dark mode
+- Animaciones suaves en hover y transiciones
+- Bordes redondeados (border-radius: 0.5rem a 2rem)
+- Espaciado consistente (gap-4, p-4, etc.)
+
+---
+
 ## Integration Hub (v4.4.0)
 
 ### Descripcion
@@ -342,7 +616,7 @@ POST /api/integrations/[id]/sync     # Trigger sync manual
 
 ## Base de Datos (Supabase)
 
-### Tablas Principales (32+)
+### Tablas Principales (40+)
 
 ```sql
 -- Core
@@ -361,10 +635,14 @@ appointments, quotes, quote_items, quote_payment_plans
 ai_message_patterns, ai_learned_vocabulary, ai_business_insights
 ai_learning_config, ai_learning_queue
 
--- Integration Hub (NUEVO)
+-- Integration Hub
 integration_connections, external_contacts, external_appointments
 external_inventory, external_products, integration_sync_logs
 integration_actions
+
+-- Admin Channel System (NUEVO v4.7.0)
+admin_channel_users, admin_channel_conversations, admin_channel_messages
+admin_channel_notifications, admin_channel_audit_log
 
 -- Loyalty
 loyalty_programs, loyalty_tiers, loyalty_rewards
@@ -385,6 +663,7 @@ plans, addons, subscriptions, clients
 | `065_AI_MESSAGE_LEARNING_SYSTEM.sql` | Sistema de aprendizaje |
 | `067_VOICE_AGENT_SYSTEM.sql` | Agente de voz (VAPI) |
 | `078_INTEGRATION_HUB.sql` | Integration Hub |
+| `177_ADMIN_CHANNEL_SYSTEM.sql` | Admin Channel System (B2B) |
 
 ### RLS (Row Level Security)
 
@@ -694,4 +973,36 @@ Tipos: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 ---
 
+## Recursos de Documentacion
+
+### Documentacion Principal
+
+Esta es la guia maestra de desarrollo. Para documentacion detallada por feature, consulta:
+
+**NUEVA: Admin Channel Docs (FASE 6)**
+- **[ADMIN_CHANNEL_DOCUMENTATION_INDEX.md](ADMIN_CHANNEL_DOCUMENTATION_INDEX.md)** - Indice maestro de toda documentacion Admin Channel
+- **[FASE6_ADMIN_CHANNEL_UI.md](FASE6_ADMIN_CHANNEL_UI.md)** - Detalles completos de FASE 6 (UI Dashboard)
+- **[ADMIN_CHANNEL_QUICK_REFERENCE.md](ADMIN_CHANNEL_QUICK_REFERENCE.md)** - Guia rapida para desarrolladores
+- **[ADMIN_CHANNEL_ARCHITECTURE.md](ADMIN_CHANNEL_ARCHITECTURE.md)** - Diagramas de arquitectura y flujos
+- **[ADMIN_CHANNEL_CODE_EXAMPLES.md](ADMIN_CHANNEL_CODE_EXAMPLES.md)** - Ejemplos y snippets de codigo
+
+**Documentacion Existente:**
+- **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** - Indice completo de toda documentacion disponible
+- **[docs/ADMIN_CHANNEL_SYSTEM.md](docs/ADMIN_CHANNEL_SYSTEM.md)** - Documentacion completa del Admin Channel System (v4.7.0)
+- **[docs/ADMIN_CHANNEL_IMPLEMENTATION_GUIDE.md](docs/ADMIN_CHANNEL_IMPLEMENTATION_GUIDE.md)** - Guia practica de implementacion
+- **[docs/ADMIN_CHANNEL_API_REFERENCE.md](docs/ADMIN_CHANNEL_API_REFERENCE.md)** - API reference detallada con ejemplos
+
+### Archivos relacionados
+
+- `/supabase/migrations/177_ADMIN_CHANNEL_SYSTEM.sql` - Migration SQL completo
+- `/src/features/admin-channel/` - Codigo fuente del feature backend
+- `/src/features/settings/components/AdminChannelSection.tsx` - Componente UI (FASE 6)
+- `/docs/API.md` - API general del proyecto
+- `/docs/INTEGRATION_GUIDE.md` - Guia de integraciones
+
+---
+
 *Este archivo es la fuente de verdad para desarrollo en TIS TIS Platform. Todas las decisiones de codigo deben alinearse con estos principios.*
+
+*Ultima actualizacion: 25 de Enero, 2026*
+*Version: 4.7.0 - FASE 6 Admin Channel UI completada*

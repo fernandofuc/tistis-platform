@@ -13,6 +13,7 @@ export { PaymentsSection } from './components/PaymentsSection';
 export { BillingSection } from './components/BillingSection';
 export { MenuCatalogConfig } from './components/MenuCatalogConfig';
 export { ServiceCatalogConfig } from './components/ServiceCatalogConfig';
+export { AdminChannelSection } from './components/AdminChannelSection';
 
 // Hooks
 export { useChannels, useChannelAIConfig, useChannel } from './hooks/useChannels';

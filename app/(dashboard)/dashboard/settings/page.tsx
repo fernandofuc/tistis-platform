@@ -13,6 +13,7 @@ import {
   SecuritySection,
   PaymentsSection,
   BillingSection,
+  AdminChannelSection,
   fetchNotificationPreferences,
   updateNotificationPreferences,
   type NotificationPreferences,
@@ -656,6 +657,9 @@ export default function SettingsPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Admin Channel Section */}
+                    <AdminChannelSection />
 
                     {/* Save Button */}
                     <div className="flex justify-center sm:justify-end pt-4 border-t border-gray-100">
