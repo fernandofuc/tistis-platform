@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/src/shared/utils';
+import { supabase } from '@/src/shared/lib/supabase';
 
 // =====================================================
 // TYPES
@@ -401,6 +402,27 @@ function LinkCodeDisplay({ linkCode, onClose, onRefresh, isRefreshing }: LinkCod
 }
 
 // =====================================================
+// AUTH HELPER - Get session token for API calls
+// =====================================================
+
+async function getAuthHeaders(): Promise<HeadersInit | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.error('[AdminChannel] No session found');
+      return null;
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    };
+  } catch (err) {
+    console.error('[AdminChannel] Error getting session:', err);
+    return null;
+  }
+}
+
+// =====================================================
 // MAIN COMPONENT
 // =====================================================
 
@@ -415,7 +437,14 @@ export function AdminChannelSection() {
   // Fetch linked users
   const fetchLinkedUsers = useCallback(async () => {
     try {
-      const response = await fetch('/api/admin-channel/link');
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        setError('Sesión no válida. Por favor, recarga la página.');
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/admin-channel/link', { headers });
       const data: LinkedUsersResponse = await response.json();
 
       if (response.ok && data.data) {
@@ -424,6 +453,7 @@ export function AdminChannelSection() {
           (u) => u.status !== 'unlinked'
         );
         setLinkedUsers(activeUsers);
+        setError(null);
       } else {
         setError(data.error ?? 'Error al cargar dispositivos');
       }
@@ -445,9 +475,16 @@ export function AdminChannelSection() {
     setError(null);
 
     try {
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        setError('Sesión no válida. Por favor, recarga la página.');
+        setIsGenerating(false);
+        return;
+      }
+
       const response = await fetch('/api/admin-channel/link', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({}),
       });
       const data: LinkCodeResponse = await response.json();
@@ -474,8 +511,16 @@ export function AdminChannelSection() {
     setUnlinkingId(userId);
 
     try {
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        setError('Sesión no válida. Por favor, recarga la página.');
+        setUnlinkingId(null);
+        return;
+      }
+
       const response = await fetch(`/api/admin-channel/link?userId=${userId}`, {
         method: 'DELETE',
+        headers,
       });
 
       if (response.ok) {

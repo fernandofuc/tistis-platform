@@ -67,19 +67,20 @@ export async function fetchNotificationPreferences(): Promise<{
       .from('notification_preferences')
       .select('*')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      // PGRST116 = no rows found - this is OK, we'll create default preferences
-      if (error.code === 'PGRST116') {
-        console.log('🟡 No notification preferences found, returning defaults');
-        return {
-          success: true,
-          preferences: { ...DEFAULT_PREFERENCES, user_id: user.id }
-        };
-      }
       console.error('🔴 Fetch notification preferences error:', error.message);
       return { success: false, error: error.message };
+    }
+
+    // No preferences found - return defaults (this is normal for new users)
+    if (!data) {
+      console.log('🟡 No notification preferences found, returning defaults');
+      return {
+        success: true,
+        preferences: { ...DEFAULT_PREFERENCES, user_id: user.id }
+      };
     }
 
     console.log('🟢 Notification preferences fetched');
@@ -124,32 +125,32 @@ export async function updateNotificationPreferences(
       .update(dataToSave)
       .eq('user_id', user.id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateError) {
-      // If no row exists, insert instead
-      if (updateError.code === 'PGRST116') {
-        const { data: insertedData, error: insertError } = await supabase
-          .from('notification_preferences')
-          .insert({
-            user_id: user.id,
-            ...DEFAULT_PREFERENCES,
-            ...updateData,
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('🔴 Insert notification preferences error:', insertError.message);
-          return { success: false, error: insertError.message };
-        }
-
-        console.log('🟢 Notification preferences created');
-        return { success: true, preferences: insertedData as NotificationPreferences };
-      }
-
       console.error('🔴 Update notification preferences error:', updateError.message);
       return { success: false, error: updateError.message };
+    }
+
+    // No row existed to update - insert instead
+    if (!updatedData) {
+      const { data: insertedData, error: insertError } = await supabase
+        .from('notification_preferences')
+        .insert({
+          user_id: user.id,
+          ...DEFAULT_PREFERENCES,
+          ...updateData,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('🔴 Insert notification preferences error:', insertError.message);
+        return { success: false, error: insertError.message };
+      }
+
+      console.log('🟢 Notification preferences created');
+      return { success: true, preferences: insertedData as NotificationPreferences };
     }
 
     console.log('🟢 Notification preferences updated');
@@ -182,7 +183,7 @@ export async function toggleNotificationPreference(
       .from('notification_preferences')
       .select('id')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       // Update existing
