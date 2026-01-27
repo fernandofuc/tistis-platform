@@ -122,7 +122,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    // First, check if the table exists by doing a simple count
+    const { error: tableCheckError } = await supabase
+      .from('admin_channel_users')
+      .select('id', { count: 'exact', head: true })
+      .limit(1);
+
+    if (tableCheckError) {
+      console.error(`${LOG_PREFIX} Table check error:`, tableCheckError);
+      // If table doesn't exist, return empty array (graceful degradation)
+      if (tableCheckError.code === '42P01' || tableCheckError.message?.includes('does not exist')) {
+        console.warn(`${LOG_PREFIX} Table admin_channel_users does not exist. Migration 177 may not be applied.`);
+        return NextResponse.json({ data: [], _warning: 'Admin Channel table not configured' });
+      }
+      return NextResponse.json(
+        { error: `Database error: ${tableCheckError.message}` },
+        { status: 500 }
+      );
+    }
+
+    // Query users - fetch without JOIN first for robustness
+    const { data: users, error: usersError } = await supabase
       .from('admin_channel_users')
       .select(`
         id,
@@ -137,30 +157,53 @@ export async function GET(request: NextRequest) {
         can_receive_notifications,
         messages_today,
         last_message_at,
-        created_at,
-        staff:staff_id (
-          id,
-          first_name,
-          last_name,
-          email
-        )
+        created_at
       `)
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error(`${LOG_PREFIX} Query error:`, error);
+    if (usersError) {
+      console.error(`${LOG_PREFIX} Users query error:`, usersError);
       return NextResponse.json(
-        { error: 'Error fetching linked users' },
+        { error: `Query error: ${usersError.message}` },
         { status: 500 }
       );
     }
 
+    // If there are users with staff_id, fetch staff info separately
+    const usersWithStaffIds = (users || []).filter(u => u.staff_id);
+    let staffMap: Record<string, { id: string; first_name: string; last_name: string; email: string }> = {};
+
+    if (usersWithStaffIds.length > 0) {
+      const staffIds = usersWithStaffIds.map(u => u.staff_id);
+      const { data: staffData, error: staffError } = await supabase
+        .from('staff')
+        .select('id, first_name, last_name, email')
+        .in('id', staffIds);
+
+      if (staffError) {
+        console.warn(`${LOG_PREFIX} Staff query warning (non-critical):`, staffError.message);
+        // Continue without staff data - it's not critical
+      } else if (staffData) {
+        staffMap = staffData.reduce((acc, s) => {
+          acc[s.id] = s;
+          return acc;
+        }, {} as typeof staffMap);
+      }
+    }
+
+    // Combine users with staff data
+    const data = (users || []).map(user => ({
+      ...user,
+      staff: user.staff_id ? staffMap[user.staff_id] || null : null,
+    }));
+
     return NextResponse.json({ data });
   } catch (error) {
     console.error(`${LOG_PREFIX} List users error:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: `Internal server error: ${errorMessage}` },
       { status: 500 }
     );
   }
