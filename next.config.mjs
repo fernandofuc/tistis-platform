@@ -9,6 +9,10 @@ const nextConfig = {
     instrumentationHook: true,
   },
 
+  // Packages that should run only on the server (not bundled by webpack)
+  // This prevents warnings like "require.extensions is not supported"
+  serverExternalPackages: ['handlebars'],
+
   // Standalone output for optimized Docker/serverless deployments
   output: process.env.BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
 

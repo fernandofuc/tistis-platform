@@ -7,6 +7,7 @@
 // =====================================================
 
 import React from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
 import {
@@ -259,11 +260,13 @@ export function ProgressPanel({
                 >
                   {file.type === 'image' || file.mimeType?.startsWith('image/') ? (
                     <div className="w-8 h-8 rounded-md overflow-hidden bg-slate-200 flex-shrink-0">
-                      <img
+                      <Image
                         src={file.url}
-                        alt={file.filename}
-                        loading="lazy"
+                        alt={file.filename || 'Archivo'}
+                        width={32}
+                        height={32}
                         className="w-full h-full object-cover"
+                        unoptimized
                       />
                     </div>
                   ) : (

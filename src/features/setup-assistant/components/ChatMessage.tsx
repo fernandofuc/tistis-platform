@@ -6,11 +6,12 @@
 // =====================================================
 
 import React, { memo } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
 import { Avatar } from '@/src/shared/components/ui/Avatar';
 import { Badge } from '@/src/shared/components/ui/Badge';
-import type { SetupMessage, MessageAction, MessageAttachment, VisionAnalysis } from '../types';
+import type { SetupMessage, MessageAction, MessageAttachment } from '../types';
 
 // Icons (using lucide-react)
 import {
@@ -125,11 +126,13 @@ function AttachmentPreview({ attachment }: AttachmentPreviewProps) {
   if (isImage) {
     return (
       <div className="relative group">
-        <img
+        <Image
           src={attachment.url}
           alt={attachment.filename || 'Imagen'}
-          loading="lazy"
+          width={128}
+          height={128}
           className="w-32 h-32 object-cover rounded-lg border border-slate-200"
+          unoptimized
         />
         {attachment.analysis && (
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center p-2">

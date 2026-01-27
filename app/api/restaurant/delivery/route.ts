@@ -15,6 +15,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Force dynamic rendering - this route uses request.headers
+export const dynamic = 'force-dynamic';
+
 // ======================
 // SUPABASE CLIENT
 // ======================

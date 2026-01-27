@@ -6,6 +6,7 @@
 // =====================================================
 
 import React, { useState, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
 import { Button } from '@/src/shared/components/ui/Button';
@@ -139,7 +140,7 @@ export function ChatInput({
     } catch (error) {
       console.error('[ChatInput] Send failed:', error);
     }
-  }, [content, attachments, isLoading, onSend]);
+  }, [content, attachments, isLoading, onSend, textareaRef]);
 
   // Handle key press
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -172,11 +173,13 @@ export function ChatInput({
                 className="relative group"
               >
                 {attachment.type === 'image' ? (
-                  <img
+                  <Image
                     src={attachment.url}
                     alt={attachment.filename}
-                    loading="lazy"
+                    width={64}
+                    height={64}
                     className="w-16 h-16 object-cover rounded-lg border border-slate-200"
+                    unoptimized
                   />
                 ) : (
                   <div className="w-16 h-16 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center">
