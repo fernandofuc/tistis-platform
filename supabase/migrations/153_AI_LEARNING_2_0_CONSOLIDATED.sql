@@ -419,9 +419,10 @@ CREATE INDEX idx_ai_drift_baselines_category ON public.ai_drift_baselines(tenant
 COMMENT ON TABLE public.ai_drift_baselines IS 'Baselines de referencia para detección de drift';
 
 -- 3.2 ai_drift_metrics: Métricas recolectadas
+-- NOTA: Tabla particionada - PK debe incluir columna de partición, FKs no soportadas directamente
 CREATE TABLE IF NOT EXISTS public.ai_drift_metrics (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+    id UUID DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL, -- FK manejada por aplicación (partitioned tables limitation)
 
     -- Identificación
     metric_name VARCHAR(100) NOT NULL,
@@ -445,7 +446,7 @@ CREATE TABLE IF NOT EXISTS public.ai_drift_metrics (
     category_distribution JSONB,
 
     -- Tests estadísticos vs baseline
-    baseline_id UUID REFERENCES public.ai_drift_baselines(id),
+    baseline_id UUID, -- FK manejada por aplicación
     ks_statistic DECIMAL(10,6),       -- Kolmogorov-Smirnov
     ks_p_value DECIMAL(10,6),
     chi_square_statistic DECIMAL(10,6), -- Chi-Square
@@ -461,7 +462,10 @@ CREATE TABLE IF NOT EXISTS public.ai_drift_metrics (
     metadata JSONB DEFAULT '{}',
 
     -- Timestamps
-    collected_at TIMESTAMPTZ DEFAULT NOW()
+    collected_at TIMESTAMPTZ DEFAULT NOW(),
+
+    -- PK compuesta incluyendo columna de partición
+    PRIMARY KEY (id, period_start)
 ) PARTITION BY RANGE (period_start);
 
 -- Crear particiones para los próximos meses
@@ -591,11 +595,12 @@ CREATE TABLE IF NOT EXISTS public.ai_feature_definitions (
 
     -- Timestamps
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-    -- Unicidad
-    UNIQUE(COALESCE(tenant_id, '00000000-0000-0000-0000-000000000000'::UUID), name)
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Índice único para unicidad (COALESCE no se puede usar en UNIQUE constraint directo)
+CREATE UNIQUE INDEX idx_ai_feature_defs_unique_name
+    ON public.ai_feature_definitions(COALESCE(tenant_id, '00000000-0000-0000-0000-000000000000'::UUID), name);
 
 -- Índices para definiciones
 CREATE INDEX idx_ai_feature_defs_group ON public.ai_feature_definitions(feature_group);
@@ -605,12 +610,13 @@ CREATE INDEX idx_ai_feature_defs_active ON public.ai_feature_definitions(is_acti
 COMMENT ON TABLE public.ai_feature_definitions IS 'Definiciones de features para el feature store';
 
 -- 4.2 ai_feature_values_offline: Feature store offline (histórico)
+-- NOTA: Tabla particionada - PK debe incluir columna de partición, FKs no soportadas directamente
 CREATE TABLE IF NOT EXISTS public.ai_feature_values_offline (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+    id UUID DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL, -- FK manejada por aplicación
 
     -- Feature
-    feature_id UUID NOT NULL REFERENCES public.ai_feature_definitions(id) ON DELETE CASCADE,
+    feature_id UUID NOT NULL, -- FK manejada por aplicación
     feature_name VARCHAR(100) NOT NULL, -- Denormalizado para queries rápidos
 
     -- Entidad
@@ -630,7 +636,10 @@ CREATE TABLE IF NOT EXISTS public.ai_feature_values_offline (
     computed_at TIMESTAMPTZ DEFAULT NOW(),
 
     -- Metadata
-    metadata JSONB DEFAULT '{}'
+    metadata JSONB DEFAULT '{}',
+
+    -- PK compuesta incluyendo columna de partición
+    PRIMARY KEY (id, event_timestamp)
 ) PARTITION BY RANGE (event_timestamp);
 
 -- Crear particiones
@@ -869,9 +878,10 @@ COMMENT ON TABLE public.ai_model_registry IS 'Registro de modelos con control de
 -- =====================================================
 
 -- 6.1 ai_decision_logs: Logs de decisiones AI
+-- NOTA: Tabla particionada - FK manejada por aplicación, PK debe incluir columna de partición
 CREATE TABLE IF NOT EXISTS public.ai_decision_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+    id UUID DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL, -- FK a tenants manejada por aplicación (partitioned tables no soportan FK)
 
     -- Contexto
     conversation_id UUID,
@@ -910,7 +920,10 @@ CREATE TABLE IF NOT EXISTS public.ai_decision_logs (
     tokens_used INTEGER,
 
     -- Timestamps
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+
+    -- PK compuesta requerida para tablas particionadas
+    PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
 -- Crear particiones

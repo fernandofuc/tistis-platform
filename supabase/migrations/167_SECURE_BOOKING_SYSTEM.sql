@@ -7,6 +7,25 @@
 -- =====================================================
 
 -- =====================================================
+-- PARTE 0: FUNCIÓN HELPER IMMUTABLE PARA GENERATED COLUMNS
+-- =====================================================
+-- PostgreSQL requiere expresiones IMMUTABLE para columnas generadas.
+-- La operación timestamptz + interval no es inmutable debido a zonas horarias,
+-- pero para minutos es seguro marcarlo como IMMUTABLE.
+
+CREATE OR REPLACE FUNCTION public.add_minutes_immutable(
+  p_datetime timestamptz,
+  p_minutes int
+)
+RETURNS timestamptz
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT p_datetime + (p_minutes * INTERVAL '1 minute')
+$$;
+
+-- =====================================================
 -- PARTE 1: TABLA booking_holds (Reservas Temporales)
 -- =====================================================
 
@@ -18,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.booking_holds (
   -- Slot info
   slot_datetime timestamptz NOT NULL,
   duration_minutes int NOT NULL DEFAULT 30,
-  end_datetime timestamptz GENERATED ALWAYS AS (slot_datetime + (duration_minutes || ' minutes')::interval) STORED,
+  end_datetime timestamptz GENERATED ALWAYS AS (add_minutes_immutable(slot_datetime, duration_minutes)) STORED,
 
   -- Hold metadata
   hold_type text NOT NULL CHECK (hold_type IN ('voice_call', 'chat_session', 'manual')),

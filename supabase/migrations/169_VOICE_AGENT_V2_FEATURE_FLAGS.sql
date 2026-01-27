@@ -226,26 +226,33 @@ ALTER TABLE migration_rollback_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE voice_assistant_metrics ENABLE ROW LEVEL SECURITY;
 
 -- Service role policies (full access for backend)
+DROP POLICY IF EXISTS "service_role_platform_feature_flags" ON platform_feature_flags;
 CREATE POLICY "service_role_platform_feature_flags" ON platform_feature_flags
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "service_role_platform_feature_flag_audit" ON platform_feature_flag_audit_log;
 CREATE POLICY "service_role_platform_feature_flag_audit" ON platform_feature_flag_audit_log
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "service_role_migration_backups" ON migration_backups;
 CREATE POLICY "service_role_migration_backups" ON migration_backups
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "service_role_migration_rollback_log" ON migration_rollback_log;
 CREATE POLICY "service_role_migration_rollback_log" ON migration_rollback_log
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "service_role_voice_assistant_metrics" ON voice_assistant_metrics;
 CREATE POLICY "service_role_voice_assistant_metrics" ON voice_assistant_metrics
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Read-only for authenticated users (admins can view flags status)
+DROP POLICY IF EXISTS "authenticated_read_platform_feature_flags" ON platform_feature_flags;
 CREATE POLICY "authenticated_read_platform_feature_flags" ON platform_feature_flags
   FOR SELECT TO authenticated USING (true);
 
 -- Metrics accessible to tenant owners
+DROP POLICY IF EXISTS "tenant_owner_voice_metrics" ON voice_assistant_metrics;
 CREATE POLICY "tenant_owner_voice_metrics" ON voice_assistant_metrics
   FOR SELECT TO authenticated
   USING (

@@ -25,51 +25,70 @@
 -- =====================================================
 -- PASO 1: MIGRAR DATOS EXISTENTES
 -- =====================================================
+-- NOTA: Verificamos existencia de COLUMNA, no solo tabla
 
--- Actualizar agent_profiles si existe
+-- Actualizar agent_profiles.response_style si existe
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agent_profiles') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'agent_profiles' AND column_name = 'response_style'
+    ) THEN
         UPDATE agent_profiles SET response_style = 'professional_friendly' WHERE response_style = 'casual';
     END IF;
 END $$;
 
--- Actualizar channel_connections si existe
+-- Actualizar channel_connections.ai_personality_override si existe
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'channel_connections') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'channel_connections' AND column_name = 'ai_personality_override'
+    ) THEN
         UPDATE channel_connections SET ai_personality_override = 'professional_friendly' WHERE ai_personality_override = 'casual';
     END IF;
 END $$;
 
--- Actualizar ai_tenant_config si existe
+-- Actualizar ai_tenant_config.ai_personality si existe
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ai_tenant_config') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'ai_tenant_config' AND column_name = 'ai_personality'
+    ) THEN
         UPDATE ai_tenant_config SET ai_personality = 'professional_friendly' WHERE ai_personality = 'casual';
     END IF;
 END $$;
 
--- Actualizar voice_agent_config si existe
+-- Actualizar voice_agent_config.ai_personality si existe
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'voice_agent_config') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'voice_agent_config' AND column_name = 'ai_personality'
+    ) THEN
         UPDATE voice_agent_config SET ai_personality = 'professional_friendly' WHERE ai_personality = 'casual';
     END IF;
 END $$;
 
--- Actualizar voice_assistant_config si existe
+-- Actualizar voice_assistant_config.personality si existe
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'voice_assistant_config') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'voice_assistant_config' AND column_name = 'personality'
+    ) THEN
         UPDATE voice_assistant_config SET personality = 'professional_friendly' WHERE personality = 'casual';
     END IF;
 END $$;
 
--- Actualizar voice_assistant_types si existe
+-- Actualizar voice_assistant_types.personality si existe
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'voice_assistant_types') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'voice_assistant_types' AND column_name = 'personality'
+    ) THEN
         UPDATE voice_assistant_types SET personality = 'professional_friendly' WHERE personality = 'casual';
     END IF;
 END $$;
@@ -80,7 +99,10 @@ END $$;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agent_profiles') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'agent_profiles' AND column_name = 'response_style'
+    ) THEN
         -- Eliminar constraint existente
         ALTER TABLE agent_profiles DROP CONSTRAINT IF EXISTS agent_profiles_response_style_check;
         -- Crear nuevo constraint sin 'casual'
@@ -95,7 +117,10 @@ END $$;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'channel_connections') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'channel_connections' AND column_name = 'ai_personality_override'
+    ) THEN
         -- Eliminar constraint existente
         ALTER TABLE channel_connections DROP CONSTRAINT IF EXISTS channel_connections_ai_personality_override_check;
         -- Crear nuevo constraint sin 'casual'
@@ -110,7 +135,10 @@ END $$;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ai_tenant_config') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'ai_tenant_config' AND column_name = 'ai_personality'
+    ) THEN
         -- Eliminar constraint existente
         ALTER TABLE ai_tenant_config DROP CONSTRAINT IF EXISTS ai_tenant_config_ai_personality_check;
         -- Crear nuevo constraint sin 'casual'
@@ -125,10 +153,12 @@ END $$;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'voice_agent_config') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'voice_agent_config' AND column_name = 'ai_personality'
+    ) THEN
         -- Eliminar constraint existente
         EXECUTE 'ALTER TABLE voice_agent_config DROP CONSTRAINT IF EXISTS voice_agent_config_ai_personality_check';
-
         -- Crear nuevo constraint sin 'casual'
         EXECUTE 'ALTER TABLE voice_agent_config ADD CONSTRAINT voice_agent_config_ai_personality_check CHECK (ai_personality IN (''professional'', ''professional_friendly'', ''formal''))';
     END IF;
@@ -140,10 +170,12 @@ END $$;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'voice_assistant_config') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'voice_assistant_config' AND column_name = 'personality'
+    ) THEN
         -- Eliminar constraint existente
         EXECUTE 'ALTER TABLE voice_assistant_config DROP CONSTRAINT IF EXISTS voice_assistant_config_personality_check';
-
         -- Crear nuevo constraint sin 'casual'
         EXECUTE 'ALTER TABLE voice_assistant_config ADD CONSTRAINT voice_assistant_config_personality_check CHECK (personality IN (''professional'', ''professional_friendly'', ''formal''))';
     END IF;
@@ -155,10 +187,12 @@ END $$;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'voice_assistant_types') THEN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'voice_assistant_types' AND column_name = 'personality'
+    ) THEN
         -- Eliminar constraint existente
         EXECUTE 'ALTER TABLE voice_assistant_types DROP CONSTRAINT IF EXISTS voice_assistant_types_personality_check';
-
         -- Crear nuevo constraint sin 'casual'
         EXECUTE 'ALTER TABLE voice_assistant_types ADD CONSTRAINT voice_assistant_types_personality_check CHECK (personality IN (''professional'', ''professional_friendly'', ''formal''))';
     END IF;
@@ -247,7 +281,10 @@ Valid personality values: professional, professional_friendly, formal (casual re
 -- PASO 9: ACTUALIZAR VIEW v_channel_accounts
 -- =====================================================
 
-CREATE OR REPLACE VIEW public.v_channel_accounts AS
+-- DROP primero porque CREATE OR REPLACE no permite cambiar orden/nombre de columnas
+DROP VIEW IF EXISTS public.v_channel_accounts;
+
+CREATE VIEW public.v_channel_accounts AS
 SELECT
     cc.id,
     cc.tenant_id,
@@ -289,16 +326,40 @@ Valid personality values: professional, professional_friendly, formal (casual re
 -- PASO 10: DOCUMENTACIÓN DE CAMBIOS
 -- =====================================================
 
-COMMENT ON COLUMN agent_profiles.response_style IS
-'Estilo de respuesta del agente. Valores válidos: professional, professional_friendly, formal.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'agent_profiles' AND column_name = 'response_style'
+    ) THEN
+        COMMENT ON COLUMN agent_profiles.response_style IS
+        'Estilo de respuesta del agente. Valores válidos: professional, professional_friendly, formal.
 El estilo casual fue removido - un negocio no debe comunicarse de manera casual.';
+    END IF;
+END $$;
 
-COMMENT ON COLUMN channel_connections.ai_personality_override IS
-'Override de personalidad AI por canal. Valores válidos: professional, professional_friendly, formal.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'channel_connections' AND column_name = 'ai_personality_override'
+    ) THEN
+        COMMENT ON COLUMN channel_connections.ai_personality_override IS
+        'Override de personalidad AI por canal. Valores válidos: professional, professional_friendly, formal.
 NULL = usar default del tenant.';
+    END IF;
+END $$;
 
-COMMENT ON COLUMN ai_tenant_config.ai_personality IS
-'Personalidad AI default del tenant. Valores válidos: professional, professional_friendly, formal.';
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'ai_tenant_config' AND column_name = 'ai_personality'
+    ) THEN
+        COMMENT ON COLUMN ai_tenant_config.ai_personality IS
+        'Personalidad AI default del tenant. Valores válidos: professional, professional_friendly, formal.';
+    END IF;
+END $$;
 
 -- =====================================================
 -- FIN DE MIGRACIÓN 154

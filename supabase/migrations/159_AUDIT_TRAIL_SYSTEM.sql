@@ -3,95 +3,234 @@
 -- AUDIT TRAIL SYSTEM
 -- Sprint 4: Sistema completo de auditoría para tracking
 -- =====================================================
+-- NOTA: Esta migración extiende la tabla audit_logs existente
+-- (creada en migración 011) con columnas adicionales para
+-- soporte multi-tenant y tracking mejorado.
+-- =====================================================
 
 -- =====================================================
--- 1. TABLA PRINCIPAL: audit_logs
+-- 1. AGREGAR COLUMNAS FALTANTES A audit_logs EXISTENTE
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- Agregar tenant_id si no existe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'tenant_id'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+    END IF;
+END $$;
 
-  -- Identificación del tenant y usuario
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+-- Agregar columna changes (reemplaza old_data/new_data)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'changes'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN changes JSONB DEFAULT '{}';
+    END IF;
+END $$;
 
-  -- Información de la acción
-  action TEXT NOT NULL CHECK (action IN (
-    'CREATE', 'UPDATE', 'DELETE', 'READ',
-    'LOGIN', 'LOGOUT', 'FAILED_LOGIN',
-    'EXPORT', 'IMPORT', 'BULK_UPDATE',
-    'SETTINGS_CHANGE', 'PERMISSION_CHANGE',
-    'AI_RESPONSE', 'ESCALATION', 'BOOKING',
-    'ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_CANCEL',
-    'INTEGRATION_SYNC', 'WEBHOOK_RECEIVED',
-    'CUSTOM'
-  )),
+-- Agregar columna metadata
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'metadata'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN metadata JSONB DEFAULT '{}';
+    END IF;
+END $$;
 
-  -- Entidad afectada
-  entity_type TEXT NOT NULL,  -- 'lead', 'appointment', 'conversation', etc.
-  entity_id UUID,             -- ID de la entidad (opcional para acciones globales)
+-- Agregar columna status
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'status'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN status TEXT DEFAULT 'success';
+    END IF;
+END $$;
 
-  -- Detalles del cambio
-  changes JSONB DEFAULT '{}',  -- { before: {...}, after: {...} }
-  metadata JSONB DEFAULT '{}', -- Contexto adicional (IP, user agent, etc.)
+-- Agregar columna error_message
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'error_message'
+    ) THEN
+        ALTER TABLE public.audit_logs ADD COLUMN error_message TEXT;
+    END IF;
+END $$;
 
-  -- Contexto de la petición
-  request_id TEXT,            -- ID único de la request (para correlación)
-  ip_address INET,
-  user_agent TEXT,
+-- Migrar datos de old_data/new_data a changes si existen
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'old_data'
+    ) AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'changes'
+    ) THEN
+        UPDATE public.audit_logs
+        SET changes = jsonb_build_object(
+            'before', COALESCE(old_data, '{}'::jsonb),
+            'after', COALESCE(new_data, '{}'::jsonb)
+        )
+        WHERE changes = '{}'::jsonb
+          AND (old_data IS NOT NULL OR new_data IS NOT NULL);
+    END IF;
+END $$;
 
-  -- Resultado
-  status TEXT DEFAULT 'success' CHECK (status IN ('success', 'failure', 'partial')),
-  error_message TEXT,
+-- Convertir entity_type a TEXT si es VARCHAR
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs'
+          AND column_name = 'entity_type' AND data_type = 'character varying'
+    ) THEN
+        ALTER TABLE public.audit_logs ALTER COLUMN entity_type TYPE TEXT;
+    END IF;
+END $$;
 
-  -- Timestamps
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- Convertir action a TEXT si es VARCHAR
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs'
+          AND column_name = 'action' AND data_type = 'character varying'
+    ) THEN
+        ALTER TABLE public.audit_logs ALTER COLUMN action TYPE TEXT;
+    END IF;
+END $$;
 
--- Comentarios de documentación
+-- Convertir ip_address a INET si es VARCHAR
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs'
+          AND column_name = 'ip_address' AND data_type = 'character varying'
+    ) THEN
+        -- Primero limpiar valores inválidos
+        UPDATE public.audit_logs SET ip_address = NULL WHERE ip_address = '';
+        -- Luego convertir
+        ALTER TABLE public.audit_logs ALTER COLUMN ip_address TYPE INET USING ip_address::INET;
+    END IF;
+END $$;
+
+-- Convertir request_id a TEXT si es UUID
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs'
+          AND column_name = 'request_id' AND data_type = 'uuid'
+    ) THEN
+        ALTER TABLE public.audit_logs ALTER COLUMN request_id TYPE TEXT USING request_id::TEXT;
+    END IF;
+END $$;
+
+-- =====================================================
+-- 2. COMENTARIOS DE DOCUMENTACIÓN
+-- =====================================================
+
 COMMENT ON TABLE audit_logs IS 'Sistema de auditoría para tracking de todas las operaciones críticas';
 COMMENT ON COLUMN audit_logs.action IS 'Tipo de acción realizada';
-COMMENT ON COLUMN audit_logs.entity_type IS 'Tipo de entidad afectada (lead, appointment, etc.)';
-COMMENT ON COLUMN audit_logs.changes IS 'Cambios realizados en formato { before: {...}, after: {...} }';
-COMMENT ON COLUMN audit_logs.metadata IS 'Metadatos adicionales de la operación';
-COMMENT ON COLUMN audit_logs.request_id IS 'ID único de la request para correlación de logs';
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'entity_type'
+    ) THEN
+        COMMENT ON COLUMN audit_logs.entity_type IS 'Tipo de entidad afectada (lead, appointment, etc.)';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'changes'
+    ) THEN
+        COMMENT ON COLUMN audit_logs.changes IS 'Cambios realizados en formato { before: {...}, after: {...} }';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'metadata'
+    ) THEN
+        COMMENT ON COLUMN audit_logs.metadata IS 'Metadatos adicionales de la operación';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_logs' AND column_name = 'request_id'
+    ) THEN
+        COMMENT ON COLUMN audit_logs.request_id IS 'ID único de la request para correlación de logs';
+    END IF;
+END $$;
 
 -- =====================================================
--- 2. ÍNDICES PARA PERFORMANCE
+-- 3. ÍNDICES PARA PERFORMANCE (con IF NOT EXISTS)
 -- =====================================================
 
 -- Índice principal para queries por tenant
-CREATE INDEX idx_audit_logs_tenant_created
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_created
   ON audit_logs (tenant_id, created_at DESC);
 
--- Índice para buscar por entidad específica
-CREATE INDEX idx_audit_logs_entity
+-- Índice para buscar por entidad específica (mejorado con tenant)
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_entity
   ON audit_logs (tenant_id, entity_type, entity_id);
 
--- Índice para buscar por usuario
-CREATE INDEX idx_audit_logs_user
+-- Índice para buscar por usuario con tenant
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_user
   ON audit_logs (tenant_id, user_id, created_at DESC);
 
--- Índice para buscar por acción
-CREATE INDEX idx_audit_logs_action
+-- Índice para buscar por acción con tenant
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_action
   ON audit_logs (tenant_id, action, created_at DESC);
 
 -- Índice para correlación de requests
-CREATE INDEX idx_audit_logs_request_id
+CREATE INDEX IF NOT EXISTS idx_audit_logs_request_id_new
   ON audit_logs (request_id)
   WHERE request_id IS NOT NULL;
 
 -- Índice para búsqueda en JSONB (búsqueda de campos específicos)
-CREATE INDEX idx_audit_logs_changes_gin
+CREATE INDEX IF NOT EXISTS idx_audit_logs_changes_gin
   ON audit_logs USING GIN (changes jsonb_path_ops);
 
+-- Índice para búsqueda en metadata
+CREATE INDEX IF NOT EXISTS idx_audit_logs_metadata_gin
+  ON audit_logs USING GIN (metadata jsonb_path_ops);
+
 -- =====================================================
--- 3. RLS POLICIES
+-- 4. RLS POLICIES (drop y recrear para evitar conflictos)
 -- =====================================================
 
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Policy: Solo admins pueden ver audit logs
+-- Eliminar policies antiguas si existen
+DROP POLICY IF EXISTS "Super admin can view all audit logs" ON audit_logs;
+DROP POLICY IF EXISTS "Service role full access audit logs" ON audit_logs;
+DROP POLICY IF EXISTS "audit_logs_admin_read" ON audit_logs;
+DROP POLICY IF EXISTS "audit_logs_service_insert" ON audit_logs;
+
+-- Policy: Admins pueden ver audit logs de su tenant
 CREATE POLICY "audit_logs_admin_read" ON audit_logs
   FOR SELECT
   USING (
@@ -99,16 +238,22 @@ CREATE POLICY "audit_logs_admin_read" ON audit_logs
       SELECT ur.tenant_id
       FROM user_roles ur
       WHERE ur.user_id = auth.uid()
-        AND ur.role IN ('admin', 'owner')
+        AND ur.role IN ('admin', 'owner', 'super_admin')
+    )
+    -- También permitir si client_id existe y coincide (compatibilidad)
+    OR (
+      client_id IS NOT NULL AND EXISTS (
+        SELECT 1 FROM user_roles ur
+        WHERE ur.user_id = auth.uid()
+          AND ur.role IN ('admin', 'owner', 'super_admin')
+      )
     )
   );
 
 -- Policy: Solo el sistema puede insertar (via service role)
--- Los usuarios normales no pueden insertar directamente
 CREATE POLICY "audit_logs_service_insert" ON audit_logs
   FOR INSERT
   WITH CHECK (
-    -- Permitir insert si viene del service role o si es admin
     current_setting('role', true) = 'service_role'
     OR tenant_id IN (
       SELECT ur.tenant_id
@@ -118,11 +263,8 @@ CREATE POLICY "audit_logs_service_insert" ON audit_logs
     )
   );
 
--- Policy: Nadie puede actualizar o eliminar audit logs (inmutabilidad)
--- (No se crean policies UPDATE/DELETE, por defecto están bloqueadas)
-
 -- =====================================================
--- 4. FUNCIÓN HELPER PARA INSERTAR AUDIT LOGS
+-- 5. FUNCIÓN HELPER PARA INSERTAR AUDIT LOGS
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION log_audit(
@@ -178,7 +320,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 COMMENT ON FUNCTION log_audit IS 'Helper function para insertar registros de auditoría';
 
 -- =====================================================
--- 5. FUNCIÓN PARA OBTENER AUDIT TRAIL DE UNA ENTIDAD
+-- 6. FUNCIÓN PARA OBTENER AUDIT TRAIL DE UNA ENTIDAD
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION get_entity_audit_trail(
@@ -219,7 +361,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 COMMENT ON FUNCTION get_entity_audit_trail IS 'Obtiene el historial de auditoría de una entidad específica';
 
 -- =====================================================
--- 6. FUNCIÓN PARA ESTADÍSTICAS DE AUDITORÍA
+-- 7. FUNCIÓN PARA ESTADÍSTICAS DE AUDITORÍA
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION get_audit_stats(
@@ -237,7 +379,6 @@ DECLARE
   v_start_date TIMESTAMPTZ;
   v_end_date TIMESTAMPTZ;
 BEGIN
-  -- Apply defaults if NULL is passed
   v_start_date := COALESCE(p_start_date, NOW() - INTERVAL '30 days');
   v_end_date := COALESCE(p_end_date, NOW());
 
@@ -259,24 +400,26 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 COMMENT ON FUNCTION get_audit_stats IS 'Estadísticas agregadas de auditoría por acción y entidad';
 
 -- =====================================================
--- 7. POLÍTICA DE RETENCIÓN (opcional - comentada)
+-- 8. VERIFICACIÓN
 -- =====================================================
 
--- Función para limpiar logs antiguos (ejecutar vía cron)
--- CREATE OR REPLACE FUNCTION cleanup_old_audit_logs(
---   p_retention_days INT DEFAULT 365
--- ) RETURNS INT AS $$
--- DECLARE
---   v_deleted INT;
--- BEGIN
---   DELETE FROM audit_logs
---   WHERE created_at < NOW() - (p_retention_days || ' days')::INTERVAL;
---
---   GET DIAGNOSTICS v_deleted = ROW_COUNT;
---   RETURN v_deleted;
--- END;
--- $$ LANGUAGE plpgsql SECURITY DEFINER;
+DO $$
+DECLARE
+  v_col_count INT;
+BEGIN
+  SELECT COUNT(*) INTO v_col_count
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'audit_logs'
+    AND column_name IN ('tenant_id', 'changes', 'metadata', 'status', 'error_message');
+
+  RAISE NOTICE 'audit_logs: % columnas nuevas verificadas', v_col_count;
+
+  IF v_col_count < 5 THEN
+    RAISE WARNING 'Algunas columnas pueden no haberse creado correctamente';
+  END IF;
+END $$;
 
 -- =====================================================
--- FIN DE MIGRACIÓN
+-- FIN DE MIGRACIÓN 159
 -- =====================================================

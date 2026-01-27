@@ -27,11 +27,14 @@ END$$;
 -- ======================
 -- JOB QUEUE TABLE
 -- ======================
-CREATE TABLE IF NOT EXISTS public.job_queue (
+-- Drop and recreate to ensure correct schema with quoted "type" column
+DROP TABLE IF EXISTS public.job_queue CASCADE;
+
+CREATE TABLE public.job_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Job definition
-  type VARCHAR(100) NOT NULL,
+  "type" VARCHAR(100) NOT NULL,
   payload JSONB NOT NULL DEFAULT '{}',
 
   -- Status tracking
@@ -70,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_job_queue_pending_priority
 
 -- Index for job type filtering
 CREATE INDEX IF NOT EXISTS idx_job_queue_type
-  ON public.job_queue (type);
+  ON public.job_queue ("type");
 
 -- Index for scheduled jobs
 CREATE INDEX IF NOT EXISTS idx_job_queue_scheduled
@@ -105,6 +108,7 @@ CREATE TRIGGER trg_job_queue_updated_at
 ALTER TABLE public.job_queue ENABLE ROW LEVEL SECURITY;
 
 -- Service role can do everything
+DROP POLICY IF EXISTS "job_queue_service_role" ON public.job_queue;
 CREATE POLICY "job_queue_service_role" ON public.job_queue
   FOR ALL
   USING (current_setting('role') = 'service_role')
@@ -140,7 +144,7 @@ BEGIN
   RETURN QUERY
   SELECT jq.status, COUNT(*)::BIGINT
   FROM public.job_queue jq
-  WHERE (p_type IS NULL OR jq.type = p_type)
+  WHERE (p_type IS NULL OR jq."type" = p_type)
   GROUP BY jq.status;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -149,7 +153,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- COMMENTS
 -- ======================
 COMMENT ON TABLE public.job_queue IS 'Background job queue for async processing (KB embeddings, bulk operations)';
-COMMENT ON COLUMN public.job_queue.type IS 'Job type identifier (e.g., kb:generate_embedding)';
+COMMENT ON COLUMN public.job_queue."type" IS 'Job type identifier (e.g., kb:generate_embedding)';
 COMMENT ON COLUMN public.job_queue.payload IS 'JSON payload with job-specific data';
 COMMENT ON COLUMN public.job_queue.timeout_ms IS 'Maximum execution time in milliseconds';
 COMMENT ON COLUMN public.job_queue.progress IS 'Execution progress 0-100';

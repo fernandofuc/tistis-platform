@@ -58,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_external_contacts_fullname
 
 -- external_appointments: Index for date range queries
 CREATE INDEX IF NOT EXISTS idx_external_appointments_date_range
-    ON public.external_appointments(tenant_id, scheduled_start, scheduled_end);
+    ON public.external_appointments(tenant_id, scheduled_at, ends_at);
 
 -- external_appointments: Index for integration filtering
 CREATE INDEX IF NOT EXISTS idx_external_appointments_integration
@@ -72,9 +72,9 @@ CREATE INDEX IF NOT EXISTS idx_external_inventory_integration
 CREATE INDEX IF NOT EXISTS idx_external_products_integration
     ON public.external_products(integration_id);
 
--- integration_sync_logs: Index for recent logs by connection
+-- integration_sync_logs: Index for recent logs by integration
 CREATE INDEX IF NOT EXISTS idx_integration_sync_logs_recent
-    ON public.integration_sync_logs(connection_id, started_at DESC);
+    ON public.integration_sync_logs(integration_id, started_at DESC);
 
 -- =====================================================
 -- PART 3: API KEY SCOPE ENFORCEMENT HELPERS
