@@ -131,9 +131,19 @@ export async function GET(request: NextRequest) {
     if (tableCheckError) {
       console.error(`${LOG_PREFIX} Table check error:`, tableCheckError);
       // If table doesn't exist, return empty array (graceful degradation)
-      if (tableCheckError.code === '42P01' || tableCheckError.message?.includes('does not exist')) {
+      // Supabase returns different error messages depending on the client
+      const isTableMissing =
+        tableCheckError.code === '42P01' ||
+        tableCheckError.message?.includes('does not exist') ||
+        tableCheckError.message?.includes('Could not find the table') ||
+        tableCheckError.message?.includes('schema cache');
+
+      if (isTableMissing) {
         console.warn(`${LOG_PREFIX} Table admin_channel_users does not exist. Migration 177 may not be applied.`);
-        return NextResponse.json({ data: [], _warning: 'Admin Channel table not configured' });
+        return NextResponse.json({
+          data: [],
+          _warning: 'Admin Channel not configured. Run migration 177 to enable this feature.'
+        });
       }
       return NextResponse.json(
         { error: `Database error: ${tableCheckError.message}` },
@@ -164,6 +174,20 @@ export async function GET(request: NextRequest) {
 
     if (usersError) {
       console.error(`${LOG_PREFIX} Users query error:`, usersError);
+      // Check if this is a "table not found" error
+      const isTableMissing =
+        usersError.code === '42P01' ||
+        usersError.message?.includes('does not exist') ||
+        usersError.message?.includes('Could not find the table') ||
+        usersError.message?.includes('schema cache');
+
+      if (isTableMissing) {
+        console.warn(`${LOG_PREFIX} Table admin_channel_users does not exist. Migration 177 may not be applied.`);
+        return NextResponse.json({
+          data: [],
+          _warning: 'Admin Channel not configured. Run migration 177 to enable this feature.'
+        });
+      }
       return NextResponse.json(
         { error: `Query error: ${usersError.message}` },
         { status: 500 }
