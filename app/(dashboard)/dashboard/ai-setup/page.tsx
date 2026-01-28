@@ -23,6 +23,7 @@ import {
   type PlanId,
 } from '@/src/features/setup-assistant/config/limits';
 import type { DetailedUsageInfo } from '@/src/features/setup-assistant/types';
+import { ReportFlowOverlay } from '@/src/features/reports';
 import { Button } from '@/src/shared/components/ui/Button';
 import { useTenant } from '@/src/hooks';
 import { useRouter } from 'next/navigation';
@@ -90,6 +91,7 @@ export default function AISetupPage() {
   const [showSidePanel, setShowSidePanel] = useState(true);
   const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(true);
+  const [showReportFlow, setShowReportFlow] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Array<{
     url: string;
     filename: string;
@@ -164,6 +166,15 @@ export default function AISetupPage() {
     setUploadedFiles([]);
     await createConversation();
   }, [isLoading, isSending, createConversation]);
+
+  // Handle quick action clicks (with special handling for report flow)
+  const handleActionClick = useCallback((prompt: string) => {
+    if (prompt === '__TRIGGER_REPORT_FLOW__') {
+      setShowReportFlow(true);
+      return;
+    }
+    sendMessage(prompt);
+  }, [sendMessage]);
 
   // Handle file upload with tracking
   const handleUploadFile = useCallback(async (file: File) => {
@@ -288,7 +299,7 @@ export default function AISetupPage() {
             <div className="flex-1 overflow-y-auto">
               {!hasConversation && !isLoading ? (
                 <WelcomeScreen
-                  onActionClick={sendMessage}
+                  onActionClick={handleActionClick}
                   vertical={tenant?.vertical}
                 />
               ) : (
@@ -464,6 +475,17 @@ export default function AISetupPage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Report Generation Flow Overlay */}
+      <ReportFlowOverlay
+        isOpen={showReportFlow}
+        onClose={() => setShowReportFlow(false)}
+        onComplete={(pdfUrl) => {
+          setShowReportFlow(false);
+          // Optionally show a success message in the chat
+          sendMessage(`¡Excelente! Tu reporte ha sido generado. [Descargar PDF](${pdfUrl})`);
+        }}
+      />
     </>
   );
 }

@@ -14,7 +14,7 @@ import {
   Bot,
   HelpCircle,
   Calendar,
-  Users,
+  FileBarChart,
 } from 'lucide-react';
 
 // =====================================================
@@ -103,11 +103,11 @@ const defaultActions: QuickAction[] = [
     color: 'green',
   },
   {
-    id: 'team',
-    icon: Users,
-    title: 'Equipo de trabajo',
-    description: 'Agrega y organiza a tu personal',
-    prompt: 'Quiero configurar mi equipo de trabajo y asignar roles',
+    id: 'report',
+    icon: FileBarChart,
+    title: 'Crear reporte',
+    description: 'Genera un PDF con las métricas de tu negocio',
+    prompt: '__TRIGGER_REPORT_FLOW__',
     color: 'pink',
   },
 ];

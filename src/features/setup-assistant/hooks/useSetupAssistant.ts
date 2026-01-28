@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { fetchWithAuth, getAccessToken } from '@/src/shared/lib/api-client';
 import type {
   SetupConversation,
   SetupMessage,
@@ -79,13 +80,10 @@ export function useSetupAssistant(
     setError(null);
 
     try {
-      const response = await fetch(`/api/setup-assistant/${id}`);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to fetch conversation');
-      }
-
-      const data = await response.json();
+      const data = await fetchWithAuth<{ conversation: SetupConversation; messages: SetupMessage[] }>(
+        `/api/setup-assistant/${id}`,
+        { throwOnError: false }
+      );
       setConversation(data.conversation);
       setMessages(data.messages || []);
     } catch (err) {
@@ -108,14 +106,13 @@ export function useSetupAssistant(
   // ======================
   const fetchUsage = useCallback(async () => {
     try {
-      const response = await fetch('/api/setup-assistant/usage');
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to fetch usage');
+      const data = await fetchWithAuth<UsageInfo>(
+        '/api/setup-assistant/usage',
+        { throwOnError: false }
+      );
+      if (data) {
+        setUsage(data);
       }
-
-      const data = await response.json();
-      setUsage(data);
     } catch (err) {
       console.error('[useSetupAssistant] Error fetching usage:', err);
     }
@@ -141,18 +138,14 @@ export function useSetupAssistant(
 
         // Create conversation first if needed
         if (!targetId) {
-          const createResponse = await fetch('/api/setup-assistant', {
+          const createData = await fetchWithAuth<{
+            conversation: SetupConversation;
+            initialResponse?: SetupMessage;
+          }>('/api/setup-assistant', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
           });
 
-          if (!createResponse.ok) {
-            const errorData = await createResponse.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Failed to create conversation');
-          }
-
-          const createData = await createResponse.json();
           targetId = createData.conversation.id;
           setConversationId(targetId);
           setConversation(createData.conversation);
@@ -162,21 +155,13 @@ export function useSetupAssistant(
         }
 
         // Send message
-        const response = await fetch(
+        const data = await fetchWithAuth<SendMessageResponse>(
           `/api/setup-assistant/${targetId}/messages`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content, attachments }),
           }
         );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to send message');
-        }
-
-        const data: SendMessageResponse = await response.json();
 
         // Update messages with user and assistant messages
         setMessages((prev) => [...prev, data.userMessage, data.assistantMessage]);
@@ -202,11 +187,22 @@ export function useSetupAssistant(
   const uploadFile = useCallback(async (file: File): Promise<UploadResponse> => {
     setError(null);
 
+    // Get access token for auth (FormData doesn't use fetchWithAuth due to Content-Type)
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      const errorMessage = 'Authentication required for file upload';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
     const response = await fetch('/api/setup-assistant/upload', {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
       body: formData,
     });
 
@@ -234,18 +230,14 @@ export function useSetupAssistant(
       setIsLoading(true);
 
       try {
-        const response = await fetch('/api/setup-assistant', {
+        const data = await fetchWithAuth<{
+          conversation: SetupConversation;
+          initialResponse?: SetupMessage;
+        }>('/api/setup-assistant', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ initialMessage }),
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to create conversation');
-        }
-
-        const data = await response.json();
         setConversationId(data.conversation.id);
         setConversation(data.conversation);
         setMessages(data.initialResponse ? [data.initialResponse] : []);

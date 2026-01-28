@@ -4,9 +4,9 @@
 
 TIS TIS Platform es un sistema SaaS multi-tenant de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API, y automatizacion de procesos multi-canal. Especializado en verticales como clinicas dentales, restaurantes, y consultorios medicos.
 
-**Version:** 4.7.0
+**Version:** 4.8.0
 **Estado:** Produccion
-**Ultima actualizacion:** 25 de Enero, 2026
+**Ultima actualizacion:** 27 de Enero, 2026
 
 ---
 
@@ -27,11 +27,12 @@ tistis-platform/
 │   │       ├── patients/         # Pacientes (vertical dental)
 │   │       └── settings/         # Configuracion (incluye Integraciones)
 │   ├── (marketing)/              # Paginas publicas (landing, pricing)
-│   ├── api/                      # API Routes (35+ endpoints)
+│   ├── api/                      # API Routes (40+ endpoints)
 │   │   ├── leads/                # CRUD leads
 │   │   ├── appointments/         # CRUD citas
 │   │   ├── conversations/        # Conversaciones
-│   │   ├── integrations/         # Integration Hub (NUEVO)
+│   │   ├── integrations/         # Integration Hub
+│   │   ├── reports/              # Generacion de reportes PDF (NUEVO v4.8.0)
 │   │   ├── webhook/              # Webhooks multi-canal
 │   │   ├── voice-agent/          # AI Agent Voz (VAPI)
 │   │   ├── stripe/               # Pagos y suscripciones
@@ -85,6 +86,11 @@ tistis-platform/
 │   │   ├── analytics/            # Metricas
 │   │   ├── loyalty/              # Sistema de lealtad
 │   │   ├── messaging/            # Envio de mensajes
+│   │   ├── reports/              # Sistema de Reportes PDF (NUEVO v4.8.0)
+│   │   │   ├── components/       # UI de flujo multi-paso
+│   │   │   ├── hooks/            # useReportGeneration
+│   │   │   ├── services/         # ReportGeneratorService (PDFShift + Handlebars)
+│   │   │   └── types/            # ReportPeriod, ReportType, etc.
 │   │   └── subscriptions/        # Suscripciones y trials
 │   │
 │   ├── shared/                   # Codigo compartido
@@ -568,6 +574,259 @@ El componente se integra en el tab "Notificaciones" de `/app/(dashboard)/dashboa
 
 ---
 
+## Sistema de Reportes PDF (v4.8.0 - NUEVO)
+
+### Descripcion
+
+Sistema completo de generacion de reportes PDF con flujo multi-paso estilo Claude Cowork. Permite a los usuarios generar reportes de diferentes tipos y periodos con una interfaz intuitiva y animaciones fluidas.
+
+### Arquitectura del Sistema
+
+```
+                    +----------------------+
+                    |  AI Setup Assistant  |
+                    |  QuickActionsGrid    |
+                    +----------+-----------+
+                               │
+                    (Trigger: __TRIGGER_REPORT_FLOW__)
+                               │
+                    +----------▼-----------+
+                    |  ReportFlowOverlay   |
+                    |  (Modal multi-paso)  |
+                    +----------+-----------+
+                               │
+          +--------------------+--------------------+
+          │                    │                    │
++---------▼--------+  +--------▼--------+  +-------▼--------+
+| PeriodSelector   |  | ReportTypeSelect|  | GeneratingState|
+| (7d, 30d, 90d)   |  | (6 tipos)       |  | (Progreso)     |
++------------------+  +-----------------+  +-------+--------+
+                                                   │
+                                          +--------▼--------+
+                                          | API /reports/   |
+                                          | generate        |
+                                          +--------+--------+
+                                                   │
+                                          +--------▼--------+
+                                          | ReportGenerator |
+                                          | Service         |
+                                          +--------+--------+
+                                                   │
+                         +-------------------------+-------------------------+
+                         │                         │                         │
+              +----------▼----------+   +----------▼----------+   +----------▼----------+
+              | Supabase Queries    |   | Handlebars Template |   | PDFShift API        |
+              | (Data fetching)     |   | (HTML generation)   |   | (PDF conversion)    |
+              +---------------------+   +---------------------+   +----------+----------+
+                                                                             │
+                                                                  +----------▼----------+
+                                                                  | Supabase Storage    |
+                                                                  | (PDF upload)        |
+                                                                  +----------+----------+
+                                                                             │
+                                                                  +----------▼----------+
+                                                                  | DownloadReady       |
+                                                                  | (Success state)     |
+                                                                  +---------------------+
+```
+
+### Tipos de Reportes Soportados
+
+| Tipo | ID | Descripcion | Metricas Incluidas |
+|------|----|-------------|-------------------|
+| **Resumen General** | `resumen` | KPIs principales y tendencias | Leads, citas, conversiones |
+| **Ventas** | `ventas` | Ingresos, tickets y metodos de pago | Revenue, ordenes, ticket promedio |
+| **Operaciones** | `operaciones` | Ordenes, tiempos y eficiencia | Citas completadas, cancelaciones, no-shows |
+| **Inventario** | `inventario` | Stock, movimientos y alertas | Items totales, stock bajo, valor |
+| **Clientes** | `clientes` | Leads, conversiones y retencion | Leads por temperatura, conversiones |
+| **AI Insights** | `ai_insights` | Analisis inteligente con IA | Conversaciones, resoluciones, escalaciones |
+
+### Periodos Soportados
+
+| Periodo | ID | Descripcion |
+|---------|----|-----------  |
+| **Semanal** | `7d` | Ultimos 7 dias |
+| **Mensual** | `30d` | Ultimos 30 dias |
+| **Trimestral** | `90d` | Ultimos 90 dias |
+
+### Feature Folder Structure
+
+```
+src/features/reports/
+├── types/
+│   └── index.ts              # ReportPeriod, ReportType, ReportFlowState, etc.
+├── hooks/
+│   ├── useReportGeneration.ts # Hook principal para estado y API calls
+│   └── index.ts              # Barrel export
+├── components/
+│   ├── PeriodSelector.tsx    # Paso 1: Selector de periodo
+│   ├── ReportTypeSelector.tsx # Paso 2: Selector de tipo de reporte
+│   ├── GeneratingState.tsx   # Paso 3: Estado de generacion con progreso
+│   ├── DownloadReady.tsx     # Paso 4: Estado de descarga listo
+│   ├── ReportFlowOverlay.tsx # Modal principal del flujo
+│   └── index.ts              # Barrel export
+├── services/
+│   ├── report-generator.service.ts # Servicio de generacion (singleton)
+│   └── index.ts              # Barrel export
+└── index.ts                  # Feature barrel export
+```
+
+### Hook Principal: useReportGeneration
+
+```typescript
+import { useReportGeneration } from '@/src/features/reports';
+
+function MyComponent() {
+  const {
+    state,           // ReportFlowState
+    isGenerating,    // boolean
+    selectPeriod,    // (period: ReportPeriod) => void
+    selectType,      // (type: ReportType) => void
+    generate,        // () => Promise<void>
+    goBack,          // () => void
+    reset,           // () => void
+  } = useReportGeneration({
+    branchId: 'optional-branch-id',
+    onSuccess: (url, filename) => console.log('PDF ready:', url),
+    onError: (error) => console.error('Error:', error),
+  });
+
+  return (
+    // ...
+  );
+}
+```
+
+### API Endpoint
+
+```
+POST /api/reports/generate
+```
+
+**Request Body:**
+```typescript
+{
+  period: '7d' | '30d' | '90d';
+  type: 'resumen' | 'ventas' | 'operaciones' | 'inventario' | 'clientes' | 'ai_insights';
+  branchId?: string;  // Opcional: filtrar por sucursal
+}
+```
+
+**Response (Success):**
+```typescript
+{
+  success: true;
+  pdfUrl: string;     // URL publica del PDF en Supabase Storage
+  filename: string;   // Nombre del archivo (e.g., "reporte-ventas-30d-1706390400000.pdf")
+}
+```
+
+**Response (Error):**
+```typescript
+{
+  error: string;
+  message: string;
+}
+```
+
+### Servicio de Generacion
+
+El `ReportGeneratorService` es un singleton que:
+
+1. **Obtiene datos** del tenant via Supabase queries
+2. **Genera HTML** usando Handlebars templates
+3. **Convierte a PDF** usando PDFShift API
+4. **Sube a Storage** en Supabase (bucket `reports`)
+5. **Retorna URL publica** del PDF
+
+```typescript
+import { getReportGeneratorService } from '@/src/features/reports';
+
+const service = getReportGeneratorService();
+const result = await service.generateReport(tenantId, {
+  period: '30d',
+  type: 'ventas',
+  branchId: 'optional',
+});
+
+if (result.success) {
+  console.log('PDF URL:', result.pdfUrl);
+}
+```
+
+### Handlebars Helpers Registrados
+
+| Helper | Descripcion | Ejemplo |
+|--------|-------------|---------|
+| `formatCurrency` | Formato moneda MXN | `$1,234.56` |
+| `formatNumber` | Formato numerico con separadores | `1,234` |
+| `formatDate` | Fecha en espanol | `27 de enero de 2026` |
+| `formatPercent` | Porcentaje | `45.5%` |
+| `eq` | Comparacion de igualdad | `{{#if (eq status "active")}}` |
+
+### Flujo de Usuario
+
+1. Usuario navega a Dashboard > AI Setup Assistant
+2. Hace clic en "Crear reporte" en Quick Actions
+3. Se abre modal `ReportFlowOverlay`
+4. **Paso 1**: Selecciona periodo (7d, 30d, 90d)
+5. **Paso 2**: Selecciona tipo de reporte y confirma
+6. **Paso 3**: Visualiza progreso de generacion
+7. **Paso 4**: Descarga o abre PDF
+
+### Componentes UI del Flujo
+
+| Componente | Responsabilidad |
+|------------|-----------------|
+| `ReportFlowOverlay` | Modal principal con animaciones Framer Motion |
+| `PeriodSelector` | Cards seleccionables para 7d/30d/90d |
+| `ReportTypeSelector` | Grid 2x3 con 6 tipos de reporte + boton confirmar |
+| `GeneratingState` | Loader animado con barra de progreso |
+| `DownloadReady` | Animacion de exito + botones descarga/abrir |
+
+### Integracion con AI Setup Assistant
+
+El flujo se activa desde `QuickActionsGrid` usando un token especial:
+
+```typescript
+// En QuickActionsGrid.tsx
+{
+  id: 'report',
+  icon: FileBarChart,
+  label: 'Crear reporte',
+  description: 'Genera reportes PDF',
+  href: '__TRIGGER_REPORT_FLOW__',  // Token especial
+  color: 'purple',
+}
+
+// En ai-setup/page.tsx
+const handleActionClick = (href: string) => {
+  if (href === '__TRIGGER_REPORT_FLOW__') {
+    setShowReportFlow(true);
+  }
+};
+```
+
+### Variables de Entorno Requeridas
+
+```env
+# PDFShift API (para conversion HTML -> PDF)
+PDFSHIFT_API_URL=https://api.pdfshift.io/v3/convert/pdf
+PDFSHIFT_API_KEY=your_api_key
+```
+
+### Estilos del PDF Generado
+
+El PDF usa estilos inline con:
+
+- **Colores TIS TIS**: Coral (#DF7373), Pink (#C23350)
+- **Gradientes**: Para headers y cards primarias
+- **Grid responsive**: 3 columnas para stats
+- **Tipografia**: Helvetica Neue, Arial
+- **Print-friendly**: Estilos optimizados para `@media print`
+
+---
+
 ## Integration Hub (v4.4.0)
 
 ### Descripcion
@@ -918,6 +1177,10 @@ META_APP_SECRET=
 
 # Resend (Email)
 RESEND_API_KEY=
+
+# PDFShift (Report PDF Generation)
+PDFSHIFT_API_URL=https://api.pdfshift.io/v3/convert/pdf
+PDFSHIFT_API_KEY=
 ```
 
 ---
@@ -997,6 +1260,8 @@ Esta es la guia maestra de desarrollo. Para documentacion detallada por feature,
 - `/supabase/migrations/177_ADMIN_CHANNEL_SYSTEM.sql` - Migration SQL completo
 - `/src/features/admin-channel/` - Codigo fuente del feature backend
 - `/src/features/settings/components/AdminChannelSection.tsx` - Componente UI (FASE 6)
+- `/src/features/reports/` - Sistema de Reportes PDF (v4.8.0)
+- `/app/api/reports/generate/route.ts` - API endpoint de generacion
 - `/docs/API.md` - API general del proyecto
 - `/docs/INTEGRATION_GUIDE.md` - Guia de integraciones
 
@@ -1004,5 +1269,5 @@ Esta es la guia maestra de desarrollo. Para documentacion detallada por feature,
 
 *Este archivo es la fuente de verdad para desarrollo en TIS TIS Platform. Todas las decisiones de codigo deben alinearse con estos principios.*
 
-*Ultima actualizacion: 25 de Enero, 2026*
-*Version: 4.7.0 - FASE 6 Admin Channel UI completada*
+*Ultima actualizacion: 27 de Enero, 2026*
+*Version: 4.8.0 - Sistema de Reportes PDF implementado*

@@ -4,7 +4,11 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import {
+  getAuthenticatedContext,
+  isAuthError,
+  createAuthErrorResponse,
+} from '@/src/shared/lib/auth-helper';
 import {
   getActiveInsights,
   canGenerateInsights,
@@ -27,46 +31,6 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 const VALID_ACTIONS = ['mark_seen', 'dismiss', 'acted_upon'] as const;
 type ValidAction = typeof VALID_ACTIONS[number];
 
-// Create Supabase client with user's access token
-function createAuthenticatedClient(accessToken: string) {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    }
-  );
-}
-
-// Extract Bearer token from Authorization header
-function getAccessToken(request: NextRequest): string | null {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.substring(7);
-  }
-  return null;
-}
-
-// Get user context (user + tenant)
-async function getUserContext(supabase: ReturnType<typeof createAuthenticatedClient>) {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return null;
-
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .single();
-
-  if (!userRole) return null;
-
-  return { user, userRole };
-}
-
 // ======================
 // GET - Retrieve business insights for tenant
 // ======================
@@ -80,25 +44,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const accessToken = getAccessToken(request);
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'No autenticado - Token no proporcionado' },
-        { status: 401 }
-      );
+    const authResult = await getAuthenticatedContext(request);
+    if (isAuthError(authResult)) {
+      return createAuthErrorResponse(authResult);
     }
 
-    const supabase = createAuthenticatedClient(accessToken);
-    const context = await getUserContext(supabase);
-
-    if (!context) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 403 }
-      );
-    }
-
-    const tenantId = context.userRole.tenant_id;
+    const { client: supabase, tenantId } = authResult;
 
     // Get tenant plan
     const { data: tenant } = await supabase
@@ -169,23 +120,12 @@ export async function GET(request: NextRequest) {
 // ======================
 export async function PATCH(request: NextRequest) {
   try {
-    const accessToken = getAccessToken(request);
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
-      );
+    const authResult = await getAuthenticatedContext(request);
+    if (isAuthError(authResult)) {
+      return createAuthErrorResponse(authResult);
     }
 
-    const supabase = createAuthenticatedClient(accessToken);
-    const context = await getUserContext(supabase);
-
-    if (!context) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 403 }
-      );
-    }
+    const { client: supabase, tenantId } = authResult;
 
     let body;
     try {
@@ -222,8 +162,6 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const tenantId = context.userRole.tenant_id;
 
     // Verify insight belongs to tenant (additional security layer)
     const { data: insight } = await supabase
