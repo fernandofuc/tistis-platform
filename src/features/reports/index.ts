@@ -9,6 +9,7 @@ export {
   GeneratingState,
   DownloadReady,
   ReportFlowOverlay,
+  ReportInlineFlow,
 } from './components';
 
 // Hooks

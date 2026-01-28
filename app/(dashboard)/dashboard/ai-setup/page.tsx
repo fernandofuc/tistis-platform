@@ -23,7 +23,7 @@ import {
   type PlanId,
 } from '@/src/features/setup-assistant/config/limits';
 import type { DetailedUsageInfo } from '@/src/features/setup-assistant/types';
-import { ReportFlowOverlay } from '@/src/features/reports';
+import { ReportInlineFlow } from '@/src/features/reports';
 import { Button } from '@/src/shared/components/ui/Button';
 import { useTenant } from '@/src/hooks';
 import { useRouter } from 'next/navigation';
@@ -387,6 +387,16 @@ export default function AISetupPage() {
               )}
             </AnimatePresence>
 
+            {/* Report Inline Flow (above chat input) */}
+            <ReportInlineFlow
+              isOpen={showReportFlow}
+              onClose={() => setShowReportFlow(false)}
+              onComplete={(pdfUrl) => {
+                setShowReportFlow(false);
+                sendMessage(`¡Excelente! Tu reporte ha sido generado. [Descargar PDF](${pdfUrl})`);
+              }}
+            />
+
             {/* Chat Input */}
             <div className="border-t border-slate-200 bg-white p-4">
               <div className="max-w-4xl mx-auto">
@@ -476,16 +486,6 @@ export default function AISetupPage() {
         )}
       </AnimatePresence>
 
-      {/* Report Generation Flow Overlay */}
-      <ReportFlowOverlay
-        isOpen={showReportFlow}
-        onClose={() => setShowReportFlow(false)}
-        onComplete={(pdfUrl) => {
-          setShowReportFlow(false);
-          // Optionally show a success message in the chat
-          sendMessage(`¡Excelente! Tu reporte ha sido generado. [Descargar PDF](${pdfUrl})`);
-        }}
-      />
     </>
   );
 }
