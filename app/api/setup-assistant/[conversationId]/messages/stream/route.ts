@@ -20,18 +20,15 @@ import {
   rowToMessage,
   type SendMessageRequest,
   type SetupContext,
-  type SetupStateMessage,
   type VisionAnalysis,
   type MessageAttachment,
 } from '@/src/features/setup-assistant';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import { visionService } from '@/src/features/setup-assistant/services/vision.service';
 import { isValidImageUrl } from '@/src/features/setup-assistant/utils';
-import { setupAssistantService } from '@/src/features/setup-assistant/services/setup-assistant.service';
 import {
   streamingService,
   createSSEHeaders,
-  type StreamChunk,
 } from '@/src/features/setup-assistant/services/streaming.service';
 
 // Route params type for Next.js 15
@@ -41,6 +38,16 @@ interface RouteParams {
 
 // UUID validation regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// SSE Configuration
+const SSE_CONFIG = {
+  /** Maximum time for entire streaming operation (2 minutes) */
+  maxDurationMs: 120_000,
+  /** Send heartbeat every 15 seconds to keep connection alive */
+  heartbeatIntervalMs: 15_000,
+  /** Maximum response size from model (100KB) */
+  maxResponseSize: 100_000,
+};
 
 // ======================
 // POST - Send message and stream AI response
@@ -185,7 +192,41 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Create streaming response
     const stream = new ReadableStream({
       async start(controller) {
+        // FIX A1/A2: Set up timeout and heartbeat
+        let heartbeatInterval: NodeJS.Timeout | null = null;
+        let timeoutId: NodeJS.Timeout | null = null;
+        let isCompleted = false;
+
+        const cleanup = () => {
+          isCompleted = true;
+          if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+          }
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+        };
+
         try {
+          // Set maximum duration timeout
+          timeoutId = setTimeout(() => {
+            if (!isCompleted) {
+              sendSSE(controller, { type: 'error', error: 'Streaming timeout exceeded' });
+              cleanup();
+              controller.close();
+            }
+          }, SSE_CONFIG.maxDurationMs);
+
+          // Start heartbeat to keep connection alive
+          heartbeatInterval = setInterval(() => {
+            if (!isCompleted) {
+              // Send SSE comment (ignored by EventSource but keeps connection alive)
+              controller.enqueue(encoder.encode(': heartbeat\n\n'));
+            }
+          }, SSE_CONFIG.heartbeatIntervalMs);
+
           // Send user message immediately
           sendSSE(controller, {
             type: 'user_message',
@@ -309,7 +350,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
           // Stream the response using Gemini
           for await (const chunk of streamingService.streamWithContext(systemPrompt, userPrompt)) {
+            // Check if we've been cleaned up (timeout)
+            if (isCompleted) break;
+
             if (chunk.type === 'text') {
+              // FIX A6: Check max response size
+              if (fullResponse.length + chunk.content.length > SSE_CONFIG.maxResponseSize) {
+                sendSSE(controller, {
+                  type: 'error',
+                  error: 'Response too large',
+                });
+                break;
+              }
+
               fullResponse += chunk.content;
               chunkCount++;
 
@@ -326,6 +379,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               });
               break;
             }
+          }
+
+          // Skip saving if we timed out or errored
+          if (isCompleted || !fullResponse) {
+            return;
           }
 
           // Process for actions (simplified - full action detection would use LangGraph)
@@ -368,24 +426,36 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             p_output_tokens: Math.ceil(fullResponse.length / 4),
           });
 
-          // Send completion event with full message
-          sendSSE(controller, {
-            type: 'done',
-            assistantMessage: assistantMessageData ? rowToMessage(assistantMessageData) : null,
-            executedActions,
-            usage: {
-              messagesCount: (usage?.messages_count || 0) + 1,
-              messagesLimit: usage?.messages_limit || 20,
-            },
-          });
+          // FIX N1: Only send done if we have a valid assistant message
+          if (assistantMessageData) {
+            sendSSE(controller, {
+              type: 'done',
+              assistantMessage: rowToMessage(assistantMessageData),
+              executedActions,
+              usage: {
+                messagesCount: (usage?.messages_count || 0) + 1,
+                messagesLimit: usage?.messages_limit || 20,
+              },
+            });
+          } else {
+            // Database save failed - send error
+            console.error('[SetupAssistant Stream] Failed to save assistant message');
+            sendSSE(controller, {
+              type: 'error',
+              error: 'Failed to save response',
+            });
+          }
 
         } catch (error) {
           console.error('[SetupAssistant Stream] Error:', error);
-          sendSSE(controller, {
-            type: 'error',
-            error: error instanceof Error ? error.message : 'Streaming error',
-          });
+          if (!isCompleted) {
+            sendSSE(controller, {
+              type: 'error',
+              error: error instanceof Error ? error.message : 'Streaming error',
+            });
+          }
         } finally {
+          cleanup();
           controller.close();
         }
       },

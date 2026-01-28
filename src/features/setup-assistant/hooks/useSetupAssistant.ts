@@ -186,6 +186,12 @@ export function useSetupAssistant(
         throw new Error('Authentication required');
       }
 
+      // FIX H1: Abort previous request if still pending (prevents leak on rapid calls)
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();
 
@@ -226,12 +232,12 @@ export function useSetupAssistant(
 
           if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-
-          // FIX: Prevent buffer overflow (#15)
-          if (buffer.length > MAX_BUFFER_SIZE) {
+          // FIX H2: Check buffer size BEFORE adding new data to prevent overflow
+          const decodedChunk = decoder.decode(value, { stream: true });
+          if (buffer.length + decodedChunk.length > MAX_BUFFER_SIZE) {
             throw new Error('SSE buffer overflow - response too large');
           }
+          buffer += decodedChunk;
 
           // Process complete SSE messages
           const lines = buffer.split('\n\n');
@@ -274,22 +280,26 @@ export function useSetupAssistant(
                   }
                   break;
 
-                case 'done':
+                case 'done': {
                   // Generation complete - add final message
-                  if (data.assistantMessage && typeof data.assistantMessage === 'object') {
+                  // FIX H5: Validate assistantMessage has required id field
+                  if (data.assistantMessage && typeof data.assistantMessage === 'object' && data.assistantMessage.id) {
                     setMessages((prev) => [...prev, data.assistantMessage]);
+                  } else {
+                    console.warn('[useSetupAssistant] Done event received without valid assistantMessage');
                   }
                   // Update usage if provided
                   if (data.usage && typeof data.usage === 'object') {
                     setUsage((prev) => prev ? { ...prev, ...data.usage } : null);
                   }
-                  // FIX: Small delay to avoid flash (#8)
+                  // Small delay to avoid flash when transitioning from streaming to final message
                   setTimeout(() => {
                     if (isMountedRef.current) {
                       setStreamingState(initialStreamingState);
                     }
                   }, 50);
                   break;
+                }
 
                 case 'error':
                   // FIX: Handle error directly instead of throwing (#13)

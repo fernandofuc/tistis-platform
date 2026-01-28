@@ -102,8 +102,26 @@ export default function AISetupPage() {
     type: 'image' | 'document';
   }>>([]);
 
-  // Scroll to bottom on new messages or streaming updates
+  // FIX P2/P3: Debounced scroll to prevent performance issues
+  // Use ref to track last scroll time for throttling
+  const lastScrollTimeRef = useRef<number>(0);
+  const isStreamingRef = useRef(streamingState.isStreaming);
+
+  // Keep ref in sync with state
   useEffect(() => {
+    isStreamingRef.current = streamingState.isStreaming;
+  }, [streamingState.isStreaming]);
+
+  useEffect(() => {
+    const now = Date.now();
+    const timeSinceLastScroll = now - lastScrollTimeRef.current;
+
+    // During streaming, throttle scrolls to max once per 150ms to prevent jank
+    if (isStreamingRef.current && timeSinceLastScroll < 150) {
+      return;
+    }
+
+    lastScrollTimeRef.current = now;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, streamingState.currentText]);
 
@@ -313,17 +331,21 @@ export default function AISetupPage() {
                     />
                   ))}
                   {/* Streaming Message - Shows text progressively while AI generates */}
-                  <AnimatePresence>
+                  {/* FIX P1: mode="wait" prevents animation overlap */}
+                  <AnimatePresence mode="wait">
                     {streamingState.isStreaming && (
                       <StreamingMessage
+                        key="streaming-message"
                         text={streamingState.currentText}
                         isStreaming={streamingState.isStreaming}
                       />
                     )}
                   </AnimatePresence>
                   {/* Typing Indicator - Only show when sending but not streaming yet */}
-                  <AnimatePresence>
-                    {isSending && !streamingState.isStreaming && <TypingIndicator />}
+                  <AnimatePresence mode="wait">
+                    {isSending && !streamingState.isStreaming && (
+                      <TypingIndicator key="typing-indicator" />
+                    )}
                   </AnimatePresence>
                   <div ref={messagesEndRef} />
                 </div>

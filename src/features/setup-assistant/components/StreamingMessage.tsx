@@ -65,7 +65,8 @@ export const StreamingMessage = memo(function StreamingMessage({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: appleEasing }}
+      exit={{ opacity: 0, y: -5 }}
+      transition={{ duration: 0.2, ease: appleEasing }}
       className={cn('flex gap-3 px-4 py-3', className)}
     >
       {/* Avatar */}
