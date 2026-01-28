@@ -14,6 +14,100 @@ import type { AgentProfileWithChannels } from '@/src/shared/types/agent-profiles
 import { icons, channelIconsConfig, LivePreviewChat } from '../shared';
 
 // ======================
+// AI MODEL CONFIG
+// ======================
+const AI_MODEL_NAME = 'GPT-5 Mini';
+
+// ======================
+// TOGGLE SWITCH COMPONENT - Professional Style (Matches Loyalty Page)
+// ======================
+interface ToggleSwitchProps {
+  enabled: boolean;
+  onToggle: () => void;
+  loading?: boolean;
+}
+
+function ToggleSwitch({ enabled, onToggle, loading }: ToggleSwitchProps) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={loading}
+      className={cn(
+        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:ring-offset-2',
+        enabled ? 'bg-tis-coral' : 'bg-slate-200',
+        loading && 'opacity-50 cursor-not-allowed'
+      )}
+    >
+      <span
+        className={cn(
+          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+          enabled ? 'translate-x-5' : 'translate-x-0'
+        )}
+      />
+    </button>
+  );
+}
+
+// ======================
+// AI AGENT TOGGLE CARD COMPONENT - Premium Design
+// ======================
+interface AIAgentToggleCardProps {
+  aiEnabled: boolean;
+  onToggle: () => void;
+  loading?: boolean;
+}
+
+function AIAgentToggleCard({ aiEnabled, onToggle, loading }: AIAgentToggleCardProps) {
+  return (
+    <div className={cn(
+      'relative rounded-2xl border p-5 transition-all duration-200',
+      aiEnabled
+        ? 'border-slate-200 bg-white shadow-sm'
+        : 'border-slate-200/80 bg-slate-50/50'
+    )}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className={cn(
+            'flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all',
+            aiEnabled
+              ? 'bg-slate-900 text-white'
+              : 'bg-slate-200 text-slate-400'
+          )}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-900">AI Agent</h3>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {aiEnabled
+                ? `Usando ${AI_MODEL_NAME} para mensajería`
+                : 'Las conversaciones serán atendidas manualmente'}
+            </p>
+            <div className="mt-2.5">
+              <span className={cn(
+                'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
+                aiEnabled
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                  : 'bg-slate-100 text-slate-500 border border-slate-200'
+              )}>
+                <span className={cn(
+                  'w-1.5 h-1.5 rounded-full',
+                  aiEnabled ? 'bg-emerald-500' : 'bg-slate-400'
+                )} />
+                {aiEnabled ? 'Activo' : 'Desactivado'}
+              </span>
+            </div>
+          </div>
+        </div>
+        <ToggleSwitch enabled={aiEnabled} onToggle={onToggle} loading={loading} />
+      </div>
+    </div>
+  );
+}
+
+// ======================
 // TYPES
 // ======================
 interface ResumenTabProps {
@@ -24,6 +118,10 @@ interface ResumenTabProps {
   isLoading?: boolean;
   onEditBusiness: () => void;
   onEditPersonal: () => void;
+  // AI Agent Toggle props
+  aiEnabled?: boolean;
+  aiToggleLoading?: boolean;
+  onToggleAI?: () => void;
 }
 
 // ======================
@@ -37,6 +135,10 @@ export function ResumenTab({
   isLoading,
   onEditBusiness,
   onEditPersonal,
+  // AI Agent Toggle props
+  aiEnabled = true,
+  aiToggleLoading = false,
+  onToggleAI,
 }: ResumenTabProps) {
   const showPersonal = vertical === 'dental';
   const businessIsActive = businessProfile?.is_active ?? false;
@@ -48,6 +150,8 @@ export function ResumenTab({
   if (isLoading) {
     return (
       <div className="space-y-6 animate-pulse">
+        {/* AI Agent Toggle skeleton */}
+        <div className="h-24 bg-slate-100 rounded-2xl" />
         <div className="h-32 bg-slate-100 rounded-2xl" />
         <div className="grid grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => (
@@ -65,6 +169,15 @@ export function ResumenTab({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
+      {/* AI Agent Toggle Card - Professional Design matching Loyalty Program */}
+      {onToggleAI && (
+        <AIAgentToggleCard
+          aiEnabled={aiEnabled}
+          onToggle={onToggleAI}
+          loading={aiToggleLoading}
+        />
+      )}
+
       {/* Status Cards */}
       <div className={cn(
         'grid gap-4',

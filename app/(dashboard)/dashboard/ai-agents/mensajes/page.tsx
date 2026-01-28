@@ -6,12 +6,13 @@
 // Design: Premium TIS TIS (Apple/Google aesthetics)
 // =====================================================
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAgentProfiles } from '@/src/hooks/useAgentProfiles';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
+import { supabase } from '@/src/shared/lib/supabase';
 import type { VerticalType } from '@/src/shared/config/agent-templates';
 import type { AgentProfileInput } from '@/src/shared/types/agent-profiles';
 import { getDefaultTemplate } from '@/src/shared/config/agent-templates';
@@ -47,8 +48,81 @@ export default function AgenteMensajesPage() {
   const [activeTab, setActiveTab] = useState<AgentMessagesTabKey>('resumen');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const isLoading = tenantLoading || profilesLoading;
+  // AI Agent toggle state
+  const [aiEnabled, setAiEnabled] = useState<boolean>(true);
+  const [aiConfigLoading, setAiConfigLoading] = useState<boolean>(true);
+  const [aiToggleLoading, setAiToggleLoading] = useState<boolean>(false);
+
+  const isLoading = tenantLoading || profilesLoading || aiConfigLoading;
   const showPersonalTab = vertical === 'dental';
+
+  // ===== FETCH AI CONFIG ON MOUNT =====
+  useEffect(() => {
+    const fetchAiConfig = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          setAiConfigLoading(false);
+          return;
+        }
+
+        const response = await fetch('/api/ai-config', {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setAiEnabled(data.ai_enabled ?? true);
+        }
+      } catch (err) {
+        console.error('Error fetching AI config:', err);
+      } finally {
+        setAiConfigLoading(false);
+      }
+    };
+
+    fetchAiConfig();
+  }, []);
+
+  // ===== TOGGLE AI HANDLER =====
+  const handleToggleAI = useCallback(async () => {
+    const newState = !aiEnabled;
+    setAiEnabled(newState); // Optimistic update
+    setAiToggleLoading(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setAiEnabled(!newState); // Revert
+        setAiToggleLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/ai-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ ai_enabled: newState }),
+      });
+
+      if (!response.ok) {
+        setAiEnabled(!newState); // Revert on error
+        console.error('Error toggling AI');
+      } else {
+        showSuccess(newState ? 'AI Agent activado' : 'AI Agent desactivado');
+      }
+    } catch (err) {
+      setAiEnabled(!newState); // Revert on error
+      console.error('Error toggling AI:', err);
+    } finally {
+      setAiToggleLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiEnabled]);
 
   // Show success message temporarily
   const showSuccess = useCallback((message: string) => {
@@ -250,6 +324,10 @@ export default function AgenteMensajesPage() {
                 isLoading={isLoading}
                 onEditBusiness={handleEditBusiness}
                 onEditPersonal={handleEditPersonal}
+                // AI Agent Toggle props
+                aiEnabled={aiEnabled}
+                aiToggleLoading={aiToggleLoading}
+                onToggleAI={handleToggleAI}
               />
             )}
 
