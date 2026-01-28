@@ -1,6 +1,8 @@
 // =====================================================
 // TIS TIS PLATFORM - Setup Assistant Hook
 // Sprint 5: AI-powered configuration assistant
+// Enhanced: Streaming support for real-time AI responses
+// Fixed: Memory leaks, race conditions, validation
 // =====================================================
 
 'use client';
@@ -22,6 +24,14 @@ import type {
 
 interface UseSetupAssistantOptions {
   conversationId?: string;
+  /** Enable streaming responses (default: true) */
+  enableStreaming?: boolean;
+}
+
+/** Streaming state for progressive text display */
+export interface StreamingState {
+  isStreaming: boolean;
+  currentText: string;
 }
 
 interface UseSetupAssistantReturn {
@@ -32,6 +42,9 @@ interface UseSetupAssistantReturn {
   isLoading: boolean;
   isSending: boolean;
   error: string | null;
+
+  // Streaming state
+  streamingState: StreamingState;
 
   // Actions
   sendMessage: (content: string, attachments?: MessageAttachment[]) => Promise<void>;
@@ -44,13 +57,25 @@ interface UseSetupAssistantReturn {
 }
 
 // =====================================================
+// CONSTANTS
+// =====================================================
+
+const initialStreamingState: StreamingState = {
+  isStreaming: false,
+  currentText: '',
+};
+
+/** Maximum SSE buffer size to prevent memory overflow (100KB) */
+const MAX_BUFFER_SIZE = 1024 * 100;
+
+// =====================================================
 // HOOK IMPLEMENTATION
 // =====================================================
 
 export function useSetupAssistant(
   options: UseSetupAssistantOptions = {}
 ): UseSetupAssistantReturn {
-  const { conversationId: initialConversationId } = options;
+  const { conversationId: initialConversationId, enableStreaming = true } = options;
 
   // State
   const [conversationId, setConversationId] = useState<string | undefined>(
@@ -63,7 +88,12 @@ export function useSetupAssistant(
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Streaming state
+  const [streamingState, setStreamingState] = useState<StreamingState>(initialStreamingState);
+
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
 
   // Update conversationId if prop changes
   useEffect(() => {
@@ -71,6 +101,21 @@ export function useSetupAssistant(
       setConversationId(initialConversationId);
     }
   }, [initialConversationId]);
+
+  // Cleanup on unmount - FIX: Also clean streaming state (#2)
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+
+      // Abort any pending request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   // ======================
   // FETCH CONVERSATION AND MESSAGES
@@ -84,13 +129,19 @@ export function useSetupAssistant(
         `/api/setup-assistant/${id}`,
         { throwOnError: false }
       );
-      setConversation(data.conversation);
-      setMessages(data.messages || []);
+      if (isMountedRef.current) {
+        setConversation(data.conversation);
+        setMessages(data.messages || []);
+      }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error loading conversation';
-      setError(errorMessage);
+      if (isMountedRef.current) {
+        const errorMessage = err instanceof Error ? err.message : 'Error loading conversation';
+        setError(errorMessage);
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -110,7 +161,7 @@ export function useSetupAssistant(
         '/api/setup-assistant/usage',
         { throwOnError: false }
       );
-      if (data) {
+      if (data && isMountedRef.current) {
         setUsage(data);
       }
     } catch (err) {
@@ -126,7 +177,180 @@ export function useSetupAssistant(
   }, [fetchUsage]);
 
   // ======================
-  // SEND MESSAGE
+  // SEND MESSAGE WITH STREAMING
+  // ======================
+  const sendMessageWithStreaming = useCallback(
+    async (targetId: string, content: string, attachments?: MessageAttachment[]) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Create abort controller for this request
+      abortControllerRef.current = new AbortController();
+
+      const response = await fetch(`/api/setup-assistant/${targetId}/messages/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ content, attachments }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to send message');
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // Start streaming state
+      if (isMountedRef.current) {
+        setStreamingState({
+          isStreaming: true,
+          currentText: '',
+        });
+      }
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // FIX: Prevent buffer overflow (#15)
+          if (buffer.length > MAX_BUFFER_SIZE) {
+            throw new Error('SSE buffer overflow - response too large');
+          }
+
+          // Process complete SSE messages
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || ''; // Keep incomplete message in buffer
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              // FIX: Validate SSE data structure (#3)
+              if (!data || typeof data.type !== 'string') {
+                console.warn('[useSetupAssistant] Invalid SSE data structure:', data);
+                continue;
+              }
+
+              // Don't update state if unmounted
+              if (!isMountedRef.current) break;
+
+              switch (data.type) {
+                case 'user_message':
+                  // Validate message structure before adding
+                  if (data.message && typeof data.message === 'object' && data.message.id) {
+                    setMessages((prev) => [...prev, data.message]);
+                  }
+                  break;
+
+                case 'generating_start':
+                  // Generation started, keep streaming state
+                  break;
+
+                case 'text_chunk':
+                  // Update streaming text progressively
+                  if (typeof data.content === 'string') {
+                    setStreamingState((prev) => ({
+                      ...prev,
+                      currentText: prev.currentText + data.content,
+                    }));
+                  }
+                  break;
+
+                case 'done':
+                  // Generation complete - add final message
+                  if (data.assistantMessage && typeof data.assistantMessage === 'object') {
+                    setMessages((prev) => [...prev, data.assistantMessage]);
+                  }
+                  // Update usage if provided
+                  if (data.usage && typeof data.usage === 'object') {
+                    setUsage((prev) => prev ? { ...prev, ...data.usage } : null);
+                  }
+                  // FIX: Small delay to avoid flash (#8)
+                  setTimeout(() => {
+                    if (isMountedRef.current) {
+                      setStreamingState(initialStreamingState);
+                    }
+                  }, 50);
+                  break;
+
+                case 'error':
+                  // FIX: Handle error directly instead of throwing (#13)
+                  if (isMountedRef.current) {
+                    setError(data.error || 'Streaming error');
+                    setStreamingState(initialStreamingState);
+                  }
+                  return; // Exit the function
+              }
+            } catch (parseError) {
+              // Only warn for actual parse errors, not for thrown errors
+              if (parseError instanceof SyntaxError) {
+                console.warn('[useSetupAssistant] SSE parse error:', parseError);
+              } else {
+                throw parseError;
+              }
+            }
+          }
+        }
+      } finally {
+        // FIX: Cancel stream before releasing lock to prevent memory leak (#1)
+        try {
+          await reader.cancel();
+        } catch {
+          // Ignore cancel errors
+        }
+        reader.releaseLock();
+        abortControllerRef.current = null;
+      }
+    },
+    []
+  );
+
+  // ======================
+  // SEND MESSAGE (NON-STREAMING FALLBACK)
+  // ======================
+  const sendMessageNonStreaming = useCallback(
+    async (targetId: string, content: string, attachments?: MessageAttachment[]) => {
+      const data = await fetchWithAuth<SendMessageResponse>(
+        `/api/setup-assistant/${targetId}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ content, attachments }),
+        }
+      );
+
+      if (isMountedRef.current) {
+        // Update messages with user and assistant messages
+        setMessages((prev) => [...prev, data.userMessage, data.assistantMessage]);
+
+        // Update usage
+        if (data.usage) {
+          setUsage(data.usage);
+        }
+      }
+    },
+    []
+  );
+
+  // ======================
+  // SEND MESSAGE (MAIN FUNCTION)
   // ======================
   const sendMessage = useCallback(
     async (content: string, attachments?: MessageAttachment[]) => {
@@ -147,38 +371,46 @@ export function useSetupAssistant(
           });
 
           targetId = createData.conversation.id;
-          setConversationId(targetId);
-          setConversation(createData.conversation);
-          if (createData.initialResponse) {
-            setMessages([createData.initialResponse]);
+          if (isMountedRef.current) {
+            setConversationId(targetId);
+            setConversation(createData.conversation);
+            if (createData.initialResponse) {
+              setMessages([createData.initialResponse]);
+            }
           }
         }
 
-        // Send message
-        const data = await fetchWithAuth<SendMessageResponse>(
-          `/api/setup-assistant/${targetId}/messages`,
-          {
-            method: 'POST',
-            body: JSON.stringify({ content, attachments }),
-          }
-        );
-
-        // Update messages with user and assistant messages
-        setMessages((prev) => [...prev, data.userMessage, data.assistantMessage]);
-
-        // Update usage
-        if (data.usage) {
-          setUsage(data.usage);
+        // Send message with streaming or fallback to non-streaming
+        if (enableStreaming) {
+          await sendMessageWithStreaming(targetId, content, attachments);
+        } else {
+          await sendMessageNonStreaming(targetId, content, attachments);
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Error sending message';
-        setError(errorMessage);
+        // FIX: Clean streaming state on abort (#4)
+        if (err instanceof Error && err.name === 'AbortError') {
+          if (isMountedRef.current) {
+            setStreamingState(initialStreamingState);
+          }
+          return;
+        }
+
+        if (isMountedRef.current) {
+          const errorMessage = err instanceof Error ? err.message : 'Error sending message';
+          setError(errorMessage);
+
+          // Clear streaming state on error
+          setStreamingState(initialStreamingState);
+        }
+
         throw err;
       } finally {
-        setIsSending(false);
+        if (isMountedRef.current) {
+          setIsSending(false);
+        }
       }
     },
-    [conversationId]
+    [conversationId, enableStreaming, sendMessageWithStreaming, sendMessageNonStreaming]
   );
 
   // ======================
@@ -209,7 +441,9 @@ export function useSetupAssistant(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || 'Failed to upload file';
-      setError(errorMessage);
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
       throw new Error(errorMessage);
     }
 
@@ -228,6 +462,7 @@ export function useSetupAssistant(
     async (initialMessage?: string): Promise<string> => {
       setError(null);
       setIsLoading(true);
+      setStreamingState(initialStreamingState); // Reset streaming state
 
       try {
         const data = await fetchWithAuth<{
@@ -238,17 +473,23 @@ export function useSetupAssistant(
           body: JSON.stringify({ initialMessage }),
         });
 
-        setConversationId(data.conversation.id);
-        setConversation(data.conversation);
-        setMessages(data.initialResponse ? [data.initialResponse] : []);
+        if (isMountedRef.current) {
+          setConversationId(data.conversation.id);
+          setConversation(data.conversation);
+          setMessages(data.initialResponse ? [data.initialResponse] : []);
+        }
 
         return data.conversation.id;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Error creating conversation';
-        setError(errorMessage);
+        if (isMountedRef.current) {
+          const errorMessage = err instanceof Error ? err.message : 'Error creating conversation';
+          setError(errorMessage);
+        }
         throw err;
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     []
@@ -271,6 +512,7 @@ export function useSetupAssistant(
     isLoading,
     isSending,
     error,
+    streamingState,
     sendMessage,
     uploadFile,
     createConversation,

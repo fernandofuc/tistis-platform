@@ -13,6 +13,7 @@ import { useSetupAssistant } from '@/src/features/setup-assistant/hooks/useSetup
 import { ChatMessage } from '@/src/features/setup-assistant/components/ChatMessage';
 import { ChatInput } from '@/src/features/setup-assistant/components/ChatInput';
 import { TypingIndicator } from '@/src/features/setup-assistant/components/TypingIndicator';
+import { StreamingMessage } from '@/src/features/setup-assistant/components/StreamingMessage';
 import { QuickActionsGrid } from '@/src/features/setup-assistant/components/QuickActionsGrid';
 import { ProgressPanel } from '@/src/features/setup-assistant/components/ProgressPanel';
 import { UpgradePrompt } from '@/src/features/setup-assistant/components/UpgradePrompt';
@@ -78,6 +79,7 @@ export default function AISetupPage() {
     isLoading,
     isSending,
     error,
+    streamingState,
     sendMessage,
     uploadFile,
     createConversation,
@@ -100,10 +102,10 @@ export default function AISetupPage() {
     type: 'image' | 'document';
   }>>([]);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom on new messages or streaming updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [messages.length, streamingState.currentText]);
 
   // Check if at limit
   const isAtLimit = usage?.isAtLimit || false;
@@ -310,8 +312,18 @@ export default function AISetupPage() {
                       message={message}
                     />
                   ))}
+                  {/* Streaming Message - Shows text progressively while AI generates */}
                   <AnimatePresence>
-                    {isSending && <TypingIndicator />}
+                    {streamingState.isStreaming && (
+                      <StreamingMessage
+                        text={streamingState.currentText}
+                        isStreaming={streamingState.isStreaming}
+                      />
+                    )}
+                  </AnimatePresence>
+                  {/* Typing Indicator - Only show when sending but not streaming yet */}
+                  <AnimatePresence>
+                    {isSending && !streamingState.isStreaming && <TypingIndicator />}
                   </AnimatePresence>
                   <div ref={messagesEndRef} />
                 </div>
