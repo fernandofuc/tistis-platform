@@ -68,6 +68,17 @@ const initialStreamingState: StreamingState = {
 /** Maximum SSE buffer size to prevent memory overflow (100KB) */
 const MAX_BUFFER_SIZE = 1024 * 100;
 
+/** Maximum file size for upload (10MB) - must match server config */
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+/** Presigned URL response type */
+interface PresignedUrlResponse {
+  uploadUrl: string;
+  path: string;
+  token: string;
+  expiresAt: string;
+}
+
 // =====================================================
 // HOOK IMPLEMENTATION
 // =====================================================
@@ -424,12 +435,21 @@ export function useSetupAssistant(
   );
 
   // ======================
-  // UPLOAD FILE
+  // UPLOAD FILE (Presigned URL flow to bypass Vercel 4.5MB limit)
   // ======================
   const uploadFile = useCallback(async (file: File): Promise<UploadResponse> => {
     setError(null);
 
-    // Get access token for auth (FormData doesn't use fetchWithAuth due to Content-Type)
+    // Client-side size validation (prevents unnecessary API calls)
+    if (file.size > MAX_FILE_SIZE) {
+      const errorMessage = `Archivo demasiado grande. Máximo ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Get access token for auth
     const accessToken = await getAccessToken();
     if (!accessToken) {
       const errorMessage = 'Authentication required for file upload';
@@ -437,27 +457,73 @@ export function useSetupAssistant(
       throw new Error(errorMessage);
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await fetch('/api/setup-assistant/upload', {
+    // Step 1: Get presigned upload URL from server
+    const presignedResponse = await fetch('/api/setup-assistant/upload/presigned', {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: formData,
+      body: JSON.stringify({
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+      }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.error || 'Failed to upload file';
+    if (!presignedResponse.ok) {
+      const errorData = await presignedResponse.json().catch(() => ({}));
+      const errorMessage = errorData.error || 'Error al preparar subida';
       if (isMountedRef.current) {
         setError(errorMessage);
       }
       throw new Error(errorMessage);
     }
 
-    const data: UploadResponse = await response.json();
+    const presignedData: PresignedUrlResponse = await presignedResponse.json();
+
+    // Step 2: Upload file directly to Supabase Storage (bypasses Vercel limit)
+    const uploadResponse = await fetch(presignedData.uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+      },
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorMessage = 'Error al subir archivo a storage';
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Step 3: Confirm upload and get signed URL for reading
+    const confirmResponse = await fetch('/api/setup-assistant/upload/confirm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        path: presignedData.path,
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+      }),
+    });
+
+    if (!confirmResponse.ok) {
+      const errorData = await confirmResponse.json().catch(() => ({}));
+      const errorMessage = errorData.error || 'Error al confirmar subida';
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data: UploadResponse = await confirmResponse.json();
 
     // Refresh usage after upload
     fetchUsage();

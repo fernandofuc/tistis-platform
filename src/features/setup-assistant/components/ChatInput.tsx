@@ -53,6 +53,7 @@ const ACCEPTED_DOC_TYPES = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.md';
 
 // Limits
 const MAX_ATTACHMENTS = 5;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - must match server config
 
 // =====================================================
 // COMPONENT
@@ -106,6 +107,15 @@ export function ChatInput({
 
     // Only process files up to the available slots
     const filesToUpload = Array.from(files).slice(0, availableSlots);
+
+    // Client-side size validation (prevents unnecessary API calls)
+    const oversizedFile = filesToUpload.find(f => f.size > MAX_FILE_SIZE);
+    if (oversizedFile) {
+      const maxMB = MAX_FILE_SIZE / (1024 * 1024);
+      setUploadError(`"${oversizedFile.name}" es demasiado grande. Máximo ${maxMB}MB`);
+      e.target.value = '';
+      return;
+    }
 
     setIsUploading(true);
     try {
