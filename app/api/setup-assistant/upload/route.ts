@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
     if (uploadError) {
       console.error('[SetupAssistant] Upload error:', uploadError);
       return NextResponse.json(
-        { error: 'Failed to upload file', details: uploadError.message },
+        { error: 'Error al subir archivo' },
         { status: 500 }
       );
     }

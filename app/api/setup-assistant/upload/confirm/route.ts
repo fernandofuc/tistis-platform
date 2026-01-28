@@ -67,10 +67,31 @@ export async function POST(request: NextRequest) {
     const { path, filename, mimeType, size } = body;
 
     // Validate required fields
-    if (!path || !filename || !mimeType || !size) {
+    if (!path || !filename || !mimeType || size === undefined || size === null) {
       return NextResponse.json(
         { error: 'Missing required fields: path, filename, mimeType, size' },
         { status: 400 }
+      );
+    }
+
+    // Validate size is positive number
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+      return NextResponse.json(
+        {
+          error: 'Tamaño de archivo inválido',
+          code: 'INVALID_FILE_SIZE',
+          providedSize: size,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Security: Validate path doesn't contain path traversal attempts
+    if (path.includes('..') || path.includes('\0') || /%2e%2e/i.test(path)) {
+      console.warn('[SetupAssistant] Path traversal attempt detected:', { path });
+      return NextResponse.json(
+        { error: 'Invalid file path' },
+        { status: 403 }
       );
     }
 
@@ -108,6 +129,9 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // Get actual file size from storage metadata (don't trust client-provided size)
+    const actualFileSize = uploadedFile.metadata?.size as number | undefined;
 
     // For images, validate content with magic numbers
     if (ALLOWED_IMAGE_MIMES.includes(mimeType)) {
@@ -191,12 +215,12 @@ export async function POST(request: NextRequest) {
       // Don't fail the request, just log
     }
 
-    // Build response
+    // Build response (use actual file size from storage, fallback to client-provided)
     const response: UploadResponse = {
       url: signedUrlData?.signedUrl || path,
       filename: filename,
       mimeType: mimeType,
-      size: size,
+      size: actualFileSize ?? size,
     };
 
     return NextResponse.json(response, { status: 201 });

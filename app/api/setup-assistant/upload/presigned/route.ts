@@ -114,7 +114,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size
+    // Validate file size (must be positive and within limits)
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+      return NextResponse.json(
+        {
+          error: 'Tamaño de archivo inválido',
+          code: 'INVALID_FILE_SIZE',
+          providedSize: size,
+        },
+        { status: 400 }
+      );
+    }
+
     if (size > MAX_FILE_SIZE) {
       return NextResponse.json(
         {
@@ -194,7 +205,7 @@ export async function POST(request: NextRequest) {
     if (signedError || !signedData) {
       console.error('[SetupAssistant] Error creating presigned URL:', signedError);
       return NextResponse.json(
-        { error: 'Error al generar URL de subida', details: signedError?.message },
+        { error: 'Error al generar URL de subida' },
         { status: 500 }
       );
     }

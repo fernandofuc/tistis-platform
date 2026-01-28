@@ -440,7 +440,16 @@ export function useSetupAssistant(
   const uploadFile = useCallback(async (file: File): Promise<UploadResponse> => {
     setError(null);
 
-    // Client-side size validation (prevents unnecessary API calls)
+    // Client-side validation: empty files
+    if (file.size === 0) {
+      const errorMessage = 'El archivo está vacío';
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Client-side validation: oversized files
     if (file.size > MAX_FILE_SIZE) {
       const errorMessage = `Archivo demasiado grande. Máximo ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
       if (isMountedRef.current) {

@@ -108,7 +108,15 @@ export function ChatInput({
     // Only process files up to the available slots
     const filesToUpload = Array.from(files).slice(0, availableSlots);
 
-    // Client-side size validation (prevents unnecessary API calls)
+    // Client-side validation: empty files
+    const emptyFile = filesToUpload.find(f => f.size === 0);
+    if (emptyFile) {
+      setUploadError(`"${emptyFile.name}" está vacío`);
+      e.target.value = '';
+      return;
+    }
+
+    // Client-side validation: oversized files
     const oversizedFile = filesToUpload.find(f => f.size > MAX_FILE_SIZE);
     if (oversizedFile) {
       const maxMB = MAX_FILE_SIZE / (1024 * 1024);
