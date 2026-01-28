@@ -13,6 +13,7 @@ import { useAgentProfiles } from '@/src/hooks/useAgentProfiles';
 import { useTenant } from '@/src/hooks/useTenant';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import { supabase } from '@/src/shared/lib/supabase';
+import { cn } from '@/src/shared/utils';
 import type { VerticalType } from '@/src/shared/config/agent-templates';
 import type { AgentProfileInput } from '@/src/shared/types/agent-profiles';
 import { getDefaultTemplate } from '@/src/shared/config/agent-templates';
@@ -26,6 +27,100 @@ import {
   PersonalProfileTab,
   AdvancedTab,
 } from './components';
+
+// ======================
+// AI MODEL CONFIG
+// ======================
+const AI_MODEL_NAME = 'GPT-5 Mini';
+
+// ======================
+// TOGGLE SWITCH COMPONENT - Professional Style (Matches Loyalty Page)
+// ======================
+interface ToggleSwitchProps {
+  enabled: boolean;
+  onToggle: () => void;
+  loading?: boolean;
+}
+
+function ToggleSwitch({ enabled, onToggle, loading }: ToggleSwitchProps) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={loading}
+      className={cn(
+        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:ring-offset-2',
+        enabled ? 'bg-tis-coral' : 'bg-slate-200',
+        loading && 'opacity-50 cursor-not-allowed'
+      )}
+    >
+      <span
+        className={cn(
+          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+          enabled ? 'translate-x-5' : 'translate-x-0'
+        )}
+      />
+    </button>
+  );
+}
+
+// ======================
+// AI AGENT TOGGLE CARD - Full Width (Matches Base Conocimiento Style)
+// ======================
+interface AIAgentToggleCardProps {
+  aiEnabled: boolean;
+  onToggle: () => void;
+  loading?: boolean;
+}
+
+function AIAgentToggleCard({ aiEnabled, onToggle, loading }: AIAgentToggleCardProps) {
+  return (
+    <div className={cn(
+      'relative rounded-2xl border p-5 transition-all duration-200',
+      aiEnabled
+        ? 'border-slate-200 bg-white shadow-sm'
+        : 'border-slate-200/80 bg-slate-50/50'
+    )}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className={cn(
+            'flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all',
+            aiEnabled
+              ? 'bg-slate-900 text-white'
+              : 'bg-slate-200 text-slate-400'
+          )}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-900">AI Agent Activo</h3>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {aiEnabled
+                ? `Usando ${AI_MODEL_NAME} para mensajería`
+                : 'Las conversaciones serán atendidas manualmente'}
+            </p>
+            <div className="mt-2.5">
+              <span className={cn(
+                'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
+                aiEnabled
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                  : 'bg-slate-100 text-slate-500 border border-slate-200'
+              )}>
+                <span className={cn(
+                  'w-1.5 h-1.5 rounded-full',
+                  aiEnabled ? 'bg-emerald-500' : 'bg-slate-400'
+                )} />
+                {aiEnabled ? 'Activo' : 'Desactivado'}
+              </span>
+            </div>
+          </div>
+        </div>
+        <ToggleSwitch enabled={aiEnabled} onToggle={onToggle} loading={loading} />
+      </div>
+    </div>
+  );
+}
 
 // ======================
 // COMPONENT
@@ -53,7 +148,8 @@ export default function AgenteMensajesPage() {
   const [aiConfigLoading, setAiConfigLoading] = useState<boolean>(true);
   const [aiToggleLoading, setAiToggleLoading] = useState<boolean>(false);
 
-  const isLoading = tenantLoading || profilesLoading || aiConfigLoading;
+  // Separate loading states: AI config card loads independently from tabs
+  const tabsLoading = tenantLoading || profilesLoading;
   const showPersonalTab = vertical === 'dental';
 
   // ===== FETCH AI CONFIG ON MOUNT =====
@@ -299,6 +395,19 @@ export default function AgenteMensajesPage() {
           </div>
         )}
 
+        {/* AI Agent Toggle Card - Full Width, Above Tabs (Like Base Conocimiento) */}
+        {aiConfigLoading ? (
+          <div className="mb-6 h-24 bg-slate-100 rounded-2xl animate-pulse" />
+        ) : (
+          <div className="mb-6">
+            <AIAgentToggleCard
+              aiEnabled={aiEnabled}
+              onToggle={handleToggleAI}
+              loading={aiToggleLoading}
+            />
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <AgentMessagesTabs
           activeTab={activeTab}
@@ -321,13 +430,9 @@ export default function AgenteMensajesPage() {
                 personalProfile={personal}
                 tenantName={tenant?.name}
                 vertical={vertical || 'general'}
-                isLoading={isLoading}
+                isLoading={tabsLoading}
                 onEditBusiness={handleEditBusiness}
                 onEditPersonal={handleEditPersonal}
-                // AI Agent Toggle props
-                aiEnabled={aiEnabled}
-                aiToggleLoading={aiToggleLoading}
-                onToggleAI={handleToggleAI}
               />
             )}
 
@@ -336,7 +441,7 @@ export default function AgenteMensajesPage() {
                 profile={business}
                 vertical={(vertical || 'general') as VerticalType}
                 tenantName={tenant?.name}
-                isLoading={isLoading}
+                isLoading={tabsLoading}
                 onSave={handleSaveBusinessProfile}
               />
             )}
@@ -346,7 +451,7 @@ export default function AgenteMensajesPage() {
                 profile={personal}
                 vertical={(vertical || 'general') as VerticalType}
                 tenantName={tenant?.name}
-                isLoading={isLoading}
+                isLoading={tabsLoading}
                 onSave={handleSavePersonalProfile}
                 onActivate={handleActivatePersonal}
                 onToggleActive={handleTogglePersonal}
@@ -356,7 +461,7 @@ export default function AgenteMensajesPage() {
             {activeTab === 'avanzado' && (
               <AdvancedTab
                 businessProfile={business}
-                isLoading={isLoading}
+                isLoading={tabsLoading}
                 onSave={handleSaveAdvancedSettings}
               />
             )}
