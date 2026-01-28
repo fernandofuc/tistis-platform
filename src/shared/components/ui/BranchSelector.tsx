@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Branch Selector Component
 // Global branch filter for multi-branch tenants
+// Updated: Consistent with navbar branch selector design
 // =====================================================
 
 'use client';
@@ -22,11 +23,6 @@ const icons = {
   chevronDown: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  ),
-  check: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
     </svg>
   ),
   building: (
@@ -90,30 +86,30 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
       <button
         onClick={() => !singleBranch && setIsOpen(!isOpen)}
         className={cn(
-          'flex items-center gap-2 w-full px-3 py-2.5 sm:py-2 rounded-lg transition-colors min-h-[44px] sm:min-h-0',
-          'bg-gray-50 border border-gray-200',
+          'flex items-center gap-2 w-full px-3 py-2.5 sm:py-2 rounded-xl transition-colors min-h-[44px] sm:min-h-0',
+          'bg-slate-50/80 hover:bg-slate-100',
           'text-left',
-          singleBranch ? 'cursor-default' : 'hover:bg-gray-100 active:bg-gray-200 cursor-pointer',
+          singleBranch ? 'cursor-default' : 'cursor-pointer',
           collapsed && 'justify-center px-2'
         )}
         title={collapsed ? displayText : undefined}
       >
-        <span className="text-purple-600">{icons.location}</span>
+        <span className="text-slate-400">{icons.location}</span>
 
         {!collapsed && (
           <>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
+              <p className="text-sm font-medium text-slate-700 truncate">
                 {displayText}
               </p>
               {displayCity && (
-                <p className="text-xs text-gray-500 truncate">{displayCity}</p>
+                <p className="text-xs text-slate-500 truncate">{displayCity}</p>
               )}
             </div>
             {/* Only show chevron if multiple branches */}
             {!singleBranch && (
               <span className={cn(
-                'text-gray-400 transition-transform',
+                'text-slate-400 transition-transform duration-200',
                 isOpen && 'rotate-180'
               )}>
                 {icons.chevronDown}
@@ -126,13 +122,13 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
       {/* Dropdown Menu - only show if multiple branches */}
       {isOpen && !singleBranch && (
         <div className={cn(
-          'absolute z-50 mt-1 w-[calc(100vw-2rem)] sm:w-64 max-w-[280px] bg-white rounded-xl shadow-lg border border-gray-200 py-1',
-          collapsed ? 'left-full ml-2 top-0' : 'left-0 sm:right-0'
+          'absolute z-50 mt-2 w-64 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200/60 py-2 overflow-hidden',
+          collapsed ? 'left-full ml-2 top-0' : 'left-0'
         )}>
           {/* Header */}
-          <div className="px-3 py-2 border-b border-gray-100">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Filtrar por sucursal
+          <div className="px-3 py-2 border-b border-slate-100">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              Sucursales
             </p>
           </div>
 
@@ -140,29 +136,18 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
           <button
             onClick={() => handleSelect(null)}
             className={cn(
-              'flex items-center gap-3 w-full px-3 py-3 sm:py-2.5 text-left transition-colors min-h-[48px] sm:min-h-0',
-              selectedBranchId === null
-                ? 'bg-purple-50 text-purple-700'
-                : 'hover:bg-gray-50 active:bg-gray-100 text-gray-700'
+              'w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 transition-colors',
+              selectedBranchId === null ? 'bg-slate-100' : 'text-slate-700'
             )}
           >
-            <span className={cn(
-              'w-8 h-8 rounded-lg flex items-center justify-center',
-              selectedBranchId === null ? 'bg-purple-100' : 'bg-gray-100'
-            )}>
-              {icons.building}
-            </span>
-            <div className="flex-1">
-              <p className="font-medium">Todas las sucursales</p>
-              <p className="text-xs text-gray-500">Ver datos consolidados</p>
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Todas las sucursales</span>
             </div>
-            {selectedBranchId === null && (
-              <span className="text-purple-600">{icons.check}</span>
-            )}
+            <span className="text-xs text-slate-500">Datos consolidados</span>
           </button>
 
           {/* Divider */}
-          <div className="border-t border-gray-100 my-1" />
+          <div className="border-t border-slate-100 my-1" />
 
           {/* Branch Options */}
           {branches.map((branch) => (
@@ -170,35 +155,21 @@ export function BranchSelector({ collapsed = false, className }: BranchSelectorP
               key={branch.id}
               onClick={() => handleSelect(branch.id)}
               className={cn(
-                'flex items-center gap-3 w-full px-3 py-3 sm:py-2.5 text-left transition-colors min-h-[48px] sm:min-h-0',
-                selectedBranchId === branch.id
-                  ? 'bg-purple-50 text-purple-700'
-                  : 'hover:bg-gray-50 active:bg-gray-100 text-gray-700'
+                'w-full px-3 py-2.5 text-left text-sm hover:bg-slate-50 transition-colors',
+                selectedBranchId === branch.id ? 'bg-slate-100' : 'text-slate-700'
               )}
             >
-              <span className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center',
-                selectedBranchId === branch.id ? 'bg-purple-100' : 'bg-gray-100',
-                branch.is_headquarters && 'ring-2 ring-purple-300'
-              )}>
-                {icons.location}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium truncate">{branch.name}</p>
-                  {branch.is_headquarters && (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full">
-                      Principal
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 truncate">
-                  {branch.city}{branch.state ? `, ${branch.state}` : ''}
-                </p>
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{branch.name}</span>
+                {branch.is_headquarters && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-slate-900 text-white rounded-md">
+                    HQ
+                  </span>
+                )}
               </div>
-              {selectedBranchId === branch.id && (
-                <span className="text-purple-600 flex-shrink-0">{icons.check}</span>
-              )}
+              <span className="text-xs text-slate-500">
+                {branch.city}{branch.state ? `, ${branch.state}` : ''}
+              </span>
             </button>
           ))}
         </div>
