@@ -6,7 +6,7 @@
 // Replaces modal with minimalist inline UI above chat input
 // =====================================================
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
 import {
@@ -89,9 +89,10 @@ export function ReportInlineFlow({
     },
   });
 
-  // Handle close with reset
+  // Handle close with reset - also reset download state
   const handleClose = useCallback(() => {
     if (isGenerating) return;
+    setIsDownloading(false);
     reset();
     onClose();
   }, [isGenerating, reset, onClose]);
@@ -111,15 +112,44 @@ export function ReportInlineFlow({
     generate();
   }, [generate]);
 
-  // Handle download
-  const handleDownload = useCallback(() => {
-    if (state.pdfUrl) {
-      window.open(state.pdfUrl, '_blank');
-    }
-  }, [state.pdfUrl]);
+  // Track download state
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Handle generate another
+  // Handle download - fetch blob and trigger actual download
+  const handleDownload = useCallback(async () => {
+    if (!state.pdfUrl || !state.filename) return;
+
+    setIsDownloading(true);
+    try {
+      // Fetch the PDF as a blob
+      const response = await fetch(state.pdfUrl);
+      if (!response.ok) throw new Error('Download failed');
+
+      const blob = await response.blob();
+
+      // Create object URL and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = state.filename;
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      // Fallback to window.open if fetch fails (e.g., CORS issues)
+      window.open(state.pdfUrl, '_blank');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [state.pdfUrl, state.filename]);
+
+  // Handle generate another - also reset download state
   const handleGenerateAnother = useCallback(() => {
+    setIsDownloading(false); // Reset download state in case download was in progress
     reset();
   }, [reset]);
 
@@ -190,7 +220,8 @@ export function ReportInlineFlow({
               )}
             </div>
 
-            {/* Content based on step */}
+            {/* Content based on step - aria-live announces changes to screen readers */}
+            <div aria-live="polite" aria-atomic="true">
             <AnimatePresence mode="wait">
               {/* Step 1: Period Selection */}
               {state.step === 'period' && (
@@ -362,16 +393,22 @@ export function ReportInlineFlow({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handleDownload}
+                      disabled={isDownloading}
                       aria-label={`Descargar reporte ${typeLabel} ${periodLabel}`}
                       className={cn(
                         'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
                         'bg-gradient-to-r from-tis-coral to-tis-pink text-white',
                         'hover:shadow-lg hover:shadow-tis-coral/25 active:scale-[0.98]',
-                        'focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:ring-offset-2'
+                        'focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:ring-offset-2',
+                        'disabled:opacity-70 disabled:cursor-wait'
                       )}
                     >
-                      <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                      Descargar
+                      {isDownloading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                      )}
+                      {isDownloading ? 'Descargando...' : 'Descargar'}
                     </button>
 
                     <a
@@ -443,6 +480,7 @@ export function ReportInlineFlow({
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
           </div>
         </motion.div>
       )}

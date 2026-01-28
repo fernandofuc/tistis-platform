@@ -391,9 +391,9 @@ export default function AISetupPage() {
             <ReportInlineFlow
               isOpen={showReportFlow}
               onClose={() => setShowReportFlow(false)}
-              onComplete={(pdfUrl) => {
-                setShowReportFlow(false);
-                sendMessage(`¡Excelente! Tu reporte ha sido generado. [Descargar PDF](${pdfUrl})`);
+              onComplete={() => {
+                // Keep the flow visible so user can use download/open buttons
+                // Don't send markdown message - ChatMessage doesn't render markdown
               }}
             />
 
