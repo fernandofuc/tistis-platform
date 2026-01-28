@@ -10,3 +10,4 @@ export { QuickActionsGrid } from './QuickActionsGrid';
 export { ProgressPanel } from './ProgressPanel';
 export { UpgradePrompt } from './UpgradePrompt';
 export { StreamingMessage } from './StreamingMessage';
+export { FilePreviewCard } from './FilePreviewCard';

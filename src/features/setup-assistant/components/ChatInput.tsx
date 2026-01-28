@@ -3,13 +3,14 @@
 // =====================================================
 // TIS TIS PLATFORM - Chat Input Component
 // Sprint 5: AI-powered configuration assistant
+// Redesigned: Cowork-inspired layout with file cards
+// Layout: File cards above, input with inline buttons
 // =====================================================
 
 import React, { useState, useCallback, useRef } from 'react';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/src/shared/utils';
-import { Button } from '@/src/shared/components/ui/Button';
+import { FilePreviewCard } from './FilePreviewCard';
 import type { MessageAttachment, UploadResponse } from '../types';
 
 // Icons (using lucide-react)
@@ -17,7 +18,7 @@ import {
   Send,
   Image as ImageIcon,
   Paperclip,
-  X,
+  Loader2,
 } from 'lucide-react';
 
 // =====================================================
@@ -44,6 +45,13 @@ interface ChatInputProps {
 // Apple-like easing
 const appleEasing = [0.25, 0.1, 0.25, 1] as const;
 
+// Supported file types
+const ACCEPTED_IMAGE_TYPES = 'image/png,image/jpeg,image/gif,image/webp';
+const ACCEPTED_DOC_TYPES = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.md';
+
+// Limits
+const MAX_ATTACHMENTS = 5;
+
 // =====================================================
 // COMPONENT
 // =====================================================
@@ -59,7 +67,8 @@ export function ChatInput({
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = externalRef || internalRef;
 
@@ -74,14 +83,27 @@ export function ChatInput({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
   }, []);
 
-  // Handle file selection
+  // Handle file selection (generic handler for both image and doc inputs)
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // Check if adding these files would exceed the limit
+    const currentCount = attachments.length;
+    const availableSlots = MAX_ATTACHMENTS - currentCount;
+
+    if (availableSlots <= 0) {
+      console.warn('[ChatInput] Max attachments reached');
+      e.target.value = '';
+      return;
+    }
+
+    // Only process files up to the available slots
+    const filesToUpload = Array.from(files).slice(0, availableSlots);
+
     setIsUploading(true);
     try {
-      for (const file of Array.from(files)) {
+      for (const file of filesToUpload) {
         const result = await onUpload(file);
         setAttachments((prev) => [
           ...prev,
@@ -98,12 +120,10 @@ export function ChatInput({
       console.error('[ChatInput] Upload failed:', error);
     } finally {
       setIsUploading(false);
-      // Reset input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      // Reset input value to allow re-selecting same file
+      e.target.value = '';
     }
-  }, [onUpload]);
+  }, [attachments.length, onUpload]);
 
   // Remove attachment
   const removeAttachment = useCallback((index: number) => {
@@ -127,7 +147,7 @@ export function ChatInput({
       }));
 
       await onSend(
-        trimmedContent || 'Analiza estas imágenes',
+        trimmedContent || 'Analiza estos archivos',
         messageAttachments.length > 0 ? messageAttachments : undefined
       );
 
@@ -151,125 +171,147 @@ export function ChatInput({
   }, [handleSend]);
 
   const canSend = (content.trim() || attachments.length > 0) && !disabled && !isLoading;
+  const hasAttachments = attachments.length > 0;
+  const isAtMaxAttachments = attachments.length >= MAX_ATTACHMENTS;
 
   return (
-    <div>
-      {/* Attachments preview */}
-      <AnimatePresence>
-        {attachments.length > 0 && (
+    <div className="flex flex-col gap-3">
+      {/* File Preview Cards - Above input (Cowork style) */}
+      <AnimatePresence mode="popLayout">
+        {hasAttachments && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: appleEasing }}
-            className="flex flex-wrap gap-2 mb-3"
+            className="flex flex-wrap gap-2"
           >
             {attachments.map((attachment, index) => (
-              <motion.div
-                key={attachment.url}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="relative group"
-              >
-                {attachment.type === 'image' ? (
-                  <Image
-                    src={attachment.url}
-                    alt={attachment.filename}
-                    width={64}
-                    height={64}
-                    className="w-16 h-16 object-cover rounded-lg border border-slate-200"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="w-16 h-16 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center">
-                    <Paperclip className="w-6 h-6 text-slate-400" />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(index)}
-                  aria-label={`Eliminar ${attachment.filename}`}
-                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </motion.div>
+              <FilePreviewCard
+                key={`${attachment.url}-${index}`}
+                url={attachment.url}
+                filename={attachment.filename}
+                mimeType={attachment.mimeType}
+                size={attachment.size}
+                type={attachment.type}
+                onRemove={() => removeAttachment(index)}
+              />
             ))}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Input area */}
-      <div className="flex items-end gap-2">
-        {/* File upload buttons */}
-        <div className="flex gap-1">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-          <Button
+      {/* Input Container - Cowork-inspired design */}
+      <div
+        className={cn(
+          'relative flex items-end gap-1',
+          'bg-slate-50 rounded-2xl',
+          'border border-slate-200',
+          'focus-within:border-tis-coral focus-within:ring-2 focus-within:ring-tis-coral/20',
+          'transition-all duration-200',
+          disabled && 'opacity-50 cursor-not-allowed'
+        )}
+      >
+        {/* Hidden file inputs */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept={ACCEPTED_IMAGE_TYPES}
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+          aria-label="Subir imagen"
+        />
+        <input
+          ref={docInputRef}
+          type="file"
+          accept={ACCEPTED_DOC_TYPES}
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+          aria-label="Subir documento"
+        />
+
+        {/* Left side buttons */}
+        <div className="flex items-center gap-0.5 pl-2 pb-2.5">
+          {/* Image upload button */}
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled || isUploading}
-            className="text-slate-500 hover:text-slate-700"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={disabled || isUploading || isAtMaxAttachments}
+            aria-label={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar imagen'}
+            title={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar imagen'}
+            className={cn(
+              'p-2 rounded-lg',
+              'text-slate-400 hover:text-tis-coral',
+              'hover:bg-slate-100',
+              'transition-colors duration-150',
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400'
+            )}
           >
             <ImageIcon className="w-5 h-5" />
-          </Button>
+          </button>
+
+          {/* Document upload button */}
+          <button
+            type="button"
+            onClick={() => docInputRef.current?.click()}
+            disabled={disabled || isUploading || isAtMaxAttachments}
+            aria-label={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar documento'}
+            title={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar documento'}
+            className={cn(
+              'p-2 rounded-lg',
+              'text-slate-400 hover:text-tis-coral',
+              'hover:bg-slate-100',
+              'transition-colors duration-150',
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400'
+            )}
+          >
+            <Paperclip className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Textarea */}
-        <div className="flex-1 relative">
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled || isLoading}
-            rows={1}
-            className={cn(
-              'w-full resize-none rounded-2xl border border-slate-200',
-              'bg-slate-50 px-4 py-3 pr-12',
-              'text-sm text-slate-900',
-              'placeholder:text-slate-400',
-              'focus:outline-none focus:ring-2 focus:ring-tis-coral/50 focus:border-tis-coral',
-              'transition-all duration-200',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-            style={{ minHeight: '48px', maxHeight: '200px' }}
-          />
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={handleInput}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={disabled || isLoading}
+          rows={1}
+          className={cn(
+            'flex-1 py-3 px-1',
+            'bg-transparent resize-none',
+            'text-sm text-slate-900',
+            'placeholder:text-slate-400',
+            'focus:outline-none',
+            'disabled:cursor-not-allowed'
+          )}
+          style={{ minHeight: '24px', maxHeight: '200px' }}
+        />
 
-          {/* Send button inside textarea */}
-          <Button
+        {/* Right side - Send button */}
+        <div className="flex items-center pr-2 pb-2.5">
+          <button
             type="button"
-            variant="primary"
-            size="sm"
             onClick={handleSend}
             disabled={!canSend}
+            aria-label="Enviar mensaje"
             className={cn(
-              'absolute right-2 bottom-2',
-              'rounded-full w-8 h-8 p-0 min-h-0',
-              'bg-tis-coral hover:bg-tis-pink',
-              'disabled:bg-slate-300'
+              'p-2 rounded-xl',
+              'transition-all duration-200',
+              canSend
+                ? 'bg-tis-coral text-white hover:bg-tis-pink shadow-sm hover:shadow-md'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
             )}
           >
             {isLoading ? (
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-              />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <Send className="w-4 h-4 text-white" />
+              <Send className="w-5 h-5" />
             )}
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -277,17 +319,14 @@ export function ChatInput({
       <AnimatePresence>
         {isUploading && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="mt-2 text-xs text-slate-500 flex items-center gap-2"
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="flex items-center gap-2 text-xs text-slate-500"
           >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              className="w-3 h-3 border-2 border-tis-coral border-t-transparent rounded-full"
-            />
-            Subiendo archivo...
+            <Loader2 className="w-3 h-3 animate-spin text-tis-coral" />
+            <span>Subiendo archivo...</span>
           </motion.div>
         )}
       </AnimatePresence>
