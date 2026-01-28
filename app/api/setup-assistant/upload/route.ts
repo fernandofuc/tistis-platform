@@ -25,13 +25,39 @@ import { imageValidatorService } from '@/src/features/setup-assistant/services/i
 // Configuration
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME_TYPES = [
+  // Images
   'image/jpeg',
   'image/png',
   'image/webp',
   'image/gif',
+  // Documents
   'application/pdf',
   'text/plain',
+  'text/csv',
+  'text/markdown',
+  // Microsoft Office
+  'application/msword', // .doc
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
 ];
+
+// Map file extensions to MIME types for fallback detection
+const EXTENSION_TO_MIME: Record<string, string> = {
+  'jpg': 'image/jpeg',
+  'jpeg': 'image/jpeg',
+  'png': 'image/png',
+  'webp': 'image/webp',
+  'gif': 'image/gif',
+  'pdf': 'application/pdf',
+  'txt': 'text/plain',
+  'csv': 'text/csv',
+  'md': 'text/markdown',
+  'doc': 'application/msword',
+  'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'xls': 'application/vnd.ms-excel',
+  'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 
 // ======================
 // POST - Upload file
@@ -72,13 +98,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    // Validate file type - use extension fallback if MIME not recognized
+    let detectedMimeType = file.type;
+
+    // If browser sends generic MIME or empty, try to detect from extension
+    if (!detectedMimeType || detectedMimeType === 'application/octet-stream') {
+      const extension = file.name?.split('.').pop()?.toLowerCase();
+      if (extension && EXTENSION_TO_MIME[extension]) {
+        detectedMimeType = EXTENSION_TO_MIME[extension];
+      }
+    }
+
+    if (!ALLOWED_MIME_TYPES.includes(detectedMimeType)) {
+      console.warn('[SetupAssistant] File type not allowed:', {
+        originalType: file.type,
+        detectedType: detectedMimeType,
+        filename: file.name,
+      });
       return NextResponse.json(
         {
-          error: 'File type not allowed',
-          allowedTypes: ALLOWED_MIME_TYPES,
-          providedType: file.type,
+          error: 'Tipo de archivo no permitido',
+          allowedTypes: ['Imágenes (PNG, JPG, GIF, WebP)', 'Documentos (PDF, DOC, DOCX, TXT, CSV, XLSX, MD)'],
+          providedType: file.type || 'desconocido',
         },
         { status: 400 }
       );
@@ -141,10 +182,10 @@ export async function POST(request: NextRequest) {
     // =====================================================
 
     // Only validate image files (skip PDFs and text)
-    if (file.type.startsWith('image/')) {
+    if (detectedMimeType.startsWith('image/')) {
       const validationResult = await imageValidatorService.validateImage(
         buffer,
-        file.type,
+        detectedMimeType,
         {
           maxFileSize: MAX_FILE_SIZE,
           allowedMimeTypes: ALLOWED_MIME_TYPES.filter(t => t.startsWith('image/')),
@@ -185,7 +226,7 @@ export async function POST(request: NextRequest) {
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('setup-assistant-uploads')
       .upload(filename, buffer, {
-        contentType: file.type,
+        contentType: detectedMimeType,
         upsert: false,
         cacheControl: '3600',
       });
@@ -226,7 +267,7 @@ export async function POST(request: NextRequest) {
     const response: UploadResponse = {
       url: signedUrlData?.signedUrl || `${uploadData.path}`,
       filename: originalName,
-      mimeType: file.type,
+      mimeType: detectedMimeType,
       size: file.size,
     };
 

@@ -28,21 +28,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const detailed = searchParams.get('detailed') === 'true';
 
-    // Call RPC function to get usage with limits
-    const { data, error } = await supabase.rpc('get_setup_usage_with_limits', {
-      p_tenant_id: tenantId,
-    });
-
-    if (error) {
-      console.error('[SetupAssistant] Error getting usage:', error);
-      return NextResponse.json(
-        { error: 'Failed to get usage' },
-        { status: 500 }
-      );
-    }
-
-    // Handle case where no usage record exists yet
-    const usageRow = data?.[0] || {
+    // Default values for when RPC fails or returns no data
+    const defaultUsage = {
       messages_count: 0,
       messages_limit: 20,
       files_uploaded: 0,
@@ -57,19 +44,37 @@ export async function GET(request: NextRequest) {
       reset_at: null,
     };
 
+    // Call RPC function to get usage with limits
+    let usageRow = defaultUsage;
+    try {
+      const { data, error } = await supabase.rpc('get_setup_usage_with_limits', {
+        p_tenant_id: tenantId,
+      });
+
+      if (error) {
+        // Log but don't fail - use defaults instead
+        console.warn('[SetupAssistant] RPC error, using defaults:', error.message);
+      } else if (data && data.length > 0) {
+        usageRow = data[0];
+      }
+    } catch (rpcError) {
+      // RPC completely failed - use defaults
+      console.warn('[SetupAssistant] RPC exception, using defaults:', rpcError);
+    }
+
     // Build base usage response
     const baseUsage: UsageInfo = {
-      messagesCount: usageRow.messages_count,
-      messagesLimit: usageRow.messages_limit,
-      filesUploaded: usageRow.files_uploaded,
-      filesLimit: usageRow.files_limit,
-      visionRequests: usageRow.vision_requests,
-      visionLimit: usageRow.vision_limit,
-      totalTokens: usageRow.total_tokens,
-      tokensLimit: usageRow.tokens_limit,
-      planId: usageRow.plan_id,
-      planName: usageRow.plan_name,
-      isAtLimit: usageRow.is_at_limit,
+      messagesCount: usageRow.messages_count ?? 0,
+      messagesLimit: usageRow.messages_limit ?? 20,
+      filesUploaded: usageRow.files_uploaded ?? 0,
+      filesLimit: usageRow.files_limit ?? 3,
+      visionRequests: usageRow.vision_requests ?? 0,
+      visionLimit: usageRow.vision_limit ?? 2,
+      totalTokens: usageRow.total_tokens ?? 0,
+      tokensLimit: usageRow.tokens_limit ?? 10000,
+      planId: usageRow.plan_id ?? 'starter',
+      planName: usageRow.plan_name ?? 'Starter',
+      isAtLimit: usageRow.is_at_limit ?? false,
       resetAt: usageRow.reset_at ? new Date(usageRow.reset_at) : undefined,
     };
 
@@ -77,13 +82,13 @@ export async function GET(request: NextRequest) {
     if (detailed) {
       const detailedUsage: DetailedUsageInfo = {
         ...baseUsage,
-        tokensUsed: usageRow.total_tokens,
-        tokensLimit: usageRow.tokens_limit,
+        tokensUsed: usageRow.total_tokens ?? 0,
+        tokensLimit: usageRow.tokens_limit ?? 10000,
         percentages: {
-          messages: getLimitPercentage(usageRow.messages_count, usageRow.messages_limit),
-          files: getLimitPercentage(usageRow.files_uploaded, usageRow.files_limit),
-          vision: getLimitPercentage(usageRow.vision_requests, usageRow.vision_limit),
-          tokens: getLimitPercentage(usageRow.total_tokens, usageRow.tokens_limit),
+          messages: getLimitPercentage(baseUsage.messagesCount, baseUsage.messagesLimit),
+          files: getLimitPercentage(baseUsage.filesUploaded, baseUsage.filesLimit),
+          vision: getLimitPercentage(baseUsage.visionRequests, baseUsage.visionLimit),
+          tokens: getLimitPercentage(baseUsage.totalTokens ?? 0, baseUsage.tokensLimit ?? 10000),
         },
       };
       return NextResponse.json(detailedUsage);

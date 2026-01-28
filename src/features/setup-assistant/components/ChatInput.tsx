@@ -19,6 +19,8 @@ import {
   Image as ImageIcon,
   Paperclip,
   Loader2,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 
 // =====================================================
@@ -67,6 +69,7 @@ export function ChatInput({
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const internalRef = useRef<HTMLTextAreaElement>(null);
@@ -88,12 +91,15 @@ export function ChatInput({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // Clear previous error
+    setUploadError(null);
+
     // Check if adding these files would exceed the limit
     const currentCount = attachments.length;
     const availableSlots = MAX_ATTACHMENTS - currentCount;
 
     if (availableSlots <= 0) {
-      console.warn('[ChatInput] Max attachments reached');
+      setUploadError(`Máximo ${MAX_ATTACHMENTS} archivos permitidos`);
       e.target.value = '';
       return;
     }
@@ -118,6 +124,9 @@ export function ChatInput({
       }
     } catch (error) {
       console.error('[ChatInput] Upload failed:', error);
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : 'Error al subir archivo';
+      setUploadError(errorMessage);
     } finally {
       setIsUploading(false);
       // Reset input value to allow re-selecting same file
@@ -204,11 +213,12 @@ export function ChatInput({
       {/* Input Container - Cowork-inspired design */}
       <div
         className={cn(
-          'relative flex items-end gap-1',
-          'bg-slate-50 rounded-2xl',
-          'border border-slate-200',
+          'relative flex items-center',
+          'bg-slate-50 dark:bg-slate-800 rounded-2xl',
+          'border border-slate-200 dark:border-slate-700',
           'focus-within:border-tis-coral focus-within:ring-2 focus-within:ring-tis-coral/20',
           'transition-all duration-200',
+          'px-2 py-1.5',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
       >
@@ -232,8 +242,8 @@ export function ChatInput({
           aria-label="Subir documento"
         />
 
-        {/* Left side buttons */}
-        <div className="flex items-center gap-0.5 pl-2 pb-2.5">
+        {/* Left side buttons - Image and Document */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           {/* Image upload button */}
           <button
             type="button"
@@ -242,9 +252,9 @@ export function ChatInput({
             aria-label={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar imagen'}
             title={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar imagen'}
             className={cn(
-              'p-2 rounded-lg',
-              'text-slate-400 hover:text-tis-coral',
-              'hover:bg-slate-100',
+              'p-2 rounded-lg flex-shrink-0',
+              'text-slate-400 dark:text-slate-500',
+              'hover:text-tis-coral hover:bg-slate-100 dark:hover:bg-slate-700',
               'transition-colors duration-150',
               'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400'
             )}
@@ -260,9 +270,9 @@ export function ChatInput({
             aria-label={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar documento'}
             title={isAtMaxAttachments ? `Máximo ${MAX_ATTACHMENTS} archivos` : 'Adjuntar documento'}
             className={cn(
-              'p-2 rounded-lg',
-              'text-slate-400 hover:text-tis-coral',
-              'hover:bg-slate-100',
+              'p-2 rounded-lg flex-shrink-0',
+              'text-slate-400 dark:text-slate-500',
+              'hover:text-tis-coral hover:bg-slate-100 dark:hover:bg-slate-700',
               'transition-colors duration-150',
               'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400'
             )}
@@ -271,7 +281,7 @@ export function ChatInput({
           </button>
         </div>
 
-        {/* Textarea */}
+        {/* Textarea - Center */}
         <textarea
           ref={textareaRef}
           value={content}
@@ -281,29 +291,30 @@ export function ChatInput({
           disabled={disabled || isLoading}
           rows={1}
           className={cn(
-            'flex-1 py-3 px-1',
+            'flex-1 py-2 px-2',
             'bg-transparent resize-none',
-            'text-sm text-slate-900',
-            'placeholder:text-slate-400',
+            'text-sm text-slate-900 dark:text-slate-100',
+            'placeholder:text-slate-400 dark:placeholder:text-slate-500',
             'focus:outline-none',
-            'disabled:cursor-not-allowed'
+            'disabled:cursor-not-allowed',
+            'min-w-0'
           )}
-          style={{ minHeight: '24px', maxHeight: '200px' }}
+          style={{ minHeight: '40px', maxHeight: '200px' }}
         />
 
         {/* Right side - Send button */}
-        <div className="flex items-center pr-2 pb-2.5">
+        <div className="flex items-center flex-shrink-0">
           <button
             type="button"
             onClick={handleSend}
             disabled={!canSend}
             aria-label="Enviar mensaje"
             className={cn(
-              'p-2 rounded-xl',
+              'p-2.5 rounded-xl flex-shrink-0',
               'transition-all duration-200',
               canSend
                 ? 'bg-tis-coral text-white hover:bg-tis-pink shadow-sm hover:shadow-md'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
             )}
           >
             {isLoading ? (
@@ -315,18 +326,40 @@ export function ChatInput({
         </div>
       </div>
 
-      {/* Upload indicator */}
-      <AnimatePresence>
+      {/* Upload indicator / Error message */}
+      <AnimatePresence mode="wait">
         {isUploading && (
           <motion.div
+            key="uploading"
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.15 }}
-            className="flex items-center gap-2 text-xs text-slate-500"
+            className="flex items-center gap-2 text-xs text-slate-500 px-1"
           >
             <Loader2 className="w-3 h-3 animate-spin text-tis-coral" />
             <span>Subiendo archivo...</span>
+          </motion.div>
+        )}
+        {uploadError && !isUploading && (
+          <motion.div
+            key="error"
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="flex items-center gap-2 text-xs text-red-500 px-1"
+          >
+            <AlertCircle className="w-3 h-3 flex-shrink-0" />
+            <span className="flex-1">{uploadError}</span>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="p-0.5 hover:bg-red-100 rounded transition-colors"
+              aria-label="Cerrar error"
+            >
+              <X className="w-3 h-3" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
