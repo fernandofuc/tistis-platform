@@ -235,7 +235,7 @@ interface ProgressIndicatorProps {
 function ProgressIndicator({ progress, currentPhase, totalPhases }: ProgressIndicatorProps) {
   return (
     <div
-      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2"
+      className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full"
       role="progressbar"
       aria-valuenow={Math.round(progress * 100)}
       aria-valuemin={0}
@@ -250,15 +250,15 @@ function ProgressIndicator({ progress, currentPhase, totalPhases }: ProgressIndi
             index < currentPhase
               ? 'bg-tis-coral w-2'
               : index === currentPhase
-                ? 'bg-tis-coral/80 w-4'
-                : 'bg-slate-300 dark:bg-slate-600'
+                ? 'bg-tis-coral w-4'
+                : 'bg-white/40'
           }`}
           aria-hidden="true"
         />
       ))}
 
       {/* Percentage */}
-      <span className="ml-2 text-xs font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+      <span className="ml-2 text-xs font-medium text-white/90 tabular-nums">
         {Math.round(progress * 100)}%
       </span>
     </div>
@@ -360,79 +360,58 @@ export default function VideoScrollPlayer({
     >
       {/* Sticky Video Container */}
       <div className="sticky top-0 h-screen w-full overflow-hidden">
-        {/* Background Decorations */}
+        {/* Background - Only shows if video fails to load */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 pointer-events-none"
+          className="absolute inset-0 bg-slate-900 pointer-events-none"
         />
 
-        {/* Decorative Blurs */}
-        <div
-          aria-hidden="true"
-          className="absolute top-20 left-10 w-48 sm:w-72 h-48 sm:h-72 bg-tis-coral/10 rounded-full blur-3xl pointer-events-none"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute bottom-20 right-10 w-64 sm:w-96 h-64 sm:h-96 bg-tis-pink/10 rounded-full blur-3xl pointer-events-none"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 sm:w-[500px] h-80 sm:h-[500px] bg-gradient-to-br from-tis-purple/5 to-blue-500/5 rounded-full blur-3xl pointer-events-none"
-        />
-
-        {/* Video Element */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative w-full max-w-4xl mx-auto px-4 sm:px-8">
-            {/* Video Frame with Glow */}
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl">
-              {/* Gradient Border Effect */}
-              <div
-                aria-hidden="true"
-                className="absolute -inset-[2px] bg-gradient-to-r from-tis-coral via-tis-pink to-tis-purple rounded-2xl sm:rounded-3xl opacity-50 blur-sm"
-              />
-
-              {/* Video Container */}
-              <div className="relative bg-black rounded-2xl sm:rounded-3xl overflow-hidden">
-                <video
-                  ref={videoRef}
-                  src={videoSrc}
-                  poster={poster}
-                  muted
-                  playsInline
-                  preload="auto"
-                  className="w-full aspect-video object-cover"
-                  aria-hidden="true"
-                >
-                  <track kind="captions" srcLang="es" label="Español" />
-                </video>
-
-                {/* Loading State */}
-                {(!isVideoReady || videoError) && <LoadingPlaceholder error={videoError} />}
-
-                {/* Gradient Overlay for better text contrast */}
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/10 pointer-events-none"
-                />
-              </div>
-            </div>
-
-            {/* Sparkles Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: isInView ? 1 : 0, y: isInView ? 0 : 20 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="absolute -top-3 sm:-top-4 right-4 sm:right-8 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 rounded-full shadow-lg border border-slate-100 dark:border-slate-700"
+        {/* Fullscreen Video Element - Apple.com Style */}
+        <div className="absolute inset-0">
+          {/* Video Container - Edge to Edge */}
+          <div className="relative w-full h-full">
+            <video
+              ref={videoRef}
+              src={videoSrc}
+              poster={poster}
+              muted
+              playsInline
+              preload="auto"
+              className="w-full h-full object-cover"
+              aria-hidden="true"
             >
-              <Sparkles
-                className="w-3 h-3 sm:w-4 sm:h-4 text-tis-coral"
-                aria-hidden="true"
-              />
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                Scroll para explorar
-              </span>
-            </motion.div>
+              <track kind="captions" srcLang="es" label="Español" />
+            </video>
+
+            {/* Loading State */}
+            {(!isVideoReady || videoError) && <LoadingPlaceholder error={videoError} />}
+
+            {/* Gradient Overlays for better text contrast */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none"
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-gradient-to-r from-black/30 via-transparent to-black/30 pointer-events-none"
+            />
           </div>
+
+          {/* Sparkles Badge - Positioned top right */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: isInView ? 1 : 0, y: isInView ? 0 : 20 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="absolute top-6 right-6 sm:top-8 sm:right-8 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-full shadow-lg border border-white/20"
+          >
+            <Sparkles
+              className="w-3 h-3 sm:w-4 sm:h-4 text-tis-coral"
+              aria-hidden="true"
+            />
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+              Scroll para explorar
+            </span>
+          </motion.div>
         </div>
 
         {/* Text Overlays */}
