@@ -83,6 +83,15 @@ export default function Header() {
                 Pronto
               </span>
             </Link>
+            <Link
+              href="/genesis"
+              className="text-tis-text-primary hover:text-tis-coral transition-colors font-medium flex items-center gap-1.5"
+            >
+              Genesis
+              <span className="text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-blue-500/15 via-purple-500/15 to-tis-pink/15 text-purple-500 rounded-full font-semibold uppercase tracking-wide">
+                2028+
+              </span>
+            </Link>
           </div>
 
           {/* Botones Derecha */}
