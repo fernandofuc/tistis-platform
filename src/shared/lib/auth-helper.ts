@@ -17,6 +17,27 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 // Timeout for auth operations (10 seconds)
 const AUTH_TIMEOUT = 10000;
 
+// Fixed length for timing-safe API key comparison (prevents length-based attacks)
+const API_KEY_FIXED_LENGTH = 64;
+
+/**
+ * Mask email for logging (PII protection)
+ * john.doe@example.com -> j***e@e***e.com
+ */
+function maskEmail(email: string | undefined): string {
+  if (!email) return '[no-email]';
+  const [local, domain] = email.split('@');
+  if (!domain) return '[invalid-email]';
+  const maskedLocal = local.length > 2
+    ? `${local[0]}***${local[local.length - 1]}`
+    : '***';
+  const domainParts = domain.split('.');
+  const maskedDomain = domainParts.map(part =>
+    part.length > 2 ? `${part[0]}***${part[part.length - 1]}` : part
+  ).join('.');
+  return `${maskedLocal}@${maskedDomain}`;
+}
+
 export interface AuthenticatedContext {
   client: SupabaseClient;
   user: { id: string; email?: string };
@@ -38,6 +59,35 @@ export interface AuthError {
 
 export type AuthResult = AuthenticatedContext | AuthError;
 export type ServiceAuthResult = AuthenticatedContext | ServiceCallContext | AuthError;
+
+/**
+ * Validate UUID format
+ * Prevents SQL injection via malformed UUIDs
+ */
+export function isValidUUID(id: string): boolean {
+  if (!id || typeof id !== 'string') return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
+}
+
+/**
+ * Timing-safe comparison of two strings
+ * Prevents timing attacks on secret comparison
+ * Uses fixed-length padding to prevent length-based timing attacks
+ */
+export function timingSafeCompare(a: string, b: string): boolean {
+  // Pad both strings to fixed length to prevent length-based timing attacks
+  const paddedA = a.padEnd(API_KEY_FIXED_LENGTH, '\0').slice(0, API_KEY_FIXED_LENGTH);
+  const paddedB = b.padEnd(API_KEY_FIXED_LENGTH, '\0').slice(0, API_KEY_FIXED_LENGTH);
+
+  try {
+    const bufferA = Buffer.from(paddedA, 'utf-8');
+    const bufferB = Buffer.from(paddedB, 'utf-8');
+    return crypto.timingSafeEqual(bufferA, bufferB);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Get authenticated context from request
@@ -69,10 +119,16 @@ export async function getAuthenticatedContext(request: NextRequest): Promise<Aut
       return { error: 'Invalid or expired token', status: 401 };
     }
 
+    // Validate user ID is a valid UUID
+    if (!isValidUUID(user.id)) {
+      console.error('[auth-helper] Invalid user ID format:', user.id);
+      return { error: 'Invalid user identification', status: 400 };
+    }
+
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Strategy 1: Try user_roles table (primary method)
-    const { data: userRole } = (await withTimeout(
+    const userRoleResult = await withTimeout(
       Promise.resolve(
         serviceClient
           .from('user_roles')
@@ -82,9 +138,16 @@ export async function getAuthenticatedContext(request: NextRequest): Promise<Aut
           .single()
       ),
       AUTH_TIMEOUT
-    )) as any;
+    );
+    const userRole = userRoleResult?.data as { tenant_id: string; role: string } | null;
 
     if (userRole?.tenant_id) {
+      // Validate tenant_id is a valid UUID before using it
+      if (!isValidUUID(userRole.tenant_id)) {
+        console.error('[auth-helper] Invalid tenant_id in user_roles:', userRole.tenant_id);
+        return { error: 'Invalid tenant configuration. Please contact support.', status: 500 };
+      }
+
       return {
         client: serviceClient,
         user: { id: user.id, email: user.email },
@@ -96,8 +159,14 @@ export async function getAuthenticatedContext(request: NextRequest): Promise<Aut
     // Strategy 2: Try user_metadata.tenant_id (fallback for OAuth/social login)
     const metadataTenantId = user.user_metadata?.tenant_id;
     if (metadataTenantId) {
+      // Validate tenant_id from metadata
+      if (!isValidUUID(metadataTenantId)) {
+        console.error('[auth-helper] Invalid tenant_id in user_metadata:', metadataTenantId);
+        return { error: 'Invalid tenant configuration. Please contact support.', status: 500 };
+      }
+
       // Get role from staff table or default to 'user'
-      const { data: staff } = (await withTimeout(
+      const staffResult = await withTimeout(
         Promise.resolve(
           serviceClient
             .from('staff')
@@ -107,7 +176,8 @@ export async function getAuthenticatedContext(request: NextRequest): Promise<Aut
             .single()
         ),
         AUTH_TIMEOUT
-      )) as any;
+      );
+      const staff = staffResult?.data as { role: string } | null;
 
       return {
         client: serviceClient,
@@ -119,20 +189,27 @@ export async function getAuthenticatedContext(request: NextRequest): Promise<Aut
 
     // Strategy 3: Find tenant via staff table by email (last resort)
     if (user.email) {
-      const { data: staffByEmail } = (await withTimeout(
+      const staffByEmailResult = await withTimeout(
         Promise.resolve(
           serviceClient
             .from('staff')
             .select('tenant_id, role')
-            .eq('email', user.email)
+            .eq('email', user.email.toLowerCase()) // Normalize email
             .eq('is_active', true)
             .limit(1)
             .single()
         ),
         AUTH_TIMEOUT
-      )) as any;
+      );
+      const staffByEmail = staffByEmailResult?.data as { tenant_id: string; role: string } | null;
 
       if (staffByEmail?.tenant_id) {
+        // Validate tenant_id from staff lookup
+        if (!isValidUUID(staffByEmail.tenant_id)) {
+          console.error('[auth-helper] Invalid tenant_id in staff:', staffByEmail.tenant_id);
+          return { error: 'Invalid tenant configuration. Please contact support.', status: 500 };
+        }
+
         return {
           client: serviceClient,
           user: { id: user.id, email: user.email },
@@ -143,7 +220,8 @@ export async function getAuthenticatedContext(request: NextRequest): Promise<Aut
     }
 
     // No tenant found - user not properly provisioned
-    console.error('[auth-helper] No tenant found for user:', user.id, user.email);
+    // Use masked email to protect PII in logs
+    console.error('[auth-helper] No tenant found for user:', user.id, maskEmail(user.email));
     return { error: 'User has no assigned tenant. Please contact support.', status: 403 };
   } catch (error) {
     // Catch timeout or other errors
@@ -174,19 +252,6 @@ export function createAuthErrorResponse(error: AuthError): NextResponse {
 }
 
 /**
- * Timing-safe comparison of two strings
- * Prevents timing attacks on secret comparison
- */
-function timingSafeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    // Compare with a known string to prevent timing attacks on length
-    crypto.timingSafeEqual(Buffer.from(a), Buffer.from(a));
-    return false;
-  }
-  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-}
-
-/**
  * Check for internal service call (INTERNAL_API_KEY)
  * Uses timing-safe comparison to prevent timing attacks
  */
@@ -210,6 +275,7 @@ export function getServiceCallContext(request: NextRequest): ServiceCallContext 
     return null;
   }
 
+  // Use timing-safe comparison with fixed-length padding
   if (!timingSafeCompare(internalApiKey, expectedKey)) {
     return null;
   }
@@ -239,15 +305,6 @@ export async function getAuthenticatedContextWithServiceSupport(
 }
 
 /**
- * Validate UUID format
- * Prevents SQL injection via malformed UUIDs
- */
-export function isValidUUID(id: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(id);
-}
-
-/**
  * Create a standardized error response for common scenarios
  */
 export function createErrorResponse(
@@ -259,4 +316,36 @@ export function createErrorResponse(
     { error, ...(details && { details }) },
     { status }
   );
+}
+
+/**
+ * Validate and sanitize tenant ID from request
+ * Returns null if invalid
+ */
+export function validateTenantId(tenantId: unknown): string | null {
+  if (!tenantId || typeof tenantId !== 'string') {
+    return null;
+  }
+  return isValidUUID(tenantId) ? tenantId : null;
+}
+
+/**
+ * Validate request body has required tenant ID
+ * Returns error response if invalid, null if valid
+ */
+export function validateRequiredTenantId(
+  tenantId: unknown,
+  fieldName: string = 'tenant_id'
+): { tenantId: string } | { error: NextResponse } {
+  const validatedId = validateTenantId(tenantId);
+  if (!validatedId) {
+    return {
+      error: createErrorResponse(
+        `Invalid or missing ${fieldName}`,
+        400,
+        { field: fieldName }
+      ),
+    };
+  }
+  return { tenantId: validatedId };
 }

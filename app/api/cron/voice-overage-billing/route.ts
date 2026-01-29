@@ -18,15 +18,16 @@ const logger = createComponentLogger('cron-voice-billing');
 // CRON SECRET VALIDATION
 // ======================
 
+// Fixed-length padding prevents length-based timing attacks
+const FIXED_LENGTH = 64;
+
 function timingSafeCompare(a: string, b: string): boolean {
   try {
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(b);
-    if (bufA.length !== bufB.length) {
-      // Compare anyway to maintain constant time
-      timingSafeEqual(bufA, bufA);
-      return false;
-    }
+    // Pad both strings to fixed length to prevent length-based timing attacks
+    const paddedA = a.padEnd(FIXED_LENGTH, '\0').slice(0, FIXED_LENGTH);
+    const paddedB = b.padEnd(FIXED_LENGTH, '\0').slice(0, FIXED_LENGTH);
+    const bufA = Buffer.from(paddedA, 'utf-8');
+    const bufB = Buffer.from(paddedB, 'utf-8');
     return timingSafeEqual(bufA, bufB);
   } catch {
     return false;

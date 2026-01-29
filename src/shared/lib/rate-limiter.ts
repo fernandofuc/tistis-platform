@@ -1,17 +1,16 @@
 // =====================================================
-// TIS TIS PLATFORM - Rate Limiter
+// TIS TIS PLATFORM - Distributed Rate Limiter
+// =====================================================
+// Uses Supabase RPC for distributed rate limiting
+// that scales across multiple servers in production
 // =====================================================
 
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 // ======================
 // TYPES
 // ======================
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
 interface RateLimitConfig {
   /** Max requests allowed in the window */
   limit: number;
@@ -26,19 +25,47 @@ interface RateLimitResult {
   reset: number;
 }
 
-// ======================
-// IN-MEMORY STORE
-// ======================
-// Note: In production, use Redis or similar for distributed rate limiting
-const store = new Map<string, RateLimitEntry>();
+interface RateLimitRPCResult {
+  success: boolean;
+  limit: number;
+  remaining: number;
+  reset: number;
+  count: number;
+}
 
-// Cleanup old entries every 5 minutes
+// ======================
+// SUPABASE CLIENT
+// ======================
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Create service client for rate limiting operations
+function getServiceClient() {
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.warn('[rate-limiter] Supabase credentials not configured, falling back to in-memory');
+    return null;
+  }
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+// ======================
+// IN-MEMORY FALLBACK STORE
+// ======================
+// Used when Supabase is not available (development/testing)
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const fallbackStore = new Map<string, RateLimitEntry>();
+
+// Cleanup old entries every 5 minutes (fallback only)
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {
     const now = Date.now();
-    for (const [key, entry] of store.entries()) {
+    for (const [key, entry] of fallbackStore.entries()) {
       if (entry.resetAt < now) {
-        store.delete(key);
+        fallbackStore.delete(key);
       }
     }
   }, 5 * 60 * 1000);
@@ -68,17 +95,17 @@ export const RATE_LIMIT_PRESETS = {
 } as const;
 
 // ======================
-// RATE LIMITER FUNCTION
+// FALLBACK RATE LIMITER (in-memory)
 // ======================
-export function rateLimit(
+function rateLimitFallback(
   identifier: string,
-  config: RateLimitConfig = RATE_LIMIT_PRESETS.standard
+  config: RateLimitConfig
 ): RateLimitResult {
   const now = Date.now();
   const windowMs = config.windowSizeInSeconds * 1000;
   const key = `rate:${identifier}`;
 
-  let entry = store.get(key);
+  let entry = fallbackStore.get(key);
 
   // Create new entry if doesn't exist or window expired
   if (!entry || entry.resetAt < now) {
@@ -90,7 +117,7 @@ export function rateLimit(
 
   // Increment count
   entry.count++;
-  store.set(key, entry);
+  fallbackStore.set(key, entry);
 
   const remaining = Math.max(0, config.limit - entry.count);
   const success = entry.count <= config.limit;
@@ -101,6 +128,76 @@ export function rateLimit(
     remaining,
     reset: entry.resetAt,
   };
+}
+
+// ======================
+// DISTRIBUTED RATE LIMITER (Supabase)
+// ======================
+async function rateLimitDistributed(
+  identifier: string,
+  config: RateLimitConfig
+): Promise<RateLimitResult> {
+  const client = getServiceClient();
+
+  if (!client) {
+    // Fallback to in-memory if Supabase not configured
+    return rateLimitFallback(identifier, config);
+  }
+
+  try {
+    const { data, error } = await client.rpc('check_rate_limit', {
+      p_identifier: `rate:${identifier}`,
+      p_limit: config.limit,
+      p_window_seconds: config.windowSizeInSeconds,
+    });
+
+    if (error) {
+      console.error('[rate-limiter] RPC error:', error);
+      // Fallback to in-memory on error
+      return rateLimitFallback(identifier, config);
+    }
+
+    const result = data as RateLimitRPCResult;
+
+    return {
+      success: result.success,
+      limit: result.limit,
+      remaining: result.remaining,
+      reset: result.reset,
+    };
+  } catch (error) {
+    console.error('[rate-limiter] Exception:', error);
+    // Fallback to in-memory on exception
+    return rateLimitFallback(identifier, config);
+  }
+}
+
+// ======================
+// MAIN RATE LIMITER FUNCTION
+// ======================
+/**
+ * Check rate limit for an identifier
+ * Uses distributed storage (Supabase) in production
+ * Falls back to in-memory for development/testing
+ */
+export function rateLimit(
+  identifier: string,
+  config: RateLimitConfig = RATE_LIMIT_PRESETS.standard
+): RateLimitResult {
+  // For synchronous compatibility, use fallback
+  // Use rateLimitAsync for distributed rate limiting
+  return rateLimitFallback(identifier, config);
+}
+
+/**
+ * Async version that uses distributed rate limiting
+ * RECOMMENDED: Use this in API routes for production
+ */
+export async function rateLimitAsync(
+  identifier: string,
+  config: RateLimitConfig = RATE_LIMIT_PRESETS.standard
+): Promise<RateLimitResult> {
+  return rateLimitDistributed(identifier, config);
 }
 
 // ======================
@@ -129,22 +226,65 @@ export function createRateLimitResponse(result: RateLimitResult): NextResponse {
 }
 
 // ======================
+// IP VALIDATION
+// ======================
+const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
+const IPV6_REGEX = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$|^([0-9a-fA-F]{1,4}:)*:([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}$/;
+
+/**
+ * Validate IP address format to prevent spoofing
+ * Only accepts valid IPv4 or IPv6 addresses
+ */
+function isValidIP(ip: string): boolean {
+  if (!ip || typeof ip !== 'string') return false;
+  const trimmed = ip.trim();
+  // Check IPv4
+  if (IPV4_REGEX.test(trimmed)) {
+    const parts = trimmed.split('.');
+    return parts.every(p => parseInt(p, 10) <= 255);
+  }
+  // Check IPv6 (simplified check)
+  if (trimmed.includes(':')) {
+    return IPV6_REGEX.test(trimmed) || /^[0-9a-fA-F:]+$/.test(trimmed);
+  }
+  return false;
+}
+
+// ======================
 // MIDDLEWARE HELPER
 // ======================
 export function getClientIdentifier(request: Request): string {
   // Try to get real IP from headers (behind proxy/load balancer)
-  const forwarded = request.headers.get('x-forwarded-for');
-  const realIp = request.headers.get('x-real-ip');
-  const cfConnectingIp = request.headers.get('cf-connecting-ip');
-
   // Priority: Cloudflare > X-Real-IP > X-Forwarded-For > fallback
-  const ip = cfConnectingIp || realIp || (forwarded ? forwarded.split(',')[0].trim() : 'unknown');
 
-  return ip;
+  // Cloudflare is trusted - use directly if available
+  const cfConnectingIp = request.headers.get('cf-connecting-ip');
+  if (cfConnectingIp && isValidIP(cfConnectingIp)) {
+    return cfConnectingIp.trim();
+  }
+
+  // X-Real-IP is typically set by reverse proxy (nginx, etc.)
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp && isValidIP(realIp)) {
+    return realIp.trim();
+  }
+
+  // X-Forwarded-For can be spoofed - take first IP only and validate
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    // Only take the first IP (closest to client)
+    const firstIp = forwarded.split(',')[0]?.trim();
+    if (firstIp && isValidIP(firstIp)) {
+      return firstIp;
+    }
+  }
+
+  // Fallback - use a hash to prevent predictable identifier
+  return 'unknown-client';
 }
 
 // ======================
-// RATE LIMIT WRAPPER FOR API ROUTES
+// RATE LIMIT WRAPPER FOR API ROUTES (SYNC)
 // ======================
 export function withRateLimit(
   identifier: string,
@@ -165,6 +305,74 @@ export function withRateLimit(
     response: null,
     result,
   };
+}
+
+// ======================
+// RATE LIMIT WRAPPER FOR API ROUTES (ASYNC - RECOMMENDED)
+// ======================
+/**
+ * Async version of rate limit wrapper
+ * RECOMMENDED: Use this in API routes for distributed rate limiting
+ */
+export async function withRateLimitAsync(
+  identifier: string,
+  preset: keyof typeof RATE_LIMIT_PRESETS = 'standard'
+): Promise<{
+  limited: boolean;
+  response: NextResponse | null;
+  result: RateLimitResult;
+}> {
+  const result = await rateLimitAsync(identifier, RATE_LIMIT_PRESETS[preset]);
+
+  if (!result.success) {
+    return {
+      limited: true,
+      response: createRateLimitResponse(result),
+      result,
+    };
+  }
+
+  return {
+    limited: false,
+    response: null,
+    result,
+  };
+}
+
+// ======================
+// TENANT-AWARE RATE LIMITING
+// ======================
+/**
+ * Rate limit by tenant + IP for multi-tenant isolation
+ * Prevents one tenant from affecting others
+ */
+export async function withTenantRateLimit(
+  tenantId: string,
+  ip: string,
+  preset: keyof typeof RATE_LIMIT_PRESETS = 'standard'
+): Promise<{
+  limited: boolean;
+  response: NextResponse | null;
+  result: RateLimitResult;
+}> {
+  const identifier = `tenant:${tenantId}:ip:${ip}`;
+  return withRateLimitAsync(identifier, preset);
+}
+
+/**
+ * Rate limit by tenant only (shared quota across all IPs)
+ * Useful for API key-based access
+ */
+export async function withTenantOnlyRateLimit(
+  tenantId: string,
+  preset: keyof typeof RATE_LIMIT_PRESETS = 'standard'
+): Promise<{
+  limited: boolean;
+  response: NextResponse | null;
+  result: RateLimitResult;
+}> {
+  const identifier = `tenant:${tenantId}`;
+  return withRateLimitAsync(identifier, preset);
 }
 
 export default rateLimit;

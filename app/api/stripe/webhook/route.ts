@@ -8,6 +8,7 @@ import { provisionTenant } from '@/lib/provisioning';
 import { getPlanConfig, PLAN_CONFIG } from '@/src/shared/config/plans';
 import { createComponentLogger } from '@/src/shared/lib';
 import { voiceSyncService } from '@/src/features/voice-agent/services/voice-sync.service';
+import { isValidUUID } from '@/src/shared/lib/auth-helper';
 
 // Create logger for Stripe webhook
 const logger = createComponentLogger('stripe-webhook');
@@ -254,10 +255,40 @@ export async function POST(req: NextRequest) {
       eventId: event.id,
       eventType: event.type,
       errorMessage: err.message,
+      retryCount,
     }, err);
 
     // ❌ Mark event as failed (will be retried by Stripe)
     await markEventProcessed(event.id, event.type, 'failed', err.message);
+
+    // If this is the 3rd+ retry, enqueue to Dead Letter Queue for manual review
+    // Stripe typically retries up to 3 times within 3 days
+    if (retryCount >= 3) {
+      logger.warn('Max retries exceeded, enqueueing to Dead Letter Queue', {
+        eventId: event.id,
+        eventType: event.type,
+        retryCount,
+      });
+
+      try {
+        const supabase = getSupabaseClient();
+        await supabase.from('webhook_dead_letters').insert({
+          channel: 'stripe',
+          payload: event,
+          error_message: err.message,
+          error_stack: err.stack || null,
+          status: 'pending',
+          max_retries: 3,
+          retry_count: 0, // DLQ has its own retry counter
+          next_retry_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 min
+        });
+        logger.info('Event enqueued to Dead Letter Queue', { eventId: event.id });
+      } catch (dlqError) {
+        logger.error('Failed to enqueue to Dead Letter Queue', {
+          eventId: event.id,
+        }, dlqError as Error);
+      }
+    }
 
     // Return 500 so Stripe retries the webhook
     return NextResponse.json(
@@ -277,13 +308,35 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const customerEmail = rawEmail?.toLowerCase();
 
   // ============================================
+  // SEC-FIX 3: Validate UUID format for metadata fields to prevent SQL injection
+  // ============================================
+  const validClientId = client_id && isValidUUID(client_id) ? client_id : undefined;
+  const validTenantId = tenant_id && isValidUUID(tenant_id) ? tenant_id : undefined;
+  const validPreviousSubId = previous_subscription_id && isValidUUID(previous_subscription_id) ? previous_subscription_id : undefined;
+  const validProposalId = proposalId && isValidUUID(proposalId) ? proposalId : undefined;
+
+  // Log invalid UUIDs for debugging (potential tampering)
+  if (client_id && !validClientId) {
+    logger.warn('Invalid client_id format in metadata', { sessionId: session.id });
+  }
+  if (tenant_id && !validTenantId) {
+    logger.warn('Invalid tenant_id format in metadata', { sessionId: session.id });
+  }
+  if (previous_subscription_id && !validPreviousSubId) {
+    logger.warn('Invalid previous_subscription_id format in metadata', { sessionId: session.id });
+  }
+  if (proposalId && !validProposalId) {
+    logger.warn('Invalid proposalId format in metadata', { sessionId: session.id });
+  }
+
+  // ============================================
   // PLAN CHANGE FLOW: Handle upgrade/downgrade from existing subscription
   // ============================================
-  if (previous_subscription_id && client_id) {
+  if (validPreviousSubId && validClientId) {
     logger.info('Plan change detected - updating existing subscription', {
-      previousSubscriptionId: previous_subscription_id,
+      previousSubscriptionId: validPreviousSubId,
       newPlan: plan,
-      clientId: client_id,
+      clientId: validClientId,
     });
 
     const validatedPlan = isValidPlan(plan) ? plan : 'essentials';
@@ -339,7 +392,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           // IMPORTANT: Update billing date
           current_period_end: currentPeriodEnd,
         })
-        .eq('id', previous_subscription_id);
+        .eq('id', validPreviousSubId);
 
       if (updateError) {
         logger.error('Error updating subscription', { error: updateError.message });
@@ -350,14 +403,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
       // CRITICAL: Also update tenant.plan - this is what the dashboard reads
       // First, try to get tenant_id from metadata, then from client
-      let tenantIdToUpdate = tenant_id;
+      let tenantIdToUpdate = validTenantId;
 
-      if (!tenantIdToUpdate && client_id) {
-        logger.debug('tenant_id not in metadata, fetching from client', { clientId: client_id });
+      if (!tenantIdToUpdate && validClientId) {
+        logger.debug('tenant_id not in metadata, fetching from client', { clientId: validClientId });
         const { data: clientData } = await supabase
           .from('clients')
           .select('tenant_id')
-          .eq('id', client_id)
+          .eq('id', validClientId)
           .single();
 
         if (clientData?.tenant_id) {
@@ -387,9 +440,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
       // Log the plan change
       await supabase.from('subscription_changes').insert({
-        subscription_id: previous_subscription_id,
+        subscription_id: validPreviousSubId,
         tenant_id: tenantIdToUpdate || null,
-        client_id: client_id,
+        client_id: validClientId,
         change_type: 'plan_changed_via_checkout',
         new_value: { plan: validatedPlan, stripe_subscription_id: stripeSubscriptionId },
         metadata: {
@@ -442,12 +495,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         contact_name: customerName,
         business_name: customerName,
         status: 'active',
-        locations_count: branches ? parseInt(branches) : 1,
+        locations_count: branches ? parseInt(branches, 10) : 1,
         // Store metadata for subscription handler (race condition prevention)
         metadata: {
           plan: validatedPlan,
           customerName,
-          branches: branches ? parseInt(branches) : 1,
+          branches: branches ? parseInt(branches, 10) : 1,
         },
       })
       .select('id')
@@ -465,22 +518,22 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       .from('clients')
       .update({
         status: 'active',
-        locations_count: branches ? parseInt(branches) : 1,
+        locations_count: branches ? parseInt(branches, 10) : 1,
       })
       .eq('id', existingClient.id);
     logger.info('Existing client updated', { clientId: existingClient.id });
   }
 
-  // Update proposal if exists
-  if (proposalId) {
+  // Update proposal if exists (using validated UUID)
+  if (validProposalId) {
     await supabase
       .from('proposals')
       .update({
         status: 'accepted',
         accepted_at: new Date().toISOString(),
       })
-      .eq('id', proposalId);
-    logger.info('Proposal marked as accepted', { proposalId });
+      .eq('id', validProposalId);
+    logger.info('Proposal marked as accepted', { proposalId: validProposalId });
   }
 
   // Create onboarding data record for the new client
@@ -534,6 +587,12 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
   const { plan: metadataPlan, customerName, customerPhone, branches, addons, vertical, proposalId } = subscription.metadata || {};
   const customerId = subscription.customer as string;
+
+  // SEC-FIX 3: Validate proposalId UUID format
+  const validProposalIdSub = proposalId && isValidUUID(proposalId) ? proposalId : undefined;
+  if (proposalId && !validProposalIdSub) {
+    logger.warn('Invalid proposalId format in subscription metadata', { subscriptionId: subscription.id });
+  }
 
   // ============================================
   // CRITICAL FIX: Detect plan from Stripe product name if not in metadata
@@ -694,7 +753,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         contact_name: customerName || (customer as Stripe.Customer).name || 'Cliente',
         business_name: customerName || (customer as Stripe.Customer).name || 'Negocio',
         status: 'active',
-        locations_count: branches ? parseInt(branches) : 1,
+        locations_count: branches ? parseInt(branches, 10) : 1,
         stripe_customer_id: customerId, // Link Stripe customer
         metadata: {
           plan: validatedPlan,
@@ -756,7 +815,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   // max_branches = sucursales CONTRATADAS (lo que el cliente paga)
   // current_branches = sucursales que se crearán (igual a branches inicialmente)
   // El plan_limit (límite máximo del plan) se calcula en el frontend
-  const contractedBranches = branches ? parseInt(branches) : 1;
+  const contractedBranches = branches ? parseInt(branches, 10) : 1;
 
   // ============================================
   // FIX: Check if subscription already exists (prevents duplicates)
@@ -848,7 +907,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     // Currently active verticals: dental, restaurant (more will be added later)
     vertical: (vertical as 'dental' | 'restaurant') || 'dental',
     plan: validatedPlan, // Use validated plan
-    branches_count: branches ? parseInt(branches) : 1,
+    branches_count: branches ? parseInt(branches, 10) : 1,
     subscription_id: newSubscription?.id,
   });
 
@@ -961,8 +1020,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     vertical: vertical || 'services',
     plan: validatedPlan, // Use validated plan
     addons: parsedAddons,
-    branches: branches ? parseInt(branches) : 1,
-    proposal_id: proposalId
+    branches: branches ? parseInt(branches, 10) : 1,
+    proposal_id: validProposalIdSub // Use validated UUID
   });
 }
 
@@ -1000,7 +1059,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
   // Get branches count from metadata (set by update-subscription endpoint)
   const metadataBranches = subscription.metadata?.branches;
-  const branchesCount = metadataBranches ? parseInt(metadataBranches) : undefined;
+  const branchesCount = metadataBranches ? parseInt(metadataBranches, 10) : undefined;
 
   // Get plan from metadata if changed
   const metadataPlan = subscription.metadata?.plan;
@@ -1184,7 +1243,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   // 📧 Send Cancellation Email
   const customerId = subscription.customer as string;
   const customer = await stripe.customers.retrieve(customerId);
-  const customerEmail = (customer as Stripe.Customer).email;
+  // Normalize email to lowercase for consistent comparison
+  const rawEmail = (customer as Stripe.Customer).email;
+  const customerEmail = rawEmail?.toLowerCase();
   const customerName = (customer as Stripe.Customer).name || 'Cliente';
 
   if (customerEmail) {
@@ -1326,9 +1387,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     return;
   }
 
-  // Get customer email
+  // Get customer email (normalize to lowercase)
   const customer = await stripe.customers.retrieve(invoice.customer as string);
-  const customerEmail = (customer as Stripe.Customer).email;
+  const rawEmail = (customer as Stripe.Customer).email;
+  const customerEmail = rawEmail?.toLowerCase();
   const customerName = (customer as Stripe.Customer).name || 'Cliente';
 
   if (!customerEmail) {
@@ -1487,9 +1549,10 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     return;
   }
 
-  // Get customer email
+  // Get customer email (normalize to lowercase)
   const customer = await stripe.customers.retrieve(invoice.customer as string);
-  const customerEmail = (customer as Stripe.Customer).email;
+  const rawEmail = (customer as Stripe.Customer).email;
+  const customerEmail = rawEmail?.toLowerCase();
   const customerName = (customer as Stripe.Customer).name || 'Cliente';
 
   if (!customerEmail) {
