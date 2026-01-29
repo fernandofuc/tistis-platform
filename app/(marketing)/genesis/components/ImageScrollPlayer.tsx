@@ -431,11 +431,7 @@ export default function ImageScrollPlayer({
         {/* Loading State */}
         {(!isImageReady || imageError) && <LoadingPlaceholder error={imageError} />}
 
-        {/* Top transition gradient - Smooth blend from hero section */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 top-0 h-40 sm:h-56 lg:h-72 bg-gradient-to-b from-slate-50 via-slate-100/80 via-40% to-transparent dark:from-slate-900 dark:via-slate-900/60 dark:to-transparent pointer-events-none z-10"
-        />
+        {/* Top transition gradient - Removed to maintain pure black background */}
 
         {/* Gradient overlays for text contrast - Subtle Apple style */}
         <div
@@ -447,10 +443,10 @@ export default function ImageScrollPlayer({
           className="absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10 pointer-events-none"
         />
 
-        {/* Bottom transition gradient - Smooth blend to next section */}
+        {/* Bottom transition gradient - Blend to next section */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-40 sm:h-56 lg:h-72 bg-gradient-to-t from-slate-50 via-slate-100/80 via-40% to-transparent dark:from-slate-900 dark:via-slate-900/60 dark:to-transparent pointer-events-none z-10"
+          className="absolute inset-x-0 bottom-0 h-32 sm:h-40 lg:h-48 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none z-10"
         />
 
         {/* Scroll Badge */}
