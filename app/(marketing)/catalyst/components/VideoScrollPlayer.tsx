@@ -377,14 +377,25 @@ export default function VideoScrollPlayer({
         {/* Loading State */}
         {(!isVideoReady || videoError) && <LoadingPlaceholder error={videoError} />}
 
+        {/* Top transition gradient - Smooth blend from Hero section */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-48 sm:h-64 lg:h-80 bg-gradient-to-b from-slate-50 via-slate-50/80 to-transparent dark:from-slate-900 dark:via-slate-900/80 dark:to-transparent pointer-events-none z-10"
+        />
+        {/* Subtle warm tint layer to match hero's coral/pink decorative elements */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-32 sm:h-40 lg:h-48 bg-gradient-to-b from-tis-coral/5 via-tis-pink/3 to-transparent dark:from-tis-coral/10 dark:via-tis-pink/5 dark:to-transparent pointer-events-none z-10"
+        />
+
         {/* Gradient Overlays for text contrast - Apple style */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30 pointer-events-none"
+          className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20 pointer-events-none"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/20 pointer-events-none"
+          className="absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10 pointer-events-none"
         />
 
         {/* Sparkles Badge - Positioned below header */}
