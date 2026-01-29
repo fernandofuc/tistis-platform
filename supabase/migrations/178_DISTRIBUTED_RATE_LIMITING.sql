@@ -39,6 +39,12 @@ WITH CHECK (true);
 -- =====================================================
 -- This function atomically checks and increments the rate limit counter
 -- Returns: { success: boolean, remaining: int, reset_at: timestamptz }
+
+-- Drop existing function(s) with any signature to avoid conflicts
+DROP FUNCTION IF EXISTS check_rate_limit(TEXT, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS check_rate_limit(TEXT, INTEGER);
+DROP FUNCTION IF EXISTS check_rate_limit(TEXT);
+
 CREATE OR REPLACE FUNCTION check_rate_limit(
   p_identifier TEXT,
   p_limit INTEGER DEFAULT 100,
@@ -89,7 +95,7 @@ END;
 $$;
 
 -- Grant execute permission to service role
-GRANT EXECUTE ON FUNCTION check_rate_limit TO service_role;
+GRANT EXECUTE ON FUNCTION check_rate_limit(TEXT, INTEGER, INTEGER) TO service_role;
 
 -- =====================================================
 -- RPC: Cleanup expired entries
@@ -136,5 +142,5 @@ COMMENT ON TABLE rate_limit_entries IS 'Distributed rate limiting storage. Repla
 COMMENT ON COLUMN rate_limit_entries.identifier IS 'Unique identifier for rate limit (e.g., rate:ip:192.168.1.1:standard)';
 COMMENT ON COLUMN rate_limit_entries.count IS 'Number of requests in current window';
 COMMENT ON COLUMN rate_limit_entries.reset_at IS 'When the current window expires and counter resets';
-COMMENT ON FUNCTION check_rate_limit IS 'Atomic rate limit check and increment. Returns success status and remaining quota.';
+COMMENT ON FUNCTION check_rate_limit(TEXT, INTEGER, INTEGER) IS 'Atomic rate limit check and increment. Returns success status and remaining quota.';
 COMMENT ON FUNCTION cleanup_expired_rate_limits IS 'Cleanup expired rate limit entries. Call periodically.';

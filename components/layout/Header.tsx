@@ -74,6 +74,15 @@ export default function Header() {
             >
               Cómo funciona
             </Link>
+            <Link
+              href="/catalyst"
+              className="text-tis-text-primary hover:text-tis-coral transition-colors font-medium flex items-center gap-1.5"
+            >
+              Catalyst
+              <span className="text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-tis-coral/15 to-tis-pink/15 text-tis-coral rounded-full font-semibold uppercase tracking-wide">
+                Pronto
+              </span>
+            </Link>
           </div>
 
           {/* Botones Derecha */}
