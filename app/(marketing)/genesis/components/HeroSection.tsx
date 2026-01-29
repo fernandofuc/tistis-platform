@@ -154,6 +154,12 @@ export default function HeroSection({
       {/* Background decorations */}
       <DecorativeBackground />
 
+      {/* Bottom fade gradient for smooth transition to dark robot section */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 h-32 sm:h-40 lg:h-48 bg-gradient-to-b from-transparent via-slate-50/50 to-slate-50 dark:via-slate-900/50 dark:to-slate-900 pointer-events-none z-5"
+      />
+
       {/* Main content */}
       <motion.div
         className="relative z-10 text-center px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto"

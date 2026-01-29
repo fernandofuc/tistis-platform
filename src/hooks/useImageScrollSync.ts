@@ -116,7 +116,9 @@ export interface ImageScrollSyncReturn {
 const DEFAULT_CONFIG: Required<ImageScrollSyncConfig> = {
   startOffset: 0.1,
   endOffset: 0.9,
-  smoothing: 0.08,
+  // Smoothing factor optimized for Apple-style buttery animations
+  // Lower = smoother but more lag, Higher = more responsive
+  smoothing: 0.12,
   debug: false,
   intersectionThreshold: 0,
   rootMargin: '0px',

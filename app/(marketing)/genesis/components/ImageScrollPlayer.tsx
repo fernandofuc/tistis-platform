@@ -321,6 +321,7 @@ export default function ImageScrollPlayer({
   const prefersReducedMotion = useReducedMotion();
 
   // Use our custom hook for scroll sync
+  // Optimized for Apple-style buttery smooth reveal animation
   const {
     containerRef,
     progress,
@@ -330,9 +331,9 @@ export default function ImageScrollPlayer({
     markImageReady,
     markImageError,
   } = useImageScrollSync({
-    startOffset: 0.1,
-    endOffset: 0.9,
-    smoothing: prefersReducedMotion ? 1 : 0.08,
+    startOffset: 0.05,  // Start revealing earlier for smoother feel
+    endOffset: 0.85,    // Complete reveal before end
+    smoothing: prefersReducedMotion ? 1 : 0.1,  // Balanced smoothing
     debug,
   });
 
@@ -370,16 +371,18 @@ export default function ImageScrollPlayer({
   const safeScrollHeight = Math.max(100, Math.min(scrollHeight, 800));
 
   // Calculate reveal effect based on progress
-  // The image reveals from bottom to top as user scrolls
+  // The image reveals from TOP to BOTTOM as user scrolls (head → body)
+  // Similar to AI Design Lab reference: robot head appears first, then body reveals
   // Uses will-change for GPU acceleration during animation
   const revealStyle = useMemo(() => {
-    // At progress 0: show only bottom 10% of image
-    // At progress 1: show 100% of image
-    const clipPercentage = 100 - (progress * 90 + 10);
+    // At progress 0: show only top 10% of image (robot head visible)
+    // At progress 1: show 100% of image (full robot body)
+    // clipPath inset(top right bottom left) - we clip from bottom
+    const clipFromBottom = 90 - (progress * 90);
 
     return {
-      clipPath: `inset(${clipPercentage}% 0 0 0)`,
-      transition: prefersReducedMotion ? 'none' : 'clip-path 0.1s ease-out',
+      clipPath: `inset(0 0 ${clipFromBottom}% 0)`,
+      transition: prefersReducedMotion ? 'none' : 'clip-path 0.15s cubic-bezier(0.25, 0.1, 0.25, 1)',
       // Hint browser for GPU acceleration during scroll
       willChange: isInView ? 'clip-path' : 'auto',
     };
@@ -394,16 +397,22 @@ export default function ImageScrollPlayer({
       aria-label="Imagen interactiva: Desplazate para explorar las fases de Genesis"
     >
       {/* Sticky Image Container - Full Viewport */}
-      <div className="sticky top-0 h-screen w-screen overflow-hidden bg-slate-900">
-        {/* Background gradient base */}
+      <div className="sticky top-0 h-screen w-screen overflow-hidden bg-black">
+        {/* Background - Pure black base like AI Design Lab reference */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+          className="absolute inset-0 bg-black"
         />
 
-        {/* Image Element with reveal effect */}
+        {/* Subtle vignette effect for depth */}
         <div
-          className="absolute inset-0 flex items-center justify-center"
+          aria-hidden="true"
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]"
+        />
+
+        {/* Image Element with reveal effect - Robot reveals from head to body */}
+        <div
+          className="absolute inset-0 flex items-start justify-center pt-8 sm:pt-12 lg:pt-16"
           style={revealStyle}
         >
           <Image
@@ -413,7 +422,7 @@ export default function ImageScrollPlayer({
             priority
             quality={90}
             sizes="100vw"
-            className="object-contain object-bottom"
+            className="object-contain object-top"
             onLoad={handleImageLoad}
             onError={handleImageError}
           />
@@ -422,32 +431,26 @@ export default function ImageScrollPlayer({
         {/* Loading State */}
         {(!isImageReady || imageError) && <LoadingPlaceholder error={imageError} />}
 
-        {/* Top transition gradient - Smooth blend from previous section */}
+        {/* Top transition gradient - Smooth blend from hero section */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 top-0 h-32 sm:h-48 lg:h-64 bg-gradient-to-b from-slate-50 via-slate-50/60 to-transparent dark:from-slate-900 dark:via-slate-900/60 dark:to-transparent pointer-events-none z-10"
+          className="absolute inset-x-0 top-0 h-40 sm:h-56 lg:h-72 bg-gradient-to-b from-slate-50 via-slate-100/80 via-40% to-transparent dark:from-slate-900 dark:via-slate-900/60 dark:to-transparent pointer-events-none z-10"
         />
 
-        {/* Warm tint layer to match TIS TIS brand */}
+        {/* Gradient overlays for text contrast - Subtle Apple style */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 top-0 h-24 sm:h-32 lg:h-40 bg-gradient-to-b from-tis-coral/5 via-tis-pink/3 to-transparent dark:from-tis-coral/10 dark:via-tis-pink/5 dark:to-transparent pointer-events-none z-10"
-        />
-
-        {/* Gradient overlays for text contrast - Apple style */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none"
+          className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/20 pointer-events-none"
+          className="absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10 pointer-events-none"
         />
 
         {/* Bottom transition gradient - Smooth blend to next section */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-32 sm:h-48 lg:h-64 bg-gradient-to-t from-slate-50 via-slate-50/60 to-transparent dark:from-slate-900 dark:via-slate-900/60 dark:to-transparent pointer-events-none z-10"
+          className="absolute inset-x-0 bottom-0 h-40 sm:h-56 lg:h-72 bg-gradient-to-t from-slate-50 via-slate-100/80 via-40% to-transparent dark:from-slate-900 dark:via-slate-900/60 dark:to-transparent pointer-events-none z-10"
         />
 
         {/* Scroll Badge */}
@@ -488,7 +491,8 @@ export default function ImageScrollPlayer({
             <div>In View: {isInView ? 'Yes' : 'No'}</div>
             <div>Image Ready: {isImageReady ? 'Yes' : 'No'}</div>
             <div>Phase: {currentPhase + 1}/{enrichedOverlays.length}</div>
-            <div>Clip: {(100 - (progress * 90 + 10)).toFixed(1)}%</div>
+            <div>Clip Bottom: {(90 - (progress * 90)).toFixed(1)}%</div>
+            <div>Visible: {(10 + progress * 90).toFixed(1)}%</div>
           </div>
         )}
       </div>
