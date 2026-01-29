@@ -15,3 +15,6 @@ export { useAgentProfiles } from './useAgentProfiles';
 
 export { useVideoScrollSync } from './useVideoScrollSync';
 export type { VideoScrollSyncConfig, VideoScrollSyncReturn } from './useVideoScrollSync';
+
+export { useImageScrollSync } from './useImageScrollSync';
+export type { ImageScrollSyncConfig, ImageScrollSyncReturn } from './useImageScrollSync';
