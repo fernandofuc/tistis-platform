@@ -12,3 +12,6 @@ export { useVerticalTerminology, EXTENDED_TERMINOLOGY, DEFAULT_TERMINOLOGY } fro
 export type { ExtendedTerminology, UseVerticalTerminologyReturn } from './useVerticalTerminology';
 
 export { useAgentProfiles } from './useAgentProfiles';
+
+export { useVideoScrollSync } from './useVideoScrollSync';
+export type { VideoScrollSyncConfig, VideoScrollSyncReturn } from './useVideoScrollSync';
