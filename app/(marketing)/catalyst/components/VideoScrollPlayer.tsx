@@ -398,6 +398,12 @@ export default function VideoScrollPlayer({
           className="absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10 pointer-events-none"
         />
 
+        {/* Bottom transition gradient - Smooth blend to WhatIs section */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-48 sm:h-64 lg:h-80 bg-gradient-to-t from-slate-50 via-slate-50/80 to-transparent dark:from-slate-900 dark:via-slate-900/80 dark:to-transparent pointer-events-none z-10"
+        />
+
         {/* Sparkles Badge - Positioned below header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
