@@ -354,65 +354,54 @@ export default function VideoScrollPlayer({
   return (
     <section
       ref={containerRef}
-      className="relative w-full"
+      className="relative w-screen -ml-[calc((100vw-100%)/2)]"
       style={{ height: `${scrollHeight}vh` }}
       aria-label="Video interactivo: Desplázate para explorar las características de TIS TIS Catalyst"
     >
-      {/* Sticky Video Container */}
-      <div className="sticky top-0 h-screen w-full overflow-hidden">
-        {/* Background - Only shows if video fails to load */}
+      {/* Sticky Video Container - True Fullscreen */}
+      <div className="sticky top-0 h-screen w-screen overflow-hidden bg-black">
+        {/* Video Element - Edge to Edge */}
+        <video
+          ref={videoRef}
+          src={videoSrc}
+          poster={poster}
+          muted
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover"
+          aria-hidden="true"
+        >
+          <track kind="captions" srcLang="es" label="Español" />
+        </video>
+
+        {/* Loading State */}
+        {(!isVideoReady || videoError) && <LoadingPlaceholder error={videoError} />}
+
+        {/* Gradient Overlays for text contrast - Apple style */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-slate-900 pointer-events-none"
+          className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30 pointer-events-none"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/20 pointer-events-none"
         />
 
-        {/* Fullscreen Video Element - Apple.com Style */}
-        <div className="absolute inset-0">
-          {/* Video Container - Edge to Edge */}
-          <div className="relative w-full h-full">
-            <video
-              ref={videoRef}
-              src={videoSrc}
-              poster={poster}
-              muted
-              playsInline
-              preload="auto"
-              className="w-full h-full object-cover"
-              aria-hidden="true"
-            >
-              <track kind="captions" srcLang="es" label="Español" />
-            </video>
-
-            {/* Loading State */}
-            {(!isVideoReady || videoError) && <LoadingPlaceholder error={videoError} />}
-
-            {/* Gradient Overlays for better text contrast */}
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none"
-            />
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 bg-gradient-to-r from-black/30 via-transparent to-black/30 pointer-events-none"
-            />
-          </div>
-
-          {/* Sparkles Badge - Positioned top right */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: isInView ? 1 : 0, y: isInView ? 0 : 20 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="absolute top-6 right-6 sm:top-8 sm:right-8 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-full shadow-lg border border-white/20"
-          >
-            <Sparkles
-              className="w-3 h-3 sm:w-4 sm:h-4 text-tis-coral"
-              aria-hidden="true"
-            />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              Scroll para explorar
-            </span>
-          </motion.div>
-        </div>
+        {/* Sparkles Badge - Positioned below header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: isInView ? 1 : 0, y: isInView ? 0 : 20 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="absolute top-20 right-6 sm:top-24 sm:right-8 z-20 inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10"
+        >
+          <Sparkles
+            className="w-3 h-3 sm:w-4 sm:h-4 text-white"
+            aria-hidden="true"
+          />
+          <span className="text-xs font-semibold text-white/90">
+            Scroll para explorar
+          </span>
+        </motion.div>
 
         {/* Text Overlays */}
         {visibleOverlays.map((overlay) => (
