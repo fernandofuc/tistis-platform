@@ -1,14 +1,30 @@
 // =====================================================
 // TIS TIS PLATFORM - SoftRestaurant Configuration Modal
 // Specialized configuration for Soft Restaurant POS integration
+// Based on official API: api.softrestaurant.com.mx
 // =====================================================
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Modal } from '@/src/shared/components/ui';
 import { cn } from '@/src/shared/utils';
 import type { IntegrationConnection, SRSyncConfig } from '../types/integration.types';
+import {
+  SR_CAPABILITY_STATUS,
+  type SRCapabilityKey,
+  type SRCapabilityStatus,
+} from '../services/soft-restaurant-api.service';
+
+// ======================
+// NATIONAL SOFT CONTACT INFO
+// Official contact for API Key requests
+// ======================
+
+const NATIONAL_SOFT_CONTACT = {
+  email: 'erik.basto@nationalsoft.com.mx',
+  apiPortal: 'https://api.softrestaurant.com.mx',
+} as const;
 
 // ======================
 // ICONS
@@ -118,6 +134,70 @@ function BellIcon({ className }: { className?: string }) {
   );
 }
 
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+    </svg>
+  );
+}
+
+function EnvelopeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+    </svg>
+  );
+}
+
+// ======================
+// CAPABILITY STATUS BADGE
+// ======================
+
+interface CapabilityBadgeProps {
+  status: SRCapabilityStatus;
+  note?: string;
+}
+
+function CapabilityBadge({ status, note }: CapabilityBadgeProps) {
+  const config = {
+    confirmed: {
+      label: 'Confirmado',
+      bgColor: 'bg-green-100',
+      textColor: 'text-green-700',
+      borderColor: 'border-green-200',
+    },
+    beta: {
+      label: 'Beta',
+      bgColor: 'bg-amber-100',
+      textColor: 'text-amber-700',
+      borderColor: 'border-amber-200',
+    },
+    coming_soon: {
+      label: 'Proximamente',
+      bgColor: 'bg-gray-100',
+      textColor: 'text-gray-600',
+      borderColor: 'border-gray-200',
+    },
+  };
+
+  const { label, bgColor, textColor, borderColor } = config[status];
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border',
+        bgColor,
+        textColor,
+        borderColor
+      )}
+      title={note}
+    >
+      {label}
+    </span>
+  );
+}
+
 // ======================
 // TYPES
 // ======================
@@ -135,6 +215,20 @@ interface SoftRestaurantConfigModalProps {
 
 type SyncDirection = 'sr_to_tistis' | 'tistis_to_sr' | 'bidirectional';
 
+type ConnectionStatusType = 'idle' | 'testing' | 'success' | 'error';
+
+interface ConnectionTestDetails {
+  menuItemsCount?: number;
+  categoriesCount?: number;
+  responseTimeMs?: number;
+}
+
+interface ConnectionErrorDetails {
+  message: string;
+  errorCode?: string;
+  errorDetails?: string;
+}
+
 interface SyncOption {
   key: keyof Pick<SRSyncConfig, 'sync_menu' | 'sync_recipes' | 'sync_inventory' | 'sync_tables' | 'sync_reservations' | 'sync_sales'>;
   label: string;
@@ -144,6 +238,7 @@ interface SyncOption {
   directionKey?: keyof Pick<SRSyncConfig, 'menu_direction' | 'inventory_direction' | 'reservations_direction'>;
   color: string;
   bgColor: string;
+  capabilityKey: SRCapabilityKey; // Links to SR_CAPABILITY_STATUS
 }
 
 // ======================
@@ -178,22 +273,24 @@ const DEFAULT_SR_SYNC_CONFIG: SRSyncConfig = {
 const SYNC_OPTIONS: SyncOption[] = [
   {
     key: 'sync_menu',
-    label: 'Menú',
-    description: 'Productos, categorías, precios y modificadores',
+    label: 'Menu',
+    description: 'Productos, categorias, precios y modificadores',
     icon: MenuIcon,
     hasDirection: true,
     directionKey: 'menu_direction',
     color: 'text-purple-600',
     bgColor: 'bg-purple-50',
+    capabilityKey: 'sync_menu',
   },
   {
     key: 'sync_recipes',
     label: 'Recetas con Gramaje',
-    description: 'Explosión de insumos, costos por porción y merma (requiere Menú)',
+    description: 'Explosion de insumos, costos por porcion y merma (requiere Menu)',
     icon: ScaleIcon,
     hasDirection: false,
     color: 'text-amber-600',
     bgColor: 'bg-amber-50',
+    capabilityKey: 'sync_recipes',
   },
   {
     key: 'sync_inventory',
@@ -204,6 +301,7 @@ const SYNC_OPTIONS: SyncOption[] = [
     directionKey: 'inventory_direction',
     color: 'text-green-600',
     bgColor: 'bg-green-50',
+    capabilityKey: 'sync_inventory',
   },
   {
     key: 'sync_tables',
@@ -213,6 +311,7 @@ const SYNC_OPTIONS: SyncOption[] = [
     hasDirection: false,
     color: 'text-blue-600',
     bgColor: 'bg-blue-50',
+    capabilityKey: 'sync_tables',
   },
   {
     key: 'sync_reservations',
@@ -223,15 +322,17 @@ const SYNC_OPTIONS: SyncOption[] = [
     directionKey: 'reservations_direction',
     color: 'text-teal-600',
     bgColor: 'bg-teal-50',
+    capabilityKey: 'sync_reservations',
   },
   {
     key: 'sync_sales',
     label: 'Ventas',
-    description: 'Tickets, productos vendidos y análisis',
+    description: 'Tickets, productos vendidos y analisis (via webhook)',
     icon: ChartIcon,
     hasDirection: false,
     color: 'text-pink-600',
     bgColor: 'bg-pink-50',
+    capabilityKey: 'sync_sales',
   },
 ];
 
@@ -283,8 +384,9 @@ export function SoftRestaurantConfigModal({
   const [currentStep, setCurrentStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatusType>('idle');
+  const [connectionDetails, setConnectionDetails] = useState<ConnectionTestDetails | null>(null);
+  const [connectionError, setConnectionError] = useState<ConnectionErrorDetails | null>(null);
   const [syncConfig, setSyncConfig] = useState<SRSyncConfig>(DEFAULT_SR_SYNC_CONFIG);
 
   // Reset form when modal opens/closes
@@ -293,7 +395,8 @@ export function SoftRestaurantConfigModal({
       // Reset all states when modal opens
       setApiKey('');
       setConnectionStatus('idle');
-      setTestingConnection(false);
+      setConnectionDetails(null);
+      setConnectionError(null);
       setShowApiKey(false);
 
       // If editing existing connection, skip credentials step and load saved config
@@ -323,26 +426,51 @@ export function SoftRestaurantConfigModal({
     }
   }, [isOpen, connection]);
 
-  // Test connection handler
-  const handleTestConnection = async () => {
+  // Test connection handler - calls real API
+  const handleTestConnection = useCallback(async () => {
     if (!apiKey.trim()) return;
 
-    setTestingConnection(true);
-    setConnectionStatus('idle');
+    setConnectionStatus('testing');
+    setConnectionDetails(null);
+    setConnectionError(null);
 
-    // Simulate API test (in real implementation, this would call the SR API)
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const response = await fetch('/api/integrations/softrestaurant/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ api_key: apiKey }),
+      });
 
-    // For demo, randomly succeed/fail (in production, this would be real API validation)
-    const success = apiKey.length >= 10;
-    setConnectionStatus(success ? 'success' : 'error');
-    setTestingConnection(false);
+      const result = await response.json();
 
-    if (success) {
-      // Auto-advance to next step after successful test
-      setTimeout(() => setCurrentStep(2), 1000);
+      if (result.success) {
+        setConnectionStatus('success');
+        setConnectionDetails(result.details || null);
+        setConnectionError(null);
+
+        // Auto-advance to next step after successful test
+        setTimeout(() => setCurrentStep(2), 1200);
+      } else {
+        setConnectionStatus('error');
+        setConnectionDetails(null);
+        setConnectionError({
+          message: result.message || 'Error de conexion',
+          errorCode: result.errorCode,
+          errorDetails: result.errorDetails,
+        });
+      }
+    } catch (error) {
+      setConnectionStatus('error');
+      setConnectionDetails(null);
+      setConnectionError({
+        message: 'Error de red. Verifica tu conexion a internet.',
+        errorCode: 'NETWORK_ERROR',
+        errorDetails: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
-  };
+  }, [apiKey]);
 
   // Toggle sync option (only for boolean fields)
   const toggleSync = (key: keyof typeof syncConfig) => {
@@ -502,7 +630,7 @@ export function SoftRestaurantConfigModal({
             </div>
             <div>
               <h4 className="font-semibold text-gray-900">Soft Restaurant</h4>
-              <p className="text-sm text-gray-600">POS #1 en México y Latinoamérica</p>
+              <p className="text-sm text-gray-600">POS #1 en Mexico y Latinoamerica</p>
             </div>
           </div>
 
@@ -519,6 +647,7 @@ export function SoftRestaurantConfigModal({
                 onChange={(e) => {
                   setApiKey(e.target.value);
                   setConnectionStatus('idle');
+                  setConnectionError(null);
                 }}
                 placeholder="Ingresa tu API Key"
                 autoComplete="off"
@@ -535,7 +664,7 @@ export function SoftRestaurantConfigModal({
               </button>
             </div>
             <p id="sr-api-key-help" className="mt-2 text-xs text-gray-500">
-              Encuentra tu API Key en Soft Restaurant &gt; Configuración &gt; API / Integraciones
+              La API Key se obtiene contactando a National Soft. No se encuentra en la configuracion del software.
             </p>
           </div>
 
@@ -543,7 +672,7 @@ export function SoftRestaurantConfigModal({
           <button
             type="button"
             onClick={handleTestConnection}
-            disabled={!apiKey.trim() || testingConnection}
+            disabled={!apiKey.trim() || connectionStatus === 'testing'}
             className={cn(
               'w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2',
               connectionStatus === 'success'
@@ -553,34 +682,90 @@ export function SoftRestaurantConfigModal({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed'
             )}
           >
-            {testingConnection ? (
+            {connectionStatus === 'testing' ? (
               <>
                 <SyncIcon className="w-5 h-5 animate-spin" />
-                Probando conexión...
+                Conectando con Soft Restaurant...
               </>
             ) : connectionStatus === 'success' ? (
               <>
                 <CheckIcon className="w-5 h-5" />
-                Conexión exitosa
+                Conexion exitosa
+                {connectionDetails?.menuItemsCount !== undefined && (
+                  <span className="text-green-600 text-sm ml-1">
+                    ({connectionDetails.menuItemsCount} productos)
+                  </span>
+                )}
               </>
             ) : connectionStatus === 'error' ? (
               <>
                 <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-xs">!</span>
-                Error de conexión - Verifica tu API Key
+                {connectionError?.message || 'Error de conexion'}
               </>
             ) : (
               <>
                 <SyncIcon className="w-5 h-5" />
-                Probar conexión
+                Probar conexion
               </>
             )}
           </button>
 
-          {/* Help Link */}
-          <div className="p-4 bg-blue-50 rounded-xl">
-            <p className="text-sm text-blue-800">
-              <strong>¿No tienes API Key?</strong> Contacta al soporte de Soft Restaurant o visita su portal de desarrolladores para obtener acceso a la API.
+          {/* Error Details (if any) */}
+          {connectionStatus === 'error' && connectionError?.errorDetails && (
+            <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+              <p className="text-xs text-red-600 font-mono">
+                {connectionError.errorCode && (
+                  <span className="font-semibold">[{connectionError.errorCode}] </span>
+                )}
+                {connectionError.errorDetails}
+              </p>
+            </div>
+          )}
+
+          {/* Success Details */}
+          {connectionStatus === 'success' && connectionDetails && (
+            <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+              <div className="flex items-center gap-4 text-sm text-green-700">
+                {connectionDetails.menuItemsCount !== undefined && (
+                  <span>{connectionDetails.menuItemsCount} productos en menu</span>
+                )}
+                {connectionDetails.categoriesCount !== undefined && (
+                  <span>{connectionDetails.categoriesCount} categorias</span>
+                )}
+                {connectionDetails.responseTimeMs !== undefined && (
+                  <span className="text-green-600 text-xs">({connectionDetails.responseTimeMs}ms)</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* How to get API Key - Corrected instructions */}
+          <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+            <h5 className="text-sm font-semibold text-amber-800 mb-2 flex items-center gap-2">
+              <EnvelopeIcon className="w-4 h-4" />
+              Como obtener tu API Key
+            </h5>
+            <p className="text-sm text-amber-700 mb-3">
+              Para obtener acceso a la API de Soft Restaurant, debes contactar directamente a National Soft:
             </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <a
+                href={`mailto:${NATIONAL_SOFT_CONTACT.email}?subject=Solicitud%20de%20API%20Key%20para%20integraci%C3%B3n%20TIS%20TIS&body=Hola%2C%0A%0ASolicito%20acceso%20a%20la%20API%20de%20Soft%20Restaurant%20para%20integrar%20con%20TIS%20TIS.%0A%0ANombre%20del%20negocio%3A%20%0AN%C3%BAmero%20de%20licencia%20SR%3A%20%0A%0AGracias.`}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg font-medium text-sm transition-colors"
+              >
+                <EnvelopeIcon className="w-4 h-4" />
+                {NATIONAL_SOFT_CONTACT.email}
+              </a>
+              <a
+                href={NATIONAL_SOFT_CONTACT.apiPortal}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-medium text-sm border border-gray-200 transition-colors"
+              >
+                <ExternalLinkIcon className="w-4 h-4" />
+                Portal API
+              </a>
+            </div>
           </div>
         </div>
       )}
@@ -588,70 +773,97 @@ export function SoftRestaurantConfigModal({
       {/* Step 2: Sync Configuration */}
       {currentStep === 2 && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 mb-4">
-            Selecciona qué datos sincronizar entre Soft Restaurant y TIS TIS
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-gray-600">
+              Selecciona que datos sincronizar entre Soft Restaurant y TIS TIS
+            </p>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <CapabilityBadge status="confirmed" />
+              <CapabilityBadge status="beta" />
+            </div>
+          </div>
 
           {SYNC_OPTIONS.map((option) => {
             const Icon = option.icon;
             const isEnabled = syncConfig[option.key];
+            const capabilityInfo = SR_CAPABILITY_STATUS[option.capabilityKey];
+            const isComingSoon = capabilityInfo.status === 'coming_soon';
 
             return (
               <div
                 key={option.key}
                 className={cn(
                   'rounded-xl border-2 transition-all overflow-hidden',
-                  isEnabled
-                    ? 'border-tis-coral/50 bg-white'
-                    : 'border-gray-200 bg-gray-50/50'
+                  isComingSoon
+                    ? 'border-gray-200 bg-gray-50/70 opacity-75'
+                    : isEnabled
+                      ? 'border-tis-coral/50 bg-white'
+                      : 'border-gray-200 bg-gray-50/50'
                 )}
               >
                 {/* Header */}
                 <button
                   type="button"
-                  onClick={() => toggleSync(option.key)}
+                  onClick={() => !isComingSoon && toggleSync(option.key)}
                   role="switch"
                   aria-checked={isEnabled}
-                  aria-label={`${isEnabled ? 'Desactivar' : 'Activar'} sincronización de ${option.label}`}
-                  className="w-full p-4 flex items-center gap-4 text-left"
+                  aria-label={`${isEnabled ? 'Desactivar' : 'Activar'} sincronizacion de ${option.label}`}
+                  disabled={isComingSoon}
+                  className={cn(
+                    'w-full p-4 flex items-center gap-4 text-left',
+                    isComingSoon && 'cursor-not-allowed'
+                  )}
                 >
                   <div className={cn(
                     'w-10 h-10 rounded-xl flex items-center justify-center transition-colors',
-                    isEnabled ? option.bgColor : 'bg-gray-100'
+                    isEnabled && !isComingSoon ? option.bgColor : 'bg-gray-100'
                   )} aria-hidden="true">
-                    <Icon className={cn('w-5 h-5', isEnabled ? option.color : 'text-gray-400')} />
+                    <Icon className={cn('w-5 h-5', isEnabled && !isComingSoon ? option.color : 'text-gray-400')} />
                   </div>
 
                   <div className="flex-1">
-                    <span className={cn(
-                      'font-medium transition-colors block',
-                      isEnabled ? 'text-gray-900' : 'text-gray-500'
-                    )}>
-                      {option.label}
-                    </span>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={cn(
+                        'font-medium transition-colors',
+                        isEnabled && !isComingSoon ? 'text-gray-900' : 'text-gray-500'
+                      )}>
+                        {option.label}
+                      </span>
+                      <CapabilityBadge
+                        status={capabilityInfo.status}
+                        note={capabilityInfo.note}
+                      />
+                    </div>
                     <span className="text-sm text-gray-500">{option.description}</span>
+                    {capabilityInfo.note && capabilityInfo.status !== 'confirmed' && (
+                      <span className="block text-xs text-gray-400 mt-0.5 italic">
+                        {capabilityInfo.note}
+                      </span>
+                    )}
                   </div>
 
                   {/* Toggle - visual only, button handles interaction */}
-                  <div
-                    className={cn(
-                      'w-12 h-7 rounded-full transition-colors relative',
-                      isEnabled ? 'bg-tis-coral' : 'bg-gray-300'
-                    )}
-                    aria-hidden="true"
-                  >
-                    <div className={cn(
-                      'absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                      isEnabled ? 'translate-x-6' : 'translate-x-1'
-                    )} />
-                  </div>
+                  {!isComingSoon && (
+                    <div
+                      className={cn(
+                        'w-12 h-7 rounded-full transition-colors relative',
+                        isEnabled ? 'bg-tis-coral' : 'bg-gray-300'
+                      )}
+                      aria-hidden="true"
+                    >
+                      <div className={cn(
+                        'absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                        isEnabled ? 'translate-x-6' : 'translate-x-1'
+                      )} />
+                    </div>
+                  )}
                 </button>
 
                 {/* Direction selector (if applicable and enabled) */}
-                {isEnabled && option.hasDirection && option.directionKey && (
+                {isEnabled && !isComingSoon && option.hasDirection && option.directionKey && (
                   <div className="px-4 pb-4 pt-2 border-t border-gray-100">
                     <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
-                      Dirección de sincronización
+                      Direccion de sincronizacion
                     </p>
                     <div className="flex gap-2">
                       <DirectionButton
@@ -689,6 +901,14 @@ export function SoftRestaurantConfigModal({
           <div className="p-4 bg-gray-50 rounded-xl mt-4">
             <p className="text-sm text-gray-600">
               <strong>{enabledSyncsCount}</strong> tipo(s) de datos seleccionados para sincronizar
+            </p>
+          </div>
+
+          {/* API Info Banner */}
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <p className="text-xs text-blue-700">
+              <strong>Nota:</strong> Las capacidades marcadas como &quot;Beta&quot; requieren configuracion adicional con National Soft.
+              Solo &quot;Menu&quot; y &quot;Ventas (webhook)&quot; estan completamente confirmados en la documentacion oficial.
             </p>
           </div>
         </div>
