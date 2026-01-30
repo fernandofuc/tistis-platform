@@ -39,24 +39,28 @@ const EXAMPLE_ROBOT_SCORE = 78;
 
 export default function GenesisPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="min-h-screen">
       {/* ============================================= */}
-      {/* Hero Section - Above the fold */}
-      {/* Vision 2028+ badge, main title, CTAs */}
+      {/* Unified Hero + Robot Section */}
+      {/* Robot image visible from start, hero text overlays */}
       {/* ============================================= */}
-      <HeroSection showScrollIndicator />
+      <div className="relative">
+        {/* Robot Image - Starts from top, behind hero content */}
+        <ImageScrollPlayer
+          imageSrc={GENESIS_IMAGE_SRC}
+          imageAlt={GENESIS_IMAGE_ALT}
+          scrollHeight={SCROLL_HEIGHT_VH}
+          showProgress
+          debug={false}
+        />
 
-      {/* ============================================= */}
-      {/* Image Scroll Section - Immersive Experience */}
-      {/* Robot reveal with phase overlays on scroll */}
-      {/* ============================================= */}
-      <ImageScrollPlayer
-        imageSrc={GENESIS_IMAGE_SRC}
-        imageAlt={GENESIS_IMAGE_ALT}
-        scrollHeight={SCROLL_HEIGHT_VH}
-        showProgress
-        debug={false}
-      />
+        {/* Hero Content - Overlaid on robot image */}
+        <div className="absolute inset-x-0 top-0 z-30 pointer-events-none">
+          <div className="pointer-events-auto">
+            <HeroSection showScrollIndicator={false} />
+          </div>
+        </div>
+      </div>
 
       {/* ============================================= */}
       {/* What Is Genesis Section */}

@@ -397,11 +397,11 @@ export default function ImageScrollPlayer({
       aria-label="Imagen interactiva: Desplazate para explorar las fases de Genesis"
     >
       {/* Sticky Image Container - Full Viewport */}
-      <div className="sticky top-0 h-screen w-full overflow-hidden bg-black">
-        {/* Background - Pure black base */}
+      <div className="sticky top-0 h-screen w-full overflow-hidden bg-white dark:bg-slate-900">
+        {/* Background - White base for smooth transitions */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-black z-0"
+          className="absolute inset-0 bg-white dark:bg-slate-900 z-0"
         />
 
         {/* Image Element - Full screen, scrolls through robot body */}
@@ -431,16 +431,16 @@ export default function ImageScrollPlayer({
         {/* Loading State */}
         {(!isImageReady || imageError) && <LoadingPlaceholder error={imageError} />}
 
-        {/* Vignette overlay for depth - subtle */}
+        {/* Vignette overlay for depth - subtle white */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.3)_100%)] pointer-events-none z-20"
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(255,255,255,0.2)_100%)] dark:bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.2)_100%)] pointer-events-none z-20"
         />
 
-        {/* Bottom transition gradient - Blend to next section */}
+        {/* Bottom transition gradient - Blend to next section (white) */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-40 sm:h-56 lg:h-64 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none z-20"
+          className="absolute inset-x-0 bottom-0 h-40 sm:h-56 lg:h-64 bg-gradient-to-t from-white via-white/90 to-transparent dark:from-slate-900 dark:via-slate-900/90 dark:to-transparent pointer-events-none z-20"
         />
 
         {/* Scroll Badge */}

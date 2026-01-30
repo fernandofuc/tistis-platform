@@ -151,13 +151,10 @@ export default function HeroSection({
       className={`relative min-h-[90vh] flex items-center justify-center overflow-hidden ${className}`}
       aria-label="TIS TIS Genesis - Prepara tu negocio para robots"
     >
-      {/* Background decorations */}
-      <DecorativeBackground />
-
-      {/* Bottom fade gradient for smooth transition to dark robot section */}
+      {/* Semi-transparent white overlay for text readability */}
       <div
         aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 h-48 sm:h-64 lg:h-80 bg-gradient-to-b from-transparent via-black/60 to-black pointer-events-none z-[5]"
+        className="absolute inset-0 bg-gradient-to-b from-white/95 via-white/80 to-transparent dark:from-slate-900/95 dark:via-slate-900/80 dark:to-transparent pointer-events-none z-0"
       />
 
       {/* Main content */}
