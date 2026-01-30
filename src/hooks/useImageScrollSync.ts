@@ -117,11 +117,12 @@ const DEFAULT_CONFIG: Required<ImageScrollSyncConfig> = {
   startOffset: 0.1,
   endOffset: 0.9,
   // Smoothing factor optimized for Apple-style buttery animations
-  // Lower = smoother but more lag, Higher = more responsive
-  smoothing: 0.12,
+  // Higher = more responsive, Lower = smoother but more lag
+  // 0.18 provides good balance between smoothness and responsiveness
+  smoothing: 0.18,
   debug: false,
   intersectionThreshold: 0,
-  rootMargin: '0px',
+  rootMargin: '100px', // Start tracking before element is fully visible
   startHidden: true,
 };
 
@@ -261,23 +262,32 @@ export function useImageScrollSync(
     // Smooth interpolation towards target progress
     const current = currentProgressRef.current;
     const target = targetProgressRef.current;
+    const diff = Math.abs(target - current);
 
     // Use smoothing factor (1 = instant, lower = smoother)
     const effectiveSmoothing = smoothing >= 1 ? 1 : smoothing;
-    const smoothed = lerp(current, target, effectiveSmoothing);
+
+    // Use adaptive smoothing - faster when far from target, slower when close
+    // This prevents overshooting and makes scroll direction changes smoother
+    const adaptiveSmoothing = diff > 0.1
+      ? Math.min(effectiveSmoothing * 1.5, 0.3) // Faster catch-up for large differences
+      : effectiveSmoothing;
+
+    const smoothed = lerp(current, target, adaptiveSmoothing);
 
     // Only update if there's a meaningful difference
-    if (Math.abs(smoothed - current) > 0.0001) {
+    if (diff > 0.0001) {
       currentProgressRef.current = smoothed;
       setProgress(smoothed);
 
       if (debug) {
-        console.log('[ImageScrollSync] Progress:', smoothed.toFixed(3));
+        console.log('[ImageScrollSync] Progress:', smoothed.toFixed(3), 'Target:', target.toFixed(3));
       }
     }
 
-    // Continue animation loop if in view
-    if (isInView) {
+    // Continue animation loop while there's still movement to animate
+    // This ensures smooth transitions even when scrolling direction changes
+    if (diff > 0.0001 || isInView) {
       rafRef.current = requestAnimationFrame(updateProgress);
     }
   }, [smoothing, isInView, debug]);
@@ -286,16 +296,20 @@ export function useImageScrollSync(
   // Scroll Handler
   // =====================================================
 
+  // Track if we've ever been in view to prevent premature cleanup
+  const hasBeenInViewRef = useRef<boolean>(false);
+
   useEffect(() => {
     // SSR guard - only run on client
     if (typeof window === 'undefined') return;
 
-    if (!isInView) {
-      // Cancel animation frame when out of view
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
+    // Track if element has been in view
+    if (isInView) {
+      hasBeenInViewRef.current = true;
+    }
+
+    // Only skip if never been in view
+    if (!isInView && !hasBeenInViewRef.current) {
       return;
     }
 
@@ -320,8 +334,10 @@ export function useImageScrollSync(
     // Initial calculation
     handleScroll();
 
-    // Start animation loop
-    rafRef.current = requestAnimationFrame(updateProgress);
+    // Start animation loop if not already running
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(updateProgress);
+    }
 
     // Add scroll listener (passive for performance)
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -331,7 +347,9 @@ export function useImageScrollSync(
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleScroll);
 
-      if (rafRef.current) {
+      // Only cancel RAF if completely out of view and progress has stabilized
+      const diff = Math.abs(targetProgressRef.current - currentProgressRef.current);
+      if (!isInView && diff < 0.001 && rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
