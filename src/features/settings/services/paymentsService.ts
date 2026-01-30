@@ -326,7 +326,9 @@ export async function checkStripeHealth(): Promise<StripeHealthStatus> {
       message: data.services?.stripe_connect?.message,
       actionUrl: data.services?.stripe_connect?.action_url,
     };
-  } catch {
+  } catch (error) {
+    // Log the error for debugging while returning a graceful fallback
+    console.error('[PaymentsService] Error checking Stripe health:', error);
     return {
       status: 'unhealthy',
       connectEnabled: false,

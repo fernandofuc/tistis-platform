@@ -8,6 +8,13 @@ import {
   checkStripeConnectHealth,
   getConnectErrorDetails,
 } from '@/src/features/payments/services';
+import {
+  checkRateLimit,
+  getClientIP,
+  publicAPILimiter,
+  rateLimitExceeded,
+  addRateLimitHeaders,
+} from '@/src/shared/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +48,17 @@ interface StripeHealthResponse {
 // ======================
 
 export async function GET(request: NextRequest) {
+  // Rate limiting to prevent abuse
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, {
+    ...publicAPILimiter,
+    identifier: 'stripe-health', // More specific identifier
+  });
+
+  if (!rateLimitResult.success) {
+    return rateLimitExceeded(rateLimitResult);
+  }
+
   try {
     const forceRefresh = request.nextUrl.searchParams.get('refresh') === 'true';
 
@@ -97,13 +115,16 @@ export async function GET(request: NextRequest) {
 
     const httpStatus = overallStatus === 'unhealthy' ? 503 : 200;
 
-    return NextResponse.json(response, {
+    const jsonResponse = NextResponse.json(response, {
       status: httpStatus,
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',
         'X-Stripe-Health-Status': overallStatus,
       },
     });
+
+    // Add rate limit headers to successful responses
+    return addRateLimitHeaders(jsonResponse, rateLimitResult);
   } catch (error) {
     console.error('[Stripe Health] Error:', error);
 

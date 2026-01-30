@@ -14,6 +14,12 @@ import { getVerticalConfig, type VerticalType, type VerticalTerminology } from '
 // CONSTANTS
 // ======================
 const VERTICAL_CACHE_KEY = 'tistis_vertical_cache';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+interface CachedVerticalData {
+  vertical: VerticalType;
+  timestamp: number;
+}
 
 // ======================
 // EXTENDED TERMINOLOGY
@@ -377,14 +383,35 @@ const DEFAULT_TERMINOLOGY = EXTENDED_TERMINOLOGY.dental;
 
 /**
  * Get cached vertical from localStorage
- * Returns null if not found or on server
+ * Returns null if not found, expired, or on server
  */
 function getCachedVertical(): VerticalType | null {
   if (typeof window === 'undefined') return null;
   try {
-    const cached = localStorage.getItem(VERTICAL_CACHE_KEY);
-    if (cached && cached in EXTENDED_TERMINOLOGY) {
-      return cached as VerticalType;
+    const cachedRaw = localStorage.getItem(VERTICAL_CACHE_KEY);
+    if (!cachedRaw) return null;
+
+    // Try to parse as new format (with TTL)
+    try {
+      const cached: CachedVerticalData = JSON.parse(cachedRaw);
+      const now = Date.now();
+
+      // Check if cache is expired
+      if (now - cached.timestamp > CACHE_TTL_MS) {
+        localStorage.removeItem(VERTICAL_CACHE_KEY);
+        return null;
+      }
+
+      if (cached.vertical && cached.vertical in EXTENDED_TERMINOLOGY) {
+        return cached.vertical;
+      }
+    } catch {
+      // Old format (plain string) - migrate it
+      if (cachedRaw in EXTENDED_TERMINOLOGY) {
+        // Migrate to new format
+        setCachedVertical(cachedRaw as VerticalType);
+        return cachedRaw as VerticalType;
+      }
     }
   } catch {
     // localStorage not available
@@ -393,12 +420,29 @@ function getCachedVertical(): VerticalType | null {
 }
 
 /**
- * Save vertical to localStorage for future loads
+ * Save vertical to localStorage with timestamp for TTL
  */
 function setCachedVertical(vertical: VerticalType): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(VERTICAL_CACHE_KEY, vertical);
+    const cacheData: CachedVerticalData = {
+      vertical,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(VERTICAL_CACHE_KEY, JSON.stringify(cacheData));
+  } catch {
+    // localStorage not available
+  }
+}
+
+/**
+ * Clear vertical cache from localStorage
+ * Called on user logout to prevent data leakage between users
+ */
+export function clearVerticalCache(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(VERTICAL_CACHE_KEY);
   } catch {
     // localStorage not available
   }

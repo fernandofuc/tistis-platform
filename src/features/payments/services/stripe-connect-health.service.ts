@@ -4,30 +4,10 @@
 // =====================================================
 
 import Stripe from 'stripe';
-
-// ======================
-// TYPES
-// ======================
-
-export interface StripeConnectHealthStatus {
-  isConfigured: boolean;
-  isConnectEnabled: boolean;
-  errorCode?: string;
-  errorMessage?: string;
-  capabilities?: {
-    cardPayments: boolean;
-    transfers: boolean;
-  };
-  lastChecked: string;
-}
-
-export interface ConnectErrorDetails {
-  title: string;
-  message: string;
-  action: string;
-  actionUrl?: string;
-  severity: 'error' | 'warning' | 'info';
-}
+import type {
+  StripeConnectHealthStatus,
+  ConnectErrorDetails,
+} from '../types';
 
 // ======================
 // SINGLETON CLIENT
@@ -35,9 +15,17 @@ export interface ConnectErrorDetails {
 
 let stripeClient: Stripe | null = null;
 
+/**
+ * Get or create Stripe client singleton
+ * @throws Error if STRIPE_SECRET_KEY is not configured
+ */
 function getStripeClient(): Stripe {
   if (!stripeClient) {
-    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      throw new Error('STRIPE_SECRET_KEY is not configured');
+    }
+    stripeClient = new Stripe(secretKey);
   }
   return stripeClient;
 }
@@ -46,7 +34,15 @@ function getStripeClient(): Stripe {
 // CACHE
 // ======================
 
-// Cache for health status (5 minute TTL)
+/**
+ * In-memory cache for health status (5 minute TTL)
+ *
+ * NOTE: In serverless environments (Vercel, AWS Lambda), each instance
+ * has its own cache. This means multiple requests might hit Stripe
+ * until the cache is populated in that instance. This is acceptable
+ * for a health check endpoint and prevents excessive API calls within
+ * a single instance's lifecycle.
+ */
 let cachedStatus: StripeConnectHealthStatus | null = null;
 let cacheExpiry: number = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -110,7 +106,8 @@ export async function checkStripeConnectHealth(
     // The account object for the platform account will have different properties
     // than a connected account. We're checking the platform account here.
 
-    console.log('[Stripe Health] Platform account retrieved:', account.id);
+    // Account retrieved successfully - don't log account.id for security
+    console.log('[Stripe Health] Platform account retrieved successfully');
 
     // Try a more specific check - attempt to list connected accounts
     // This will fail if Connect is not enabled

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/auth';
 import { useAppStore, useBranch } from '@/shared/stores';
+import { clearVerticalCache } from './useVerticalTerminology';
 
 // Types for tenant data
 interface Tenant {
@@ -261,6 +262,8 @@ export function useTenant(): TenantContextValue {
         // Clear global Zustand store
         setBranchesStore([]);
         setSelectedBranchId(null);
+        // Clear vertical terminology cache to prevent data leakage
+        clearVerticalCache();
       }
     });
 
