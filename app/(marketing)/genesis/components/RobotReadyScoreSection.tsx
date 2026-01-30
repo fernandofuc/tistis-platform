@@ -381,19 +381,19 @@ export default function RobotReadyScoreSection({
             transition={{ duration: 0.6, ease: APPLE_EASE }}
             className="relative"
           >
+            {/* Example badge - centered above gauge */}
+            <div className="flex justify-center mb-4">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-xs font-semibold">
+                <Trophy className="w-3.5 h-3.5" aria-hidden="true" />
+                Ejemplo: Clínica 3 años con TIS TIS
+              </span>
+            </div>
+
             <ScoreGauge
               score={exampleScore}
               isInView={isInView}
               prefersReducedMotion={prefersReducedMotion}
             />
-
-            {/* Example badge */}
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-xs font-semibold">
-                <Trophy className="w-3 h-3" aria-hidden="true" />
-                Ejemplo: Clínica 3 años con TIS TIS
-              </span>
-            </div>
           </motion.div>
 
           {/* Right: Component Breakdown */}
@@ -443,41 +443,41 @@ export default function RobotReadyScoreSection({
           className="mt-12 sm:mt-16"
         >
           <div className="
-            p-6 sm:p-8
+            p-6 sm:p-8 lg:p-10
             bg-white dark:bg-slate-800/50
             rounded-2xl sm:rounded-3xl
             border border-slate-100 dark:border-slate-700/50
           ">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-3 gap-4 sm:gap-8 lg:gap-12">
               {/* Score Range 1 */}
               <div className="text-center">
-                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                  <span className="text-lg font-bold text-slate-400">0-39</span>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                  <span className="text-base sm:text-lg font-bold text-slate-400">0-39</span>
                 </div>
-                <h4 className="font-semibold text-slate-900 dark:text-white mb-1">Iniciando</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <h4 className="font-semibold text-slate-900 dark:text-white mb-1 text-sm sm:text-base">Iniciando</h4>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                   Comenzando a acumular datos operativos
                 </p>
               </div>
 
               {/* Score Range 2 */}
               <div className="text-center">
-                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-tis-coral/10 flex items-center justify-center">
-                  <span className="text-lg font-bold text-tis-coral">40-79</span>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 rounded-full bg-tis-coral/10 flex items-center justify-center">
+                  <span className="text-base sm:text-lg font-bold text-tis-coral">40-<br className="sm:hidden"/>79</span>
                 </div>
-                <h4 className="font-semibold text-slate-900 dark:text-white mb-1">En Progreso</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <h4 className="font-semibold text-slate-900 dark:text-white mb-1 text-sm sm:text-base">En Progreso</h4>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                   Base sólida para integración futura
                 </p>
               </div>
 
               {/* Score Range 3 */}
               <div className="text-center">
-                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <span className="text-lg font-bold text-green-500">80-100</span>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <span className="text-base sm:text-lg font-bold text-green-500">80-<br className="sm:hidden"/>100</span>
                 </div>
-                <h4 className="font-semibold text-slate-900 dark:text-white mb-1">Robot-Ready</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <h4 className="font-semibold text-slate-900 dark:text-white mb-1 text-sm sm:text-base">Robot-Ready</h4>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                   Listo para integración inmediata
                 </p>
               </div>
