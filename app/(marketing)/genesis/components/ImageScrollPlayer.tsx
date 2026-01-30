@@ -333,9 +333,9 @@ export default function ImageScrollPlayer({
   } = useImageScrollSync({
     startOffset: 0.05,  // Start revealing earlier for smoother feel
     endOffset: 0.85,    // Complete reveal before end
-    // Use hook defaults for smoothing (0.18) - optimized for Apple-style buttery animations
-    // Only disable smoothing if user prefers reduced motion
-    smoothing: prefersReducedMotion ? 1 : undefined,
+    // Use hook defaults for smoothing (0.12) - optimized for Apple-style buttery animations
+    // Only override smoothing for reduced motion (instant updates)
+    ...(prefersReducedMotion ? { smoothing: 1 } : {}),
     debug,
   });
 

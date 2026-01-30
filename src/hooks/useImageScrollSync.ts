@@ -175,11 +175,18 @@ function calculateScrollProgress(
 export function useImageScrollSync(
   config: ImageScrollSyncConfig = {}
 ): ImageScrollSyncReturn {
-  // Merge config with defaults
-  const mergedConfig = useMemo(() => ({
-    ...DEFAULT_CONFIG,
-    ...config,
-  }), [config]);
+  // Merge config with defaults, filtering out undefined values to preserve defaults
+  const mergedConfig = useMemo(() => {
+    // Filter out undefined values from config to prevent overwriting defaults
+    const filteredConfig = Object.fromEntries(
+      Object.entries(config).filter(([, value]) => value !== undefined)
+    ) as Partial<ImageScrollSyncConfig>;
+
+    return {
+      ...DEFAULT_CONFIG,
+      ...filteredConfig,
+    };
+  }, [config]);
 
   const {
     startOffset,
