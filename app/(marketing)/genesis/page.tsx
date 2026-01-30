@@ -12,7 +12,6 @@ import {
   WhatIsGenesisSection,
   HowItWorksSection,
   RobotReadyScoreSection,
-  UseCaseSection,
   ComingSoonCTA,
 } from './components';
 
@@ -79,12 +78,6 @@ export default function GenesisPage() {
       {/* Interactive score visualization 0-100 */}
       {/* ============================================= */}
       <RobotReadyScoreSection exampleScore={EXAMPLE_ROBOT_SCORE} />
-
-      {/* ============================================= */}
-      {/* Use Cases Section */}
-      {/* Real examples by business type (dental, restaurant, etc) */}
-      {/* ============================================= */}
-      <UseCaseSection />
 
       {/* ============================================= */}
       {/* Coming Soon CTA - Vision 2028+ */}

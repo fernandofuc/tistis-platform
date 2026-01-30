@@ -23,7 +23,6 @@ export { default as HeroSection } from './HeroSection';
 export { default as WhatIsGenesisSection } from './WhatIsGenesisSection';
 export { default as HowItWorksSection } from './HowItWorksSection';
 export { default as RobotReadyScoreSection } from './RobotReadyScoreSection';
-export { default as UseCaseSection } from './UseCaseSection';
 export { default as ComingSoonCTA } from './ComingSoonCTA';
 
 // =====================================================
