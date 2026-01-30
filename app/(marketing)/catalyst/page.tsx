@@ -11,7 +11,6 @@ import {
   VideoScrollPlayer,
   WhatIsSection,
   HowItWorksSection,
-  ComingSoonCTA,
 } from './components';
 
 // =====================================================
@@ -45,10 +44,6 @@ export default function CatalystPage() {
       {/* ============================================= */}
       <HowItWorksSection />
 
-      {/* ============================================= */}
-      {/* Coming Soon CTA - Waitlist + Footer */}
-      {/* ============================================= */}
-      <ComingSoonCTA showBackLink />
     </div>
   );
 }

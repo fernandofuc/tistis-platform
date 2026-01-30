@@ -12,7 +12,6 @@ import {
   WhatIsGenesisSection,
   HowItWorksSection,
   RobotReadyScoreSection,
-  ComingSoonCTA,
 } from './components';
 
 // =====================================================
@@ -79,11 +78,6 @@ export default function GenesisPage() {
       {/* ============================================= */}
       <RobotReadyScoreSection exampleScore={EXAMPLE_ROBOT_SCORE} />
 
-      {/* ============================================= */}
-      {/* Coming Soon CTA - Vision 2028+ */}
-      {/* Final call to action + timeline preview */}
-      {/* ============================================= */}
-      <ComingSoonCTA showBackLink showStartNow />
     </div>
   );
 }
