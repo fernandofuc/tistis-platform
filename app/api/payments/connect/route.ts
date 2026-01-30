@@ -7,6 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import crypto from 'crypto';
+import {
+  checkStripeConnectHealth,
+  getConnectErrorDetails,
+} from '@/src/features/payments/services';
 
 // Force dynamic rendering - this API uses request headers
 export const dynamic = 'force-dynamic';
@@ -212,6 +216,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos para gestionar pagos' }, { status: 403 });
     }
 
+    // ======================
+    // PROACTIVE STRIPE CONNECT CHECK
+    // Check if Stripe Connect is enabled BEFORE attempting to create accounts
+    // ======================
+    console.log('[Payments API] Checking Stripe Connect health...');
+    const connectHealth = await checkStripeConnectHealth();
+
+    if (!connectHealth.isConnectEnabled) {
+      const errorDetails = getConnectErrorDetails(connectHealth);
+      console.error('[Payments API] Stripe Connect not enabled:', connectHealth.errorCode);
+
+      return NextResponse.json({
+        error: errorDetails.message,
+        code: connectHealth.errorCode || 'STRIPE_CONNECT_NOT_ENABLED',
+        action: errorDetails.action,
+        actionUrl: errorDetails.actionUrl,
+        isConfigurationError: true,
+      }, { status: 503 }); // 503 Service Unavailable - appropriate for config issues
+    }
+    console.log('[Payments API] Stripe Connect health check passed');
 
     // Get or create Stripe Connect account record
     let { data: account, error: selectError } = await supabase
@@ -353,14 +377,30 @@ export async function POST(request: NextRequest) {
       console.error('[Payments API] Stripe error code:', error.code);
       console.error('[Payments API] Stripe error message:', error.message);
 
-      // Common Stripe Connect errors
-      if (error.message.includes('Connect') || error.code === 'account_invalid') {
+      // Common Stripe Connect errors - return structured error
+      if (error.message.includes('Connect') || error.code === 'account_invalid' || error.type === 'StripePermissionError') {
         return NextResponse.json({
-          error: 'Stripe Connect no está habilitado en tu cuenta de Stripe. Actívalo en dashboard.stripe.com/settings/connect'
-        }, { status: 500 });
+          error: 'Stripe Connect no esta habilitado en tu cuenta de Stripe.',
+          code: 'STRIPE_CONNECT_NOT_ENABLED',
+          action: 'Activar Stripe Connect',
+          actionUrl: 'https://dashboard.stripe.com/settings/connect',
+          isConfigurationError: true,
+        }, { status: 503 }); // 503 Service Unavailable
       }
 
-      return NextResponse.json({ error: `Error de Stripe: ${error.message}` }, { status: 500 });
+      // Authentication errors
+      if (error.type === 'StripeAuthenticationError') {
+        return NextResponse.json({
+          error: 'Error de autenticacion con Stripe. Verifica la configuracion del servidor.',
+          code: 'STRIPE_AUTH_ERROR',
+          isConfigurationError: true,
+        }, { status: 503 });
+      }
+
+      return NextResponse.json({
+        error: `Error de Stripe: ${error.message}`,
+        code: error.code || 'STRIPE_ERROR',
+      }, { status: 500 });
     }
 
     // Handle database errors

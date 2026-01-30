@@ -88,10 +88,34 @@ export interface PaginatedResponse<T> {
   };
 }
 
+/**
+ * Structured error from API for better UI handling
+ */
+export interface StripePaymentError {
+  message: string;
+  code?: string;
+  action?: string;
+  actionUrl?: string;
+  isConfigurationError?: boolean;
+}
+
+/**
+ * Stripe health check response
+ */
+export interface StripeHealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  connectEnabled: boolean;
+  message?: string;
+  actionUrl?: string;
+}
+
 // ======================
 // HELPER
 // ======================
 
+/**
+ * Fetch with authentication - preserves structured errors from API
+ */
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   const accessToken = session?.access_token;
@@ -108,7 +132,19 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || 'Error en la solicitud');
+    // Preserve structured error information for UI handling
+    // The error message contains JSON that can be parsed by the component
+    const structuredError: StripePaymentError = {
+      message: data.error || 'Error en la solicitud',
+      code: data.code,
+      action: data.action,
+      actionUrl: data.actionUrl,
+      isConfigurationError: data.isConfigurationError,
+    };
+
+    // Throw error with JSON string so component can parse it
+    const error = new Error(JSON.stringify(structuredError));
+    throw error;
   }
 
   return data;
@@ -269,4 +305,54 @@ export function getStatusLabel(status: string): string {
   };
 
   return labels[status] || status;
+}
+
+// ======================
+// STRIPE HEALTH CHECK
+// ======================
+
+/**
+ * Check Stripe service health (Connect enabled, webhooks, etc.)
+ * Used for proactive UI feedback before user attempts to connect
+ */
+export async function checkStripeHealth(): Promise<StripeHealthStatus> {
+  try {
+    const response = await fetch('/api/health/stripe');
+    const data = await response.json();
+
+    return {
+      status: data.status,
+      connectEnabled: data.services?.stripe_connect?.enabled ?? false,
+      message: data.services?.stripe_connect?.message,
+      actionUrl: data.services?.stripe_connect?.action_url,
+    };
+  } catch {
+    return {
+      status: 'unhealthy',
+      connectEnabled: false,
+      message: 'No se pudo verificar el estado de Stripe',
+    };
+  }
+}
+
+/**
+ * Parse structured error from API response
+ * Returns null if error is not a structured payment error
+ */
+export function parsePaymentError(error: unknown): StripePaymentError | null {
+  if (!(error instanceof Error)) return null;
+
+  try {
+    const parsed = JSON.parse(error.message);
+    if (parsed && typeof parsed === 'object' && 'message' in parsed) {
+      return parsed as StripePaymentError;
+    }
+  } catch {
+    // Not JSON, return simple error
+    return {
+      message: error.message,
+    };
+  }
+
+  return null;
 }

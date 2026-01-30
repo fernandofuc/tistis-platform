@@ -16,8 +16,10 @@ import {
   formatAmount,
   getStatusColor,
   getStatusLabel,
+  parsePaymentError,
   type StripeConnectStatus,
   type PayoutRecord,
+  type StripePaymentError,
 } from '../services/paymentsService';
 
 // ======================
@@ -98,7 +100,7 @@ export function PaymentsSection() {
   const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<StripePaymentError | null>(null);
 
   // Load status on mount
   const loadStatus = useCallback(async () => {
@@ -115,7 +117,8 @@ export function PaymentsSection() {
       }
     } catch (err) {
       console.error('Error loading payments status:', err);
-      setError(err instanceof Error ? err.message : 'Error al cargar estado de pagos');
+      const parsedError = parsePaymentError(err);
+      setError(parsedError || { message: 'Error al cargar estado de pagos' });
     } finally {
       setLoading(false);
     }
@@ -135,14 +138,15 @@ export function PaymentsSection() {
       window.location.href = link.onboarding_url;
     } catch (err) {
       console.error('Error creating onboarding link:', err);
-      setError(err instanceof Error ? err.message : 'Error al conectar con Stripe');
+      const parsedError = parsePaymentError(err);
+      setError(parsedError || { message: 'Error al conectar con Stripe' });
       setConnecting(false);
     }
   };
 
   // Handle disconnect
   const handleDisconnect = async () => {
-    if (!confirm('¿Estás seguro de desconectar tu cuenta de Stripe? Esto deshabilitará los cobros de membresías.')) {
+    if (!confirm('¿Estas seguro de desconectar tu cuenta de Stripe? Esto deshabilitara los cobros de membresias.')) {
       return;
     }
 
@@ -151,7 +155,8 @@ export function PaymentsSection() {
       await loadStatus();
     } catch (err) {
       console.error('Error disconnecting:', err);
-      setError(err instanceof Error ? err.message : 'Error al desconectar');
+      const parsedError = parsePaymentError(err);
+      setError(parsedError || { message: 'Error al desconectar' });
     }
   };
 
@@ -178,10 +183,52 @@ export function PaymentsSection() {
           subtitle="Conecta Stripe para recibir pagos de membresías"
         />
         <CardContent>
+          {/* Error Banner - Configuration errors in amber, others in red */}
           {error && (
-            <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
-              {icons.warning}
-              <span className="text-sm">{error}</span>
+            <div className={cn(
+              'mb-6 p-4 rounded-lg',
+              error.isConfigurationError
+                ? 'bg-amber-50 border border-amber-200'
+                : 'bg-red-50 border border-red-200'
+            )}>
+              <div className="flex items-start gap-3">
+                <div className={error.isConfigurationError ? 'text-amber-600' : 'text-red-600'}>
+                  {icons.warning}
+                </div>
+                <div className="flex-1">
+                  <p className={cn(
+                    'text-sm font-medium',
+                    error.isConfigurationError ? 'text-amber-800' : 'text-red-700'
+                  )}>
+                    {error.message}
+                  </p>
+                  {error.actionUrl && (
+                    <a
+                      href={error.actionUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(
+                        'inline-flex items-center gap-2 mt-2 text-sm font-medium',
+                        error.isConfigurationError
+                          ? 'text-amber-700 hover:text-amber-800'
+                          : 'text-red-600 hover:text-red-700'
+                      )}
+                    >
+                      {error.action || 'Ver mas'}
+                      {icons.externalLink}
+                    </a>
+                  )}
+                </div>
+                <button
+                  onClick={() => setError(null)}
+                  className={cn(
+                    'text-sm',
+                    error.isConfigurationError ? 'text-amber-500 hover:text-amber-700' : 'text-red-400 hover:text-red-600'
+                  )}
+                >
+                  ×
+                </button>
+              </div>
             </div>
           )}
 
@@ -301,10 +348,52 @@ export function PaymentsSection() {
         subtitle="Gestiona tu cuenta de Stripe y revisa tus ingresos"
       />
       <CardContent>
+        {/* Error Banner - Configuration errors in amber, others in red */}
         {error && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
-            {icons.warning}
-            <span className="text-sm">{error}</span>
+          <div className={cn(
+            'mb-6 p-4 rounded-lg',
+            error.isConfigurationError
+              ? 'bg-amber-50 border border-amber-200'
+              : 'bg-red-50 border border-red-200'
+          )}>
+            <div className="flex items-start gap-3">
+              <div className={error.isConfigurationError ? 'text-amber-600' : 'text-red-600'}>
+                {icons.warning}
+              </div>
+              <div className="flex-1">
+                <p className={cn(
+                  'text-sm font-medium',
+                  error.isConfigurationError ? 'text-amber-800' : 'text-red-700'
+                )}>
+                  {error.message}
+                </p>
+                {error.actionUrl && (
+                  <a
+                    href={error.actionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      'inline-flex items-center gap-2 mt-2 text-sm font-medium',
+                      error.isConfigurationError
+                        ? 'text-amber-700 hover:text-amber-800'
+                        : 'text-red-600 hover:text-red-700'
+                    )}
+                  >
+                    {error.action || 'Ver mas'}
+                    {icons.externalLink}
+                  </a>
+                )}
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className={cn(
+                  'text-sm',
+                  error.isConfigurationError ? 'text-amber-500 hover:text-amber-700' : 'text-red-400 hover:text-red-600'
+                )}
+              >
+                ×
+              </button>
+            </div>
           </div>
         )}
 
