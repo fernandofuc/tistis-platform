@@ -118,11 +118,11 @@ const DEFAULT_CONFIG: Required<ImageScrollSyncConfig> = {
   endOffset: 0.9,
   // Smoothing factor optimized for Apple-style buttery animations
   // Higher = more responsive, Lower = smoother but more lag
-  // 0.18 provides good balance between smoothness and responsiveness
-  smoothing: 0.18,
+  // 0.12 provides ultra-smooth animations with minimal perceived lag
+  smoothing: 0.12,
   debug: false,
   intersectionThreshold: 0,
-  rootMargin: '100px', // Start tracking before element is fully visible
+  rootMargin: '200px', // Start tracking well before element is visible
   startHidden: true,
 };
 
@@ -267,11 +267,22 @@ export function useImageScrollSync(
     // Use smoothing factor (1 = instant, lower = smoother)
     const effectiveSmoothing = smoothing >= 1 ? 1 : smoothing;
 
-    // Use adaptive smoothing - faster when far from target, slower when close
-    // This prevents overshooting and makes scroll direction changes smoother
-    const adaptiveSmoothing = diff > 0.1
-      ? Math.min(effectiveSmoothing * 1.5, 0.3) // Faster catch-up for large differences
-      : effectiveSmoothing;
+    // Use adaptive smoothing with easing curve
+    // - Very close to target: use base smoothing for precise positioning
+    // - Medium distance: slightly faster for responsiveness
+    // - Far from target: even faster catch-up, but still smooth
+    // This creates buttery smooth animations in both scroll directions
+    let adaptiveSmoothing: number;
+    if (diff < 0.02) {
+      // Very close - use base smoothing for precision
+      adaptiveSmoothing = effectiveSmoothing;
+    } else if (diff < 0.15) {
+      // Medium distance - slightly faster
+      adaptiveSmoothing = effectiveSmoothing * 1.2;
+    } else {
+      // Far from target - faster catch-up (but capped for smoothness)
+      adaptiveSmoothing = Math.min(effectiveSmoothing * 1.8, 0.25);
+    }
 
     const smoothed = lerp(current, target, adaptiveSmoothing);
 

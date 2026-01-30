@@ -333,7 +333,9 @@ export default function ImageScrollPlayer({
   } = useImageScrollSync({
     startOffset: 0.05,  // Start revealing earlier for smoother feel
     endOffset: 0.85,    // Complete reveal before end
-    smoothing: prefersReducedMotion ? 1 : 0.1,  // Balanced smoothing
+    // Use hook defaults for smoothing (0.18) - optimized for Apple-style buttery animations
+    // Only disable smoothing if user prefers reduced motion
+    smoothing: prefersReducedMotion ? 1 : undefined,
     debug,
   });
 
@@ -372,17 +374,16 @@ export default function ImageScrollPlayer({
 
   // Calculate scroll effect based on progress
   // The image is taller than viewport, scrolling pans down through the robot body
-  // At progress 0: robot at starting position (slightly lower to show more body)
-  // At progress 1: bottom of robot visible
+  // At progress 0: robot head visible at starting position
+  // At progress 1: scrolled down to show more of robot body
   // Uses transform for GPU-accelerated smooth scrolling
   // NOTE: No CSS transition here - smoothing is handled by useImageScrollSync
   const scrollStyle = useMemo(() => {
-    // Start with the image already translated down a bit (-10%) to show more of the robot body
-    // Then pan down through the image as user scrolls
-    // translateY goes from -10% to -50% (showing bottom half of container)
-    const baseOffset = -10; // Start lower to show more body
-    const scrollRange = 40; // Total range: from -10% to -50%
-    const translateY = baseOffset + (progress * -scrollRange);
+    // Start at 0% (showing top of image with robot head)
+    // Scroll down to -30% as user progresses (subtle pan effect)
+    // Reduced range for more subtle, Apple-like effect
+    const scrollRange = 30; // Total range: from 0% to -30%
+    const translateY = progress * -scrollRange;
 
     return {
       transform: `translateY(${translateY}%)`,
@@ -424,7 +425,7 @@ export default function ImageScrollPlayer({
             sizes="100vw"
             className="object-cover object-center"
             style={{
-              objectPosition: '50% 35%', // Center horizontally, start lower showing more body
+              objectPosition: '50% 15%', // Center horizontally, show robot head (15% from top)
             }}
             onLoad={handleImageLoad}
             onError={handleImageError}
@@ -490,7 +491,7 @@ export default function ImageScrollPlayer({
             <div>In View: {isInView ? 'Yes' : 'No'}</div>
             <div>Image Ready: {isImageReady ? 'Yes' : 'No'}</div>
             <div>Phase: {currentPhase + 1}/{enrichedOverlays.length}</div>
-            <div>TranslateY: {(progress * -50).toFixed(1)}%</div>
+            <div>TranslateY: {(progress * -30).toFixed(1)}%</div>
           </div>
         )}
       </div>
