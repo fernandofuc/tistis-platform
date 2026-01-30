@@ -1,13 +1,19 @@
 // =====================================================
 // TIS TIS PLATFORM - Vertical Terminology Hook
 // Provides dynamic terminology based on current vertical
+// With localStorage persistence to prevent flash on reload
 // =====================================================
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useTenant } from './useTenant';
 import { getVerticalConfig, type VerticalType, type VerticalTerminology } from '@/src/shared/config/verticals';
+
+// ======================
+// CONSTANTS
+// ======================
+const VERTICAL_CACHE_KEY = 'tistis_vertical_cache';
 
 // ======================
 // EXTENDED TERMINOLOGY
@@ -362,8 +368,41 @@ const EXTENDED_TERMINOLOGY: Record<VerticalType, ExtendedTerminology> = {
   },
 };
 
-// Default to dental terminology
+// Default to dental terminology (used only as absolute fallback)
 const DEFAULT_TERMINOLOGY = EXTENDED_TERMINOLOGY.dental;
+
+// ======================
+// CACHE HELPERS
+// ======================
+
+/**
+ * Get cached vertical from localStorage
+ * Returns null if not found or on server
+ */
+function getCachedVertical(): VerticalType | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = localStorage.getItem(VERTICAL_CACHE_KEY);
+    if (cached && cached in EXTENDED_TERMINOLOGY) {
+      return cached as VerticalType;
+    }
+  } catch {
+    // localStorage not available
+  }
+  return null;
+}
+
+/**
+ * Save vertical to localStorage for future loads
+ */
+function setCachedVertical(vertical: VerticalType): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(VERTICAL_CACHE_KEY, vertical);
+  } catch {
+    // localStorage not available
+  }
+}
 
 // ======================
 // HOOK
@@ -372,6 +411,8 @@ export interface UseVerticalTerminologyReturn {
   terminology: ExtendedTerminology;
   vertical: VerticalType;
   isLoading: boolean;
+  /** True when terminology is ready (either from cache or tenant data) */
+  isReady: boolean;
 
   // Helper to get specific term
   t: (key: keyof ExtendedTerminology) => string;
@@ -385,7 +426,19 @@ export interface UseVerticalTerminologyReturn {
 export function useVerticalTerminology(): UseVerticalTerminologyReturn {
   const { tenant, isLoading } = useTenant();
 
-  const vertical = (tenant?.vertical as VerticalType) || 'dental';
+  // Get vertical: prefer tenant data, fallback to cache, then default
+  const cachedVertical = useMemo(() => getCachedVertical(), []);
+  const vertical = (tenant?.vertical as VerticalType) || cachedVertical || 'dental';
+
+  // Cache the vertical when tenant loads
+  useEffect(() => {
+    if (tenant?.vertical) {
+      setCachedVertical(tenant.vertical as VerticalType);
+    }
+  }, [tenant?.vertical]);
+
+  // isReady when: tenant loaded OR we have a cached vertical
+  const isReady = !isLoading || cachedVertical !== null;
 
   const terminology = useMemo(() => {
     return EXTENDED_TERMINOLOGY[vertical] || DEFAULT_TERMINOLOGY;
@@ -405,6 +458,7 @@ export function useVerticalTerminology(): UseVerticalTerminologyReturn {
     terminology,
     vertical,
     isLoading,
+    isReady,
     t,
     verticalIcon: verticalConfig.icon,
     verticalColor: verticalConfig.color,
