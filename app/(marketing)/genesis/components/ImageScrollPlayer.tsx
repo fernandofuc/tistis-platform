@@ -377,12 +377,13 @@ export default function ImageScrollPlayer({
   // Uses transform for GPU-accelerated smooth scrolling
   const scrollStyle = useMemo(() => {
     // Pan down through the image as user scrolls
-    // translateY goes from 0% (top) to -50% (showing bottom half)
-    const translateY = progress * -40; // Move up to 40% of image height
+    // translateY goes from 0% (top) to -50% (showing bottom half of container)
+    // Since container is 200% of viewport, -50% translateY = full scroll through image
+    const translateY = progress * -50; // Move up to 50% of image container height
 
     return {
       transform: `translateY(${translateY}%)`,
-      transition: prefersReducedMotion ? 'none' : 'transform 0.15s cubic-bezier(0.25, 0.1, 0.25, 1)',
+      transition: prefersReducedMotion ? 'none' : 'transform 0.1s cubic-bezier(0.33, 1, 0.68, 1)',
       willChange: isInView ? 'transform' : 'auto',
     };
   }, [progress, prefersReducedMotion, isInView]);
@@ -396,24 +397,18 @@ export default function ImageScrollPlayer({
       aria-label="Imagen interactiva: Desplazate para explorar las fases de Genesis"
     >
       {/* Sticky Image Container - Full Viewport */}
-      <div className="sticky top-0 h-screen w-screen overflow-hidden bg-black">
-        {/* Background - Pure black base like AI Design Lab reference */}
+      <div className="sticky top-0 h-screen w-full overflow-hidden bg-black">
+        {/* Background - Pure black base */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-black"
-        />
-
-        {/* Subtle vignette effect for depth */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]"
+          className="absolute inset-0 bg-black z-0"
         />
 
         {/* Image Element - Full screen, scrolls through robot body */}
         <div
-          className="absolute inset-0 w-full"
+          className="absolute inset-0 w-full z-10"
           style={{
-            height: '180%', // Image container taller than viewport
+            height: '200%', // Image container much taller than viewport for scroll effect
             ...scrollStyle,
           }}
         >
@@ -422,9 +417,12 @@ export default function ImageScrollPlayer({
             alt={imageAlt}
             fill
             priority
-            quality={95}
+            quality={100}
             sizes="100vw"
-            className="object-cover object-top"
+            className="object-cover object-center"
+            style={{
+              objectPosition: '50% 20%', // Center horizontally, show more of top
+            }}
             onLoad={handleImageLoad}
             onError={handleImageError}
           />
@@ -433,26 +431,22 @@ export default function ImageScrollPlayer({
         {/* Loading State */}
         {(!isImageReady || imageError) && <LoadingPlaceholder error={imageError} />}
 
-        {/* Top transition gradient - Removed to maintain pure black background */}
-
-        {/* Gradient overlays for text contrast - Subtle Apple style */}
+        {/* Vignette overlay for depth - subtle */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10 pointer-events-none"
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.3)_100%)] pointer-events-none z-20"
         />
 
         {/* Bottom transition gradient - Blend to next section */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-32 sm:h-40 lg:h-48 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none z-10"
+          className="absolute inset-x-0 bottom-0 h-40 sm:h-56 lg:h-64 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none z-20"
         />
 
         {/* Scroll Badge */}
-        <ScrollBadge isVisible={isInView && progress < 0.1} />
+        <div className="z-30">
+          <ScrollBadge isVisible={isInView && progress < 0.1} />
+        </div>
 
         {/* Screen Reader Announcements */}
         <div
@@ -464,22 +458,26 @@ export default function ImageScrollPlayer({
         </div>
 
         {/* Text Overlays */}
-        {visibleOverlays.map((overlay) => (
-          <TextOverlayCard
-            key={overlay.id}
-            overlay={overlay}
-            isVisible={overlay.isVisible}
-            prefersReducedMotion={prefersReducedMotion}
-          />
-        ))}
+        <div className="z-30">
+          {visibleOverlays.map((overlay) => (
+            <TextOverlayCard
+              key={overlay.id}
+              overlay={overlay}
+              isVisible={overlay.isVisible}
+              prefersReducedMotion={prefersReducedMotion}
+            />
+          ))}
+        </div>
 
         {/* Progress Indicator */}
         {showProgress && (
-          <ProgressIndicator
-            progress={progress}
-            currentPhase={currentPhase}
-            totalPhases={enrichedOverlays.length}
-          />
+          <div className="z-30">
+            <ProgressIndicator
+              progress={progress}
+              currentPhase={currentPhase}
+              totalPhases={enrichedOverlays.length}
+            />
+          </div>
         )}
 
         {/* Debug Overlay */}
@@ -489,7 +487,7 @@ export default function ImageScrollPlayer({
             <div>In View: {isInView ? 'Yes' : 'No'}</div>
             <div>Image Ready: {isImageReady ? 'Yes' : 'No'}</div>
             <div>Phase: {currentPhase + 1}/{enrichedOverlays.length}</div>
-            <div>TranslateY: {(progress * -40).toFixed(1)}%</div>
+            <div>TranslateY: {(progress * -50).toFixed(1)}%</div>
           </div>
         )}
       </div>

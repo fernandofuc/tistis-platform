@@ -157,7 +157,7 @@ export default function HeroSection({
       {/* Bottom fade gradient for smooth transition to dark robot section */}
       <div
         aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 h-40 sm:h-56 lg:h-72 bg-gradient-to-b from-transparent via-black/30 to-black pointer-events-none z-5"
+        className="absolute inset-x-0 bottom-0 h-48 sm:h-64 lg:h-80 bg-gradient-to-b from-transparent via-black/60 to-black pointer-events-none z-[5]"
       />
 
       {/* Main content */}
