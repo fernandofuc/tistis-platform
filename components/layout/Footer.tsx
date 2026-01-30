@@ -45,6 +45,16 @@ export default function Footer() {
                   Como Funciona
                 </Link>
               </li>
+              <li>
+                <Link href="/catalyst" className="text-slate-500 hover:text-tis-coral transition-colors">
+                  Catalyst
+                </Link>
+              </li>
+              <li>
+                <Link href="/genesis" className="text-slate-500 hover:text-tis-coral transition-colors">
+                  Genesis
+                </Link>
+              </li>
             </ul>
           </div>
 
