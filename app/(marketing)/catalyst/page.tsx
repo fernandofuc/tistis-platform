@@ -11,8 +11,6 @@ import {
   VideoScrollPlayer,
   WhatIsSection,
   HowItWorksSection,
-  BenefitsSection,
-  UseCaseSection,
   ComingSoonCTA,
 } from './components';
 
@@ -46,16 +44,6 @@ export default function CatalystPage() {
       {/* How It Works Section - Process Timeline */}
       {/* ============================================= */}
       <HowItWorksSection />
-
-      {/* ============================================= */}
-      {/* Benefits Section - Key Advantages */}
-      {/* ============================================= */}
-      <BenefitsSection />
-
-      {/* ============================================= */}
-      {/* Use Cases Section - Vertical Examples */}
-      {/* ============================================= */}
-      <UseCaseSection />
 
       {/* ============================================= */}
       {/* Coming Soon CTA - Waitlist + Footer */}

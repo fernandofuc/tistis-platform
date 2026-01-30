@@ -10,8 +10,6 @@ export { default as VideoScrollPlayer } from './VideoScrollPlayer';
 export { default as HeroSection } from './HeroSection';
 export { default as WhatIsSection } from './WhatIsSection';
 export { default as HowItWorksSection } from './HowItWorksSection';
-export { default as BenefitsSection } from './BenefitsSection';
-export { default as UseCaseSection } from './UseCaseSection';
 export { default as ComingSoonCTA } from './ComingSoonCTA';
 
 // Types & Constants
