@@ -370,21 +370,20 @@ export default function ImageScrollPlayer({
   // Validate scrollHeight with sensible bounds (100vh to 800vh)
   const safeScrollHeight = Math.max(100, Math.min(scrollHeight, 800));
 
-  // Calculate reveal effect based on progress
-  // The image reveals from TOP to BOTTOM as user scrolls (head → body)
-  // Similar to AI Design Lab reference: robot head appears first, then body reveals
-  // Uses will-change for GPU acceleration during animation
-  const revealStyle = useMemo(() => {
-    // At progress 0: show only top 10% of image (robot head visible)
-    // At progress 1: show 100% of image (full robot body)
-    // clipPath inset(top right bottom left) - we clip from bottom
-    const clipFromBottom = 90 - (progress * 90);
+  // Calculate scroll effect based on progress
+  // The image is taller than viewport, scrolling pans down through the robot body
+  // At progress 0: top of robot (head) visible
+  // At progress 1: bottom of robot visible
+  // Uses transform for GPU-accelerated smooth scrolling
+  const scrollStyle = useMemo(() => {
+    // Pan down through the image as user scrolls
+    // translateY goes from 0% (top) to -50% (showing bottom half)
+    const translateY = progress * -40; // Move up to 40% of image height
 
     return {
-      clipPath: `inset(0 0 ${clipFromBottom}% 0)`,
-      transition: prefersReducedMotion ? 'none' : 'clip-path 0.15s cubic-bezier(0.25, 0.1, 0.25, 1)',
-      // Hint browser for GPU acceleration during scroll
-      willChange: isInView ? 'clip-path' : 'auto',
+      transform: `translateY(${translateY}%)`,
+      transition: prefersReducedMotion ? 'none' : 'transform 0.15s cubic-bezier(0.25, 0.1, 0.25, 1)',
+      willChange: isInView ? 'transform' : 'auto',
     };
   }, [progress, prefersReducedMotion, isInView]);
 
@@ -410,19 +409,22 @@ export default function ImageScrollPlayer({
           className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]"
         />
 
-        {/* Image Element with reveal effect - Robot reveals from head to body */}
+        {/* Image Element - Full screen, scrolls through robot body */}
         <div
-          className="absolute inset-0 flex items-start justify-center pt-8 sm:pt-12 lg:pt-16"
-          style={revealStyle}
+          className="absolute inset-0 w-full"
+          style={{
+            height: '180%', // Image container taller than viewport
+            ...scrollStyle,
+          }}
         >
           <Image
             src={imageSrc}
             alt={imageAlt}
             fill
             priority
-            quality={90}
+            quality={95}
             sizes="100vw"
-            className="object-contain object-top"
+            className="object-cover object-top"
             onLoad={handleImageLoad}
             onError={handleImageError}
           />
@@ -487,8 +489,7 @@ export default function ImageScrollPlayer({
             <div>In View: {isInView ? 'Yes' : 'No'}</div>
             <div>Image Ready: {isImageReady ? 'Yes' : 'No'}</div>
             <div>Phase: {currentPhase + 1}/{enrichedOverlays.length}</div>
-            <div>Clip Bottom: {(90 - (progress * 90)).toFixed(1)}%</div>
-            <div>Visible: {(10 + progress * 90).toFixed(1)}%</div>
+            <div>TranslateY: {(progress * -40).toFixed(1)}%</div>
           </div>
         )}
       </div>
