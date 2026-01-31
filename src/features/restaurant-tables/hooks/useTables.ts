@@ -1,12 +1,17 @@
 // =====================================================
 // TIS TIS PLATFORM - Restaurant Tables Hooks
 // React hooks for tables state management
+// With centralized cache for instant navigation
 // =====================================================
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/src/shared/lib/supabase';
+import {
+  useRestaurantDataStore,
+  useCachedTables,
+} from '@/src/shared/stores/restaurantDataStore';
 import * as tablesService from '../services/tables.service';
 import type {
   RestaurantTable,
@@ -20,22 +25,40 @@ import type {
 // TABLES LIST HOOK
 // ======================
 export function useTables(filters: TableFilters = {}) {
-  const [tables, setTables] = useState<RestaurantTable[]>([]);
-  const [stats, setStats] = useState<TableStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const branchId = filters.branch_id || null;
+
+  // Get cached data from store
+  const cached = useCachedTables(branchId);
+  const store = useRestaurantDataStore();
+
+  // Local state - initialized from cache if available
+  const [tables, setTables] = useState<RestaurantTable[]>(cached.tables || []);
+  const [stats, setStats] = useState<TableStats | null>(cached.stats || null);
+  const [loading, setLoading] = useState(!cached.tables);
   const [error, setError] = useState<string | null>(null);
+
+  // Track if this is the first render to show cached data immediately
+  const isFirstRender = useRef(true);
 
   // Memoize filters to avoid complex dependency expressions
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
 
-  const fetchTables = useCallback(async () => {
+  const fetchTables = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      // Only show loading if no cached data
+      if (showLoading && !cached.tables) {
+        setLoading(true);
+      }
       setError(null);
+
       const response = await tablesService.getTables(filters);
       if (response.success) {
         setTables(response.data.tables);
         setStats(response.data.stats);
+
+        // Update global cache
+        store.setTables(response.data.tables, branchId);
+        store.setTableStats(response.data.stats, branchId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar mesas');
@@ -43,11 +66,25 @@ export function useTables(filters: TableFilters = {}) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }, [filtersKey, branchId]);
 
-  // Subscribe to real-time changes
+  // Initialize from cache and fetch fresh data
   useEffect(() => {
-    fetchTables();
+    if (isFirstRender.current && cached.tables) {
+      // Use cached data immediately
+      setTables(cached.tables);
+      setStats(cached.stats);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      // Refresh in background if stale
+      if (cached.isStale) {
+        fetchTables(false);
+      }
+    } else {
+      // No cache, fetch fresh
+      fetchTables(true);
+    }
 
     // Real-time subscription for table changes
     const channel = supabase
@@ -61,13 +98,19 @@ export function useTables(filters: TableFilters = {}) {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setTables((prev) => [...prev, payload.new as RestaurantTable]);
+            const newTable = payload.new as RestaurantTable;
+            setTables((prev) => [...prev, newTable]);
+            store.addTable(newTable);
           } else if (payload.eventType === 'UPDATE') {
+            const updatedTable = payload.new as RestaurantTable;
             setTables((prev) =>
-              prev.map((t) => (t.id === payload.new.id ? (payload.new as RestaurantTable) : t))
+              prev.map((t) => (t.id === updatedTable.id ? updatedTable : t))
             );
+            store.updateTable(updatedTable);
           } else if (payload.eventType === 'DELETE') {
-            setTables((prev) => prev.filter((t) => t.id !== payload.old.id));
+            const deletedId = payload.old.id;
+            setTables((prev) => prev.filter((t) => t.id !== deletedId));
+            store.removeTable(deletedId);
           }
         }
       )
@@ -76,7 +119,7 @@ export function useTables(filters: TableFilters = {}) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchTables]);
+  }, [fetchTables, cached.tables, cached.stats, cached.isStale, store]);
 
   // Create table
   // Note: Don't add to state here - the real-time subscription will handle it

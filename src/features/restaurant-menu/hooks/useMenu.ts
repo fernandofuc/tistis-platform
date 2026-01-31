@@ -1,12 +1,17 @@
 // =====================================================
 // TIS TIS PLATFORM - Restaurant Menu Hooks
 // React hooks for menu state management
+// With centralized cache for instant navigation
 // =====================================================
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/src/shared/lib/supabase';
+import {
+  useRestaurantDataStore,
+  useCachedMenu,
+} from '@/src/shared/stores/restaurantDataStore';
 import * as menuService from '../services/menu.service';
 import type {
   MenuCategory,
@@ -21,27 +26,46 @@ import type {
 // CATEGORIES HOOK
 // ======================
 export function useCategories(includeInactive: boolean = false) {
-  const [categories, setCategories] = useState<MenuCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Menu doesn't use branch_id, so we use null
+  const cached = useCachedMenu(null);
+  const store = useRestaurantDataStore();
+
+  const [categories, setCategories] = useState<MenuCategory[]>(cached.categories || []);
+  const [loading, setLoading] = useState(!cached.categories);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCategories = useCallback(async () => {
+  const isFirstRender = useRef(true);
+
+  const fetchCategories = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading && !cached.categories) {
+        setLoading(true);
+      }
       setError(null);
       const response = await menuService.getCategories(includeInactive);
       if (response.success) {
         setCategories(response.data);
+        store.setMenuCategories(response.data, null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar categorías');
     } finally {
       setLoading(false);
     }
-  }, [includeInactive]);
+  }, [includeInactive, cached.categories, store]);
 
   useEffect(() => {
-    fetchCategories();
+    if (isFirstRender.current && cached.categories) {
+      setCategories(cached.categories);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      if (cached.isStale) {
+        fetchCategories(false);
+      }
+    } else {
+      fetchCategories(true);
+    }
 
     // Real-time subscription
     const channel = supabase
@@ -54,7 +78,7 @@ export function useCategories(includeInactive: boolean = false) {
           table: 'restaurant_menu_categories',
         },
         () => {
-          fetchCategories();
+          fetchCategories(false);
         }
       )
       .subscribe();
@@ -62,7 +86,7 @@ export function useCategories(includeInactive: boolean = false) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchCategories]);
+  }, [fetchCategories, cached.categories, cached.isStale]);
 
   const createCategory = useCallback(async (data: CategoryFormData) => {
     const response = await menuService.createCategory(data);
@@ -136,27 +160,35 @@ export function useCategories(includeInactive: boolean = false) {
 // MENU ITEMS HOOK
 // ======================
 export function useMenuItems(filters: MenuFilters = {}, page: number = 1, limit: number = 50) {
-  const [items, setItems] = useState<MenuItem[]>([]);
+  const cached = useCachedMenu(null);
+  const store = useRestaurantDataStore();
+
+  const [items, setItems] = useState<MenuItem[]>(cached.items || []);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
     total: 0,
     totalPages: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached.items);
   const [error, setError] = useState<string | null>(null);
+
+  const isFirstRender = useRef(true);
 
   // Memoize filters to avoid complex dependency expressions
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading && !cached.items) {
+        setLoading(true);
+      }
       setError(null);
       const response = await menuService.getMenuItems(filters, page, limit);
       if (response.success) {
         setItems(response.data.items);
         setPagination(response.data.pagination);
+        store.setMenuItems(response.data.items, null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar platillos');
@@ -164,10 +196,20 @@ export function useMenuItems(filters: MenuFilters = {}, page: number = 1, limit:
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey, page, limit]);
+  }, [filtersKey, page, limit, cached.items]);
 
   useEffect(() => {
-    fetchItems();
+    if (isFirstRender.current && cached.items) {
+      setItems(cached.items);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      if (cached.isStale) {
+        fetchItems(false);
+      }
+    } else {
+      fetchItems(true);
+    }
 
     // Real-time subscription
     const channel = supabase
@@ -180,7 +222,7 @@ export function useMenuItems(filters: MenuFilters = {}, page: number = 1, limit:
           table: 'restaurant_menu_items',
         },
         () => {
-          fetchItems();
+          fetchItems(false);
         }
       )
       .subscribe();
@@ -188,7 +230,7 @@ export function useMenuItems(filters: MenuFilters = {}, page: number = 1, limit:
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchItems]);
+  }, [fetchItems, cached.items, cached.isStale]);
 
   const createItem = useCallback(async (data: MenuItemFormData) => {
     const response = await menuService.createMenuItem(data);
@@ -312,34 +354,52 @@ export function useMenuItem(id: string | null) {
 // MENU STATS HOOK
 // ======================
 export function useMenuStats() {
-  const [stats, setStats] = useState<MenuStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cached = useCachedMenu(null);
+  const store = useRestaurantDataStore();
+
+  const [stats, setStats] = useState<MenuStats | null>(cached.stats || null);
+  const [loading, setLoading] = useState(!cached.stats);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStats = useCallback(async () => {
+  const isFirstRender = useRef(true);
+
+  const fetchStats = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading && !cached.stats) {
+        setLoading(true);
+      }
       setError(null);
       const response = await menuService.getMenuStats();
       if (response.success) {
         setStats(response.data);
+        store.setMenuStats(response.data, null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar estadísticas');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cached.stats, store]);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    if (isFirstRender.current && cached.stats) {
+      setStats(cached.stats);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      if (cached.isStale) {
+        fetchStats(false);
+      }
+    } else {
+      fetchStats(true);
+    }
+  }, [fetchStats, cached.stats, cached.isStale]);
 
   return {
     stats,
     loading,
     error,
-    refresh: fetchStats,
+    refresh: () => fetchStats(true),
   };
 }
 

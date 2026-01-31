@@ -3,11 +3,16 @@
 // =====================================================
 // TIS TIS PLATFORM - Inventory Hook
 // React hook for Inventory state management with realtime
+// With centralized cache for instant navigation
 // =====================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/src/shared/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import {
+  useRestaurantDataStore,
+  useCachedInventory,
+} from '@/src/shared/stores/restaurantDataStore';
 import type {
   InventoryItem,
   InventoryCategory,
@@ -85,27 +90,37 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
     autoRefreshInterval = 60000, // 1 minute default
   } = options;
 
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [categories, setCategories] = useState<InventoryCategory[]>([]);
-  const [suppliers, setSuppliers] = useState<InventorySupplier[]>([]);
-  const [movements, setMovements] = useState<InventoryMovement[]>([]);
-  const [stats, setStats] = useState<InventoryStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Get cached data from store
+  const cached = useCachedInventory(branch_id || null);
+  const store = useRestaurantDataStore();
+
+  // Local state - initialized from cache if available
+  const [items, setItems] = useState<InventoryItem[]>(cached.items || []);
+  const [categories, setCategories] = useState<InventoryCategory[]>(cached.categories || []);
+  const [suppliers, setSuppliers] = useState<InventorySupplier[]>(cached.suppliers || []);
+  const [movements, setMovements] = useState<InventoryMovement[]>(cached.movements || []);
+  const [stats, setStats] = useState<InventoryStats | null>(cached.stats || null);
+  const [loading, setLoading] = useState(!cached.items);
   const [error, setError] = useState<string | null>(null);
 
   const channelsRef = useRef<RealtimeChannel[]>([]);
+  const isFirstRender = useRef(true);
 
   // ======================
   // DATA FETCHING
   // ======================
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
     if (!branch_id) {
       setLoading(false);
       return;
     }
 
     try {
+      // Only show loading if no cached data
+      if (showLoading && !cached.items) {
+        setLoading(true);
+      }
       setError(null);
 
       const [itemsData, categoriesData, suppliersData, movementsData, statsData] = await Promise.all([
@@ -127,18 +142,41 @@ export function useInventory(options: UseInventoryOptions = {}): UseInventoryRet
       setSuppliers(suppliersData);
       setMovements(movementsData);
       setStats(statsData);
+
+      // Update global cache
+      store.setInventoryItems(itemsData, branch_id);
+      store.setInventoryCategories(categoriesData, branch_id);
+      store.setInventorySuppliers(suppliersData, branch_id);
+      store.setInventoryMovements(movementsData, branch_id);
+      store.setInventoryStats(statsData, branch_id);
     } catch (err) {
       console.error('Error fetching inventory data:', err);
       setError(err instanceof Error ? err.message : 'Error al cargar inventario');
     } finally {
       setLoading(false);
     }
-  }, [branch_id, category_id, search, item_type, low_stock_only]);
+  }, [branch_id, category_id, search, item_type, low_stock_only, cached.items, store]);
 
-  // Initial fetch
+  // Initial fetch with cache support
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (isFirstRender.current && cached.items) {
+      // Use cached data immediately
+      setItems(cached.items);
+      setCategories(cached.categories || []);
+      setSuppliers(cached.suppliers || []);
+      setMovements(cached.movements || []);
+      setStats(cached.stats);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      // Refresh in background if stale
+      if (cached.isStale) {
+        fetchData(false);
+      }
+    } else {
+      fetchData(true);
+    }
+  }, [fetchData, cached.items, cached.categories, cached.suppliers, cached.movements, cached.stats, cached.isStale]);
 
   // ======================
   // REALTIME SUBSCRIPTIONS

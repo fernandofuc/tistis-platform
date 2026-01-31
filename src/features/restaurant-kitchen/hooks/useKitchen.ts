@@ -3,13 +3,17 @@
 // =====================================================
 // TIS TIS PLATFORM - Kitchen Hook
 // React hook for Kitchen Display System state management
+// With centralized cache for instant navigation
 // =====================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/src/shared/lib/supabase';
+import {
+  useRestaurantDataStore,
+  useCachedKitchen,
+} from '@/src/shared/stores/restaurantDataStore';
 import type {
   RestaurantOrder,
-  RestaurantOrderItem,
   KDSOrderView,
   KDSStats,
   KitchenStationConfig,
@@ -77,24 +81,33 @@ interface UseKitchenReturn {
 export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
   const { branch_id, station, autoRefresh = true, refreshInterval = 30000 } = options;
 
-  const [orders, setOrders] = useState<KDSOrderView[]>([]);
-  const [orderHistory, setOrderHistory] = useState<RestaurantOrder[]>([]);
-  const [stations, setStations] = useState<KitchenStationConfig[]>([]);
-  const [stats, setStats] = useState<KDSStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Get cached data from store
+  const cached = useCachedKitchen(branch_id || null);
+  const store = useRestaurantDataStore();
+
+  const [orders, setOrders] = useState<KDSOrderView[]>(cached.orders || []);
+  const [orderHistory, setOrderHistory] = useState<RestaurantOrder[]>(cached.orderHistory || []);
+  const [stations, setStations] = useState<KitchenStationConfig[]>(cached.stations || []);
+  const [stats, setStats] = useState<KDSStats | null>(cached.stats || null);
+  const [loading, setLoading] = useState(!cached.orders);
   const [error, setError] = useState<string | null>(null);
+
+  const isFirstRender = useRef(true);
 
   // ======================
   // DATA FETCHING
   // ======================
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
     if (!branch_id) {
       setLoading(false);
       return;
     }
 
     try {
+      if (showLoading && !cached.orders) {
+        setLoading(true);
+      }
       setError(null);
 
       const [ordersData, stationsData, statsData] = await Promise.all([
@@ -108,18 +121,36 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
       setOrders(ordersData);
       setStations(stationsData);
       setStats(statsData);
+
+      // Update global cache
+      store.setKitchenOrders(ordersData, branch_id);
+      store.setKitchenStations(stationsData, branch_id);
+      store.setKitchenStats(statsData, branch_id);
     } catch (err) {
       console.error('Error fetching kitchen data:', err);
       setError(err instanceof Error ? err.message : 'Error al cargar datos');
     } finally {
       setLoading(false);
     }
-  }, [branch_id, station]);
+  }, [branch_id, station, cached.orders, store]);
 
-  // Initial fetch
+  // Initial fetch with cache support
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (isFirstRender.current && cached.orders) {
+      setOrders(cached.orders);
+      setOrderHistory(cached.orderHistory || []);
+      setStations(cached.stations || []);
+      setStats(cached.stats);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      if (cached.isStale) {
+        fetchData(false);
+      }
+    } else {
+      fetchData(true);
+    }
+  }, [fetchData, cached.orders, cached.orderHistory, cached.stations, cached.stats, cached.isStale]);
 
   // Auto-refresh
   useEffect(() => {
@@ -274,10 +305,11 @@ export function useKitchen(options: UseKitchenOptions = {}): UseKitchenReturn {
       });
 
       setOrderHistory(historyData);
+      store.setKitchenOrderHistory(historyData, branch_id);
     } catch (err) {
       console.error('Error fetching order history:', err);
     }
-  }, [branch_id]);
+  }, [branch_id, store]);
 
   // ======================
   // ITEM ACTIONS
