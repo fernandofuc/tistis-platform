@@ -555,7 +555,8 @@ export function LocalAgentSetupWizard({
 
       if (createResponse.ok) {
         const newIntegration = await createResponse.json();
-        return newIntegration.id;
+        // API returns { connection: { id, ... } }, not { id, ... }
+        return newIntegration.connection?.id || newIntegration.id;
       }
 
       return null;
