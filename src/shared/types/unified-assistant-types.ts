@@ -57,12 +57,12 @@ export const MESSAGING_SUB_CHANNELS: MessagingSubChannel[] = [
 /**
  * Verticales de negocio soportadas
  */
-export type Vertical = 'restaurant' | 'dental';
+export type Vertical = 'restaurant' | 'dental' | 'clinic';
 
 /**
  * Array de verticales para validación runtime
  */
-export const VERTICALS: Vertical[] = ['restaurant', 'dental'];
+export const VERTICALS: Vertical[] = ['restaurant', 'dental', 'clinic'];
 
 /**
  * Información de display para verticales
@@ -77,6 +77,11 @@ export const VERTICAL_INFO: Record<Vertical, { displayName: string; description:
     displayName: 'Dental',
     description: 'Citas, servicios, doctores y emergencias',
     icon: 'tooth',
+  },
+  clinic: {
+    displayName: 'Consultorios',
+    description: 'Consultas, pacientes, servicios médicos y estéticos',
+    icon: 'stethoscope',
   },
 };
 
@@ -128,7 +133,10 @@ export type UnifiedAssistantTypeId =
   | 'rest_complete'
   // Dental: 2 niveles (basic eliminado)
   | 'dental_standard'
-  | 'dental_complete';
+  | 'dental_complete'
+  // Clinic: 2 niveles (same as dental, medical workflows)
+  | 'clinic_standard'
+  | 'clinic_complete';
 
 /**
  * Array de IDs activos para validación runtime
@@ -139,6 +147,8 @@ export const UNIFIED_ASSISTANT_TYPE_IDS: UnifiedAssistantTypeId[] = [
   'rest_complete',
   'dental_standard',
   'dental_complete',
+  'clinic_standard',
+  'clinic_complete',
 ];
 
 /**
@@ -297,6 +307,23 @@ export const CAPABILITIES_BY_VERTICAL: Record<Vertical, Capability[]> = {
     'pricing',
     'doctor_info',
     'dentist_info',
+    'insurance_info',
+    'appointment_management',
+    'emergencies',
+    'emergency_triage',
+  ],
+  clinic: [
+    'business_hours',
+    'business_info',
+    'location_info',
+    'human_transfer',
+    'faq',
+    'invoicing',
+    'leads',
+    'appointments',
+    'services_info',
+    'pricing',
+    'doctor_info',
     'insurance_info',
     'appointment_management',
     'emergencies',

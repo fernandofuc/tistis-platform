@@ -40,6 +40,17 @@ const VERTICALS_DISPLAY = [
     },
   },
   {
+    id: 'clinic' as VerticalType,
+    name: 'Consultorios',
+    icon: '✨',
+    description: 'Consultorios medicos, esteticos, de belleza y especialidades',
+    features: {
+      starter: ['Agenda de consultas automatizada', 'Recordatorios por WhatsApp', 'Dashboard de pacientes'],
+      essentials: ['Historial clinico digital', 'Cotizaciones automaticas', 'Seguimiento de tratamientos'],
+      growth: ['IA con voz para llamadas', 'Multi-sucursal sincronizado', 'Reportes de productividad'],
+    },
+  },
+  {
     id: 'restaurant' as VerticalType,
     name: 'Restaurante',
     icon: '🍽️',
@@ -514,8 +525,8 @@ function PricingContent() {
     }
 
     // Cargar vertical desde URL o sessionStorage
-    // Currently active verticals (more will be added later)
-    const validVerticals: VerticalType[] = ['dental', 'restaurant'];
+    // Currently active verticals: dental, restaurant, clinic
+    const validVerticals: VerticalType[] = ['dental', 'restaurant', 'clinic'];
     if (urlVertical && validVerticals.includes(urlVertical as VerticalType)) {
       setSelectedVertical(urlVertical as VerticalType);
     } else if (storedAnalysis) {

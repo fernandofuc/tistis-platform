@@ -104,8 +104,8 @@ async function saveSessionInBackground(
   }
 }
 
-// Tipos de negocio soportados (dental y restaurant son los verticales activos)
-type BusinessType = 'dental' | 'restaurant' | 'otro';
+// Tipos de negocio soportados (dental, restaurant y clinic son los verticales activos)
+type BusinessType = 'dental' | 'restaurant' | 'clinic' | 'otro';
 
 // Interface para el análisis de la IA
 interface AIAnalysis {
@@ -145,10 +145,11 @@ const DISCOVERY_SYSTEM_PROMPT = `Eres un consultor senior de negocios de TIS TIS
 
 ## VERTICALES QUE ATENDEMOS
 
-Solo trabajamos con tres tipos de negocio:
+Solo trabajamos con cuatro tipos de negocio:
 1. **Clinica Dental** - Consultorios, clinicas dentales, ortodoncistas
 2. **Restaurante** - Restaurantes, cafeterias, bares, dark kitchens
-3. **Otro** - Cualquier otro tipo de negocio (requiere evaluacion personalizada)
+3. **Consultorios** - Consultorios medicos, esteticos, de belleza y cualquier especialidad (dermatologia, oftalmologia, fisioterapia, cirugia plastica, etc.)
+4. **Otro** - Cualquier otro tipo de negocio (requiere evaluacion personalizada)
 
 ## TU MISION
 
@@ -169,7 +170,7 @@ Identificar rapidamente:
 ## FLUJO DE CONVERSACION
 
 **PASO 1 - Identificacion del negocio:**
-Pregunta que tipo de negocio tiene. Clasifica internamente como: dental, restaurant, u otro.
+Pregunta que tipo de negocio tiene. Clasifica internamente como: dental, restaurant, clinic (para clinicas medicas no dentales), u otro.
 
 **PASO 2 - Problema principal:**
 Identifica el problema operativo que mas le esta costando dinero o tiempo.
@@ -185,7 +186,7 @@ Evalua que tan critico es resolver esto para el negocio.
 
 ## MANEJO SEGUN TIPO DE NEGOCIO
 
-### Si es CLINICA DENTAL o RESTAURANTE:
+### Si es CLINICA DENTAL, RESTAURANTE o CLINICA MEDICA:
 - Profundiza en sus problemas especificos
 - Cuantifica el impacto financiero
 - Al tener suficiente informacion (4-6 intercambios), genera el analisis
@@ -201,7 +202,7 @@ Evalua que tan critico es resolver esto para el negocio.
 Cuando tengas suficiente informacion, genera un JSON con el prefijo exacto "ANALYSIS_COMPLETE::" seguido de:
 
 ANALYSIS_COMPLETE::{
-  "business_type": "dental|restaurant|otro",
+  "business_type": "dental|restaurant|clinic|otro",
   "business_subtype": "descripcion especifica si aplica",
   "primary_pain": "problema principal identificado",
   "financial_impact": numero_en_pesos_mensuales,

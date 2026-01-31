@@ -111,9 +111,9 @@ export const VERTICALS: Record<VerticalType, VerticalConfig> = {
 
   clinic: {
     id: 'clinic',
-    name: 'Clínica Médica',
-    description: 'Clínicas médicas y consultorios de especialidades',
-    icon: '🏥',
+    name: 'Consultorios',
+    description: 'Consultorios médicos, estéticos, de belleza y especialidades',
+    icon: '✨',
     color: '#059669',
     terminology: {
       patient: 'Paciente',
@@ -136,6 +136,7 @@ export const VERTICALS: Record<VerticalType, VerticalConfig> = {
       'leads',
       'patients',
       'appointments',
+      'quotes',
       'clinical_history',
       'inbox',
       'analytics',
@@ -145,6 +146,7 @@ export const VERTICALS: Record<VerticalType, VerticalConfig> = {
       'leads_enabled',
       'patients_enabled',
       'appointments_enabled',
+      'quotes_enabled',
       'clinical_history_enabled',
       'conversations_enabled',
     ],

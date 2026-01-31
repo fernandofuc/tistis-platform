@@ -28,6 +28,7 @@ import { PLAN_CONFIG, getPlanConfig } from '@/src/shared/config/plans';
 
 const VERTICALS_DISPLAY: Record<string, { name: string; icon: string }> = {
   dental: { name: 'Clinica Dental', icon: '🦷' },
+  clinic: { name: 'Consultorios', icon: '✨' },
   restaurant: { name: 'Restaurante', icon: '🍽️' },
 };
 

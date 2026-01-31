@@ -57,7 +57,7 @@ export default function QuestionnaireForm({
             options={[
               { value: 'restaurante', label: '🍽️ Restaurante / Bar / Cafetería' },
               { value: 'retail', label: '🛍️ Retail / Supermercado / Tienda' },
-              { value: 'clinica', label: '🏥 Clínica / Consultorio Médico' },
+              { value: 'clinica', label: '✨ Consultorios' },
               { value: 'farmacia', label: '💊 Farmacia' },
               { value: 'industrial', label: '🏭 Industrial / Manufactura' },
               { value: 'servicios', label: '✂️ Servicios (Salón, Spa, etc.)' },

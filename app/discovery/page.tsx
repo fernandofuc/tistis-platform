@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // ============================================================
 
 interface AIAnalysis {
-  business_type: 'dental' | 'restaurant' | 'otro';
+  business_type: 'dental' | 'restaurant' | 'clinic' | 'otro';
   business_subtype?: string;
   primary_pain: string;
   financial_impact: number;
@@ -298,7 +298,9 @@ function AnalysisPanel({
                       ? 'Clinica Dental'
                       : analysis.business_type === 'restaurant'
                         ? 'Restaurante'
-                        : 'Evaluacion Personalizada'
+                        : analysis.business_type === 'clinic'
+                          ? 'Consultorios'
+                          : 'Evaluacion Personalizada'
                     }
                   </span>
                 </div>

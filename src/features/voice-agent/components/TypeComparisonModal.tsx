@@ -40,7 +40,7 @@ import {
 interface TypeComparisonModalProps {
   isOpen: boolean;
   onClose: () => void;
-  vertical: 'restaurant' | 'dental';
+  vertical: 'restaurant' | 'dental' | 'clinic';
   currentTypeId: string | null;
   onSelectType?: (typeId: string) => void;
 }
@@ -102,7 +102,7 @@ export function TypeComparisonModal({
                     Comparar Tipos de Asistente
                   </h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    {vertical === 'restaurant' ? 'Restaurante' : 'Dental'} - Compara capacidades y herramientas
+                    {vertical === 'restaurant' ? 'Restaurante' : vertical === 'clinic' ? 'Consultorios' : 'Dental'} - Compara capacidades y herramientas
                   </p>
                 </div>
                 <button
@@ -167,7 +167,7 @@ export function TypeComparisonModal({
 interface TypeComparisonCardProps {
   type: AssistantType;
   isCurrent: boolean;
-  vertical: 'restaurant' | 'dental';
+  vertical: 'restaurant' | 'dental' | 'clinic';
   onSelect?: () => void;
 }
 
