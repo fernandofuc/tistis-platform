@@ -286,18 +286,21 @@ export function getAssistantTypeById(
 
 /**
  * Get all assistant types for a vertical
+ * Note: 'clinic' uses DENTAL_TYPES as they share similar medical workflows
  */
 export function getTypesForVertical(
-  vertical: 'restaurant' | 'dental'
+  vertical: 'restaurant' | 'dental' | 'clinic'
 ): AssistantType[] {
-  return vertical === 'restaurant' ? RESTAURANT_TYPES : DENTAL_TYPES;
+  if (vertical === 'restaurant') return RESTAURANT_TYPES;
+  // 'dental' and 'clinic' share similar medical assistant types
+  return DENTAL_TYPES;
 }
 
 /**
  * Get the recommended type for a vertical
  */
 export function getRecommendedType(
-  vertical: 'restaurant' | 'dental'
+  vertical: 'restaurant' | 'dental' | 'clinic'
 ): AssistantType {
   const types = getTypesForVertical(vertical);
   return types.find((t) => t.isRecommended) ?? types[0];
@@ -314,7 +317,7 @@ export function getActiveTypes(): AssistantType[] {
  * Get active types for a vertical
  */
 export function getActiveTypesForVertical(
-  vertical: 'restaurant' | 'dental'
+  vertical: 'restaurant' | 'dental' | 'clinic'
 ): AssistantType[] {
   return getTypesForVertical(vertical).filter((t) => t.isActive);
 }
@@ -330,7 +333,7 @@ export function typeExists(typeId: string): boolean {
  * Get type IDs for a vertical
  */
 export function getTypeIdsForVertical(
-  vertical: 'restaurant' | 'dental'
+  vertical: 'restaurant' | 'dental' | 'clinic'
 ): AssistantTypeId[] {
   return getTypesForVertical(vertical).map((t) => t.id);
 }

@@ -7,9 +7,10 @@
  * - Capability: Features available to each type
  * - Tools: Functions the assistant can call
  *
- * Two verticals supported:
+ * Three verticals supported:
  * - Restaurant: rest_basic, rest_standard, rest_complete
  * - Dental: dental_basic, dental_standard, dental_complete
+ * - Clinic: clinic_basic, clinic_standard, clinic_complete (medical clinics)
  */
 
 // =====================================================
@@ -19,12 +20,12 @@
 /**
  * Supported business verticals
  */
-export type Vertical = 'restaurant' | 'dental';
+export type Vertical = 'restaurant' | 'dental' | 'clinic';
 
 /**
  * Available verticals list (for validation)
  */
-export const VERTICALS: Vertical[] = ['restaurant', 'dental'];
+export const VERTICALS: Vertical[] = ['restaurant', 'dental', 'clinic'];
 
 // =====================================================
 // CAPABILITIES
