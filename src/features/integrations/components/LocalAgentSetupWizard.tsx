@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from '@/src/shared/components/ui';
 import { cn } from '@/src/shared/utils';
+import { supabase } from '@/src/shared/lib/supabase';
 import type {
   AgentCredentials,
   AgentInstallerConfig,
@@ -456,6 +457,18 @@ export function LocalAgentSetupWizard({
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState<string | null>(null);
 
+  // Helper to get auth headers with Bearer token
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    return headers;
+  }, []);
+
   // Generate credentials via API
   const generateCredentials = async () => {
     setIsGenerating(true);
@@ -474,11 +487,10 @@ export function LocalAgentSetupWizard({
         throw new Error('No se pudo encontrar la integración de Soft Restaurant');
       }
 
+      const headers = await getAuthHeaders();
       const response = await fetch('/api/agent/installer', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           integration_id: effectiveIntegrationId,
           branch_id: selectedBranchId || undefined,
@@ -516,8 +528,12 @@ export function LocalAgentSetupWizard({
   // Helper to find or create Soft Restaurant integration
   const findOrCreateSRIntegration = async (): Promise<string | null> => {
     try {
+      const headers = await getAuthHeaders();
+
       // First, try to find existing SR integration for this tenant
-      const response = await fetch('/api/integrations?type=softrestaurant');
+      const response = await fetch('/api/integrations?type=softrestaurant', {
+        headers,
+      });
       if (response.ok) {
         const data = await response.json();
         if (data.connections && data.connections.length > 0) {
@@ -528,7 +544,7 @@ export function LocalAgentSetupWizard({
       // If not found, create one
       const createResponse = await fetch('/api/integrations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           integration_type: 'softrestaurant',
           connection_name: 'Soft Restaurant (Local Agent)',
