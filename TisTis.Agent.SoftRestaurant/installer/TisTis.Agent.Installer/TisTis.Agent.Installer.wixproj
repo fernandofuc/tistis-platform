@@ -1,0 +1,93 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Agent Installer Project
+     WiX Toolset v4 Project for Windows MSI Installer
+     ===================================================== -->
+
+<Project Sdk="WixToolset.Sdk/4.0.4">
+
+  <PropertyGroup>
+    <!-- Output Configuration -->
+    <OutputType>Package</OutputType>
+    <OutputName>TisTis.Agent.SoftRestaurant</OutputName>
+
+    <!-- Product Information -->
+    <Manufacturer>TIS TIS Platform</Manufacturer>
+    <ProductName>TIS TIS Agent for Soft Restaurant</ProductName>
+    <ProductVersion>1.0.0</ProductVersion>
+
+    <!-- Build Configuration -->
+    <DefaultLanguage>es-MX</DefaultLanguage>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <Cultures>es-MX;en-US</Cultures>
+
+    <!-- Compression -->
+    <DefaultCompressionLevel>high</DefaultCompressionLevel>
+
+    <!-- Signing (optional, configure for production) -->
+    <!-- <SignOutput>true</SignOutput> -->
+    <!-- <SigningCertificateFile>path/to/certificate.pfx</SigningCertificateFile> -->
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <OutputPath>bin\Release\</OutputPath>
+    <DefaultCompressionLevel>high</DefaultCompressionLevel>
+  </PropertyGroup>
+
+  <!-- WiX Extensions -->
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="4.0.4" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="4.0.4" />
+    <PackageReference Include="WixToolset.NetFx.wixext" Version="4.0.4" />
+  </ItemGroup>
+
+  <!-- Source Files -->
+  <ItemGroup>
+    <Compile Include="Package.wxs" />
+    <Compile Include="Directories.wxs" />
+    <Compile Include="Components.wxs" />
+    <Compile Include="Features.wxs" />
+    <Compile Include="UI.wxs" />
+    <Compile Include="Dialogs\*.wxs" />
+  </ItemGroup>
+
+  <!-- Includes -->
+  <ItemGroup>
+    <Content Include="Includes\*.wxi" />
+  </ItemGroup>
+
+  <!-- Agent Service Binaries -->
+  <ItemGroup>
+    <BindPath Include="$(MSBuildThisFileDirectory)..\..\src\TisTis.Agent.Service\bin\$(Configuration)\net8.0-windows\win-x64\publish\" />
+  </ItemGroup>
+
+  <!-- Custom Actions DLL Path (FIX L3) -->
+  <ItemGroup>
+    <BindPath Include="$(MSBuildThisFileDirectory)..\TisTis.Agent.Installer.CustomActions\bin\$(Configuration)\net8.0-windows\" />
+  </ItemGroup>
+
+  <!-- Custom Actions Reference -->
+  <ItemGroup>
+    <ProjectReference Include="..\TisTis.Agent.Installer.CustomActions\TisTis.Agent.Installer.CustomActions.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- Banner and Dialog Images -->
+  <ItemGroup>
+    <Content Include="Assets\banner.png" />
+    <Content Include="Assets\dialog.png" />
+    <Content Include="Assets\icon.ico" />
+  </ItemGroup>
+
+  <!-- Localization Files -->
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\es-MX.wxl" />
+    <EmbeddedResource Include="Localization\en-US.wxl" />
+  </ItemGroup>
+
+</Project>

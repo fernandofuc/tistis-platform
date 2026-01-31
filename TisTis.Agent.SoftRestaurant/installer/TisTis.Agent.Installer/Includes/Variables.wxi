@@ -1,0 +1,103 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Agent Installer Variables
+     Shared variables and constants
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <!-- ========================================
+       PRODUCT IDENTIFICATION
+       ======================================== -->
+
+  <!-- Unique UpgradeCode - NEVER CHANGE THIS for upgrades to work -->
+  <?define UpgradeCode = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" ?>
+
+  <!-- Product Information -->
+  <?define ProductName = "TIS TIS Agent for Soft Restaurant" ?>
+  <?define ProductVersion = "1.0.0" ?>
+  <?define ProductDescription = "Agente local para sincronizar datos entre Soft Restaurant y TIS TIS Platform" ?>
+  <?define Manufacturer = "TIS TIS Platform" ?>
+
+  <!-- ========================================
+       INSTALLATION PATHS
+       ======================================== -->
+
+  <!-- Default installation directory -->
+  <?define DefaultInstallDir = "TisTis\Agent" ?>
+
+  <!-- Program data directory (for logs and config) -->
+  <?define ProgramDataDir = "TisTis\Agent" ?>
+
+  <!-- Log directory -->
+  <?define LogDir = "Logs" ?>
+
+  <!-- ========================================
+       SERVICE CONFIGURATION
+       ======================================== -->
+
+  <!-- Windows Service Name -->
+  <?define ServiceName = "TisTis.Agent.SoftRestaurant" ?>
+  <?define ServiceDisplayName = "TIS TIS Agent for Soft Restaurant" ?>
+  <?define ServiceDescription = "Sincroniza datos entre Soft Restaurant POS y TIS TIS Platform" ?>
+
+  <!-- Service Executable -->
+  <?define ServiceExecutable = "TisTis.Agent.Service.exe" ?>
+
+  <!-- ========================================
+       TIS TIS CONFIGURATION
+       These values are replaced during installer generation
+       ======================================== -->
+
+  <!-- Agent Identity (replaced at build time) -->
+  <?define AgentId = "PLACEHOLDER_AGENT_ID" ?>
+  <?define TenantId = "PLACEHOLDER_TENANT_ID" ?>
+  <?define IntegrationId = "PLACEHOLDER_INTEGRATION_ID" ?>
+
+  <!-- Authentication (replaced at build time, secured) -->
+  <?define AuthToken = "PLACEHOLDER_AUTH_TOKEN" ?>
+
+  <!-- API Endpoints -->
+  <?define WebhookUrl = "https://app.tistis.com/api/agent/sync" ?>
+  <?define HeartbeatUrl = "https://app.tistis.com/api/agent/heartbeat" ?>
+  <?define RegisterUrl = "https://app.tistis.com/api/agent/register" ?>
+
+  <!-- ========================================
+       COMPONENT GUIDS
+       Production GUIDs - DO NOT CHANGE for upgrades to work
+       ======================================== -->
+
+  <?define GUID_MainExecutable = "F8A7B6C5-D4E3-4F2A-B1C0-9D8E7F6A5B4C" ?>
+  <?define GUID_ConfigFile = "E7B6A5D4-C3F2-4E1B-A0D9-8C7B6A5D4E3F" ?>
+  <?define GUID_LogDirectory = "D6A5B4C3-E2F1-4D0C-B9A8-7C6B5A4D3E2F" ?>
+  <?define GUID_RegistryKeys = "C5B4A3D2-F1E0-4C9B-A8D7-6B5A4C3D2E1F" ?>
+  <?define GUID_WindowsService = "B4A3C2D1-E0F9-4B8A-D7C6-5A4B3C2D1E0F" ?>
+  <?define GUID_Shortcuts = "A3B2C1D0-F9E8-4A7B-C6D5-4A3B2C1D0E9F" ?>
+  <?define GUID_DataDirectory = "92A1B0C9-E8D7-4F6A-B5C4-3A2B1C0D9E8F" ?>
+
+  <!-- ========================================
+       FEATURE FLAGS
+       ======================================== -->
+
+  <!-- Default sync settings -->
+  <?define DefaultSyncInterval = "30" ?>
+  <?define DefaultSyncMenu = "1" ?>
+  <?define DefaultSyncInventory = "1" ?>
+  <?define DefaultSyncSales = "1" ?>
+  <?define DefaultSyncTables = "0" ?>
+
+  <!-- ========================================
+       UI SETTINGS
+       ======================================== -->
+
+  <!-- Banner and dialog dimensions (WiX standard) -->
+  <?define BannerWidth = "493" ?>
+  <?define BannerHeight = "58" ?>
+  <?define DialogWidth = "493" ?>
+  <?define DialogHeight = "312" ?>
+
+  <!-- Colors (TIS TIS brand) -->
+  <?define ColorPrimary = "DF7373" ?>
+  <?define ColorSecondary = "C23350" ?>
+
+</Include>

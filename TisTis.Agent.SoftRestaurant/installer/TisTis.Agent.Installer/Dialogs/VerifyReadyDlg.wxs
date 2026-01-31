@@ -1,0 +1,117 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Verify Ready Dialog
+     Confirmation before installation
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include ..\Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         VERIFY READY DIALOG
+         ======================================== -->
+
+    <UI>
+      <Dialog Id="VerifyReadyDlg_TisTis" Width="370" Height="270" Title="!(loc.VerifyReadyTitle)">
+
+        <!-- Banner Image -->
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.WelcomeDlgBitmap)" />
+
+        <!-- Horizontal Line -->
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <!-- Title -->
+        <Control Id="Title" Type="Text" X="20" Y="50" Width="330" Height="20"
+                 Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Listo para Instalar" />
+
+        <!-- Description -->
+        <Control Id="Description" Type="Text" X="20" Y="70" Width="330" Height="25"
+                 Transparent="yes" NoPrefix="yes">
+          <Text>
+El asistente está listo para instalar el Agente TIS TIS. Revise la configuración:
+          </Text>
+        </Control>
+
+        <!-- Summary Group -->
+        <Control Id="SummaryGroup" Type="GroupBox" X="20" Y="95" Width="330" Height="130"
+                 Text="Resumen de Instalación" />
+
+        <!-- Installation Summary - SR Info -->
+        <Control Id="SummarySR" Type="Text" X="30" Y="108" Width="310" Height="45"
+                 Transparent="yes" NoPrefix="yes">
+          <Text>Soft Restaurant:
+  • Versión: [SR_VERSION]
+  • Base de Datos: [SR_DATABASE_NAME]
+  • Instancia: [SR_SQL_INSTANCE]</Text>
+        </Control>
+
+        <!-- Sync Status - Dynamic checkmarks (FIX L7) -->
+        <Control Id="SyncLabel" Type="Text" X="30" Y="153" Width="100" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="Sincronización:" />
+
+        <!-- Sync checkmarks using conditional icons would be ideal, but text works -->
+        <Control Id="SyncSalesYes" Type="Text" X="35" Y="165" Width="70" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✓ Ventas">
+          <Condition Action="show">SYNC_SALES = "1"</Condition>
+        </Control>
+        <Control Id="SyncSalesNo" Type="Text" X="35" Y="165" Width="70" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✗ Ventas">
+          <Condition Action="show">SYNC_SALES &lt;&gt; "1"</Condition>
+        </Control>
+
+        <Control Id="SyncMenuYes" Type="Text" X="110" Y="165" Width="60" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✓ Menú">
+          <Condition Action="show">SYNC_MENU = "1"</Condition>
+        </Control>
+        <Control Id="SyncMenuNo" Type="Text" X="110" Y="165" Width="60" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✗ Menú">
+          <Condition Action="show">SYNC_MENU &lt;&gt; "1"</Condition>
+        </Control>
+
+        <Control Id="SyncInvYes" Type="Text" X="175" Y="165" Width="75" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✓ Inventario">
+          <Condition Action="show">SYNC_INVENTORY = "1"</Condition>
+        </Control>
+        <Control Id="SyncInvNo" Type="Text" X="175" Y="165" Width="75" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✗ Inventario">
+          <Condition Action="show">SYNC_INVENTORY &lt;&gt; "1"</Condition>
+        </Control>
+
+        <Control Id="SyncTablesYes" Type="Text" X="255" Y="165" Width="60" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✓ Mesas">
+          <Condition Action="show">SYNC_TABLES = "1"</Condition>
+        </Control>
+        <Control Id="SyncTablesNo" Type="Text" X="255" Y="165" Width="60" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="✗ Mesas">
+          <Condition Action="show">SYNC_TABLES &lt;&gt; "1"</Condition>
+        </Control>
+
+        <Control Id="SyncInterval" Type="Text" X="35" Y="178" Width="280" Height="12"
+                 Transparent="yes" NoPrefix="yes" Text="  Intervalo: [SYNC_INTERVAL] segundos" />
+
+        <!-- Install Path -->
+        <Control Id="InstallPath" Type="Text" X="30" Y="193" Width="310" Height="25"
+                 Transparent="yes" NoPrefix="yes">
+          <Text>Directorio:
+  [INSTALLDIR]</Text>
+        </Control>
+
+        <!-- Navigation Buttons -->
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)" />
+
+        <Control Id="Cancel" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)" />
+
+        <Control Id="Install" Type="PushButton" X="298" Y="243" Width="56" Height="17"
+                 Default="yes" Text="Instalar" />
+
+      </Dialog>
+    </UI>
+
+  </Fragment>
+
+</Wix>

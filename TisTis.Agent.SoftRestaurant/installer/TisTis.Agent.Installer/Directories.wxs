@@ -1,0 +1,54 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Agent Installer Directories
+     Directory structure for installation
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         INSTALLATION DIRECTORIES
+         ======================================== -->
+
+    <!-- Standard folder references -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <!-- Main installation folder: C:\Program Files\TisTis\Agent -->
+      <Directory Id="MANUFACTURERDIR" Name="TisTis">
+        <Directory Id="INSTALLDIR" Name="Agent">
+
+          <!-- Logs subdirectory -->
+          <Directory Id="LogsDir" Name="Logs" />
+
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- CommonAppData folder: C:\ProgramData\TisTis\Agent -->
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATAROOTDIR" Name="TisTis">
+        <Directory Id="DATADIR" Name="Agent">
+
+          <!-- Logs in ProgramData (preferred for service logs) -->
+          <Directory Id="DataLogsDir" Name="Logs" />
+
+          <!-- Configuration files -->
+          <Directory Id="ConfigDir" Name="Config" />
+
+          <!-- Credential storage -->
+          <Directory Id="CredentialsDir" Name="Credentials" />
+
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu Programs folder -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="TIS TIS Agent" />
+    </StandardDirectory>
+
+  </Fragment>
+
+</Wix>

@@ -1,0 +1,247 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Agent Installer Components
+     Component definitions for all installed files
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <?include Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         COMPONENT GROUP: Core Agent Files
+         ======================================== -->
+
+    <ComponentGroup Id="CG_AgentCore" Directory="INSTALLDIR">
+
+      <!-- Main Executable -->
+      <Component Id="C_MainExecutable" Guid="$(var.GUID_MainExecutable)">
+        <File Id="F_AgentExe"
+              Name="$(var.ServiceExecutable)"
+              Source="!(bindpath)$(var.ServiceExecutable)"
+              KeyPath="yes"
+              Checksum="yes" />
+
+        <!-- Register executable path -->
+        <RegistryKey Root="HKLM" Key="SOFTWARE\TisTis\Agent">
+          <RegistryValue Name="InstallPath" Type="string" Value="[INSTALLDIR]" />
+          <RegistryValue Name="Version" Type="string" Value="$(var.ProductVersion)" />
+          <RegistryValue Name="AgentId" Type="string" Value="[TISTIS_AGENT_ID]" />
+        </RegistryKey>
+      </Component>
+
+      <!-- .NET Runtime Dependencies (self-contained, so these are bundled) -->
+      <Component Id="C_RuntimeDeps" Guid="*">
+        <File Id="F_HostFxr" Source="!(bindpath)hostfxr.dll" />
+        <File Id="F_HostPolicy" Source="!(bindpath)hostpolicy.dll" />
+      </Component>
+
+      <!-- Core DLLs -->
+      <Component Id="C_CoreDll" Guid="*">
+        <File Id="F_CoreDll" Source="!(bindpath)TisTis.Agent.Core.dll" />
+      </Component>
+
+      <!-- Configuration Files -->
+      <Component Id="C_AppSettings" Guid="*" NeverOverwrite="yes">
+        <File Id="F_AppSettings"
+              Name="appsettings.json"
+              Source="!(bindpath)appsettings.json" />
+      </Component>
+
+      <!-- deps.json and runtimeconfig.json -->
+      <Component Id="C_RuntimeConfig" Guid="*">
+        <File Id="F_DepsJson" Source="!(bindpath)TisTis.Agent.Service.deps.json" />
+        <File Id="F_RuntimeConfig" Source="!(bindpath)TisTis.Agent.Service.runtimeconfig.json" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- ========================================
+         COMPONENT GROUP: Windows Service
+         ======================================== -->
+
+    <ComponentGroup Id="CG_WindowsService" Directory="INSTALLDIR">
+
+      <Component Id="C_WindowsService" Guid="$(var.GUID_WindowsService)">
+        <!-- Service Installation -->
+        <ServiceInstall Id="SI_AgentService"
+                        Name="$(var.ServiceName)"
+                        DisplayName="$(var.ServiceDisplayName)"
+                        Description="$(var.ServiceDescription)"
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem">
+
+          <!-- Recovery options: restart on failure -->
+          <util:ServiceConfig FirstFailureActionType="restart"
+                              SecondFailureActionType="restart"
+                              ThirdFailureActionType="restart"
+                              ResetPeriodInDays="1"
+                              RestartServiceDelayInSeconds="60" />
+
+          <!-- Service dependencies -->
+          <ServiceDependency Id="Tcpip" />
+          <ServiceDependency Id="EventLog" />
+        </ServiceInstall>
+
+        <!-- Service Control -->
+        <ServiceControl Id="SC_AgentService"
+                        Name="$(var.ServiceName)"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- ========================================
+         COMPONENT GROUP: Data Directories
+         ======================================== -->
+
+    <ComponentGroup Id="CG_DataDirectories">
+
+      <!-- Create ProgramData directories -->
+      <Component Id="C_DataDir" Guid="$(var.GUID_DataDirectory)" Directory="DATADIR">
+        <CreateFolder>
+          <!-- Restrict access to SYSTEM and Administrators -->
+          <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+          <util:PermissionEx User="Administrators" GenericAll="yes" />
+        </CreateFolder>
+
+        <!-- Directory existence as keypath -->
+        <RegistryKey Root="HKLM" Key="SOFTWARE\TisTis\Agent">
+          <RegistryValue Name="DataPath" Type="string" Value="[DATADIR]" KeyPath="yes" />
+        </RegistryKey>
+      </Component>
+
+      <!-- Logs Directory -->
+      <Component Id="C_LogsDir" Guid="$(var.GUID_LogDirectory)" Directory="DataLogsDir">
+        <CreateFolder>
+          <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+          <util:PermissionEx User="Administrators" GenericAll="yes" />
+        </CreateFolder>
+        <RemoveFolder Id="RF_LogsDir" On="uninstall" />
+      </Component>
+
+      <!-- Config Directory -->
+      <Component Id="C_ConfigDir" Guid="*" Directory="ConfigDir">
+        <CreateFolder>
+          <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+          <util:PermissionEx User="Administrators" GenericRead="yes" />
+        </CreateFolder>
+        <RemoveFolder Id="RF_ConfigDir" On="uninstall" />
+      </Component>
+
+      <!-- Credentials Directory (highly restricted) -->
+      <Component Id="C_CredentialsDir" Guid="*" Directory="CredentialsDir">
+        <CreateFolder>
+          <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+          <!-- Only SYSTEM can access credentials -->
+        </CreateFolder>
+        <RemoveFolder Id="RF_CredentialsDir" On="uninstall" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- ========================================
+         COMPONENT GROUP: Start Menu Shortcuts
+         ======================================== -->
+
+    <ComponentGroup Id="CG_Shortcuts" Directory="ApplicationProgramsFolder">
+
+      <Component Id="C_Shortcuts" Guid="$(var.GUID_Shortcuts)">
+        <!-- Start Menu Folder -->
+        <CreateFolder />
+        <RemoveFolder Id="RF_AppFolder" On="uninstall" />
+
+        <!-- Shortcut to Services.msc for easy access -->
+        <Shortcut Id="SC_Services"
+                  Name="Administrar Servicio TIS TIS"
+                  Description="Abrir Servicios de Windows para administrar el agente"
+                  Target="[System64Folder]services.msc"
+                  WorkingDirectory="System64Folder"
+                  Icon="ProductIcon" />
+
+        <!-- Shortcut to Event Viewer -->
+        <Shortcut Id="SC_EventViewer"
+                  Name="Ver Logs del Agente"
+                  Description="Abrir Visor de Eventos para ver logs del agente"
+                  Target="[System64Folder]eventvwr.msc"
+                  WorkingDirectory="System64Folder"
+                  Icon="ProductIcon" />
+
+        <!-- Shortcut to Uninstall -->
+        <Shortcut Id="SC_Uninstall"
+                  Name="Desinstalar TIS TIS Agent"
+                  Description="Desinstalar el Agente TIS TIS"
+                  Target="[System64Folder]msiexec.exe"
+                  Arguments="/x [ProductCode]"
+                  Icon="ProductIcon" />
+
+        <!-- Registry as keypath -->
+        <RegistryValue Root="HKCU"
+                       Key="SOFTWARE\TisTis\Agent"
+                       Name="ShortcutsInstalled"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- ========================================
+         COMPONENT GROUP: Registry
+         ======================================== -->
+
+    <ComponentGroup Id="CG_Registry">
+
+      <Component Id="C_RegistryKeys" Guid="$(var.GUID_RegistryKeys)" Directory="INSTALLDIR">
+        <RegistryKey Root="HKLM" Key="SOFTWARE\TisTis\Agent" ForceCreateOnInstall="yes">
+
+          <!-- Installation Info -->
+          <RegistryValue Name="ProductName" Type="string" Value="$(var.ProductName)" />
+          <RegistryValue Name="ProductVersion" Type="string" Value="$(var.ProductVersion)" />
+          <RegistryValue Name="Manufacturer" Type="string" Value="$(var.Manufacturer)" />
+
+          <!-- Agent Configuration -->
+          <RegistryValue Name="AgentId" Type="string" Value="[TISTIS_AGENT_ID]" />
+          <RegistryValue Name="TenantId" Type="string" Value="[TISTIS_TENANT_ID]" />
+          <RegistryValue Name="IntegrationId" Type="string" Value="[TISTIS_INTEGRATION_ID]" />
+          <RegistryValue Name="WebhookUrl" Type="string" Value="[TISTIS_WEBHOOK_URL]" />
+
+          <!-- SR Detection Results -->
+          <RegistryValue Name="SRVersion" Type="string" Value="[SR_VERSION]" />
+          <RegistryValue Name="SRDatabaseName" Type="string" Value="[SR_DATABASE_NAME]" />
+          <RegistryValue Name="SRSqlInstance" Type="string" Value="[SR_SQL_INSTANCE]" />
+          <RegistryValue Name="SREmpresaId" Type="string" Value="[SR_EMPRESA_ID]" />
+
+          <!-- Sync Configuration -->
+          <RegistryValue Name="SyncInterval" Type="integer" Value="[SYNC_INTERVAL]" />
+          <RegistryValue Name="SyncMenu" Type="integer" Value="[SYNC_MENU]" />
+          <RegistryValue Name="SyncInventory" Type="integer" Value="[SYNC_INVENTORY]" />
+          <RegistryValue Name="SyncSales" Type="integer" Value="[SYNC_SALES]" />
+          <RegistryValue Name="SyncTables" Type="integer" Value="[SYNC_TABLES]" />
+
+          <!-- Installation Timestamp -->
+          <RegistryValue Name="InstallDate" Type="string" Value="[Date]" />
+
+        </RegistryKey>
+
+        <!-- Windows Event Log Source Registration -->
+        <RegistryKey Root="HKLM"
+                     Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\TisTis.Agent"
+                     ForceCreateOnInstall="yes">
+          <RegistryValue Name="EventMessageFile" Type="expandable" Value="[INSTALLDIR]$(var.ServiceExecutable)" />
+          <RegistryValue Name="TypesSupported" Type="integer" Value="7" />
+        </RegistryKey>
+      </Component>
+
+    </ComponentGroup>
+
+  </Fragment>
+
+</Wix>

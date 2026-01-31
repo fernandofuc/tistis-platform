@@ -1,0 +1,15 @@
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.csproj.AssemblyReference.cache
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.GeneratedMSBuildEditorConfig.editorconfig
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.AssemblyInfoInputs.cache
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.AssemblyInfo.cs
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.csproj.CoreCompileInputs.cache
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.sourcelink.json
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/bin/Debug/net8.0/TisTis.Agent.Core.deps.json
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/bin/Debug/net8.0/TisTis.Agent.Core.dll
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/bin/Debug/net8.0/TisTis.Agent.Core.pdb
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/bin/Debug/net8.0/TisTis.Agent.Core.xml
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.dll
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/refint/TisTis.Agent.Core.dll
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.xml
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/TisTis.Agent.Core.pdb
+/Users/macfer/Documents/TIS TIS /tistis-platform/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/obj/Debug/net8.0/ref/TisTis.Agent.Core.dll

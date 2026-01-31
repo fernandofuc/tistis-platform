@@ -4,9 +4,9 @@
 
 TIS TIS Platform es un sistema SaaS multi-tenant de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API, y automatizacion de procesos multi-canal. Especializado en verticales como clinicas dentales, restaurantes, y consultorios medicos.
 
-**Version:** 4.8.0
+**Version:** 4.8.1
 **Estado:** Produccion
-**Ultima actualizacion:** 27 de Enero, 2026
+**Ultima actualizacion:** 30 de Enero, 2026
 
 ---
 
@@ -32,7 +32,12 @@ tistis-platform/
 │   │   ├── appointments/         # CRUD citas
 │   │   ├── conversations/        # Conversaciones
 │   │   ├── integrations/         # Integration Hub
-│   │   ├── reports/              # Generacion de reportes PDF (NUEVO v4.8.0)
+│   │   ├── agent/                # TIS TIS Local Agent (NUEVO v4.8.1)
+│   │   │   ├── installer/        # POST: genera credenciales
+│   │   │   ├── sync/             # POST: recibe datos de sync
+│   │   │   ├── heartbeat/        # POST: registra estado
+│   │   │   └── register/         # POST: registra agente
+│   │   ├── reports/              # Generacion de reportes PDF (v4.8.0)
 │   │   ├── webhook/              # Webhooks multi-canal
 │   │   ├── voice-agent/          # AI Agent Voz (VAPI)
 │   │   ├── stripe/               # Pagos y suscripciones
@@ -57,9 +62,10 @@ tistis-platform/
 │   │   │   ├── state/            # BusinessContext, AgentState
 │   │   │   └── services/         # langgraph-ai.service.ts
 │   │   │
-│   │   ├── integrations/         # Integration Hub
-│   │   │   ├── components/       # IntegrationHub.tsx
-│   │   │   └── types/            # integration.types.ts
+│   │   ├── integrations/         # Integration Hub + Local Agent
+│   │   │   ├── components/       # IntegrationHub, LocalAgentSetupWizard, AgentStatusCard
+│   │   │   ├── services/         # agent-manager.service.ts (singleton)
+│   │   │   └── types/            # integration.types.ts, AgentInstance, etc.
 │   │   │
 │   │   ├── voice-agent/          # AI Agent Voz
 │   │   │   ├── components/       # VoiceAgentConfig, TalkToAssistant
@@ -128,10 +134,11 @@ tistis-platform/
 │   └── lib/                      # Librerias adicionales
 │
 ├── supabase/
-│   └── migrations/               # 78+ migraciones SQL
+│   └── migrations/               # 181+ migraciones SQL
 │       ├── 001_initial_schema.sql
 │       ├── ...
-│       └── 078_INTEGRATION_HUB.sql
+│       ├── 180_AGENT_INSTANCES.sql
+│       └── 181_AGENT_INSTANCES_STORE_CODE.sql
 │
 └── public/                       # Archivos estaticos
 ```
@@ -827,6 +834,250 @@ El PDF usa estilos inline con:
 
 ---
 
+## TIS TIS Local Agent - Soft Restaurant (v4.8.1 - NUEVO)
+
+### Descripcion
+
+Sistema de sincronizacion local para Soft Restaurant que permite conectar el POS con TIS TIS sin necesidad de APIs de terceros. Un servicio Windows lee directamente la base de datos SQL Server de Soft Restaurant y envia los datos a TIS TIS.
+
+### Soporte Multi-Sucursal (v4.8.1)
+
+El Local Agent soporta configuraciones multi-sucursal, permitiendo que cada agente se asocie a una sucursal especifica de TIS TIS y filtre datos por `store_code` (CodigoTienda/Almacen) en Soft Restaurant.
+
+### Arquitectura del Sistema
+
+```
++-------------------+     +-------------------+     +-------------------+
+|   Dashboard UI    |     |  Windows Agent    |     |  Soft Restaurant  |
+|  LocalAgentSetup  |     |  TIS TIS Agent    |     |  SQL Server DB    |
+|     Wizard        |     |                   |     |                   |
++--------+----------+     +--------+----------+     +--------+----------+
+         │                         │                         │
+         │ POST /api/agent/installer                         │
+         │ (branchId, storeCode)                             │
+         ├────────────────────────>│                         │
+         │                         │                         │
+         │ Credentials + Config    │                         │
+         │<────────────────────────│                         │
+         │                         │                         │
+         │                         │ SQL Query               │
+         │                         │ WHERE CodigoTienda=X    │
+         │                         ├────────────────────────>│
+         │                         │                         │
+         │                         │ Filtered Records        │
+         │                         │<────────────────────────│
+         │                         │                         │
+         │                         │ POST /api/agent/sync    │
+         │                         │ (records + branch_id)   │
+         │<────────────────────────│                         │
+         │                         │                         │
+    sr_sales (with branch_id)      │                         │
+         │                         │                         │
+```
+
+### Migraciones
+
+| Migracion | Descripcion |
+|-----------|-------------|
+| `180_AGENT_INSTANCES.sql` | Tabla base y funciones para agentes |
+| `181_AGENT_INSTANCES_STORE_CODE.sql` | Soporte multi-sucursal con `store_code` |
+
+### Tabla: agent_instances
+
+```sql
+agent_instances
+├── id (UUID PK)
+├── tenant_id (FK tenants)
+├── integration_id (FK integration_connections)
+├── branch_id (FK branches, nullable)     -- TIS TIS branch
+├── store_code (VARCHAR 50, nullable)     -- SR CodigoTienda for SQL filtering
+├── agent_id (VARCHAR 64, unique)         -- e.g., "tis-agent-abc123"
+├── agent_version (VARCHAR 20)
+├── machine_name (VARCHAR 255)
+├── status (ENUM: pending, registered, connected, syncing, error, offline)
+├── auth_token_hash (VARCHAR 64)          -- SHA-256 hash
+├── token_expires_at (TIMESTAMPTZ)
+├── sync_interval_seconds (INT, default 300)
+├── sync_menu, sync_inventory, sync_sales, sync_tables (BOOLEAN)
+├── last_heartbeat_at, last_sync_at (TIMESTAMPTZ)
+└── total_records_synced, consecutive_errors (INT)
+```
+
+### RPCs Implementados
+
+| RPC | Proposito |
+|-----|-----------|
+| `validate_agent_token(agent_id, token_hash)` | Valida credenciales y retorna contexto con `store_code` |
+| `update_agent_store_code(agent_id, store_code, branch_id?, tenant_id?)` | Actualiza store_code con validacion de tenant |
+| `record_agent_heartbeat(agent_id, status, records?, error?)` | Registra heartbeat del agente |
+| `complete_agent_sync(log_id, status, counts...)` | Completa registro de sync |
+| `get_agent_stats(tenant_id)` | Estadisticas agregadas |
+
+### API Endpoints
+
+| Endpoint | Metodo | Descripcion |
+|----------|--------|-------------|
+| `/api/agent/installer` | POST | Genera credenciales y config para nuevo agente |
+| `/api/agent/sync` | POST | Recibe datos de sincronizacion del agente |
+| `/api/agent/heartbeat` | POST | Registra estado del agente |
+| `/api/agent/register` | POST | Registra agente despues de instalacion |
+
+### Flujo de Datos Multi-Branch
+
+```
+Dashboard UI → LocalAgentSetupWizard
+    ↓ (branchId + storeCode validation)
+POST /api/agent/installer
+    ↓ (validates format: alphanumeric, hyphens, max 50 chars)
+AgentManagerService.createAgent()
+    ↓ (stores branch_id + store_code)
+agent_instances (DB)
+    ↓
+validate_agent_token RPC → sync_config.store_code
+    ↓
+Windows Agent → SQL WHERE CodigoTienda = store_code
+    ↓
+POST /api/agent/sync → sr_sales (with branch_id, NOT NULL)
+```
+
+### Servicio: AgentManagerService
+
+Ubicacion: `/src/features/integrations/services/agent-manager.service.ts`
+
+```typescript
+// Crear agente con soporte multi-sucursal
+const result = await agentService.createAgent({
+  tenantId: 'uuid',
+  integrationId: 'uuid',
+  branchId: 'uuid',           // TIS TIS branch
+  storeCode: 'TIENDA01',      // SR CodigoTienda for SQL filtering
+  syncMenu: true,
+  syncInventory: true,
+  syncSales: true,
+  syncTables: false,
+});
+
+// Actualizar configuracion
+await agentService.updateAgentConfig(agentId, {
+  storeCode: 'SUC_CENTRO',    // Validates format
+  branchId: 'new-uuid',       // Validates UUID format
+}, tenantId);                 // Optional: for RLS validation
+```
+
+### Componente: LocalAgentSetupWizard
+
+Ubicacion: `/src/features/integrations/components/LocalAgentSetupWizard.tsx`
+
+Wizard de 5 pasos para configurar el Local Agent:
+
+| Paso | Descripcion |
+|------|-------------|
+| 1. Informacion | Explicacion del agente y requisitos |
+| 2. Configuracion | Seleccion de branch, storeCode, opciones de sync |
+| 3. Descarga | Generacion de credenciales y descarga de instalador |
+| 4. Instalacion | Instrucciones paso a paso |
+| 5. Verificacion | Confirmacion de conexion exitosa |
+
+**Validaciones en UI:**
+- `storeCode`: alfanumerico, guiones, guiones bajos, max 50 caracteres
+- Error visual si formato invalido
+- Boton "Continuar" deshabilitado si storeCode invalido o no hay credentials
+
+### Optimizaciones de Performance
+
+**Batch Processing en `/api/agent/sync`:**
+
+```typescript
+// ANTES (N+1 queries):
+for (const record of records) {
+  const { data: existing } = await supabase
+    .from('sr_sales')
+    .select('id')
+    .eq('folio_venta', folio);
+  // ...insert or skip
+}
+
+// DESPUES (2 queries):
+// 1. Extract all folios
+const folios = salesWithFolio.map(s => s.folio);
+
+// 2. Batch query existing
+const { data: existingSales } = await supabase
+  .from('sr_sales')
+  .select('folio_venta')
+  .eq('tenant_id', tenantId)
+  .in('folio_venta', folios);
+
+// 3. Set for O(1) lookup
+const existingFolios = new Set(existingSales.map(s => s.folio_venta));
+
+// 4. Filter and batch insert new
+const newSales = salesWithFolio.filter(s => !existingFolios.has(s.folio));
+await supabase.from('sr_sales').insert(newSales);
+```
+
+### Mejoras de Seguridad
+
+**Validacion de tenant_id en RPC:**
+
+```sql
+-- update_agent_store_code ahora valida tenant
+CREATE OR REPLACE FUNCTION update_agent_store_code(
+    p_agent_id VARCHAR(64),
+    p_store_code VARCHAR(50),
+    p_branch_id UUID DEFAULT NULL,
+    p_tenant_id UUID DEFAULT NULL  -- Required for security
+)
+-- Solo actualiza si agent pertenece al tenant especificado
+UPDATE agent_instances
+SET store_code = p_store_code
+WHERE agent_id = p_agent_id
+  AND tenant_id = v_tenant_id;  -- Tenant isolation
+```
+
+### Tipos Relacionados
+
+```typescript
+// integration.types.ts
+interface AgentInstance {
+  id: string;
+  tenant_id: string;
+  integration_id: string;
+  branch_id?: string;         // TIS TIS branch
+  store_code?: string;        // SR CodigoTienda
+  agent_id: string;
+  status: AgentStatus;
+  // ...
+}
+
+interface ValidateTokenResult {
+  isValid: boolean;
+  context?: {
+    tenantId: string;
+    integrationId: string;
+    branchId?: string;
+    syncConfig: {
+      storeCode: string;      // From validate_agent_token RPC
+      // ...
+    };
+  };
+}
+```
+
+### Archivos Relacionados
+
+| Archivo | Proposito |
+|---------|-----------|
+| `supabase/migrations/180_AGENT_INSTANCES.sql` | Tabla base |
+| `supabase/migrations/181_AGENT_INSTANCES_STORE_CODE.sql` | Multi-branch support |
+| `app/api/agent/installer/route.ts` | Genera credenciales |
+| `app/api/agent/sync/route.ts` | Recibe datos con batch processing |
+| `src/features/integrations/services/agent-manager.service.ts` | Servicio singleton |
+| `src/features/integrations/components/LocalAgentSetupWizard.tsx` | UI wizard |
+| `src/features/integrations/components/IntegrationHub.tsx` | Hub principal |
+
+---
+
 ## Integration Hub (v4.4.0)
 
 ### Descripcion
@@ -899,6 +1150,9 @@ integration_connections, external_contacts, external_appointments
 external_inventory, external_products, integration_sync_logs
 integration_actions
 
+-- Local Agent System (NUEVO v4.8.1)
+agent_instances, agent_sync_logs, sr_sales
+
 -- Admin Channel System (NUEVO v4.7.0)
 admin_channel_users, admin_channel_conversations, admin_channel_messages
 admin_channel_notifications, admin_channel_audit_log
@@ -923,6 +1177,8 @@ plans, addons, subscriptions, clients
 | `067_VOICE_AGENT_SYSTEM.sql` | Agente de voz (VAPI) |
 | `078_INTEGRATION_HUB.sql` | Integration Hub |
 | `177_ADMIN_CHANNEL_SYSTEM.sql` | Admin Channel System (B2B) |
+| `180_AGENT_INSTANCES.sql` | TIS TIS Local Agent base |
+| `181_AGENT_INSTANCES_STORE_CODE.sql` | Multi-branch store_code support |
 
 ### RLS (Row Level Security)
 
@@ -1258,9 +1514,14 @@ Esta es la guia maestra de desarrollo. Para documentacion detallada por feature,
 ### Archivos relacionados
 
 - `/supabase/migrations/177_ADMIN_CHANNEL_SYSTEM.sql` - Migration SQL completo
+- `/supabase/migrations/180_AGENT_INSTANCES.sql` - TIS TIS Local Agent base
+- `/supabase/migrations/181_AGENT_INSTANCES_STORE_CODE.sql` - Multi-branch store_code support
 - `/src/features/admin-channel/` - Codigo fuente del feature backend
 - `/src/features/settings/components/AdminChannelSection.tsx` - Componente UI (FASE 6)
 - `/src/features/reports/` - Sistema de Reportes PDF (v4.8.0)
+- `/src/features/integrations/services/agent-manager.service.ts` - Servicio de gestion de agentes
+- `/src/features/integrations/components/LocalAgentSetupWizard.tsx` - Wizard de configuracion
+- `/app/api/agent/` - Endpoints del Local Agent (installer, sync, heartbeat)
 - `/app/api/reports/generate/route.ts` - API endpoint de generacion
 - `/docs/API.md` - API general del proyecto
 - `/docs/INTEGRATION_GUIDE.md` - Guia de integraciones
@@ -1269,5 +1530,5 @@ Esta es la guia maestra de desarrollo. Para documentacion detallada por feature,
 
 *Este archivo es la fuente de verdad para desarrollo en TIS TIS Platform. Todas las decisiones de codigo deben alinearse con estos principios.*
 
-*Ultima actualizacion: 27 de Enero, 2026*
-*Version: 4.8.0 - Sistema de Reportes PDF implementado*
+*Ultima actualizacion: 30 de Enero, 2026*
+*Version: 4.8.1 - Multi-branch support para TIS TIS Local Agent (Soft Restaurant)*

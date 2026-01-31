@@ -1,0 +1,121 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Agent Installer UI
+     Custom user interface configuration
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <?include Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         CUSTOM UI DEFINITION
+         ======================================== -->
+
+    <UI Id="WixUI_TisTisAgent">
+
+      <!-- Text Styles -->
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" Bold="yes" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="12" Bold="yes" />
+      <TextStyle Id="WixUI_Font_Title_Big" FaceName="Segoe UI" Size="14" Bold="yes" />
+
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WixUI_Mode" Value="Custom" />
+
+      <!-- Standard Dialog References from WixUI_Common -->
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="CancelDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+
+      <!-- Custom Dialogs -->
+      <DialogRef Id="WelcomeDlg_TisTis" />
+      <DialogRef Id="DetectionDlg_TisTis" />
+      <DialogRef Id="ConfigureDlg_TisTis" />
+      <DialogRef Id="VerifyReadyDlg_TisTis" />
+      <DialogRef Id="ExitDlg_TisTis" />
+
+      <!-- ========================================
+           DIALOG NAVIGATION FLOW
+           ======================================== -->
+
+      <!-- Welcome -> Detection -->
+      <Publish Dialog="WelcomeDlg_TisTis" Control="Next" Event="NewDialog" Value="DetectionDlg_TisTis">1</Publish>
+      <Publish Dialog="WelcomeDlg_TisTis" Control="Cancel" Event="SpawnDialog" Value="CancelDlg">1</Publish>
+
+      <!-- Detection -> Configure (if SR detected) -->
+      <Publish Dialog="DetectionDlg_TisTis" Control="Next" Event="NewDialog" Value="ConfigureDlg_TisTis">SR_DETECTED = "1"</Publish>
+      <Publish Dialog="DetectionDlg_TisTis" Control="Back" Event="NewDialog" Value="WelcomeDlg_TisTis">1</Publish>
+      <Publish Dialog="DetectionDlg_TisTis" Control="Cancel" Event="SpawnDialog" Value="CancelDlg">1</Publish>
+
+      <!-- Detection -> Detect Again (if SR not detected) -->
+      <Publish Dialog="DetectionDlg_TisTis" Control="Retry" Event="DoAction" Value="CA_DetectSoftRestaurant">1</Publish>
+
+      <!-- Configure -> VerifyReady -->
+      <Publish Dialog="ConfigureDlg_TisTis" Control="Next" Event="NewDialog" Value="VerifyReadyDlg_TisTis">1</Publish>
+      <Publish Dialog="ConfigureDlg_TisTis" Control="Back" Event="NewDialog" Value="DetectionDlg_TisTis">1</Publish>
+      <Publish Dialog="ConfigureDlg_TisTis" Control="Cancel" Event="SpawnDialog" Value="CancelDlg">1</Publish>
+
+      <!-- Test Connection Button -->
+      <Publish Dialog="ConfigureDlg_TisTis" Control="TestConnection" Event="DoAction" Value="CA_TestSqlConnection">1</Publish>
+
+      <!-- VerifyReady -> Install -->
+      <Publish Dialog="VerifyReadyDlg_TisTis" Control="Install" Event="EndDialog" Value="Return">1</Publish>
+      <Publish Dialog="VerifyReadyDlg_TisTis" Control="Back" Event="NewDialog" Value="ConfigureDlg_TisTis">1</Publish>
+      <Publish Dialog="VerifyReadyDlg_TisTis" Control="Cancel" Event="SpawnDialog" Value="CancelDlg">1</Publish>
+
+      <!-- Exit Dialog -->
+      <Publish Dialog="ExitDlg_TisTis" Control="Finish" Event="EndDialog" Value="Return">1</Publish>
+
+      <!-- ========================================
+           ADMIN INSTALL SEQUENCE
+           ======================================== -->
+
+      <AdminUISequence>
+        <Show Dialog="WelcomeDlg_TisTis" After="CostFinalize" />
+      </AdminUISequence>
+
+      <!-- ========================================
+           INSTALL UI SEQUENCE
+           ======================================== -->
+
+      <InstallUISequence>
+        <!-- Show appropriate dialog based on installation state -->
+        <Show Dialog="WelcomeDlg_TisTis" After="MigrateFeatureStates" Condition="NOT Installed" />
+        <Show Dialog="ResumeDlg" After="MigrateFeatureStates" Condition="Installed AND (RESUME OR Preselected)" />
+        <Show Dialog="MaintenanceWelcomeDlg" After="MigrateFeatureStates" Condition="Installed AND NOT RESUME AND NOT Preselected" />
+
+        <Show Dialog="ProgressDlg" After="WelcomeDlg_TisTis" />
+
+        <!-- Show exit dialog after successful installation (FIX L8) -->
+        <Show Dialog="ExitDlg_TisTis" OnExit="success" />
+      </InstallUISequence>
+
+      <!-- Property for banner and dialog images -->
+      <Property Id="WixUIBannerBmp" Value="Assets\banner.png" />
+      <Property Id="WixUIDialogBmp" Value="Assets\dialog.png" />
+
+    </UI>
+
+    <!-- ========================================
+         UI STRINGS OVERRIDE (Spanish)
+         ======================================== -->
+
+    <UIRef Id="WixUI_Common" />
+
+    <!-- Standard error dialog reference -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="El Agente TIS TIS se ha instalado correctamente. El servicio se iniciará automáticamente." />
+
+  </Fragment>
+
+</Wix>

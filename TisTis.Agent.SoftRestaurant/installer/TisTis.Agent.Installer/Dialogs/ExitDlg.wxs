@@ -1,0 +1,70 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Exit Dialog
+     Success dialog after installation
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include ..\Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         EXIT DIALOG (Success)
+         ======================================== -->
+
+    <UI>
+      <Dialog Id="ExitDlg_TisTis" Width="370" Height="270" Title="!(loc.ExitTitle)">
+
+        <!-- Banner Image -->
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.WelcomeDlgBitmap)" />
+
+        <!-- Horizontal Line -->
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <!-- Success Icon -->
+        <Control Id="SuccessIcon" Type="Icon" X="20" Y="55" Width="32" Height="32"
+                 IconSize="32" FixedSize="yes" Text="CheckIcon" />
+
+        <!-- Title -->
+        <Control Id="Title" Type="Text" X="60" Y="55" Width="290" Height="25"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="{\WixUI_Font_Title_Big}Instalación Completada" />
+
+        <!-- Description -->
+        <Control Id="Description" Type="Text" X="20" Y="95" Width="330" Height="45"
+                 Transparent="yes" NoPrefix="yes">
+          <Text>
+El Agente TIS TIS para Soft Restaurant se ha instalado correctamente.
+
+El servicio se ha iniciado automáticamente y comenzará a sincronizar datos con TIS TIS Platform.
+          </Text>
+        </Control>
+
+        <!-- Status Info -->
+        <Control Id="StatusGroup" Type="GroupBox" X="20" Y="145" Width="330" Height="80"
+                 Text="Estado del Servicio" />
+
+        <Control Id="StatusInfo" Type="Text" X="30" Y="162" Width="310" Height="55"
+                 Transparent="yes" NoPrefix="yes">
+          <Text>
+✓ Servicio instalado: $(var.ServiceDisplayName)
+✓ Estado: En ejecución
+✓ Tipo de inicio: Automático
+
+Puede administrar el servicio desde el Panel de Control > Servicios
+o usando el acceso directo en el menú Inicio.
+          </Text>
+        </Control>
+
+        <!-- Finish Button -->
+        <Control Id="Finish" Type="PushButton" X="298" Y="243" Width="56" Height="17"
+                 Default="yes" Cancel="yes" Text="Finalizar" />
+
+      </Dialog>
+    </UI>
+
+  </Fragment>
+
+</Wix>

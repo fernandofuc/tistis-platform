@@ -1,0 +1,73 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - English (US) Localization
+     ===================================================== -->
+
+<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization Culture="en-US" Codepage="1252"
+                 xmlns="http://wixtoolset.org/schemas/v4/wxl">
+
+  <!-- ========================================
+       DIALOG TITLES
+       ======================================== -->
+  <String Id="WelcomeTitle">TIS TIS Agent Installer for Soft Restaurant</String>
+  <String Id="DetectionTitle">Soft Restaurant Detection</String>
+  <String Id="ConfigureTitle">Sync Configuration</String>
+  <String Id="VerifyReadyTitle">Ready to Install</String>
+  <String Id="ExitTitle">Installation Complete</String>
+
+  <!-- ========================================
+       BUTTON LABELS
+       ======================================== -->
+  <String Id="WixUIBack" Overridable="yes">&lt; Back</String>
+  <String Id="WixUINext" Overridable="yes">Next &gt;</String>
+  <String Id="WixUICancel" Overridable="yes">Cancel</String>
+  <String Id="WixUIInstall" Overridable="yes">Install</String>
+  <String Id="WixUIFinish" Overridable="yes">Finish</String>
+
+  <!-- ========================================
+       ERROR MESSAGES
+       ======================================== -->
+  <String Id="DowngradeError">A newer version of [ProductName] is already installed. Setup will now exit.</String>
+  <String Id="NetRuntimeRequired">.NET 8.0 Runtime is required to run this application. Download it from https://dotnet.microsoft.com/download/dotnet/8.0</String>
+  <String Id="WindowsVersionRequired">This application requires Windows 10 or Windows Server 2016 or later.</String>
+  <String Id="AdminRequired">Administrator privileges are required to install this application. Please run the installer as Administrator.</String>
+
+  <!-- ========================================
+       WELCOME DIALOG
+       ======================================== -->
+  <String Id="WelcomeDlgBitmap">WixUI:Banner</String>
+  <String Id="WelcomeDescription">This wizard will install the TIS TIS Agent for Soft Restaurant on your computer.</String>
+
+  <!-- ========================================
+       DETECTION DIALOG
+       ======================================== -->
+  <String Id="DetectionStatus_Found">Soft Restaurant detected successfully</String>
+  <String Id="DetectionStatus_NotFound">Soft Restaurant was not detected</String>
+  <String Id="DetectionRetry">Retry Detection</String>
+
+  <!-- ========================================
+       CONFIGURE DIALOG
+       ======================================== -->
+  <String Id="SyncOptions_Sales">Sync Sales (every 30 seconds)</String>
+  <String Id="SyncOptions_Menu">Sync Menu (products and categories)</String>
+  <String Id="SyncOptions_Inventory">Sync Inventory (stock and movements)</String>
+  <String Id="SyncOptions_Tables">Sync Tables (real-time status)</String>
+  <String Id="TestConnection">Test Connection</String>
+  <String Id="ConnectionSuccess">Connection successful!</String>
+  <String Id="ConnectionFailed">Connection failed</String>
+
+  <!-- ========================================
+       EXIT DIALOG
+       ======================================== -->
+  <String Id="ExitSuccess">The TIS TIS Agent for Soft Restaurant has been installed successfully.</String>
+  <String Id="ExitServiceInfo">The service has started automatically and will begin syncing data with TIS TIS Platform.</String>
+
+  <!-- ========================================
+       PROGRESS DIALOG
+       ======================================== -->
+  <String Id="ProgressGenerating">Installing...</String>
+  <String Id="ProgressConfig">Configuring the agent...</String>
+  <String Id="ProgressRegister">Registering with TIS TIS Platform...</String>
+  <String Id="ProgressService">Installing Windows service...</String>
+
+</WixLocalization>

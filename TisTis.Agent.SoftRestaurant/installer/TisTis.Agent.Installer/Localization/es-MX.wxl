@@ -1,0 +1,73 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Spanish (Mexico) Localization
+     ===================================================== -->
+
+<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization Culture="es-MX" Codepage="1252"
+                 xmlns="http://wixtoolset.org/schemas/v4/wxl">
+
+  <!-- ========================================
+       DIALOG TITLES
+       ======================================== -->
+  <String Id="WelcomeTitle">Instalador del Agente TIS TIS para Soft Restaurant</String>
+  <String Id="DetectionTitle">Detección de Soft Restaurant</String>
+  <String Id="ConfigureTitle">Configuración de Sincronización</String>
+  <String Id="VerifyReadyTitle">Listo para Instalar</String>
+  <String Id="ExitTitle">Instalación Completada</String>
+
+  <!-- ========================================
+       BUTTON LABELS
+       ======================================== -->
+  <String Id="WixUIBack" Overridable="yes">&lt; Anterior</String>
+  <String Id="WixUINext" Overridable="yes">Siguiente &gt;</String>
+  <String Id="WixUICancel" Overridable="yes">Cancelar</String>
+  <String Id="WixUIInstall" Overridable="yes">Instalar</String>
+  <String Id="WixUIFinish" Overridable="yes">Finalizar</String>
+
+  <!-- ========================================
+       ERROR MESSAGES
+       ======================================== -->
+  <String Id="DowngradeError">Ya existe una versión más reciente de [ProductName] instalada. El instalador terminará ahora.</String>
+  <String Id="NetRuntimeRequired">Se requiere .NET 8.0 Runtime para ejecutar esta aplicación. Descárguelo desde https://dotnet.microsoft.com/download/dotnet/8.0</String>
+  <String Id="WindowsVersionRequired">Esta aplicación requiere Windows 10 o Windows Server 2016 o posterior.</String>
+  <String Id="AdminRequired">Se requieren privilegios de administrador para instalar esta aplicación. Por favor, ejecute el instalador como Administrador.</String>
+
+  <!-- ========================================
+       WELCOME DIALOG
+       ======================================== -->
+  <String Id="WelcomeDlgBitmap">WixUI:Banner</String>
+  <String Id="WelcomeDescription">Este asistente instalará el Agente TIS TIS para Soft Restaurant en su computadora.</String>
+
+  <!-- ========================================
+       DETECTION DIALOG
+       ======================================== -->
+  <String Id="DetectionStatus_Found">Soft Restaurant detectado correctamente</String>
+  <String Id="DetectionStatus_NotFound">No se detectó Soft Restaurant</String>
+  <String Id="DetectionRetry">Reintentar Detección</String>
+
+  <!-- ========================================
+       CONFIGURE DIALOG
+       ======================================== -->
+  <String Id="SyncOptions_Sales">Sincronizar Ventas (cada 30 segundos)</String>
+  <String Id="SyncOptions_Menu">Sincronizar Menú (productos y categorías)</String>
+  <String Id="SyncOptions_Inventory">Sincronizar Inventario (stock y movimientos)</String>
+  <String Id="SyncOptions_Tables">Sincronizar Mesas (estado en tiempo real)</String>
+  <String Id="TestConnection">Probar Conexión</String>
+  <String Id="ConnectionSuccess">¡Conexión exitosa!</String>
+  <String Id="ConnectionFailed">Error de conexión</String>
+
+  <!-- ========================================
+       EXIT DIALOG
+       ======================================== -->
+  <String Id="ExitSuccess">El Agente TIS TIS para Soft Restaurant se ha instalado correctamente.</String>
+  <String Id="ExitServiceInfo">El servicio se ha iniciado automáticamente y comenzará a sincronizar datos con TIS TIS Platform.</String>
+
+  <!-- ========================================
+       PROGRESS DIALOG
+       ======================================== -->
+  <String Id="ProgressGenerating">Instalando...</String>
+  <String Id="ProgressConfig">Configurando el agente...</String>
+  <String Id="ProgressRegister">Registrando con TIS TIS Platform...</String>
+  <String Id="ProgressService">Instalando servicio de Windows...</String>
+
+</WixLocalization>

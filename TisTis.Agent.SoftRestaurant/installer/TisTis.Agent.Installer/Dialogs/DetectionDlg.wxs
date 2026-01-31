@@ -1,0 +1,127 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Detection Dialog
+     Shows Soft Restaurant detection results
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include ..\Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         DETECTION DIALOG
+         ======================================== -->
+
+    <UI>
+      <Dialog Id="DetectionDlg_TisTis" Width="370" Height="270" Title="!(loc.DetectionTitle)">
+
+        <!-- Banner Image -->
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.WelcomeDlgBitmap)" />
+
+        <!-- Horizontal Line -->
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <!-- Title -->
+        <Control Id="Title" Type="Text" X="20" Y="50" Width="330" Height="20"
+                 Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Detección de Soft Restaurant" />
+
+        <!-- Detection Status Group Box -->
+        <Control Id="DetectionGroup" Type="GroupBox" X="20" Y="75" Width="330" Height="100"
+                 Text="Estado de Detección" />
+
+        <!-- Detection Icon (Success/Failure) -->
+        <Control Id="StatusIcon" Type="Icon" X="30" Y="95" Width="24" Height="24"
+                 IconSize="32" FixedSize="yes">
+          <Condition Action="show">SR_DETECTED = "1"</Condition>
+          <Text>CheckIcon</Text>
+        </Control>
+
+        <Control Id="StatusIconFail" Type="Icon" X="30" Y="95" Width="24" Height="24"
+                 IconSize="32" FixedSize="yes">
+          <Condition Action="show">SR_DETECTED &lt;&gt; "1"</Condition>
+          <Text>WarningIcon</Text>
+        </Control>
+
+        <!-- Detection Result Text -->
+        <Control Id="DetectedText" Type="Text" X="60" Y="95" Width="280" Height="18"
+                 Transparent="yes" NoPrefix="yes">
+          <Condition Action="show">SR_DETECTED = "1"</Condition>
+          <Text>{\WixUI_Font_Bigger}Soft Restaurant detectado correctamente</Text>
+        </Control>
+
+        <Control Id="NotDetectedText" Type="Text" X="60" Y="95" Width="280" Height="18"
+                 Transparent="yes" NoPrefix="yes">
+          <Condition Action="show">SR_DETECTED &lt;&gt; "1"</Condition>
+          <Text>{\WixUI_Font_Bigger}No se detectó Soft Restaurant</Text>
+        </Control>
+
+        <!-- Detected Details -->
+        <Control Id="DetailsLabel" Type="Text" X="30" Y="118" Width="310" Height="50"
+                 Transparent="yes" NoPrefix="yes">
+          <Condition Action="show">SR_DETECTED = "1"</Condition>
+          <Text>
+Versión: [SR_VERSION]
+Instancia SQL: [SR_SQL_INSTANCE]
+Base de Datos: [SR_DATABASE_NAME]
+          </Text>
+        </Control>
+
+        <!-- Not Detected Message -->
+        <Control Id="NotDetectedDetails" Type="Text" X="30" Y="118" Width="310" Height="50"
+                 Transparent="yes" NoPrefix="yes">
+          <Condition Action="show">SR_DETECTED &lt;&gt; "1"</Condition>
+          <Text>
+No se encontró una instalación de Soft Restaurant en este equipo.
+Verifique que SQL Server esté ejecutándose y que la base de datos
+de Soft Restaurant esté accesible.
+          </Text>
+        </Control>
+
+        <!-- Retry Button (only shown when not detected) -->
+        <Control Id="Retry" Type="PushButton" X="20" Y="180" Width="100" Height="17"
+                 Text="Reintentar Detección">
+          <Condition Action="show">SR_DETECTED &lt;&gt; "1"</Condition>
+        </Control>
+
+        <!-- TIS TIS Connection Info -->
+        <Control Id="TisTisGroup" Type="GroupBox" X="20" Y="180" Width="330" Height="45"
+                 Text="Conexión TIS TIS">
+          <Condition Action="show">SR_DETECTED = "1"</Condition>
+        </Control>
+
+        <Control Id="TisTisInfo" Type="Text" X="30" Y="195" Width="310" Height="25"
+                 Transparent="yes" NoPrefix="yes">
+          <Condition Action="show">SR_DETECTED = "1"</Condition>
+          <Text>
+Agent ID: [TISTIS_AGENT_ID]
+Endpoint: [TISTIS_WEBHOOK_URL]
+          </Text>
+        </Control>
+
+        <!-- Navigation Buttons -->
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)" />
+
+        <Control Id="Cancel" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)" />
+
+        <Control Id="Next" Type="PushButton" X="298" Y="243" Width="56" Height="17"
+                 Default="yes" Text="!(loc.WixUINext)">
+          <!-- Disable Next if SR not detected -->
+          <Condition Action="disable">SR_DETECTED &lt;&gt; "1"</Condition>
+          <Condition Action="enable">SR_DETECTED = "1"</Condition>
+        </Control>
+
+      </Dialog>
+
+      <!-- Icons for status -->
+      <Icon Id="CheckIcon" SourceFile="Assets\check.ico" />
+      <Icon Id="WarningIcon" SourceFile="Assets\warning.ico" />
+
+    </UI>
+
+  </Fragment>
+
+</Wix>

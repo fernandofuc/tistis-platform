@@ -1,0 +1,68 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Agent Installer Features
+     Feature definitions for installation options
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         FEATURE TREE
+         ======================================== -->
+
+    <!-- Main Feature: TIS TIS Agent -->
+    <Feature Id="F_Complete"
+             Title="TIS TIS Agent for Soft Restaurant"
+             Description="Instala el agente completo para sincronizar datos entre Soft Restaurant y TIS TIS Platform."
+             Level="1"
+             Display="expand"
+             ConfigurableDirectory="INSTALLDIR"
+             AllowAdvertise="no"
+             Absent="disallow">
+
+      <!-- Core Agent (required, cannot be deselected) -->
+      <Feature Id="F_Core"
+               Title="Agente Core"
+               Description="Archivos principales del agente (requerido)."
+               Level="1"
+               AllowAdvertise="no"
+               Absent="disallow">
+
+        <ComponentGroupRef Id="CG_AgentCore" />
+        <ComponentGroupRef Id="CG_DataDirectories" />
+        <ComponentGroupRef Id="CG_Registry" />
+
+      </Feature>
+
+      <!-- Windows Service (required) -->
+      <Feature Id="F_Service"
+               Title="Servicio de Windows"
+               Description="Instala el agente como servicio de Windows para ejecución automática."
+               Level="1"
+               AllowAdvertise="no"
+               Absent="disallow">
+
+        <ComponentGroupRef Id="CG_WindowsService" />
+
+      </Feature>
+
+      <!-- Start Menu Shortcuts (optional) -->
+      <Feature Id="F_Shortcuts"
+               Title="Accesos Directos"
+               Description="Agrega accesos directos al menú Inicio."
+               Level="1"
+               AllowAdvertise="no"
+               Absent="allow">
+
+        <ComponentGroupRef Id="CG_Shortcuts" />
+
+      </Feature>
+
+    </Feature>
+
+  </Fragment>
+
+</Wix>

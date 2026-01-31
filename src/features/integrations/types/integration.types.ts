@@ -870,3 +870,171 @@ export interface SRSyncConfig {
   alert_on_low_stock: boolean;
   alert_on_price_change: boolean;
 }
+
+// ======================
+// SOFT RESTAURANT LOCAL AGENT TYPES
+// TIS TIS Local Agent for Soft Restaurant Integration
+// ======================
+
+/**
+ * Integration method for Soft Restaurant
+ * - webhook_official: Uses National Soft's ERP/PMS module (requires purchase)
+ * - local_agent: Uses TIS TIS Local Agent installed on customer's server
+ */
+export type SRIntegrationMethod = 'webhook_official' | 'local_agent';
+
+/**
+ * Agent instance status lifecycle
+ */
+export type AgentStatus =
+  | 'pending'      // Waiting for installation
+  | 'registered'   // Agent registered, not yet connected
+  | 'connected'    // Connected and healthy
+  | 'syncing'      // Currently synchronizing data
+  | 'error'        // Connection or sync error
+  | 'offline';     // No heartbeat received
+
+/**
+ * Agent instance representing a local TIS TIS Agent for SR
+ */
+export interface AgentInstance {
+  id: string;
+  tenant_id: string;
+  integration_id: string;
+  branch_id?: string;
+
+  // Agent identification
+  agent_id: string;              // Unique hash identifier
+  agent_version: string;         // e.g., "1.0.0"
+  machine_name?: string;         // Windows hostname
+
+  // Status
+  status: AgentStatus;
+
+  // Soft Restaurant connection info
+  sr_version?: string;           // e.g., "Soft Restaurant 10.5.2"
+  sr_database_name?: string;     // e.g., "DVSOFT_RESTAURANTE"
+  sr_sql_instance?: string;      // e.g., "SQLEXPRESS"
+  sr_empresa_id?: string;        // SR company ID
+
+  // Multi-branch filtering
+  store_code?: string;           // CodigoTienda/Almacen for multi-branch SQL filtering
+
+  // Sync configuration
+  sync_interval_seconds: number;
+  sync_menu: boolean;
+  sync_inventory: boolean;
+  sync_sales: boolean;
+  sync_tables: boolean;
+
+  // Statistics
+  last_heartbeat_at?: string;
+  last_sync_at?: string;
+  last_sync_records: number;
+  total_records_synced: number;
+  consecutive_errors: number;
+  last_error_message?: string;
+  last_error_at?: string;
+
+  // Security
+  token_expires_at?: string;
+  allowed_ips?: string[];
+
+  // Metadata
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Agent credentials generated during setup
+ * Only shown once to the user, then must be stored securely
+ */
+export interface AgentCredentials {
+  agent_id: string;
+  auth_token: string;           // Bearer token for API authentication
+  webhook_url: string;          // TIS TIS sync endpoint
+  expires_at: string;           // Token expiration
+}
+
+/**
+ * Agent registration request from Windows Agent
+ */
+export interface AgentRegistrationRequest {
+  agent_id: string;
+  agent_version: string;
+  machine_name: string;
+  sr_version?: string;
+  sr_database_name?: string;
+  sr_sql_instance?: string;
+  sr_empresa_id?: string;
+}
+
+/**
+ * Agent heartbeat request
+ */
+export interface AgentHeartbeatRequest {
+  agent_id: string;
+  status: 'healthy' | 'degraded' | 'error';
+  last_sync_at?: string;
+  records_since_last_heartbeat: number;
+  cpu_usage?: number;
+  memory_usage?: number;
+  error_message?: string;
+}
+
+/**
+ * Agent sync batch request
+ */
+export interface AgentSyncRequest {
+  agent_id: string;
+  sync_type: 'sales' | 'menu' | 'inventory' | 'tables' | 'full';
+  batch_id: string;
+  batch_number: number;
+  total_batches: number;
+  records: unknown[];           // Transformed SR data
+  sync_started_at: string;
+  last_record_id?: string;      // For incremental sync
+}
+
+/**
+ * Installer download configuration
+ * Contains pre-configured credentials embedded in the MSI
+ */
+export interface AgentInstallerConfig {
+  tenant_id: string;
+  integration_id: string;
+  agent_id: string;
+  auth_token: string;
+  api_base_url: string;
+  sync_config: {
+    sync_menu: boolean;
+    sync_inventory: boolean;
+    sync_sales: boolean;
+    sync_tables: boolean;
+    sync_interval_seconds: number;
+  };
+  download_url: string;
+  filename: string;
+  file_size_bytes: number;
+  generated_at: string;
+  expires_at: string;
+}
+
+/**
+ * Extended SR sync config for Local Agent
+ */
+export interface SRAgentSyncConfig extends SRSyncConfig {
+  // Integration method
+  integration_method: SRIntegrationMethod;
+
+  // Agent-specific settings (only used when integration_method === 'local_agent')
+  agent_sync_interval_seconds: number;
+  agent_batch_size: number;
+  agent_retry_attempts: number;
+  agent_retry_delay_seconds: number;
+
+  // Data selection for agent
+  agent_sync_modified_only: boolean;    // Only sync modified records
+  agent_full_sync_interval_hours: number; // Force full sync every N hours
+}

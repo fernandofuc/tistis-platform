@@ -1,0 +1,3108 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>TisTis.Agent.Core</name>
+    </assembly>
+    <members>
+        <member name="T:TisTis.Agent.Core.Api.ITisTisApiClient">
+            <summary>
+            Interface for TIS TIS API client
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.ITisTisApiClient.RegisterAsync(TisTis.Agent.Core.Api.Requests.RegisterRequest,System.Threading.CancellationToken)">
+            <summary>
+            Register the agent with TIS TIS
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.ITisTisApiClient.SendHeartbeatAsync(System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Send heartbeat to TIS TIS
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.ITisTisApiClient.SendSyncDataAsync``1(System.String,System.Collections.Generic.IEnumerable{``0},System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Send sync data to TIS TIS
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.ITisTisApiClient.PingAsync(System.Threading.CancellationToken)">
+            <summary>
+            Check if the API is reachable
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Requests.RegisterRequest">
+            <summary>
+            Request to register the agent with TIS TIS
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Requests.HeartbeatRequest">
+            <summary>
+            Request to send heartbeat
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Requests.SyncRequest`1">
+            <summary>
+            Request to send sync data
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Responses.ApiResponse">
+            <summary>
+            Base response from TIS TIS API
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Responses.RegisterResponse">
+            <summary>
+            Response from agent registration
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Responses.SyncConfigResponse">
+            <summary>
+            Sync configuration from server
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Responses.HeartbeatResponse">
+            <summary>
+            Response from heartbeat
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.Responses.SyncResponse">
+            <summary>
+            Response from sync data
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Api.TisTisApiClient">
+            <summary>
+            HTTP client for communicating with TIS TIS API.
+            FIX SEC-04: Supports certificate pinning for enhanced security.
+            FIX SEC-02: Uses secure logging practices.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.#ctor(TisTis.Agent.Core.Configuration.AgentConfiguration,Microsoft.Extensions.Logging.ILogger{TisTis.Agent.Core.Api.TisTisApiClient},TisTis.Agent.Core.Security.CertificateValidator,System.Net.Http.HttpClient)">
+            <summary>
+            Creates API client with optional certificate validator.
+            FIX SEC-04: Certificate pinning support.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.CreateHttpClient">
+            <summary>
+            Creates HttpClient with security configuration.
+            FIX SEC-04: Uses CertificateValidator when available.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.CreateAuthenticatedRequest(System.Net.Http.HttpMethod,System.String,System.Object)">
+            <summary>
+            FIX S4: Creates an HTTP request with authentication headers.
+            This method adds auth via headers (more secure as headers aren't typically logged).
+            For backwards compatibility, the body may still contain credentials until the backend
+            is updated to read exclusively from headers.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.ExecuteAuthenticatedRequestAsync(System.Net.Http.HttpMethod,System.String,System.Object,System.Threading.CancellationToken)">
+            <summary>
+            FIX S4: Executes an authenticated request using headers for auth.
+            Wraps the retry policy and handles common response patterns.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.RegisterAsync(TisTis.Agent.Core.Api.Requests.RegisterRequest,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.SendHeartbeatAsync(System.String,System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.SendSyncDataAsync``1(System.String,System.Collections.Generic.IEnumerable{``0},System.Int32,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.PingAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.Dispose">
+            <summary>
+            Dispose resources
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Api.TisTisApiClient.Dispose(System.Boolean)">
+            <summary>
+            Dispose pattern implementation
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Configuration.AgentConfiguration">
+            <summary>
+            Main configuration for TIS TIS Local Agent.
+            Loaded from appsettings.json and optionally overridden by environment variables.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Configuration.AgentConfiguration.SectionName">
+            <summary>
+            Configuration section name in appsettings.json
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.AgentId">
+            <summary>
+            Unique identifier for this agent instance (generated during installation)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.AuthToken">
+            <summary>
+            Authentication token for TIS TIS API (stored encrypted with DPAPI)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.TenantId">
+            <summary>
+            TIS TIS Tenant ID this agent belongs to
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.IntegrationId">
+            <summary>
+            TIS TIS Integration ID this agent is associated with
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.BranchId">
+            <summary>
+            Optional Branch ID for multi-branch restaurants
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.Api">
+            <summary>
+            TIS TIS API configuration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.SoftRestaurant">
+            <summary>
+            Soft Restaurant connection configuration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.Sync">
+            <summary>
+            Sync engine configuration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.Logging">
+            <summary>
+            Logging configuration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.Security">
+            <summary>
+            Security configuration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.AgentConfiguration.Version">
+            <summary>
+            Agent version (set at build time)
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Configuration.AgentConfiguration.Validate">
+            <summary>
+            Validate the configuration
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Configuration.ApiOptions">
+            <summary>
+            TIS TIS API connection options
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.BaseUrl">
+            <summary>
+            Base URL for TIS TIS API (e.g., https://app.tistis.com)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.RegisterEndpoint">
+            <summary>
+            Endpoint for agent registration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.HeartbeatEndpoint">
+            <summary>
+            Endpoint for heartbeat
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.SyncEndpoint">
+            <summary>
+            Endpoint for sync data
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.TimeoutSeconds">
+            <summary>
+            HTTP request timeout in seconds
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.MaxRetries">
+            <summary>
+            Maximum retry attempts for failed requests
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.RetryDelayMs">
+            <summary>
+            Base delay between retries in milliseconds (exponential backoff)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.ApiOptions.ValidateSsl">
+            <summary>
+            Whether to validate SSL certificates (always true in production)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Configuration.SoftRestaurantOptions">
+            <summary>
+            Soft Restaurant database connection options
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.ConnectionString">
+            <summary>
+            SQL Server connection string (set during detection/installation)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.SqlInstance">
+            <summary>
+            SQL Server instance name (e.g., DVSOFT, SQLEXPRESS)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.DatabaseName">
+            <summary>
+            Database name (e.g., DVSOFT, SOFTRESTAURANT)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.Version">
+            <summary>
+            Detected Soft Restaurant version
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.EmpresaId">
+            <summary>
+            Empresa ID from SR configuration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.QueryTimeoutSeconds">
+            <summary>
+            SQL query timeout in seconds
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.MinPoolSize">
+            <summary>
+            Connection pool minimum size
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SoftRestaurantOptions.MaxPoolSize">
+            <summary>
+            Connection pool maximum size
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Configuration.SyncOptions">
+            <summary>
+            Sync engine options
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.IntervalSeconds">
+            <summary>
+            Interval between sync cycles in seconds
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.SyncSales">
+            <summary>
+            Whether to sync sales data
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.SyncMenu">
+            <summary>
+            Whether to sync menu/products
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.SyncInventory">
+            <summary>
+            Whether to sync inventory
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.SyncTables">
+            <summary>
+            Whether to sync table status
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.BatchSize">
+            <summary>
+            Maximum records per batch
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.MaxRecordsPerQuery">
+            <summary>
+            Maximum records to fetch per query
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.HeartbeatIntervalSeconds">
+            <summary>
+            Heartbeat interval in seconds
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.FullSyncIntervalMinutes">
+            <summary>
+            Interval for full menu/inventory sync in minutes (0 = disabled)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.MaxConsecutiveErrors">
+            <summary>
+            Maximum consecutive errors before pausing sync
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SyncOptions.ErrorPauseSeconds">
+            <summary>
+            Pause duration in seconds after max errors reached
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Configuration.LoggingOptions">
+            <summary>
+            Logging options
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.LoggingOptions.LogDirectory">
+            <summary>
+            Log file directory (default: %ProgramData%\TisTis\Agent\Logs)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.LoggingOptions.MinimumLevel">
+            <summary>
+            Minimum log level (Verbose, Debug, Information, Warning, Error, Fatal)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.LoggingOptions.RetainDays">
+            <summary>
+            Days to retain log files
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.LoggingOptions.MaxFileSizeMb">
+            <summary>
+            Maximum log file size in MB
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.LoggingOptions.WriteToEventLog">
+            <summary>
+            Whether to write to Windows Event Log
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.LoggingOptions.EventLogSource">
+            <summary>
+            Windows Event Log source name
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Configuration.SecurityOptions">
+            <summary>
+            Security options
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SecurityOptions.UseDataProtection">
+            <summary>
+            Whether credentials are stored encrypted with DPAPI
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SecurityOptions.CredentialStorePath">
+            <summary>
+            Path to credential store file
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SecurityOptions.MinTlsVersion">
+            <summary>
+            Minimum TLS version (Tls12 or Tls13)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SecurityOptions.UseCertificatePinning">
+            <summary>
+            Whether to pin TIS TIS certificate (enhanced security)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Configuration.SecurityOptions.CertificateThumbprint">
+            <summary>
+            Expected TIS TIS certificate thumbprint (for pinning)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Configuration.ValidationResult">
+            <summary>
+            Validation result for configuration
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.ISoftRestaurantRepository">
+            <summary>
+            Interface for reading data from Soft Restaurant database
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.TestConnectionAsync(System.Threading.CancellationToken)">
+            <summary>
+            Test the database connection
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetNewVentasAsync(System.Int64,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Get new/modified sales since last sync
+            </summary>
+            <param name="sinceId">Get sales with ID greater than this</param>
+            <param name="limit">Maximum number of sales to return</param>
+            <param name="cancellationToken">Cancellation token</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetProductosAsync(System.Boolean,System.Threading.CancellationToken)">
+            <summary>
+            Get all products/menu items
+            </summary>
+            <param name="includeInactive">Include inactive products</param>
+            <param name="cancellationToken">Cancellation token</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetModifiedProductosAsync(System.DateTime,System.Threading.CancellationToken)">
+            <summary>
+            Get products modified since a specific date
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetInventarioAsync(System.Threading.CancellationToken)">
+            <summary>
+            Get all inventory items
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetLowStockItemsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Get inventory items with low stock
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetMesasAsync(System.Threading.CancellationToken)">
+            <summary>
+            Get all tables with current status
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetMaxVentaIdAsync(System.Threading.CancellationToken)">
+            <summary>
+            Get the highest synced venta ID
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.GetStatsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Get database statistics
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.ISoftRestaurantRepository.UpdateSyncPosition(System.Int64)">
+            <summary>
+            Update the last synced timestamp/ID
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.DatabaseStats">
+            <summary>
+            Statistics about the SR database
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRInventario">
+            <summary>
+            Represents an inventory item from Soft Restaurant
+            Mapped from: dbo.Inventario + dbo.CategoriasInventario
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.Codigo">
+            <summary>
+            Item code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.Descripcion">
+            <summary>
+            Item description
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.UnidadMedida">
+            <summary>
+            Unit of measure (kg, lt, pza, etc.)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.ExistenciaActual">
+            <summary>
+            Current stock quantity
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.ExistenciaMinima">
+            <summary>
+            Minimum stock level (reorder point)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.ExistenciaMaxima">
+            <summary>
+            Maximum stock level
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.CostoPromedio">
+            <summary>
+            Average cost
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.UltimoCosto">
+            <summary>
+            Last purchase cost
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.UltimaCompra">
+            <summary>
+            Last purchase date
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.Categoria">
+            <summary>
+            Category name
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.CodigoCategoria">
+            <summary>
+            Category code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.Activo">
+            <summary>
+            Whether item is active
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.Almacen">
+            <summary>
+            Warehouse/location code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.CodigoProveedor">
+            <summary>
+            Supplier/vendor code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.NombreProveedor">
+            <summary>
+            Supplier/vendor name
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.CodigoBarras">
+            <summary>
+            Barcode
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.EsPerecedero">
+            <summary>
+            Whether this is a perishable item
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.DiasVigencia">
+            <summary>
+            Shelf life in days
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.Temperatura">
+            <summary>
+            Storage temperature requirements
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.UltimoConteo">
+            <summary>
+            Last inventory count date
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.StockBajo">
+            <summary>
+            Whether item is below minimum stock
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRInventario.ValorInventario">
+            <summary>
+            Stock value (ExistenciaActual * CostoPromedio)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRMesa">
+            <summary>
+            Represents a table/mesa from Soft Restaurant
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Numero">
+            <summary>
+            Table number
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Nombre">
+            <summary>
+            Table name/description
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Capacidad">
+            <summary>
+            Seating capacity
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Seccion">
+            <summary>
+            Section/area code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Estado">
+            <summary>
+            Current status (Libre, Ocupada, Reservada, etc.)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.OrdenActual">
+            <summary>
+            Current order number if occupied
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.MeseroAsignado">
+            <summary>
+            Current waiter/server assigned
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.HoraOcupacion">
+            <summary>
+            Time when table was occupied
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.NumeroComensales">
+            <summary>
+            Number of guests at table
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Activo">
+            <summary>
+            Whether table is active
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Orden">
+            <summary>
+            Display order
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.PosicionX">
+            <summary>
+            X position for floor map
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.PosicionY">
+            <summary>
+            Y position for floor map
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRMesa.Forma">
+            <summary>
+            Table shape (Rectangular, Redonda, etc.)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRProducto">
+            <summary>
+            Represents a menu item/product from Soft Restaurant
+            Mapped from: dbo.Productos + dbo.Categorias
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Codigo">
+            <summary>
+            Product code (SKU)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Descripcion">
+            <summary>
+            Product name/description
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Precio">
+            <summary>
+            Regular price
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.PrecioMayoreo">
+            <summary>
+            Wholesale/second price tier
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.PrecioPromocion">
+            <summary>
+            Happy hour/promotional price
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Costo">
+            <summary>
+            Cost price (for margin calculation)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Categoria">
+            <summary>
+            Category name
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.CodigoCategoria">
+            <summary>
+            Category code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.SubCategoria">
+            <summary>
+            Subcategory name
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Activo">
+            <summary>
+            Whether product is active
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.EsReceta">
+            <summary>
+            Whether this is a recipe (composed of other items)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.EsModificador">
+            <summary>
+            Whether this is a modifier group
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.TiempoPreparacion">
+            <summary>
+            Preparation time in minutes
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Calorias">
+            <summary>
+            Calorie count
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Alergenos">
+            <summary>
+            Allergen information
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.DescripcionMenu">
+            <summary>
+            Product description for menu display
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Imagen">
+            <summary>
+            Image path or URL
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.CodigoBarras">
+            <summary>
+            Barcode/UPC
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.UnidadMedida">
+            <summary>
+            Unit of measure (pieza, kg, lt, etc.)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.TasaImpuesto">
+            <summary>
+            Tax rate percentage
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.PrecioIncluyeImpuesto">
+            <summary>
+            Whether price includes tax
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Orden">
+            <summary>
+            Display order in category
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Impresora">
+            <summary>
+            Printer/station to send orders to
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.FechaModificacion">
+            <summary>
+            Last modified date
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Modificadores">
+            <summary>
+            Available modifiers for this product
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRProducto.Receta">
+            <summary>
+            Recipe components (if EsReceta = true)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRModificador">
+            <summary>
+            Modifier option for a product
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.CodigoGrupo">
+            <summary>
+            Modifier group code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.NombreGrupo">
+            <summary>
+            Modifier group name
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.Codigo">
+            <summary>
+            Modifier code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.Descripcion">
+            <summary>
+            Modifier description
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.PrecioAdicional">
+            <summary>
+            Additional price for this modifier
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.PorDefecto">
+            <summary>
+            Whether this modifier is selected by default
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.MinimoSelecciones">
+            <summary>
+            Minimum selections required
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRModificador.MaximoSelecciones">
+            <summary>
+            Maximum selections allowed
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRRecetaItem">
+            <summary>
+            Recipe component (for composed products)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRRecetaItem.CodigoInsumo">
+            <summary>
+            Inventory item code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRRecetaItem.DescripcionInsumo">
+            <summary>
+            Inventory item description
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRRecetaItem.Cantidad">
+            <summary>
+            Quantity required per unit of product
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRRecetaItem.UnidadMedida">
+            <summary>
+            Unit of measure
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRVenta">
+            <summary>
+            Represents a sale ticket from Soft Restaurant
+            Mapped from: dbo.Ventas + dbo.DetalleVentas + dbo.PagosVenta
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.IdVenta">
+            <summary>
+            Internal ID from SR database
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.NumeroOrden">
+            <summary>
+            Order number (ticket number)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.FolioVenta">
+            <summary>
+            Folio/receipt number
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Estacion">
+            <summary>
+            POS station identifier
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Almacen">
+            <summary>
+            Warehouse/location code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.FechaApertura">
+            <summary>
+            When the order was opened
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.FechaCierre">
+            <summary>
+            When the order was closed/paid
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.NumeroMesa">
+            <summary>
+            Table number (for dine-in)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.CodigoCliente">
+            <summary>
+            Customer code from SR
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.NombreCliente">
+            <summary>
+            Customer name
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.CodigoMesero">
+            <summary>
+            Server/waiter code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.NombreMesero">
+            <summary>
+            Server/waiter name
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Observaciones">
+            <summary>
+            Order notes/comments
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.SubtotalSinImpuestos">
+            <summary>
+            Subtotal before taxes
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.TotalImpuestos">
+            <summary>
+            Total taxes
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.TotalDescuentos">
+            <summary>
+            Total discounts applied
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.TotalPropinas">
+            <summary>
+            Total tips
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Total">
+            <summary>
+            Grand total
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Moneda">
+            <summary>
+            Currency code (default MXN)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Cancelada">
+            <summary>
+            Whether the order was cancelled
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Pagada">
+            <summary>
+            Whether the order is fully paid
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.TipoOrden">
+            <summary>
+            Order type (1=Dine-in, 2=Takeout, 3=Delivery, etc.)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.NumeroComensales">
+            <summary>
+            Number of guests
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Detalles">
+            <summary>
+            Line items in this order
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVenta.Pagos">
+            <summary>
+            Payments applied to this order
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRVentaDetalle">
+            <summary>
+            Line item detail for a sale
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Codigo">
+            <summary>
+            Product code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Descripcion">
+            <summary>
+            Product description
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Cantidad">
+            <summary>
+            Quantity ordered
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.PrecioUnitario">
+            <summary>
+            Unit price
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Importe">
+            <summary>
+            Line total (Cantidad * PrecioUnitario)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Descuento">
+            <summary>
+            Discount amount
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Impuesto">
+            <summary>
+            Tax amount
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Modificadores">
+            <summary>
+            Modifiers applied (e.g., "Sin cebolla, Extra queso")
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Notas">
+            <summary>
+            Item-level notes
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.CodigoCategoria">
+            <summary>
+            Category code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.Cancelado">
+            <summary>
+            Whether this item was voided
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.HoraEnvio">
+            <summary>
+            Time when item was sent to kitchen
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRVentaDetalle.HoraServido">
+            <summary>
+            Time when item was ready/served
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.Models.SRPago">
+            <summary>
+            Payment record for a sale
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.FormaPago">
+            <summary>
+            Payment method (Efectivo, Tarjeta, etc.)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.Monto">
+            <summary>
+            Payment amount
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.Referencia">
+            <summary>
+            Reference number (card auth, check number, etc.)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.Propina">
+            <summary>
+            Tip amount included in this payment
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.Moneda">
+            <summary>
+            Currency code
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.TipoCambio">
+            <summary>
+            Exchange rate (for non-MXN payments)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.Ultimos4Digitos">
+            <summary>
+            Last 4 digits of card (if applicable)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Database.Models.SRPago.MarcaTarjeta">
+            <summary>
+            Card brand (Visa, Mastercard, etc.)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Database.SoftRestaurantRepository">
+            <summary>
+            Repository for reading data from Soft Restaurant SQL Server database
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.TestConnectionAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetNewVentasAsync(System.Int64,System.Int32,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetProductosAsync(System.Boolean,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetModifiedProductosAsync(System.DateTime,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetInventarioAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetLowStockItemsAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetMesasAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetMaxVentaIdAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetStatsAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.UpdateSyncPosition(System.Int64)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetVentaDetallesBatchAsync(System.Collections.Generic.List{System.String},Microsoft.Data.SqlClient.SqlConnection,System.Threading.CancellationToken)">
+            <summary>
+            FIX S2: Batch load detalles for multiple orders in a single query.
+            Uses parameterized IN clause to prevent SQL injection.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Database.SoftRestaurantRepository.GetVentaPagosBatchAsync(System.Collections.Generic.List{System.String},Microsoft.Data.SqlClient.SqlConnection,System.Threading.CancellationToken)">
+            <summary>
+            FIX S2: Batch load pagos for multiple orders in a single query.
+            Uses parameterized IN clause to prevent SQL injection.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.DetectionResult">
+            <summary>
+            Complete result of Soft Restaurant detection process
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.Success">
+            <summary>
+            Whether detection was successful (found a usable SR database)
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.DetectionStarted">
+            <summary>
+            Timestamp when detection started
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.DetectionCompleted">
+            <summary>
+            Timestamp when detection completed
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.DetectionDurationMs">
+            <summary>
+            Total detection duration in milliseconds
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.Version">
+            <summary>
+            Detected Soft Restaurant version (e.g., "10.5.2", "11.0.0")
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.InstallPath">
+            <summary>
+            Installation path on disk
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.ServiceName">
+            <summary>
+            Windows service name if running as service
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.ServiceStatus">
+            <summary>
+            Windows service status
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.SqlInstance">
+            <summary>
+            SQL Server instance name (e.g., "DVSOFT", "SQLEXPRESS")
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.DatabaseName">
+            <summary>
+            Database name (e.g., "DVSOFT", "SOFTRESTAURANT")
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.EmpresaId">
+            <summary>
+            Empresa ID from SR configuration
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.ConnectionString">
+            <summary>
+            Full connection string for the detected database
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.Methods">
+            <summary>
+            Detection methods that were attempted and their results
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.Errors">
+            <summary>
+            Error messages if detection failed
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionResult.Metadata">
+            <summary>
+            Additional metadata about the detection
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.DetectionResult.Failed(System.String)">
+            <summary>
+            Create a failed detection result with error message
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.DetectionResult.GetSummary">
+            <summary>
+            Get a summary string for logging
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.DetectionMethod">
+            <summary>
+            Individual detection method result
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionMethod.Name">
+            <summary>
+            Name of the detection method (e.g., "Registry", "WindowsService", "SQL_DVSOFT")
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionMethod.Success">
+            <summary>
+            Whether this method found Soft Restaurant
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionMethod.Details">
+            <summary>
+            Detailed results from this method
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionMethod.Error">
+            <summary>
+            Error message if method failed
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Detection.DetectionMethod.DurationMs">
+            <summary>
+            Duration of this method in milliseconds
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.RegistryDetectionResult">
+            <summary>
+            Result from registry detection
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.ServiceDetectionResult">
+            <summary>
+            Result from Windows service detection
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.SqlDetectionResult">
+            <summary>
+            Result from SQL database detection
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.ISoftRestaurantDetector">
+            <summary>
+            Interface for Soft Restaurant detection service
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.ISoftRestaurantDetector.DetectAsync(System.Threading.CancellationToken)">
+            <summary>
+            Performs full detection of Soft Restaurant installation
+            Checks registry, Windows services, and SQL Server instances
+            </summary>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Detection result with connection details if found</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.ISoftRestaurantDetector.QuickCheck">
+            <summary>
+            Quick check if SR appears to be installed (for UI feedback)
+            Does not validate database connection
+            </summary>
+            <returns>True if SR indicators found</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.ISoftRestaurantDetector.TestConnectionAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Test a specific SQL Server connection
+            </summary>
+            <param name="connectionString">Connection string to test</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>True if connection successful and SR tables exist</returns>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.RegistryDetector">
+            <summary>
+            Detects Soft Restaurant installation via Windows Registry
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.RegistryDetector.KnownRegistryPaths">
+            <summary>
+            Known registry paths where Soft Restaurant registers itself
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.RegistryDetector.ValueNames">
+            <summary>
+            Registry value names that contain useful information
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.RegistryDetector.DetectAsync(System.Collections.Generic.IEnumerable{System.String},System.Threading.CancellationToken)">
+            <summary>
+            Detect SR via registry entries
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.RegistryDetector.QuickCheck">
+            <summary>
+            Quick check for any SR registry keys
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.ServiceDetector">
+            <summary>
+            Detects Soft Restaurant via Windows Services
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.ServiceDetector.KnownServiceNames">
+            <summary>
+            Known service names associated with Soft Restaurant
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.ServiceDetector.SqlServicePatterns">
+            <summary>
+            SQL Server service name patterns
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.ServiceDetector.DetectAsync(System.Threading.CancellationToken)">
+            <summary>
+            Detect SR-related Windows services
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.ServiceDetector.GetSqlServerInstances">
+            <summary>
+            Get list of all SQL Server instances on this machine
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.SoftRestaurantDetector">
+            <summary>
+            Main service that orchestrates Soft Restaurant detection
+            Uses multiple detection methods to find SR installation
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.SoftRestaurantDetector.KnownSqlInstances">
+            <summary>
+            Known SQL Server instance names commonly used by Soft Restaurant
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.SoftRestaurantDetector.KnownDatabaseNames">
+            <summary>
+            Known database names used by Soft Restaurant
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.SoftRestaurantDetector.RegistryPaths">
+            <summary>
+            Registry paths where SR might be registered
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.SoftRestaurantDetector.DetectAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.SoftRestaurantDetector.QuickCheck">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.SoftRestaurantDetector.TestConnectionAsync(System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:TisTis.Agent.Core.Detection.SqlInstanceDetector">
+            <summary>
+            Detects Soft Restaurant database in SQL Server instances
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.SqlInstanceDetector.KnownDatabaseNames">
+            <summary>
+            Known database names used by Soft Restaurant
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.SqlInstanceDetector.RequiredTables">
+            <summary>
+            Core tables that must exist in an SR database
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Detection.SqlInstanceDetector.OptionalTables">
+            <summary>
+            Optional tables that help identify SR version
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.SqlInstanceDetector.EnumerateInstancesAsync(System.Threading.CancellationToken)">
+            <summary>
+            Enumerate all SQL Server instances on this machine
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.SqlInstanceDetector.FindSRDatabaseAsync(System.String,System.Collections.Generic.IEnumerable{System.String},System.Threading.CancellationToken)">
+            <summary>
+            Find SR database in a specific SQL instance
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.SqlInstanceDetector.CheckDatabaseForSRAsync(System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Check if a specific database contains SR tables
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Detection.SqlInstanceDetector.DetectVersionFromTables(System.Collections.Generic.List{System.String})">
+            <summary>
+            Detect SR version based on table structure
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Logging.AgentLogger">
+            <summary>
+            Factory for creating configured Serilog loggers.
+            FIX SEC-02: Includes secure data redaction enricher.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.AgentLogger.CreateLogger(TisTis.Agent.Core.Configuration.LoggingOptions)">
+            <summary>
+            Create a configured Serilog logger with security features.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Logging.LoggerExtensions">
+            <summary>
+            Extension methods for logging specific agent events.
+            FIX SEC-02: Uses secure data redaction for sensitive values.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.LoggerExtensions.LogAgentRegistered(Serilog.ILogger,System.String,System.String)">
+            <summary>
+            FIX SEC-02: Uses redacted agent ID.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.LoggerExtensions.SanitizeExceptionMessage(System.Exception)">
+            <summary>
+            FIX SEC-02: Sanitizes exception messages to remove potential sensitive data.
+            FIX ITER1-B3: More precise token detection to avoid false positives.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.LoggerExtensions.SanitizeConnectionTarget(System.String)">
+            <summary>
+            FIX SEC-02: Sanitizes connection targets to hide server details.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Logging.SecureLogEnricher">
+            <summary>
+            Serilog enricher that redacts sensitive data from log properties.
+            FIX SEC-02: Prevents accidental exposure of credentials in logs.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Logging.SecureLogEnricher.FullyRedactedProperties">
+            <summary>
+            Property names that should be fully redacted
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Logging.SecureLogEnricher.PartiallyRedactedProperties">
+            <summary>
+            Property names that should be partially redacted (show first/last chars)
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Logging.SecureLogEnricher.SensitivePatterns">
+            <summary>
+            Patterns in property names that suggest sensitive data
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.Enrich(Serilog.Events.LogEvent,Serilog.Core.ILogEventPropertyFactory)">
+            <summary>
+            Enriches log event by redacting sensitive properties.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.ProcessProperty(System.String,Serilog.Events.LogEventPropertyValue)">
+            <summary>
+            Processes a single property and returns redacted value if needed.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.ShouldFullyRedact(System.String)">
+            <summary>
+            Checks if a property should be fully redacted.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.ShouldPartiallyRedact(System.String)">
+            <summary>
+            Checks if a property should be partially redacted.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.GetRedactedValue(Serilog.Events.LogEventPropertyValue)">
+            <summary>
+            Gets fully redacted value representation.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.GetPartiallyRedactedValue(Serilog.Events.LogEventPropertyValue)">
+            <summary>
+            Gets partially redacted value representation.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.ProcessStructure(Serilog.Events.StructureValue)">
+            <summary>
+            Processes structure values recursively.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.ProcessDictionary(Serilog.Events.DictionaryValue)">
+            <summary>
+            Processes dictionary values recursively.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricher.ProcessSequence(Serilog.Events.SequenceValue)">
+            <summary>
+            Processes sequence values recursively.
+            FIX ITER1-A4: Process elements that may contain sensitive nested properties.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Logging.SecureLogEnricherExtensions">
+            <summary>
+            Extension methods for adding secure enricher to Serilog configuration.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Logging.SecureLogEnricherExtensions.WithSecureDataRedaction(Serilog.Configuration.LoggerEnrichmentConfiguration)">
+            <summary>
+            Adds the secure log enricher to the logger configuration.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService">
+            <summary>
+            Interface for alerting service.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.EvaluateAsync(System.Threading.CancellationToken)">
+            <summary>
+            Evaluates current metrics against thresholds and generates alerts.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.GetActiveAlerts">
+            <summary>
+            Gets all active (unacknowledged) alerts.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.GetAllAlerts">
+            <summary>
+            Gets all alerts including acknowledged ones.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.AcknowledgeAlert(System.String)">
+            <summary>
+            Acknowledges an alert by ID.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.ClearOldAlerts(System.TimeSpan)">
+            <summary>
+            Clears resolved alerts older than specified age.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.RaiseAlert(TisTis.Agent.Core.Monitoring.Types.AlertSeverity,TisTis.Agent.Core.Monitoring.Types.SubsystemType,System.String,System.String,System.String,System.Nullable{System.Double},System.Nullable{System.Double})">
+            <summary>
+            Raises a custom alert programmatically.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.GetStatistics">
+            <summary>
+            Gets alert statistics.
+            </summary>
+        </member>
+        <member name="E:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.AlertRaised">
+            <summary>
+            Event raised when a new alert is generated.
+            </summary>
+        </member>
+        <member name="E:TisTis.Agent.Core.Monitoring.Alerting.IAlertingService.AlertAcknowledged">
+            <summary>
+            Event raised when an alert is acknowledged.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Alerting.AlertEventArgs">
+            <summary>
+            Event arguments for alert events.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Alerting.AlertStatistics">
+            <summary>
+            Statistics about alerts.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Alerting.AlertingService">
+            <summary>
+            Service that monitors metrics against thresholds and generates alerts.
+            Thread-safe with alert deduplication to prevent spam.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.MinEvaluationInterval">
+            <summary>
+            Minimum interval between evaluations to prevent excessive processing.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.AlertCooldownPeriod">
+            <summary>
+            Cooldown period before re-raising the same alert type.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.MaxAlerts">
+            <summary>
+            FIX ITER2-A1: Maximum number of alerts to prevent memory leak.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.AbsoluteAlertTtl">
+            <summary>
+            FIX ITER2-A2: Absolute TTL for alerts (independent of acknowledgment).
+            Alerts older than this will be evicted regardless of their state.
+            </summary>
+        </member>
+        <member name="E:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.AlertRaised">
+            <inheritdoc />
+        </member>
+        <member name="E:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.AlertAcknowledged">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.EvaluateAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.GetActiveAlerts">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.GetAllAlerts">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.AcknowledgeAlert(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.ClearOldAlerts(System.TimeSpan)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.RaiseAlert(TisTis.Agent.Core.Monitoring.Types.AlertSeverity,TisTis.Agent.Core.Monitoring.Types.SubsystemType,System.String,System.String,System.String,System.Nullable{System.Double},System.Nullable{System.Double})">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.GetStatistics">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.EvaluateConsecutiveErrors(System.Collections.Generic.List{TisTis.Agent.Core.Monitoring.Types.MonitoringAlert},System.Collections.Generic.IReadOnlyList{TisTis.Agent.Core.Monitoring.Types.MetricDataPoint})">
+            FIX ITER1-C2: Accept cached metrics to avoid repeated GetMetrics() calls
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.EvaluateMemoryUsage(System.Collections.Generic.List{TisTis.Agent.Core.Monitoring.Types.MonitoringAlert},System.Collections.Generic.IReadOnlyList{TisTis.Agent.Core.Monitoring.Types.MetricDataPoint})">
+            FIX ITER1-C3: Accept cached metrics to avoid repeated GetMetrics() calls
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.EvaluateTimeSinceLastSync(System.Collections.Generic.List{TisTis.Agent.Core.Monitoring.Types.MonitoringAlert},System.Collections.Generic.IReadOnlyList{TisTis.Agent.Core.Monitoring.Types.MetricDataPoint})">
+            FIX ITER1-C4: Accept cached metrics to avoid repeated GetMetrics() calls
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.TryRaiseThresholdAlert(System.String,TisTis.Agent.Core.Monitoring.Types.AlertSeverity,TisTis.Agent.Core.Monitoring.Types.SubsystemType,System.String,System.String,System.String,System.Double,System.Double)">
+            <summary>
+            Tries to raise a threshold-based alert with cooldown support.
+            Returns null if the alert is on cooldown.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.OnAlertRaised(TisTis.Agent.Core.Monitoring.Types.MonitoringAlert)">
+            FIX ITER1-C5: Safe event invocation with copied delegate reference
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Alerting.AlertingService.OnAlertAcknowledged(TisTis.Agent.Core.Monitoring.Types.MonitoringAlert)">
+            FIX ITER1-C5: Safe event invocation with copied delegate reference
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Diagnostics.IDiagnosticsService">
+            <summary>
+            Interface for diagnostics service.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.IDiagnosticsService.CollectDiagnosticsAsync(System.Threading.CancellationToken)">
+            <summary>
+            Collects comprehensive diagnostic information.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.IDiagnosticsService.GenerateReportAsync(System.Threading.CancellationToken)">
+            <summary>
+            Generates a diagnostic report as formatted text.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.IDiagnosticsService.GetQuickSummary">
+            <summary>
+            Gets a quick diagnostic summary without full collection.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.IDiagnosticsService.GetRecentLogs(System.Int32)">
+            <summary>
+            Gets recent log entries (redacted).
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.IDiagnosticsService.AddLogEntry(System.String)">
+            <summary>
+            Adds a log entry to the in-memory buffer.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticQuickSummary">
+            <summary>
+            Quick diagnostic summary for fast checks.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService">
+            <summary>
+            Service that collects comprehensive diagnostic information.
+            Implements secure redaction of sensitive data.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.MaxLogEntries">
+            <summary>
+            Maximum number of log entries to keep in memory.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.SensitiveConfigKeys">
+            <summary>
+            Configuration keys that should be redacted.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.SensitiveLogPatterns">
+            <summary>
+            FIX ITER1-D1: Static patterns to avoid allocation on every AddLogEntry call
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.ValueDelimiters">
+            <summary>
+            FIX ITER1-D2: Static array for value delimiters
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.CollectDiagnosticsAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.GenerateReportAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.GetQuickSummary">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.GetRecentLogs(System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.AddLogEntry(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Diagnostics.DiagnosticsService.RedactLogEntry(System.String)">
+            FIX ITER1-D3: Use static patterns to avoid allocation on every call
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Diagnostics.CircularBuffer`1">
+            <summary>
+            Thread-safe circular buffer for log entries.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.HealthCheck.IHealthCheckService">
+            <summary>
+            Interface for health check service.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.HealthCheck.IHealthCheckService.CheckHealthAsync(System.Threading.CancellationToken)">
+            <summary>
+            Performs comprehensive health check of all subsystems.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.HealthCheck.IHealthCheckService.CheckSubsystemAsync(TisTis.Agent.Core.Monitoring.Types.SubsystemType,System.Threading.CancellationToken)">
+            <summary>
+            Checks health of a specific subsystem.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.HealthCheck.IHealthCheckService.GetLastHealthReport">
+            <summary>
+            Gets the last cached health report (without performing new checks).
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.HealthCheck.IHealthCheckService.StartTime">
+            <summary>
+            Agent start time for uptime calculation.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService">
+            <summary>
+            Comprehensive health check service for the TIS TIS Agent.
+            Checks all subsystems and provides aggregated health status.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService._checkSemaphore">
+            <summary>
+            FIX ITER2-E1: Use SemaphoreSlim to prevent concurrent health checks.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService.StartTime">
+            <inheritdoc />
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService.CacheDuration">
+            <summary>
+            Cache duration for health reports.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService.CheckHealthAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService.GetCachedReportIfValid">
+            <summary>
+            FIX ITER2-E4: Helper method to check cache validity.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService.CheckSubsystemAsync(TisTis.Agent.Core.Monitoring.Types.SubsystemType,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.HealthCheck.HealthCheckService.GetLastHealthReport">
+            <inheritdoc />
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector">
+            <summary>
+            Interface for metrics collection.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.IncrementCounter(System.String,System.Int64,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Records a counter increment.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.RecordGauge(System.String,System.Double,System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Records a gauge value.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.RecordHistogram(System.String,System.Double,System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Records a value for histogram distribution.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.StartTimer(System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Starts a timer and returns a disposable that records the duration on dispose.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.GetMetrics">
+            <summary>
+            Gets all current metric data points.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.GetHistogram(System.String)">
+            <summary>
+            Gets histogram statistics for a specific metric.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.GetAllHistograms">
+            <summary>
+            Gets all histogram metrics.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.Reset">
+            <summary>
+            Resets all metrics (useful for testing or periodic cleanup).
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.IMetricsCollector.GetSummary">
+            <summary>
+            Gets metrics summary for reporting.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Metrics.MetricsSummary">
+            <summary>
+            Summary of collected metrics.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector">
+            <summary>
+            Collects and aggregates metrics for the TIS TIS Agent.
+            Thread-safe implementation using concurrent collections.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.MaxMetricsPerType">
+            <summary>
+            FIX ITER2-B1: Maximum number of unique metrics per type to prevent cardinality explosion.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector._cardinalityWarningLogged">
+            <summary>
+            FIX ITER2-B2: Flag to log cardinality warnings only once.
+            FIX ITER3-A1: Use int with Interlocked for atomic compare-and-swap.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.IncrementCounter(System.String,System.Int64,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.RecordGauge(System.String,System.Double,System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.RecordHistogram(System.String,System.Double,System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <inheritdoc />
+            FIX ITER1-B2: Use optimized circular buffer via AddValue method
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.StartTimer(System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.GetMetrics">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.GetHistogram(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.GetAllHistograms">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.Reset">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.GetSummary">
+            <inheritdoc />
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.HistogramMetricState">
+            FIX ITER1-B1: Use dedicated lock object and optimized circular buffer
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.CalculateHistogramStats(TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.HistogramMetricState)">
+            FIX ITER1-B3: Use GetValuesCopy to minimize lock duration
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.Metrics.MetricsCollector.LogCardinalityWarning(System.String)">
+            <summary>
+            FIX ITER2-B8: Log cardinality warning only once to avoid log spam.
+            FIX ITER3-A2: Use Interlocked.CompareExchange for thread-safe check-then-act.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator">
+            <summary>
+            Interface for monitoring orchestrator.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.CurrentHealthStatus">
+            <summary>
+            Gets the current health status.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.HealthChecks">
+            <summary>
+            Gets the health check service.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.Metrics">
+            <summary>
+            Gets the metrics collector.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.Alerts">
+            <summary>
+            Gets the alerting service.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.Diagnostics">
+            <summary>
+            Gets the diagnostics service.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.ForceHealthCheckAsync(System.Threading.CancellationToken)">
+            <summary>
+            Forces an immediate health check.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.RecordSyncOperation(System.Boolean,System.TimeSpan,System.Int32)">
+            <summary>
+            Records a sync operation metric.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.RecordApiCall(System.Boolean,System.TimeSpan,System.String)">
+            <summary>
+            Records an API call metric.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.RecordDbQuery(System.Boolean,System.TimeSpan,System.String)">
+            <summary>
+            Records a database query metric.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.UpdateConsecutiveErrors(System.Int32)">
+            <summary>
+            Updates consecutive error count.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.RecordLastSuccessfulSync">
+            <summary>
+            Records last successful sync time.
+            </summary>
+        </member>
+        <member name="E:TisTis.Agent.Core.Monitoring.IMonitoringOrchestrator.HealthStatusChanged">
+            <summary>
+            Event raised when health status changes.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.HealthStatusChangedEventArgs">
+            <summary>
+            Event arguments for health status change.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator">
+            <summary>
+            Orchestrates all monitoring services with periodic checks.
+            Runs as a background hosted service.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.HealthCheckInterval">
+            <summary>
+            Interval between health checks.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.AlertEvaluationInterval">
+            <summary>
+            Interval between alert evaluations.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.MetricSnapshotInterval">
+            <summary>
+            Interval between metric snapshots (for process metrics).
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.AlertCleanupInterval">
+            <summary>
+            Interval for cleaning up old alerts.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.MaxAlertAge">
+            <summary>
+            Maximum age for acknowledged alerts before cleanup.
+            </summary>
+        </member>
+        <member name="E:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.HealthStatusChanged">
+            <inheritdoc />
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.CurrentHealthStatus">
+            <inheritdoc />
+            FIX ITER1-A2: Thread-safe health status with atomic check-and-set
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.HealthChecks">
+            <inheritdoc />
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.Metrics">
+            <inheritdoc />
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.Alerts">
+            <inheritdoc />
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.Diagnostics">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.ForceHealthCheckAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.RecordSyncOperation(System.Boolean,System.TimeSpan,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.RecordApiCall(System.Boolean,System.TimeSpan,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.RecordDbQuery(System.Boolean,System.TimeSpan,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.UpdateConsecutiveErrors(System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.RecordLastSuccessfulSync">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.OnAlertRaised(System.Object,TisTis.Agent.Core.Monitoring.Alerting.AlertEventArgs)">
+            FIX ITER1-A3: Added disposal check to event handler
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.OnAlertAcknowledged(System.Object,TisTis.Agent.Core.Monitoring.Alerting.AlertEventArgs)">
+            FIX ITER1-A3: Added disposal check to event handler
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.OnHealthStatusChanged(TisTis.Agent.Core.Monitoring.Types.HealthStatus,TisTis.Agent.Core.Monitoring.Types.HealthStatus)">
+            FIX ITER1-A4: Fixed unsafe event invocation pattern
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringOrchestrator.Dispose">
+            FIX ITER1-A5: Proper dispose pattern for BackgroundService inheritance
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.MonitoringServiceExtensions">
+            <summary>
+            Extension methods for registering monitoring services.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringServiceExtensions.AddTisTisMonitoring(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Action{TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds})">
+            <summary>
+            Adds all monitoring services to the service collection.
+            Includes health checks, metrics, alerting, diagnostics, and orchestrator.
+            </summary>
+            <param name="services">The service collection</param>
+            <param name="configureThresholds">Optional action to configure monitoring thresholds</param>
+            <returns>The service collection for chaining</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringServiceExtensions.AddTisTisMonitoringMinimal(Microsoft.Extensions.DependencyInjection.IServiceCollection)">
+            <summary>
+            Adds minimal monitoring services (metrics and basic health checks only).
+            Useful for testing or lightweight deployments.
+            </summary>
+            <param name="services">The service collection</param>
+            <returns>The service collection for chaining</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Monitoring.MonitoringServiceExtensions.ValidateThresholds(TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds)">
+            <summary>
+            FIX ITER2-C3: Validates monitoring thresholds to prevent invalid configuration.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.HealthStatus">
+            <summary>
+            Overall health status of the agent.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.HealthStatus.Healthy">
+            <summary>All systems operational</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.HealthStatus.Degraded">
+            <summary>Some issues detected but agent is functional</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.HealthStatus.Unhealthy">
+            <summary>Critical issues preventing normal operation</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.HealthStatus.Unknown">
+            <summary>Status unknown (check failed)</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.AlertSeverity">
+            <summary>
+            Severity level for alerts and issues.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.AlertSeverity.Info">
+            <summary>Informational - no action required</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.AlertSeverity.Warning">
+            <summary>Warning - should be investigated</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.AlertSeverity.Error">
+            <summary>Error - requires attention</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.AlertSeverity.Critical">
+            <summary>Critical - immediate action required</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.MetricType">
+            <summary>
+            Type of metric being recorded.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.MetricType.Counter">
+            <summary>Counter that only increases (e.g., total syncs)</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.MetricType.Gauge">
+            <summary>Value that can go up or down (e.g., queue size)</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.MetricType.Histogram">
+            <summary>Distribution of values (e.g., response times)</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.MetricType.Rate">
+            <summary>Rate per time period (e.g., syncs per minute)</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.SubsystemType">
+            <summary>
+            Categories of subsystems that can be monitored.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.SubsystemType.Agent">
+            <summary>Core agent service</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.SubsystemType.SyncEngine">
+            <summary>Synchronization engine</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.SubsystemType.Database">
+            <summary>Database connection</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.SubsystemType.ApiClient">
+            <summary>API client for TIS TIS server</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.SubsystemType.CredentialStore">
+            <summary>Credential storage</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.SubsystemType.Logging">
+            <summary>Logging subsystem</summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Monitoring.Types.SubsystemType.Security">
+            <summary>SSL/TLS validation</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult">
+            <summary>
+            Health check result for a single subsystem.
+            Uses record type to support 'with' expressions for immutable modifications.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult.Subsystem">
+            <summary>Name of the subsystem</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult.Status">
+            <summary>Current health status</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult.Message">
+            <summary>Human-readable status message</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult.CheckDuration">
+            <summary>Time taken to perform the check</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult.CheckedAt">
+            <summary>When the check was performed</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult.Metadata">
+            <summary>Additional diagnostic data</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.SubsystemHealthResult.ErrorDetails">
+            <summary>Error details if unhealthy</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport">
+            <summary>
+            Comprehensive health report for the entire agent.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport.OverallStatus">
+            <summary>Overall agent health status</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport.Version">
+            <summary>Agent version</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport.GeneratedAt">
+            <summary>When the report was generated</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport.Uptime">
+            <summary>Agent uptime</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport.Subsystems">
+            <summary>Health results for each subsystem</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport.Issues">
+            <summary>Summary of issues found</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.AgentHealthReport.Recommendation">
+            <summary>Overall recommendation</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.MetricDataPoint">
+            <summary>
+            A single metric data point.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MetricDataPoint.Name">
+            <summary>Unique identifier for this metric</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MetricDataPoint.Type">
+            <summary>Type of metric</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MetricDataPoint.Value">
+            <summary>Current value</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MetricDataPoint.Unit">
+            <summary>Unit of measurement (e.g., "ms", "records", "bytes")</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MetricDataPoint.RecordedAt">
+            <summary>When the metric was recorded</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MetricDataPoint.Tags">
+            <summary>Tags for filtering/grouping</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.HistogramMetric">
+            <summary>
+            Histogram data with distribution statistics.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.Name">
+            <summary>Metric name</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.Count">
+            <summary>Number of samples</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.Sum">
+            <summary>Sum of all values</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.Min">
+            <summary>Minimum value</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.Max">
+            <summary>Maximum value</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.Mean">
+            <summary>Average value</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.P50">
+            <summary>50th percentile</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.P90">
+            <summary>90th percentile</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.P99">
+            <summary>99th percentile</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.HistogramMetric.StdDev">
+            <summary>Standard deviation</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert">
+            <summary>
+            Alert notification.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.Id">
+            <summary>Unique identifier</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.Severity">
+            <summary>Alert severity level</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.Source">
+            <summary>Which subsystem raised the alert</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.Title">
+            <summary>Alert title/summary</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.Message">
+            <summary>Detailed message</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.RaisedAt">
+            <summary>When the alert was raised</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.MetricName">
+            <summary>Associated metric name if applicable</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.Threshold">
+            <summary>Threshold that was exceeded</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.ActualValue">
+            <summary>Actual value that triggered alert</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.Acknowledged">
+            <summary>Whether alert has been acknowledged</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringAlert.AcknowledgedAt">
+            <summary>When alert was acknowledged</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo">
+            <summary>
+            Diagnostic information for troubleshooting.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.CollectedAt">
+            <summary>When diagnostics were collected</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.AgentVersion">
+            <summary>Agent version</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.MachineName">
+            <summary>Machine name</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.OsVersion">
+            <summary>Operating system version</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.ProcessId">
+            <summary>Process ID</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.WorkingSetBytes">
+            <summary>Working set memory in bytes</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.ThreadCount">
+            <summary>Number of threads</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.ProcessStartTime">
+            <summary>Process start time</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.SyncEngineState">
+            <summary>Current sync engine state</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.LastSuccessfulSync">
+            <summary>Last successful sync time</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.ConsecutiveErrors">
+            <summary>Consecutive error count</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.LastError">
+            <summary>Last error message</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.ConfigurationSummary">
+            <summary>Configuration summary (redacted)</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.DiagnosticInfo.RecentLogs">
+            <summary>Recent log entries (last N entries)</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds">
+            <summary>
+            Configuration for monitoring thresholds.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds.MaxConsecutiveErrors">
+            <summary>Maximum consecutive errors before critical alert</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds.MaxSyncDurationSeconds">
+            <summary>Maximum sync duration in seconds before warning</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds.MaxApiResponseTimeMs">
+            <summary>Maximum API response time in ms before warning</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds.MaxDbQueryTimeMs">
+            <summary>Maximum database query time in ms before warning</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds.MaxMemoryUsageMb">
+            <summary>Maximum memory usage in MB before warning</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds.MinDiskSpaceMb">
+            <summary>Minimum disk space in MB before warning</summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Monitoring.Types.MonitoringThresholds.MaxTimeSinceLastSyncMinutes">
+            <summary>Maximum time since last sync in minutes before warning</summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Security.CertificateValidator">
+            <summary>
+            SSL/TLS certificate validation with optional certificate pinning.
+            FIX SEC-04: Implements certificate pinning for enhanced security.
+            Thread-safe implementation for concurrent access.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.CertificateValidator.MinRsaKeySize">
+            <summary>
+            Minimum acceptable RSA key size in bits
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.CertificateValidator.DefaultPinnedThumbprints">
+            <summary>
+            Known TIS TIS production certificate thumbprints.
+            Updated during deployment - add new certs before rotation.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.InitializePinnedCertificates">
+            <summary>
+            Initialize the set of pinned certificate identifiers.
+            Caller must hold _pinLock.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.GetValidationCallback">
+            <summary>
+            Gets the callback for server certificate validation (legacy).
+            Use GetHttpClientValidationCallback() for HttpClientHandler.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.GetHttpClientValidationCallback">
+            <summary>
+            Gets the callback for HttpClientHandler.ServerCertificateCustomValidationCallback.
+            FIX: Compatible with modern HttpClientHandler signature.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.ValidateServerCertificate(System.Object,System.Security.Cryptography.X509Certificates.X509Certificate,System.Security.Cryptography.X509Certificates.X509Chain,System.Net.Security.SslPolicyErrors)">
+            <summary>
+            Validates the server certificate.
+            FIX SEC-04: Implements certificate pinning when enabled.
+            FIX AUDIT-09: Enhanced validation for security best practices.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.CertificateValidator.MinEcdsaKeySize">
+            <summary>
+            Minimum acceptable ECDSA key size in bits
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.CertificateValidator.WeakSha1Oids">
+            <summary>
+            FIX ITER2-C3: Static array of weak SHA-1 OIDs to avoid allocation per call
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.ValidateKeyStrength(System.Security.Cryptography.X509Certificates.X509Certificate2)">
+            <summary>
+            FIX AUDIT-10: Validates certificate key strength.
+            FIX ITER1-B1: Fixed SHA1 detection logic.
+            FIX ITER1-B2: Added ECDSA/ECDsa validation.
+            FIX: Migrated from obsolete PublicKey.Key to GetRSAPublicKey()/GetECDsaPublicKey().
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.ValidatePinnedCertificate(System.Security.Cryptography.X509Certificates.X509Certificate2,System.Security.Cryptography.X509Certificates.X509Chain)">
+            <summary>
+            Validates certificate against pinned thumbprints and public key hashes.
+            FIX AUDIT-01: Properly handles X509Certificate disposal in chain.
+            FIX AUDIT-06: Uses lock for thread-safe HashSet access.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.ComputePublicKeyHash(System.Security.Cryptography.X509Certificates.X509Certificate2)">
+            <summary>
+            Computes SHA256 hash of the certificate's public key.
+            This is more stable across certificate renewals than thumbprint.
+            FIX ITER2-C4: Added exception handling for robustness.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.NormalizeThumbprint(System.String)">
+            <summary>
+            Normalizes a thumbprint for comparison.
+            Removes colons, spaces, and converts to uppercase.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.AddPinnedThumbprint(System.String)">
+            <summary>
+            Adds a certificate thumbprint to the pinned set at runtime.
+            Thread-safe for concurrent access.
+            </summary>
+            <param name="thumbprint">The certificate thumbprint to add</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CertificateValidator.AddPinnedPublicKeyHash(System.String)">
+            <summary>
+            Adds a public key hash to the pinned set at runtime.
+            Thread-safe for concurrent access.
+            </summary>
+            <param name="publicKeyHash">The SHA256 hash of the public key in hex</param>
+        </member>
+        <member name="P:TisTis.Agent.Core.Security.CertificateValidator.IsPinningEnabled">
+            <summary>
+            Checks if certificate pinning is currently enabled.
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Security.CertificateValidator.PinnedCertificateCount">
+            <summary>
+            Gets the count of pinned certificates.
+            Thread-safe access.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Security.CredentialStore">
+            <summary>
+            Secure credential storage using Windows Data Protection API (DPAPI).
+            Implements IDisposable for proper resource cleanup.
+            FIX SEC-01: Clears sensitive data from memory after use.
+            FIX SEC-06: Proper disposal pattern implementation.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.#ctor(System.String,System.Boolean,Microsoft.Extensions.Logging.ILogger{TisTis.Agent.Core.Security.CredentialStore})">
+            <summary>
+            Create a new credential store
+            </summary>
+            <param name="storePath">Path to the credential file</param>
+            <param name="useDataProtection">Whether to use DPAPI encryption</param>
+            <param name="logger">Logger instance</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.SetDirectoryPermissions(System.String)">
+            <summary>
+            Set restrictive permissions on the credential directory (Windows only)
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.SetFilePermissions">
+            <summary>
+            Set restrictive permissions on the credential file (Windows only)
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.Store(TisTis.Agent.Core.Security.StoredCredentials)">
+            <summary>
+            Store credentials securely (thread-safe with file locking)
+            FIX SEC-01: Clears plaintext data from memory after encryption.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.Retrieve">
+            <summary>
+            Retrieve stored credentials (thread-safe with file locking)
+            FIX SEC-01: Clears decrypted data from memory after parsing.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.Delete">
+            <summary>
+            Delete stored credentials
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.Exists">
+            <summary>
+            Check if credentials exist
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.UpdateToken(System.String)">
+            <summary>
+            Update auth token
+            FIX SEC-03: Validates token format before storing.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.Dispose">
+            <summary>
+            FIX SEC-06: Dispose pattern implementation.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.Dispose(System.Boolean)">
+            <summary>
+            FIX SEC-06: Protected dispose method.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.CredentialStore.ThrowIfDisposed">
+            <summary>
+            Throws ObjectDisposedException if disposed.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Security.StoredCredentials">
+            <summary>
+            Stored credentials model
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Security.SecureUtilities">
+            <summary>
+            Security utility functions for cryptographic operations and secure memory handling.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.SecureUtilities.MaxCredentialSizeBytes">
+            <summary>
+            Maximum allowed size for credentials (prevent memory DoS)
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.SecureUtilities.MaxTokenLength">
+            <summary>
+            Maximum allowed token length
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.ConstantTimeEquals(System.Byte[],System.Byte[])">
+            <summary>
+            FIX SEC-03: Performs a constant-time comparison of two byte arrays.
+            This prevents timing attacks where an attacker could measure comparison time
+            to infer information about the expected value.
+            FIX ITER1-A1: Maintains constant time even for null/length-mismatch cases.
+            </summary>
+            <param name="a">First byte array</param>
+            <param name="b">Second byte array</param>
+            <returns>True if arrays are equal, false otherwise</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.ConstantTimeEquals(System.String,System.String)">
+            <summary>
+            FIX SEC-03: Performs a constant-time comparison of two strings.
+            Converts to UTF-8 bytes for comparison.
+            FIX AUDIT-03: Maintains constant time even for null comparisons.
+            </summary>
+            <param name="a">First string</param>
+            <param name="b">Second string</param>
+            <returns>True if strings are equal, false otherwise</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.ClearBytes(System.Byte[])">
+            <summary>
+            FIX SEC-01: Securely clears a byte array from memory.
+            Uses volatile writes to prevent compiler optimization from removing the clear.
+            </summary>
+            <param name="data">The byte array to clear</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.ClearChars(System.Char[])">
+            <summary>
+            FIX SEC-01: Securely clears a char array from memory.
+            </summary>
+            <param name="data">The char array to clear</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.ValidateTokenFormat(System.String)">
+            <summary>
+            Validates that a token has a reasonable format and size.
+            This is a basic sanity check, not a full JWT validation.
+            </summary>
+            <param name="token">The token to validate</param>
+            <returns>True if token appears valid, false otherwise</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.ValidateDataSize(System.Byte[])">
+            <summary>
+            Validates that credentials data is within acceptable size limits.
+            </summary>
+            <param name="data">The data to validate</param>
+            <returns>True if size is acceptable, false otherwise</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.GenerateSecureBytes(System.Int32)">
+            <summary>
+            Generates a cryptographically secure random byte array.
+            </summary>
+            <param name="length">Number of bytes to generate</param>
+            <returns>Random byte array</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.GenerateSecureToken(System.Int32)">
+            <summary>
+            Generates a cryptographically secure random string (base64 URL-safe).
+            </summary>
+            <param name="byteLength">Number of random bytes (output will be longer)</param>
+            <returns>URL-safe base64 encoded random string</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.Redact(System.String,System.Int32)">
+            <summary>
+            Redacts sensitive information from a string for safe logging.
+            Shows first 4 and last 4 characters only.
+            </summary>
+            <param name="value">The value to redact</param>
+            <param name="visibleChars">Number of chars to show at each end</param>
+            <returns>Redacted string</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.RedactFull(System.String)">
+            <summary>
+            Completely redacts a value for logging (no partial reveal).
+            </summary>
+            <param name="value">The value to redact</param>
+            <returns>Redaction indicator</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.SecureUtilities.ComputeHashPrefix(System.String)">
+            <summary>
+            Computes SHA256 hash of a string for logging/comparison purposes.
+            Useful for logging token identifiers without exposing the actual token.
+            </summary>
+            <param name="value">The value to hash</param>
+            <returns>Hex-encoded first 8 bytes of SHA256 hash</returns>
+        </member>
+        <member name="T:TisTis.Agent.Core.Security.TokenManager">
+            <summary>
+            Manages authentication token lifecycle and rotation.
+            FIX SEC-02: Uses secure logging practices.
+            FIX SEC-03: Validates token format before use.
+            FIX SEC-05: Proactive token expiration management.
+            FIX SEC-06: Implements IDisposable for cleanup.
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.TokenManager.DefaultRotationThreshold">
+            <summary>
+            Default threshold for token rotation (24 hours before expiry)
+            </summary>
+        </member>
+        <member name="F:TisTis.Agent.Core.Security.TokenManager.TokenValidationInterval">
+            <summary>
+            Minimum interval between token validations
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.GetToken">
+            <summary>
+            Get the current auth token.
+            FIX SEC-03: Validates token format before returning.
+            </summary>
+            <exception cref="T:System.InvalidOperationException">Thrown when no valid token is available</exception>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.NeedsRotation(System.Nullable{System.TimeSpan})">
+            <summary>
+            Check if token needs rotation.
+            FIX SEC-05: Enhanced rotation logic with logging.
+            </summary>
+            <param name="rotationThreshold">How long before expiry to start rotation</param>
+            <returns>True if token should be rotated</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.IsExpired">
+            <summary>
+            Check if token has expired.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.SetTokenExpiration(System.DateTime)">
+            <summary>
+            Set token expiration time.
+            </summary>
+            <param name="expiresAt">When the token expires</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.GetTimeToExpiration">
+            <summary>
+            Get remaining time until token expiration.
+            </summary>
+            <returns>Time until expiration, or null if unknown</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.UpdateToken(System.String)">
+            <summary>
+            Update token with new value.
+            FIX SEC-02: Logs token hash instead of token value.
+            FIX SEC-03: Validates token format before storing.
+            FIX ITER1-A3: Atomic update to prevent inconsistent state.
+            </summary>
+            <param name="newToken">The new authentication token</param>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.SecureCompare(System.String,System.String)">
+            <summary>
+            Securely compare two tokens using constant-time comparison.
+            FIX SEC-03: Prevents timing attacks.
+            </summary>
+            <param name="token1">First token</param>
+            <param name="token2">Second token</param>
+            <returns>True if tokens are equal</returns>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.BuildRegisterRequest">
+            <summary>
+            Build register request with current credentials.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.LoadFromStore">
+            <summary>
+            Initialize from stored credentials.
+            FIX SEC-02: Uses secure logging.
+            FIX ITER1-B4: Atomic load to prevent partial state on failure.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.SaveToStore">
+            <summary>
+            Save current credentials to store.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.ValidateTokenOrThrow(System.String,System.String)">
+            <summary>
+            Validates token format and throws if invalid.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.Dispose">
+            <summary>
+            FIX SEC-06: Dispose pattern implementation.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.Dispose(System.Boolean)">
+            <summary>
+            FIX SEC-06: Protected dispose method.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Security.TokenManager.ThrowIfDisposed">
+            <summary>
+            Throws ObjectDisposedException if disposed.
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.ISyncEngine">
+            <summary>
+            Interface for the synchronization engine
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.ISyncEngine.State">
+            <summary>
+            Current state of the sync engine
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncEngine.StartAsync(System.Threading.CancellationToken)">
+            <summary>
+            Start the sync engine
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncEngine.StopAsync">
+            <summary>
+            Stop the sync engine
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncEngine.SyncNowAsync(TisTis.Agent.Core.Sync.SyncType,System.Threading.CancellationToken)">
+            <summary>
+            Trigger an immediate sync
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncEngine.GetStatistics">
+            <summary>
+            Get sync statistics
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.SyncEngineState">
+            <summary>
+            Sync engine state
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.SyncType">
+            <summary>
+            Type of sync to perform
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.SyncResult">
+            <summary>
+            Result of a sync operation
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.SyncStatistics">
+            <summary>
+            Sync engine statistics
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.SyncEngine">
+            <summary>
+            Main synchronization engine that coordinates data flow from SR to TIS TIS
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncEngine.State">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncEngine.StartAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncEngine.StopAsync">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncEngine.Dispose">
+            <summary>
+            Dispose resources
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncEngine.Dispose(System.Boolean)">
+            <summary>
+            Dispose pattern implementation
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncEngine.SyncNowAsync(TisTis.Agent.Core.Sync.SyncType,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncEngine.GetStatistics">
+            <inheritdoc />
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.ISyncStateService">
+            <summary>
+            Service for persisting and retrieving sync state across service restarts.
+            Uses a JSON file to store sync positions and metadata.
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncStateService.GetLastSyncPositionAsync(TisTis.Agent.Core.Sync.SyncType,System.Threading.CancellationToken)">
+            <summary>
+            Get the last synced position for a specific sync type
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncStateService.UpdateSyncPositionAsync(TisTis.Agent.Core.Sync.SyncType,System.Int64,System.Threading.CancellationToken)">
+            <summary>
+            Update the sync position for a specific sync type
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncStateService.GetStateAsync(System.Threading.CancellationToken)">
+            <summary>
+            Get the full sync state
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.ISyncStateService.SaveStateAsync(TisTis.Agent.Core.Sync.SyncState,System.Threading.CancellationToken)">
+            <summary>
+            Save the full sync state
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.SyncState">
+            <summary>
+            Represents the persisted sync state
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.LastSyncedSaleId">
+            <summary>
+            Last synced sale ID for incremental sync
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.LastMenuSyncAt">
+            <summary>
+            Last time menu was fully synced
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.LastInventorySyncAt">
+            <summary>
+            Last time inventory was fully synced
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.LastTablesSyncAt">
+            <summary>
+            Last time tables were synced
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.LastFullSyncAt">
+            <summary>
+            Last time a full sync was performed
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.TotalRecordsSynced">
+            <summary>
+            Total records synced since service start
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.SuccessfulSyncs">
+            <summary>
+            Total successful syncs since service start
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.FailedSyncs">
+            <summary>
+            Total failed syncs since service start
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.UpdatedAt">
+            <summary>
+            When this state was last updated
+            </summary>
+        </member>
+        <member name="P:TisTis.Agent.Core.Sync.SyncState.AgentVersion">
+            <summary>
+            Agent version that created this state (for migration support)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.SyncStateService">
+            <summary>
+            File-based implementation of ISyncStateService
+            FIX S19: Implements IDisposable to properly dispose SemaphoreSlim
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.Dispose">
+            <summary>
+            Dispose resources
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.Dispose(System.Boolean)">
+            <summary>
+            Dispose pattern implementation
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.GetLastSyncPositionAsync(TisTis.Agent.Core.Sync.SyncType,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.UpdateSyncPositionAsync(TisTis.Agent.Core.Sync.SyncType,System.Int64,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.GetStateAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.SaveStateAsync(TisTis.Agent.Core.Sync.SyncState,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.GetStateInternalAsync(System.Threading.CancellationToken)">
+            <summary>
+            Internal method to get state without locking (caller must hold lock)
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.SyncStateService.SaveStateInternalAsync(TisTis.Agent.Core.Sync.SyncState,System.Threading.CancellationToken)">
+            <summary>
+            Internal method to save state without locking (caller must hold lock)
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.IDataTransformer`2">
+            <summary>
+            Interface for transforming SR data to TIS TIS format
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.IDataTransformer`2.Transform(`0)">
+            <summary>
+            Transform a single item
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.IDataTransformer`2.TransformMany(System.Collections.Generic.IEnumerable{`0})">
+            <summary>
+            Transform a collection of items
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.TisTisSale">
+            <summary>
+            Base TIS TIS format for a sale/order
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.TisTisSaleItem">
+            <summary>
+            TIS TIS format for a sale line item
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.TisTisPayment">
+            <summary>
+            TIS TIS format for a payment
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.TisTisMenuItem">
+            <summary>
+            TIS TIS format for a menu item
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.TisTisInventoryItem">
+            <summary>
+            TIS TIS format for an inventory item
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.TisTisTable">
+            <summary>
+            TIS TIS format for a table
+            </summary>
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.InventarioTransformer">
+            <summary>
+            Transforms Soft Restaurant inventory to TIS TIS format
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.InventarioTransformer.Transform(TisTis.Agent.Core.Database.Models.SRInventario)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.InventarioTransformer.TransformMany(System.Collections.Generic.IEnumerable{TisTis.Agent.Core.Database.Models.SRInventario})">
+            <inheritdoc />
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.MesasTransformer">
+            <summary>
+            Transforms Soft Restaurant tables to TIS TIS format
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.MesasTransformer.Transform(TisTis.Agent.Core.Database.Models.SRMesa)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.MesasTransformer.TransformMany(System.Collections.Generic.IEnumerable{TisTis.Agent.Core.Database.Models.SRMesa})">
+            <inheritdoc />
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.ProductosTransformer">
+            <summary>
+            Transforms Soft Restaurant products to TIS TIS format
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.ProductosTransformer.Transform(TisTis.Agent.Core.Database.Models.SRProducto)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.ProductosTransformer.TransformMany(System.Collections.Generic.IEnumerable{TisTis.Agent.Core.Database.Models.SRProducto})">
+            <inheritdoc />
+        </member>
+        <member name="T:TisTis.Agent.Core.Sync.Transformers.VentasTransformer">
+            <summary>
+            Transforms Soft Restaurant sales to TIS TIS format
+            </summary>
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.VentasTransformer.Transform(TisTis.Agent.Core.Database.Models.SRVenta)">
+            <inheritdoc />
+        </member>
+        <member name="M:TisTis.Agent.Core.Sync.Transformers.VentasTransformer.TransformMany(System.Collections.Generic.IEnumerable{TisTis.Agent.Core.Database.Models.SRVenta})">
+            <inheritdoc />
+        </member>
+    </members>
+</doc>

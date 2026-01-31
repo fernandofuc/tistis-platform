@@ -1,0 +1,240 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Agent Installer Package
+     Main package definition for MSI installer
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+
+  <!-- Include variables -->
+  <?include Includes\Variables.wxi ?>
+
+  <!-- ========================================
+       PACKAGE DEFINITION
+       ======================================== -->
+  <Package Name="$(var.ProductName)"
+           Manufacturer="$(var.Manufacturer)"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="$(var.UpgradeCode)"
+           Language="3082"
+           Codepage="1252"
+           InstallerVersion="500"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <!-- Package Summary -->
+    <SummaryInformation Description="$(var.ProductDescription)"
+                        Manufacturer="$(var.Manufacturer)"
+                        Keywords="TIS TIS, Soft Restaurant, Agent, Sync" />
+
+    <!-- Media for embedding files -->
+    <Media Id="1" Cabinet="agent.cab" EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Icon for Add/Remove Programs -->
+    <Icon Id="ProductIcon" SourceFile="Assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://tistis.com" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://tistis.com/agent/updates" />
+    <Property Id="ARPHELPLINK" Value="https://tistis.com/support" />
+
+    <!-- Major Upgrade Configuration -->
+    <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)"
+                  AllowSameVersionUpgrades="yes"
+                  Schedule="afterInstallInitialize" />
+
+    <!-- ========================================
+         PREREQUISITES CHECK
+         ======================================== -->
+
+    <!-- .NET 8.0 Runtime Check -->
+    <Property Id="NETRUNTIME80">
+      <RegistrySearch Id="NetRuntime80Search"
+                      Root="HKLM"
+                      Key="SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost"
+                      Name="Version"
+                      Type="raw" />
+    </Property>
+
+    <Launch Condition="NETRUNTIME80 OR Installed"
+            Message="!(loc.NetRuntimeRequired)" />
+
+    <!-- Windows Version Check (FIX S4)
+         .NET 8.0 requires Windows 10 1607+ or Server 2016+.
+         Since we already check for .NET 8.0 Runtime above, and .NET 8.0
+         won't install on incompatible Windows versions, we use a simpler check.
+         VersionNT >= 603 covers Win8.1+, but the .NET 8.0 check is authoritative.
+         We keep a basic Windows version check as a fallback for better error messages. -->
+    <Launch Condition="VersionNT >= 603 OR Installed"
+            Message="!(loc.WindowsVersionRequired)" />
+
+    <!-- Admin Rights Required -->
+    <Launch Condition="Privileged"
+            Message="!(loc.AdminRequired)" />
+
+    <!-- ========================================
+         CUSTOM PROPERTIES
+         ======================================== -->
+
+    <!-- Properties for SR Detection (set by Custom Actions) -->
+    <Property Id="SR_DETECTED" Value="0" />
+    <Property Id="SR_VERSION" Value="" />
+    <Property Id="SR_SQL_INSTANCE" Value="" />
+    <Property Id="SR_DATABASE_NAME" Value="" />
+    <Property Id="SR_CONNECTION_STRING" Value="" Secure="yes" />
+    <Property Id="SR_EMPRESA_ID" Value="" />
+
+    <!-- Properties from TIS TIS (embedded in installer) -->
+    <Property Id="TISTIS_AGENT_ID" Value="$(var.AgentId)" Secure="yes" />
+    <Property Id="TISTIS_TENANT_ID" Value="$(var.TenantId)" Secure="yes" />
+    <Property Id="TISTIS_AUTH_TOKEN" Value="$(var.AuthToken)" Secure="yes" Hidden="yes" />
+    <Property Id="TISTIS_WEBHOOK_URL" Value="$(var.WebhookUrl)" />
+    <Property Id="TISTIS_INTEGRATION_ID" Value="$(var.IntegrationId)" />
+
+    <!-- Sync Configuration (user can modify during install) -->
+    <Property Id="SYNC_INTERVAL" Value="30" />
+    <Property Id="SYNC_MENU" Value="1" />
+    <Property Id="SYNC_INVENTORY" Value="1" />
+    <Property Id="SYNC_SALES" Value="1" />
+    <Property Id="SYNC_TABLES" Value="0" />
+
+    <!-- Installation Directory -->
+    <Property Id="INSTALLDIR">
+      <RegistrySearch Id="InstallDirSearch"
+                      Root="HKLM"
+                      Key="SOFTWARE\TisTis\Agent"
+                      Name="InstallPath"
+                      Type="directory" />
+    </Property>
+
+    <!-- ========================================
+         CUSTOM ACTIONS
+         ======================================== -->
+
+    <!-- Reference to Custom Actions DLL -->
+    <Binary Id="CustomActionsDll"
+            SourceFile="!(bindpath)\TisTis.Agent.Installer.CustomActions.dll" />
+
+    <!-- Detect Soft Restaurant -->
+    <CustomAction Id="CA_DetectSoftRestaurant"
+                  DllEntry="DetectSoftRestaurant"
+                  BinaryRef="CustomActionsDll"
+                  Execute="immediate"
+                  Return="check" />
+
+    <!-- Test SQL Connection -->
+    <CustomAction Id="CA_TestSqlConnection"
+                  DllEntry="TestSqlConnection"
+                  BinaryRef="CustomActionsDll"
+                  Execute="immediate"
+                  Return="check" />
+
+    <!-- Create Configuration File -->
+    <CustomAction Id="CA_CreateConfiguration"
+                  DllEntry="CreateConfiguration"
+                  BinaryRef="CustomActionsDll"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <!-- Register Agent with TIS TIS -->
+    <CustomAction Id="CA_RegisterAgent"
+                  DllEntry="RegisterAgent"
+                  BinaryRef="CustomActionsDll"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <!-- Rollback Registration -->
+    <CustomAction Id="CA_RollbackRegistration"
+                  DllEntry="RollbackRegistration"
+                  BinaryRef="CustomActionsDll"
+                  Execute="rollback"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Start Service After Install -->
+    <CustomAction Id="CA_StartAgentService"
+                  DllEntry="StartAgentService"
+                  BinaryRef="CustomActionsDll"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <!-- Stop Service Before Uninstall -->
+    <CustomAction Id="CA_StopAgentService"
+                  DllEntry="StopAgentService"
+                  BinaryRef="CustomActionsDll"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Cleanup on Uninstall -->
+    <CustomAction Id="CA_Cleanup"
+                  DllEntry="Cleanup"
+                  BinaryRef="CustomActionsDll"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Set property values for deferred actions -->
+    <CustomAction Id="CA_SetConfigData"
+                  Property="CA_CreateConfiguration"
+                  Value="INSTALLDIR=[INSTALLDIR];SR_CONNECTION_STRING=[SR_CONNECTION_STRING];TISTIS_AGENT_ID=[TISTIS_AGENT_ID];TISTIS_AUTH_TOKEN=[TISTIS_AUTH_TOKEN];TISTIS_WEBHOOK_URL=[TISTIS_WEBHOOK_URL];SYNC_INTERVAL=[SYNC_INTERVAL];SYNC_MENU=[SYNC_MENU];SYNC_INVENTORY=[SYNC_INVENTORY];SYNC_SALES=[SYNC_SALES];SYNC_TABLES=[SYNC_TABLES]"
+                  Execute="immediate" />
+
+    <CustomAction Id="CA_SetRegisterData"
+                  Property="CA_RegisterAgent"
+                  Value="TISTIS_AGENT_ID=[TISTIS_AGENT_ID];TISTIS_AUTH_TOKEN=[TISTIS_AUTH_TOKEN];TISTIS_WEBHOOK_URL=[TISTIS_WEBHOOK_URL];SR_VERSION=[SR_VERSION];SR_DATABASE_NAME=[SR_DATABASE_NAME]"
+                  Execute="immediate" />
+
+    <!-- ========================================
+         INSTALL EXECUTE SEQUENCE
+         ======================================== -->
+
+    <InstallExecuteSequence>
+      <!-- Detection runs during UI -->
+      <Custom Action="CA_DetectSoftRestaurant" Before="CostFinalize" Condition="NOT Installed" />
+
+      <!-- Set properties before deferred actions -->
+      <Custom Action="CA_SetConfigData" Before="CA_CreateConfiguration" Condition="NOT Installed" />
+      <Custom Action="CA_SetRegisterData" Before="CA_RegisterAgent" Condition="NOT Installed" />
+
+      <!-- Stop service before uninstall -->
+      <Custom Action="CA_StopAgentService" Before="StopServices" Condition="REMOVE~=&quot;ALL&quot;" />
+
+      <!-- Create config after files are installed -->
+      <Custom Action="CA_CreateConfiguration" After="InstallFiles" Condition="NOT Installed" />
+
+      <!-- Register with TIS TIS after config is created -->
+      <Custom Action="CA_RollbackRegistration" Before="CA_RegisterAgent" Condition="NOT Installed" />
+      <Custom Action="CA_RegisterAgent" After="CA_CreateConfiguration" Condition="NOT Installed" />
+
+      <!-- Start service after installation -->
+      <Custom Action="CA_StartAgentService" After="StartServices" Condition="NOT Installed" />
+
+      <!-- Cleanup on uninstall -->
+      <Custom Action="CA_Cleanup" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
+    <!-- ========================================
+         INSTALL UI SEQUENCE
+         ======================================== -->
+
+    <InstallUISequence>
+      <!-- Run detection when user enters configuration dialog -->
+      <Custom Action="CA_DetectSoftRestaurant" After="CostFinalize" Condition="NOT Installed" />
+    </InstallUISequence>
+
+    <!-- ========================================
+         USER INTERFACE
+         ======================================== -->
+
+    <!-- Use custom UI sequence -->
+    <ui:WixUI Id="WixUI_TisTisAgent" />
+
+  </Package>
+
+</Wix>

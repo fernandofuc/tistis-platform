@@ -1,0 +1,64 @@
+<!-- =====================================================
+     TIS TIS PLATFORM - Welcome Dialog
+     First dialog shown during installation
+     ===================================================== -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include ..\Includes\Variables.wxi ?>
+
+  <Fragment>
+    <!-- ========================================
+         WELCOME DIALOG
+         ======================================== -->
+
+    <UI>
+      <Dialog Id="WelcomeDlg_TisTis" Width="370" Height="270" Title="!(loc.WelcomeTitle)">
+
+        <!-- Banner Image -->
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.WelcomeDlgBitmap)" />
+
+        <!-- Horizontal Line -->
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <!-- Title -->
+        <Control Id="Title" Type="Text" X="20" Y="50" Width="330" Height="35"
+                 Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title_Big}!(loc.WelcomeTitle)" />
+
+        <!-- Description Text -->
+        <Control Id="Description" Type="Text" X="20" Y="90" Width="330" Height="60"
+                 Transparent="yes" NoPrefix="yes">
+          <Text>
+Este asistente instalará el Agente TIS TIS para Soft Restaurant en su computadora.
+
+El agente sincronizará automáticamente los datos de ventas, menú e inventario de Soft Restaurant con su cuenta de TIS TIS Platform.
+          </Text>
+        </Control>
+
+        <!-- Requirements List -->
+        <Control Id="Requirements" Type="Text" X="20" Y="155" Width="330" Height="70"
+                 Transparent="yes" NoPrefix="yes">
+          <Text>
+Requisitos:
+• Windows 10 o posterior / Windows Server 2016 o posterior
+• Soft Restaurant instalado y funcionando
+• Conexión a Internet
+• Derechos de administrador
+          </Text>
+        </Control>
+
+        <!-- Navigation Buttons -->
+        <Control Id="Cancel" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)" />
+
+        <Control Id="Next" Type="PushButton" X="298" Y="243" Width="56" Height="17"
+                 Default="yes" Text="!(loc.WixUINext)" />
+
+      </Dialog>
+    </UI>
+
+  </Fragment>
+
+</Wix>

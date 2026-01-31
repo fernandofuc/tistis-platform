@@ -18,8 +18,12 @@ import type {
   IntegrationStatus,
   ConnectorDefinition,
   SRSyncConfig,
+  SRIntegrationMethod,
+  AgentInstance,
 } from '../types/integration.types';
 import { SoftRestaurantConfigModal } from './SoftRestaurantConfigModal';
+import { LocalAgentSetupWizard } from './LocalAgentSetupWizard';
+import { AgentStatusCard } from './AgentStatusCard';
 
 // ======================
 // CONNECTOR DEFINITIONS
@@ -1477,8 +1481,11 @@ export function IntegrationHub() {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [srConfigModalOpen, setSrConfigModalOpen] = useState(false);
+  const [agentWizardOpen, setAgentWizardOpen] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<IntegrationConnection | null>(null);
   const [selectedConnector, setSelectedConnector] = useState<ConnectorDefinition | null>(null);
+  const [agentInstance, setAgentInstance] = useState<AgentInstance | null>(null);
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Get connector catalog with dynamic terminology
   const connectorCatalog = useMemo(
@@ -1547,7 +1554,7 @@ export function IntegrationHub() {
     return () => {
       isMounted = false;
     };
-  }, [staff?.tenant_id, getAuthHeaders, selectedBranchId]);
+  }, [staff?.tenant_id, getAuthHeaders, selectedBranchId, refreshCounter]);
 
   // Get connector definition for a connection (uses dynamic catalog)
   const getConnector = useCallback((type: IntegrationType): ConnectorDefinition | undefined => {
@@ -1666,8 +1673,8 @@ export function IntegrationHub() {
     }
   };
 
-  // Save SoftRestaurant configuration
-  const handleSaveSRConfig = async (data: { api_key: string; sync_config: SRSyncConfig }) => {
+  // Save SoftRestaurant configuration (Webhook model or Local Agent)
+  const handleSaveSRConfig = async (data: { sync_config: SRSyncConfig; integration_method?: SRIntegrationMethod }) => {
     if (!staff?.tenant_id) return;
 
     setActionLoading(selectedConnection?.id || 'creating_sr');
@@ -1688,10 +1695,11 @@ export function IntegrationHub() {
             sync_inventory: data.sync_config.sync_inventory,
             sync_appointments: data.sync_config.sync_reservations,
             sync_orders: data.sync_config.sync_sales,
-            sync_frequency_minutes: data.sync_config.sync_frequency_minutes,
+            sync_frequency_minutes: data.sync_config.sync_frequency_minutes || 0,
             metadata: {
               ...existingMetadata,
               sync_config: data.sync_config,
+              integration_method: data.integration_method || existingMetadata.integration_method || 'webhook_official',
             },
           }),
         });
@@ -1706,23 +1714,25 @@ export function IntegrationHub() {
           prev.map(c => c.id === selectedConnection.id ? result.connection : c)
         );
       } else {
-        // Create new SoftRestaurant connection - associate with selected branch
+        // Create new SoftRestaurant connection - webhook model (no api_key needed)
+        // The webhook_secret is generated server-side
         const response = await fetch('/api/integrations', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             integration_type: 'softrestaurant',
             connection_name: selectedBranch ? `Soft Restaurant - ${selectedBranch.name}` : 'Soft Restaurant',
-            branch_id: selectedBranchId || undefined, // Associate with current branch
-            api_key: data.api_key,
+            branch_id: selectedBranchId || undefined,
             sync_enabled: true,
             sync_products: data.sync_config.sync_menu,
             sync_inventory: data.sync_config.sync_inventory,
             sync_appointments: data.sync_config.sync_reservations,
             sync_orders: data.sync_config.sync_sales,
-            sync_frequency_minutes: data.sync_config.sync_frequency_minutes,
+            sync_frequency_minutes: 0, // Real-time via webhook
             metadata: {
               sync_config: data.sync_config,
+              integration_method: data.integration_method || 'webhook_official',
+              integration_model: data.integration_method === 'local_agent' ? 'agent' : 'webhook',
             },
           }),
         });
@@ -2071,6 +2081,57 @@ export function IntegrationHub() {
         onClose={() => setSrConfigModalOpen(false)}
         connection={selectedConnection}
         onSave={handleSaveSRConfig}
+        isLoading={actionLoading !== null}
+        tenantId={staff?.tenant_id || ''}
+        agentInstance={agentInstance}
+        onOpenAgentWizard={() => {
+          setSrConfigModalOpen(false);
+          setAgentWizardOpen(true);
+        }}
+      />
+
+      {/* Local Agent Setup Wizard */}
+      <LocalAgentSetupWizard
+        isOpen={agentWizardOpen}
+        onClose={() => setAgentWizardOpen(false)}
+        tenantId={staff?.tenant_id || ''}
+        integrationId={selectedConnection?.integration_type === 'softrestaurant' ? selectedConnection?.id : undefined}
+        branches={(branches || []).map(b => ({
+          id: b.id,
+          name: b.name,
+          address: b.address || undefined,
+          is_main: b.is_headquarters || false,
+        }))}
+        onComplete={async (config) => {
+          setAgentWizardOpen(false);
+          // Agent was created by the wizard via /api/agent/installer
+          // Just log for debugging and refresh the integrations list
+          console.log('[IntegrationHub] Agent created successfully:', {
+            agentId: config.credentials.agent_id,
+            branchId: config.branchId,
+            storeCode: config.storeCode,
+            syncConfig: config.sync_config,
+          });
+
+          // Refresh connections to show the new agent-based connection
+          setRefreshCounter(prev => prev + 1);
+
+          // Update the SR config modal with the new agent instance
+          if (selectedConnection?.integration_type === 'softrestaurant') {
+            // Fetch fresh agent data
+            try {
+              const agentResponse = await fetch(`/api/agent/${staff?.tenant_id}?integration_id=${selectedConnection.id}`);
+              if (agentResponse.ok) {
+                const agentData = await agentResponse.json();
+                if (agentData.agents && agentData.agents.length > 0) {
+                  setAgentInstance(agentData.agents[0]);
+                }
+              }
+            } catch (err) {
+              console.error('[IntegrationHub] Failed to fetch agent after creation:', err);
+            }
+          }
+        }}
         isLoading={actionLoading !== null}
       />
     </>
