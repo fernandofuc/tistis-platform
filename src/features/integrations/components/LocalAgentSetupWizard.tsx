@@ -15,6 +15,8 @@ import type {
   AgentInstallerConfig,
   SRSyncConfig,
 } from '../types/integration.types';
+import { SchemaValidationStatus, type SchemaValidationData } from './SchemaValidationStatus';
+import { CredentialsGuide } from './CredentialsGuide';
 
 // ======================
 // TYPES
@@ -390,6 +392,13 @@ export function LocalAgentSetupWizard({
   const [isGenerating, setIsGenerating] = useState(false);
   const [agentStatus, setAgentStatus] = useState<'waiting' | 'connected' | 'error'>('waiting');
 
+  // Schema validation state
+  const [schemaValidation, setSchemaValidation] = useState<SchemaValidationData | null>(null);
+  const [isValidatingSchema, setIsValidatingSchema] = useState(false);
+
+  // Credentials guide state
+  const [showCredentialsGuide, setShowCredentialsGuide] = useState(false);
+
   // Multi-branch configuration
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [storeCode, setStoreCode] = useState<string>('');
@@ -425,6 +434,18 @@ export function LocalAgentSetupWizard({
     ? window.location.origin
     : process.env.NEXT_PUBLIC_APP_URL || 'https://app.tistis.com';
 
+  // Helper to get auth headers with Bearer token (moved up to fix dependency order)
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    return headers;
+  }, []);
+
   // Reset wizard when opened
   useEffect(() => {
     if (isOpen) {
@@ -443,8 +464,75 @@ export function LocalAgentSetupWizard({
       const mainBranch = branches.find(b => b.is_main) || branches[0];
       setSelectedBranchId(mainBranch?.id || '');
       setStoreCode('');
+      setSchemaValidation(null);
+      setIsValidatingSchema(false);
     }
   }, [isOpen, branches]);
+
+  // Poll for agent status and schema validation when on Step 5
+  useEffect(() => {
+    if (!isOpen || currentStep !== 5 || !credentials?.agent_id) return;
+
+    let isMounted = true;
+    const pollInterval = 5000; // Poll every 5 seconds
+
+    const checkAgentStatus = async () => {
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(
+          `/api/agent/status?agent_id=${encodeURIComponent(credentials.agent_id)}`,
+          { headers }
+        );
+
+        if (!response.ok || !isMounted) return;
+
+        const data = await response.json();
+
+        if (data.status === 'connected' || data.status === 'syncing') {
+          setAgentStatus('connected');
+
+          // If agent has schema validation data, update state
+          if (data.schema_validation) {
+            setSchemaValidation({
+              success: data.schema_validation.success,
+              validatedAt: data.schema_validation.validated_at,
+              databaseName: data.schema_validation.database_name,
+              srVersionDetected: data.schema_validation.sr_version,
+              tablesFound: data.schema_validation.tables_found || 0,
+              tablesMissing: data.schema_validation.tables_missing || 0,
+              totalTablesExpected: data.schema_validation.total_tables_expected || 12,
+              canSyncSales: data.schema_validation.can_sync_sales ?? true,
+              canSyncMenu: data.schema_validation.can_sync_menu ?? true,
+              canSyncInventory: data.schema_validation.can_sync_inventory ?? false,
+              canSyncTables: data.schema_validation.can_sync_tables ?? false,
+              errors: data.schema_validation.errors || [],
+              warnings: data.schema_validation.warnings || [],
+              missingRequiredTables: data.schema_validation.missing_required_tables || [],
+            });
+            setIsValidatingSchema(false);
+          } else if (data.status === 'connected' && !schemaValidation) {
+            // Agent connected but no schema validation yet - it's validating
+            setIsValidatingSchema(true);
+          }
+        } else if (data.status === 'error') {
+          setAgentStatus('error');
+        }
+      } catch (error) {
+        console.error('[AgentWizard] Failed to poll agent status:', error);
+      }
+    };
+
+    // Initial check
+    checkAgentStatus();
+
+    // Set up polling
+    const intervalId = setInterval(checkAgentStatus, pollInterval);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [isOpen, currentStep, credentials?.agent_id, getAuthHeaders, schemaValidation]);
 
   // Toggle sync option
   const toggleSync = useCallback((key: keyof SRSyncConfig) => {
@@ -456,18 +544,6 @@ export function LocalAgentSetupWizard({
   // Error state for credential generation
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState<string | null>(null);
-
-  // Helper to get auth headers with Bearer token
-  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-    return headers;
-  }, []);
 
   // Generate credentials via API
   const generateCredentials = async () => {
@@ -678,6 +754,36 @@ export function LocalAgentSetupWizard({
                 <li>• Conexión a internet</li>
               </ul>
             </div>
+
+            {/* Credentials Guide Toggle */}
+            {!showCredentialsGuide ? (
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCredentialsGuide(true)}
+                  className="inline-flex items-center gap-2 text-sm text-tis-coral hover:text-tis-pink transition-colors"
+                >
+                  <KeyIcon className="w-4 h-4" />
+                  ¿Necesitas ayuda con las credenciales de SQL Server?
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    Guía de Credenciales
+                  </h5>
+                  <button
+                    type="button"
+                    onClick={() => setShowCredentialsGuide(false)}
+                    className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    Ocultar guía
+                  </button>
+                </div>
+                <CredentialsGuide compact />
+              </div>
+            )}
           </div>
         );
 
@@ -995,7 +1101,8 @@ export function LocalAgentSetupWizard({
       case 5:
         return (
           <div className="space-y-6">
-            <div className="flex flex-col items-center justify-center py-8">
+            {/* Connection Status Header */}
+            <div className="flex flex-col items-center justify-center py-6">
               {agentStatus === 'waiting' && (
                 <>
                   <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
@@ -1020,7 +1127,23 @@ export function LocalAgentSetupWizard({
                     Agente conectado exitosamente
                   </h4>
                   <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-sm">
-                    El agente está funcionando correctamente y ha comenzado a sincronizar datos.
+                    El agente está funcionando correctamente.
+                  </p>
+                </>
+              )}
+
+              {agentStatus === 'error' && (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Error de conexión
+                  </h4>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-sm">
+                    El agente reportó un error. Verifica la configuración y los logs del servicio.
                   </p>
                 </>
               )}
@@ -1041,15 +1164,79 @@ export function LocalAgentSetupWizard({
               </div>
             )}
 
+            {/* Schema Validation Section (shows when agent is connected) */}
+            {agentStatus === 'connected' && (
+              <div className="space-y-3">
+                <h5 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+                  </svg>
+                  Validación de Base de Datos
+                </h5>
+                <SchemaValidationStatus
+                  validation={schemaValidation}
+                  isValidating={isValidatingSchema}
+                  onRetry={() => {
+                    setSchemaValidation(null);
+                    setIsValidatingSchema(true);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Skip verification button */}
             {agentStatus === 'waiting' && (
-              <div className="text-center">
+              <div className="text-center space-y-2">
                 <button
                   type="button"
-                  onClick={() => setAgentStatus('connected')}
+                  onClick={() => {
+                    setAgentStatus('connected');
+                    // Simulate schema validation success for demo
+                    setSchemaValidation({
+                      success: true,
+                      validatedAt: new Date().toISOString(),
+                      databaseName: 'SoftRestaurant_Demo',
+                      srVersionDetected: 'SR 10.x',
+                      tablesFound: 10,
+                      tablesMissing: 2,
+                      totalTablesExpected: 12,
+                      canSyncSales: true,
+                      canSyncMenu: true,
+                      canSyncInventory: true,
+                      canSyncTables: false,
+                      errors: [],
+                      warnings: ['Tabla Mesas no encontrada - sync de mesas deshabilitado'],
+                      missingRequiredTables: [],
+                    });
+                  }}
                   className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline"
                 >
                   Simular conexión exitosa (demo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAgentStatus('connected');
+                    // Simulate schema validation failure for demo
+                    setSchemaValidation({
+                      success: false,
+                      validatedAt: new Date().toISOString(),
+                      databaseName: 'Unknown',
+                      tablesFound: 4,
+                      tablesMissing: 8,
+                      totalTablesExpected: 12,
+                      canSyncSales: false,
+                      canSyncMenu: false,
+                      canSyncInventory: false,
+                      canSyncTables: false,
+                      errors: ['No se encontraron las tablas requeridas para sincronización'],
+                      warnings: [],
+                      missingRequiredTables: ['Ventas', 'DetalleVentas', 'Productos'],
+                    });
+                  }}
+                  className="block mx-auto text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 underline"
+                >
+                  Simular error de validación (demo)
                 </button>
               </div>
             )}

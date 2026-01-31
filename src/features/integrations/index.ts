@@ -79,3 +79,8 @@ export {
   getSchemaValidatorService,
   SchemaValidatorService,
 } from './services/schema-validator.service';
+
+// Services - Soft Restaurant Processor (sr_sales → restaurant_orders)
+export {
+  SoftRestaurantProcessor,
+} from './services/soft-restaurant-processor';

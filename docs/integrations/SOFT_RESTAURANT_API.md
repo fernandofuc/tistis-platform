@@ -402,20 +402,80 @@ Create Sync Log
 Return 201 Created
 ```
 
-### 2. Asynchronous Processing (TODO: Implement trigger)
+### 2. Automatic Background Processing (v4.8.5+)
+
+When sales are received via `/api/agent/sync`, they are automatically processed in the background:
 
 ```
-Background Job
+POST /api/agent/sync (receives sales from TIS TIS Local Agent)
   ↓
-Get Pending Sales
+Insert into sr_sales (status: pending)
+  ↓
+Return 200 OK to agent (non-blocking)
+  ↓
+processCreatedSalesInBackground() fires asynchronously
   ↓
 For Each Sale:
-  ├── Map Products (fuzzy matching)
-  ├── Explode Recipes
-  ├── Deduct Inventory
-  ├── Create Restaurant Order
-  └── Update Status → 'processed'
+  ├── SoftRestaurantProcessor.processSale()
+  │     ├── ProductMappingService.mapSaleItems()
+  │     │     ├── Fuzzy match SR products to menu items
+  │     │     └── Create/update sr_product_mappings
+  │     ├── RecipeDeductionService.deduceForSale()
+  │     │     ├── Get recipe ingredients for each mapped item
+  │     │     ├── Calculate deductions (quantity * portions_sold)
+  │     │     ├── Update inventory_items.current_stock
+  │     │     └── Create inventory_movements records
+  │     ├── LowStockAlertService.checkAfterDeduction()
+  │     │     └── Generate alerts for items below minimum_stock
+  │     └── RestaurantOrderService.createOrderFromSale()
+  │           ├── Map SR sale fields to restaurant_orders schema
+  │           │     ├── table_id (UUID lookup from table_number)
+  │           │     ├── order_type (mapped via mapSRSaleTypeToOrderType)
+  │           │     └── SR-specific data → metadata JSONB
+  │           └── Create restaurant_order_items (mapped + unmapped)
+  └── Update sr_sales.status → 'processed'
 ```
+
+**Key Architecture Points:**
+
+1. **Fire-and-forget processing**: The sync endpoint returns immediately after inserting sales, background processing doesn't block the agent response.
+
+2. **Cron fallback**: A cron job runs every 5 minutes to process any sales that may have been missed.
+
+3. **Schema mapping**: The `RestaurantOrderService` correctly maps SR fields to TIS TIS `restaurant_orders` schema:
+   - `table_number` (string) → `table_id` (UUID via lookup)
+   - SR `sale_type` → `order_type` via `mapSRSaleTypeToOrderType()`
+   - Financial fields: `tax_amount`, `discount_amount`, `tip_amount`
+   - SR metadata preserved in `metadata` JSONB column
+
+4. **Unmapped item handling**: Items without menu mappings are still created with `[SR]` prefix in name for visibility.
+
+### 2b. Manual Processing Endpoint
+
+For manual processing of pending sales:
+
+### 2c. Internal Processing Endpoint
+
+```
+POST /api/internal/sr-process
+```
+
+**Purpose:** Internal endpoint for cron-triggered processing of pending sales.
+
+**Authentication:** Internal CRON_SECRET header
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "processed": 5,
+  "succeeded": 4,
+  "failed": 1,
+  "processingTimeMs": 1234
+}
+```
+
+---
 
 ### 3. Product Mapping Strategy
 
@@ -430,7 +490,68 @@ Check sr_product_mappings (exact code match)
         └── No match? → Create unmapped entry (manual review needed)
 ```
 
-### 4. Inventory Deduction (Recipe Explosion)
+### 4. SR Sale Type to Order Type Mapping
+
+The `mapSRSaleTypeToOrderType()` function translates SR sale types to TIS TIS order types:
+
+| SR Sale Type | TIS TIS Order Type | Notes |
+|--------------|-------------------|-------|
+| `mesa`, `comedor`, `restaurante`, `local`, `1` | `dine_in` | Default |
+| `llevar`, `para llevar`, `takeout`, `pll`, `2` | `takeout` | |
+| `domicilio`, `delivery`, `envio`, `reparto`, `3` | `delivery` | |
+| `autoservicio`, `drive`, `drive_thru`, `4` | `drive_thru` | |
+| `catering`, `evento`, `banquete`, `5` | `catering` | |
+| Any other value | `dine_in` | Fallback |
+
+### 5. Restaurant Order Schema Mapping
+
+The `RestaurantOrderService` maps SR sales to `restaurant_orders` with these considerations:
+
+**Column Mappings:**
+
+| SR Field | restaurant_orders Column | Notes |
+|----------|-------------------------|-------|
+| `table_number` | `table_id` (UUID) | Looked up via `findTableIdByNumber()` |
+| `sale_type` | `order_type` | Mapped via `mapSRSaleTypeToOrderType()` |
+| `subtotal_without_tax` | `subtotal` | |
+| `total_tax` | `tax_amount` | Not `tax` |
+| `total_discounts` | `discount_amount` | Not `discount` |
+| `total_tips` | `tip_amount` | Not `tip` |
+| `total` | `total` | |
+| `currency` | `currency` | Default: MXN |
+| `notes` | `customer_notes` | |
+
+**Metadata JSONB Contents:**
+
+```json
+{
+  "source": "softrestaurant",
+  "sr_sale_id": "uuid",
+  "sr_folio": "TICKET-001234",
+  "sr_store_code": "POLANCO",
+  "sr_customer_code": "CLI-001",
+  "sr_user_code": "MESERO-05",
+  "sr_table_number": "12",
+  "sr_guest_count": 4,
+  "sr_opened_at": "2026-01-22T14:30:00.000Z",
+  "sr_closed_at": "2026-01-22T15:45:00.000Z",
+  "sr_sale_type": "Mesa",
+  "items_mapped": 3,
+  "items_unmapped": 1,
+  "total_items": 4
+}
+```
+
+**Auto-generated Fields:**
+
+- `order_number` - SERIAL, auto-incremented
+- `display_number` - Generated by trigger based on order_type (e.g., "DI-001234")
+- `status` - Set to `completed` for SR sales
+- `payment_status` - Set to `paid` for SR sales
+
+---
+
+### 6. Inventory Deduction (Recipe Explosion)
 
 ```
 For Each Mapped Item:

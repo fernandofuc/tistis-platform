@@ -1,6 +1,7 @@
 // =====================================================
 // TIS TIS PLATFORM - Soft Restaurant Connection Test API
-// Tests connection to Soft Restaurant API with provided credentials
+// DEPRECATED: Integration now uses webhook model (SR pushes to TIS TIS)
+// See: /api/integrations/softrestaurant/webhook/[tenantId]
 // =====================================================
 
 export const dynamic = 'force-dynamic';
@@ -11,118 +12,73 @@ import {
   isAuthError,
   createAuthErrorResponse,
 } from '@/src/shared/lib/auth-helper';
-import {
-  testSoftRestaurantConnection,
-  SR_ERROR_CODES,
-} from '@/src/features/integrations/services/soft-restaurant-api.service';
-import {
-  checkRateLimit,
-  getClientIP,
-  addRateLimitHeaders,
-} from '@/src/shared/lib/rate-limit';
 
 // ======================
-// RATE LIMITER CONFIG
-// ======================
-
-const SR_TEST_LIMITER = {
-  limit: 10,            // 10 requests
-  windowSeconds: 60,    // per minute
-  identifier: 'sr-connection-test',
-};
-
-// ======================
-// POST - Test Connection
+// POST - DEPRECATED Test Connection
 // ======================
 
 export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting
-    const clientIP = getClientIP(request);
-    const rateLimitResult = checkRateLimit(clientIP, SR_TEST_LIMITER);
+  // Authentication check
+  const authResult = await getAuthenticatedContext(request);
 
-    if (!rateLimitResult.success) {
-      const retryAfterSeconds = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Demasiadas solicitudes. Espera un momento antes de intentar de nuevo.',
-          errorCode: 'RATE_LIMITED',
-        },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(Math.max(1, retryAfterSeconds)),
-          },
-        }
-      );
-    }
-
-    // Authentication
-    const authResult = await getAuthenticatedContext(request);
-
-    if (isAuthError(authResult)) {
-      return createAuthErrorResponse(authResult);
-    }
-
-    const { role } = authResult;
-
-    // Check permissions - only owner/admin can test integrations
-    if (!['owner', 'admin'].includes(role)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Solo administradores pueden probar integraciones',
-          errorCode: 'FORBIDDEN',
-        },
-        { status: 403 }
-      );
-    }
-
-    // Parse request body
-    const body = await request.json();
-    const { api_key } = body;
-
-    // Validate API key presence
-    if (!api_key || typeof api_key !== 'string') {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'API Key es requerida',
-          errorCode: SR_ERROR_CODES.INVALID_API_KEY,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Test connection with Soft Restaurant API
-    console.log('[SR Test API] Testing connection...');
-    const result = await testSoftRestaurantConnection(api_key);
-
-    // Log result (without sensitive data)
-    console.log('[SR Test API] Connection test result:', {
-      success: result.success,
-      errorCode: result.errorCode,
-      hasDetails: !!result.details,
-    });
-
-    // Return result with appropriate status code
-    const statusCode = result.success ? 200 : 400;
-
-    const response = NextResponse.json(result, { status: statusCode });
-    return addRateLimitHeaders(response, rateLimitResult);
-
-  } catch (error) {
-    console.error('[SR Test API] Unexpected error:', error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        message: 'Error interno del servidor',
-        errorCode: SR_ERROR_CODES.UNKNOWN_ERROR,
-        errorDetails: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+  if (isAuthError(authResult)) {
+    return createAuthErrorResponse(authResult);
   }
+
+  const { tenantId } = authResult;
+
+  // Return deprecation notice with webhook URL
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.tistis.com';
+  const webhookUrl = `${baseUrl}/api/integrations/softrestaurant/webhook/${tenantId}`;
+
+  return NextResponse.json(
+    {
+      success: false,
+      deprecated: true,
+      message: 'Este endpoint está deprecado. La integración de Soft Restaurant ahora usa webhooks.',
+      errorCode: 'DEPRECATED',
+      migration: {
+        newModel: 'webhook',
+        description: 'Soft Restaurant debe enviar datos al webhook de TIS TIS',
+        webhookUrl,
+        documentation: 'OPE.ANA.SR11.Guia_para_el_modulo_de_conexion_de_ERP_y_PMS.pdf',
+        requiredModule: 'Interface para ERP y PMS',
+        contact: 'erik.basto@nationalsoft.com.mx',
+      },
+    },
+    { status: 410 } // 410 Gone - indicates resource is no longer available
+  );
+}
+
+// ======================
+// GET - Info about deprecation
+// ======================
+
+export async function GET(request: NextRequest) {
+  const authResult = await getAuthenticatedContext(request);
+
+  if (isAuthError(authResult)) {
+    return createAuthErrorResponse(authResult);
+  }
+
+  const { tenantId } = authResult;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.tistis.com';
+  const webhookUrl = `${baseUrl}/api/integrations/softrestaurant/webhook/${tenantId}`;
+
+  return NextResponse.json({
+    deprecated: true,
+    message: 'La integración de Soft Restaurant ahora usa modelo de webhook',
+    newModel: {
+      type: 'webhook',
+      description: 'Soft Restaurant envía datos de ventas a TIS TIS cuando se cierra un ticket',
+      webhookUrl,
+      documentation: 'OPE.ANA.SR11.Guia_para_el_modulo_de_conexion_de_ERP_y_PMS.pdf',
+    },
+    steps: [
+      'Contactar a National Soft para adquirir el módulo "Interface para ERP y PMS"',
+      'Configurar en SR: Configuración → Interface para ERP y PMS',
+      'Ingresar la URL del webhook y el secret de autenticación',
+      'Seleccionar envío de datos al cierre de cada ticket',
+    ],
+  });
 }

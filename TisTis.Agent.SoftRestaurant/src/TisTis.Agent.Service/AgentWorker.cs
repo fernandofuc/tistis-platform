@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TisTis.Agent.Core.Api;
 using TisTis.Agent.Core.Configuration;
+using TisTis.Agent.Core.Database;
 using TisTis.Agent.Core.Detection;
 using TisTis.Agent.Core.Monitoring;
 using TisTis.Agent.Core.Security;
@@ -27,10 +28,12 @@ public class AgentWorker : BackgroundService
     private readonly ISyncEngine _syncEngine;
     private readonly TokenManager _tokenManager;
     private readonly CredentialStore _credentialStore;
+    private readonly ISchemaValidator? _schemaValidator;
     private readonly IMonitoringOrchestrator? _monitoring;
 
     // Volatile for thread-safe access from multiple threads (ExecuteAsync and StopAsync)
     private volatile bool _isRegistered = false;
+    private volatile bool _schemaValidated = false;
 
     public AgentWorker(
         ILogger<AgentWorker> logger,
@@ -40,6 +43,7 @@ public class AgentWorker : BackgroundService
         ISyncEngine syncEngine,
         TokenManager tokenManager,
         CredentialStore credentialStore,
+        ISchemaValidator? schemaValidator = null,
         IMonitoringOrchestrator? monitoring = null)
     {
         _logger = logger;
@@ -49,6 +53,7 @@ public class AgentWorker : BackgroundService
         _syncEngine = syncEngine;
         _tokenManager = tokenManager;
         _credentialStore = credentialStore;
+        _schemaValidator = schemaValidator;
         _monitoring = monitoring;
     }
 
@@ -77,14 +82,17 @@ public class AgentWorker : BackgroundService
                 await DetectSoftRestaurantAsync(stoppingToken);
             }
 
-            // Step 3: Register with TIS TIS
+            // Step 3: Validate database schema (critical for first sync)
+            await ValidateSchemaAsync(stoppingToken);
+
+            // Step 4: Register with TIS TIS
             await RegisterWithTisTisAsync(stoppingToken);
 
-            // Step 4: Start sync engine
+            // Step 5: Start sync engine
             _logger.LogInformation("Starting sync engine...");
             await _syncEngine.StartAsync(stoppingToken);
 
-            // Step 5: Run heartbeat loop
+            // Step 6: Run heartbeat loop
             await RunHeartbeatLoopAsync(stoppingToken);
         }
         catch (OperationCanceledException)
@@ -145,6 +153,113 @@ public class AgentWorker : BackgroundService
 
         // Save to credential store
         _tokenManager.SaveToStore();
+    }
+
+    private async Task ValidateSchemaAsync(CancellationToken cancellationToken)
+    {
+        if (_schemaValidator == null)
+        {
+            _logger.LogWarning("Schema validator not available, skipping validation");
+            return;
+        }
+
+        _logger.LogInformation("Validating Soft Restaurant database schema...");
+
+        try
+        {
+            var schemaStopwatch = Stopwatch.StartNew();
+            var result = await _schemaValidator.ValidateSchemaAsync(cancellationToken);
+            schemaStopwatch.Stop();
+
+            if (!result.Success)
+            {
+                _logger.LogError(
+                    "Schema validation FAILED! Missing required tables: {MissingTables}. " +
+                    "Errors: {Errors}. Duration: {Duration}ms",
+                    string.Join(", ", result.MissingRequiredTables),
+                    string.Join("; ", result.Errors),
+                    schemaStopwatch.ElapsedMilliseconds);
+
+                // Send validation results to API even on failure
+                var apiResponse = await _schemaValidator.SendValidationToApiAsync(result, cancellationToken);
+
+                if (apiResponse.Recommendations?.Count > 0)
+                {
+                    _logger.LogWarning("Recommendations from TIS TIS: {Recommendations}",
+                        string.Join("; ", apiResponse.Recommendations));
+                }
+
+                // Throw to prevent starting with invalid schema
+                throw new InvalidOperationException(
+                    $"Database schema validation failed. Missing tables: {string.Join(", ", result.MissingRequiredTables)}. " +
+                    "Please ensure you are connected to a valid Soft Restaurant database.");
+            }
+
+            _schemaValidated = true;
+
+            // Save detected SR version to configuration for use by other services
+            _config.SoftRestaurant.DetectedVersion = result.DetectedVersion;
+
+            _logger.LogInformation(
+                "Schema validation PASSED! Database: {Database}, Tables: {Found}/{Expected}, " +
+                "Features: Sales={Sales}, Menu={Menu}, Inventory={Inventory}, Tables={Tables}. " +
+                "SR Version: {SRVersion}. SQL Server: {SqlVersion}. Duration: {Duration}ms",
+                result.DatabaseName,
+                result.TablesFound,
+                result.TablesExpected,
+                result.CanSyncSales,
+                result.CanSyncMenu,
+                result.CanSyncInventory,
+                result.CanSyncTables,
+                result.DetectedVersionDisplay,
+                result.SqlServerVersion?.Split('\n').FirstOrDefault()?.Substring(0, Math.Min(50, result.SqlServerVersion?.Split('\n').FirstOrDefault()?.Length ?? 0)) ?? "Unknown",
+                schemaStopwatch.ElapsedMilliseconds);
+
+            // Send validation results to API
+            var sendResult = await _schemaValidator.SendValidationToApiAsync(result, cancellationToken);
+
+            if (sendResult.Success)
+            {
+                _logger.LogDebug("Schema validation results sent to TIS TIS API successfully");
+            }
+            else
+            {
+                _logger.LogWarning("Failed to send schema validation to API: {Error}", sendResult.ErrorMessage);
+            }
+
+            // Update sync configuration based on schema availability
+            if (!result.CanSyncSales && _config.Sync.SyncSales)
+            {
+                _logger.LogWarning("Disabling sales sync - required tables not found");
+                _config.Sync.SyncSales = false;
+            }
+            if (!result.CanSyncMenu && _config.Sync.SyncMenu)
+            {
+                _logger.LogWarning("Disabling menu sync - required tables not found");
+                _config.Sync.SyncMenu = false;
+            }
+            if (!result.CanSyncInventory && _config.Sync.SyncInventory)
+            {
+                _logger.LogWarning("Disabling inventory sync - required tables not found");
+                _config.Sync.SyncInventory = false;
+            }
+            if (!result.CanSyncTables && _config.Sync.SyncTables)
+            {
+                _logger.LogWarning("Disabling tables sync - required tables not found");
+                _config.Sync.SyncTables = false;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw; // Re-throw validation failures
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Schema validation encountered an unexpected error");
+
+            // Don't fail startup on validation errors, just log and continue
+            _logger.LogWarning("Continuing without schema validation due to error");
+        }
     }
 
     private async Task RegisterWithTisTisAsync(CancellationToken cancellationToken)

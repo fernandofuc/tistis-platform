@@ -1,7 +1,7 @@
 # TIS TIS Platform - Integration Guide
 
-**Version:** 4.4.0
-**Ultima actualizacion:** 27 de Diciembre, 2024
+**Version:** 4.8.5
+**Ultima actualizacion:** 30 de Enero, 2026
 
 ## Overview
 
@@ -1260,6 +1260,109 @@ POST /api/integrations
 ### Migration
 
 Apply migration `078_INTEGRATION_HUB.sql` to create all required tables, functions, and RLS policies.
+
+---
+
+## Soft Restaurant Integration (v4.8.5+)
+
+### Overview
+
+The Soft Restaurant integration enables real-time synchronization of sales data from Soft Restaurant POS to TIS TIS Platform. Sales are automatically processed to create restaurant orders, map products, and deduce inventory.
+
+### Integration Methods
+
+| Method | Description | Recommended |
+|--------|-------------|-------------|
+| **TIS TIS Local Agent** | Windows service that reads SR database directly | Yes |
+| **SR Cloud API** | REST API for SR Cloud users (limited features) | Only for SR Cloud |
+
+### Architecture
+
+```
+Soft Restaurant POS (SQL Server)
+       ↓
+TIS TIS Local Agent (Windows Service)
+       ↓ POST /api/agent/sync
+TIS TIS Cloud
+       ↓
+sr_sales (pending)
+       ↓ Background processing
+restaurant_orders + inventory_movements
+```
+
+### Data Flow (v4.8.5+)
+
+1. **Agent Sync**: TIS TIS Local Agent sends sales via `/api/agent/sync`
+2. **Immediate Insert**: Sales inserted to `sr_sales` with status `pending`
+3. **Background Processing**: `processCreatedSalesInBackground()` fires automatically
+4. **Product Mapping**: SR products matched to TIS TIS menu items via fuzzy search
+5. **Order Creation**: `restaurant_orders` created with correct schema mapping
+6. **Inventory Deduction**: Recipes exploded and inventory deducted
+7. **Low Stock Alerts**: Alerts generated for items below minimum stock
+
+### Key Services
+
+| Service | Purpose |
+|---------|---------|
+| `SoftRestaurantProcessor` | Main orchestrator for sale processing |
+| `ProductMappingService` | Maps SR products to TIS TIS menu items |
+| `RecipeDeductionService` | Explodes recipes and deducts inventory |
+| `LowStockAlertService` | Checks and creates low stock alerts |
+| `RestaurantOrderService` | Creates restaurant_orders from SR sales |
+
+### Order Type Mapping
+
+| SR Sale Type | TIS TIS Order Type |
+|--------------|-------------------|
+| `mesa`, `comedor`, `local`, `1` | `dine_in` |
+| `llevar`, `para llevar`, `2` | `takeout` |
+| `domicilio`, `delivery`, `3` | `delivery` |
+| `autoservicio`, `drive`, `4` | `drive_thru` |
+| `catering`, `evento`, `5` | `catering` |
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/agent/sync` | POST | Receive sales from Local Agent |
+| `/api/agent/heartbeat` | POST | Agent status updates |
+| `/api/agent/status` | GET | Get agent status with schema validation |
+| `/api/internal/sr-process` | POST | Cron fallback for processing |
+
+### Database Tables
+
+```sql
+sr_sales           -- Raw sales from Soft Restaurant
+sr_sale_items      -- Line items per sale
+sr_payments        -- Payment details
+sr_product_mappings -- SR product ↔ TIS TIS menu item
+agent_instances    -- TIS TIS Local Agent instances
+```
+
+### Processing Features
+
+- **Automatic processing**: Sales processed immediately after sync
+- **Cron fallback**: Every 5 minutes for missed sales
+- **Batch optimization**: N+1 queries eliminated
+- **Unmapped item support**: Items appear with `[SR]` prefix
+- **Metadata preservation**: All SR data stored in JSONB
+
+### Documentation
+
+For detailed documentation, see:
+- `/docs/integrations/SOFT_RESTAURANT_API.md` - API reference
+- `/docs/integrations/SOFT_RESTAURANT_IMPLEMENTATION_SUMMARY.md` - Implementation details
+- `/docs/SOFT_RESTAURANT_LOCAL_AGENT_MASTER_SPEC.md` - Local Agent specification
+
+### Soft Restaurant Checklist
+
+- [ ] TIS TIS Local Agent installed on SR server
+- [ ] Agent registered and authenticated
+- [ ] Branch and store_code configured
+- [ ] Initial sync completed
+- [ ] Product mappings reviewed
+- [ ] Inventory deduction verified
+- [ ] Restaurant orders appearing correctly
 
 ---
 

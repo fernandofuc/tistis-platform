@@ -3,6 +3,8 @@
 // Core configuration model for the local agent
 // =====================================================
 
+using TisTis.Agent.Core.Database;
+
 namespace TisTis.Agent.Core.Configuration;
 
 /// <summary>
@@ -213,6 +215,11 @@ public class SoftRestaurantOptions
     public string StoreCode { get; set; } = string.Empty;
 
     /// <summary>
+    /// Detected Soft Restaurant version (set after schema validation)
+    /// </summary>
+    public SRVersion DetectedVersion { get; set; } = SRVersion.Unknown;
+
+    /// <summary>
     /// SQL query timeout in seconds
     /// </summary>
     public int QueryTimeoutSeconds { get; set; } = 60;
@@ -390,4 +397,63 @@ public class ValidationResult
     }
 
     public static ValidationResult Success() => new(true, Array.Empty<string>());
+}
+
+/// <summary>
+/// Agent-specific options for API communication.
+/// Used by services that need to authenticate with TIS TIS API.
+/// </summary>
+public class AgentOptions
+{
+    /// <summary>
+    /// Unique agent identifier (e.g., "tis-agent-abc123")
+    /// </summary>
+    public string AgentId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Authentication token for API calls
+    /// </summary>
+    public string AuthToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// TIS TIS API base URL
+    /// </summary>
+    public string ApiBaseUrl { get; set; } = "https://app.tistis.com";
+
+    /// <summary>
+    /// Tenant ID this agent belongs to
+    /// </summary>
+    public string TenantId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Integration ID this agent is associated with
+    /// </summary>
+    public string IntegrationId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Branch ID for multi-branch support
+    /// </summary>
+    public string? BranchId { get; set; }
+
+    /// <summary>
+    /// Store code for SQL filtering
+    /// </summary>
+    public string? StoreCode { get; set; }
+
+    /// <summary>
+    /// Creates AgentOptions from AgentConfiguration
+    /// </summary>
+    public static AgentOptions FromConfiguration(AgentConfiguration config)
+    {
+        return new AgentOptions
+        {
+            AgentId = config.AgentId,
+            AuthToken = config.AuthToken,
+            ApiBaseUrl = config.Api.BaseUrl,
+            TenantId = config.TenantId,
+            IntegrationId = config.IntegrationId,
+            BranchId = config.BranchId,
+            StoreCode = config.StoreCode,
+        };
+    }
 }

@@ -1,7 +1,7 @@
 # TIS TIS Platform - Documentation Index
 
-**Current Version:** 4.7.0
-**Last Updated:** January 25, 2026
+**Current Version:** 4.8.3
+**Last Updated:** January 30, 2026
 
 ---
 
@@ -131,6 +131,55 @@ Nuevo sistema que permite a clientes B2B interactuar con TIS TIS via WhatsApp/Te
 - Conectores soportados (HubSpot, etc)
 - Configuracion y setup
 - Sincronizacion de datos
+
+---
+
+## TIS TIS Local Agent Documentation (v4.8.3)
+
+### [LOCAL_AGENT_V483_REFERENCE.md](./LOCAL_AGENT_V483_REFERENCE.md)
+**Tipo:** Referencia rapida de mejoras v4.8.3
+**Contenido:**
+- Resumen de mejoras (3 fases)
+- Archivos creados/modificados
+- Schema esperado (12 tablas)
+- API endpoints (validate-schema, status)
+- Guia de credenciales SQL
+- Fallbacks por version de SR
+- Checklist de verificacion
+
+**Cuando usar:**
+- Consulta rapida de las nuevas funcionalidades
+- Ver archivos involucrados
+- Verificar implementacion correcta
+
+**Lectura recomendada:** 10-15 minutos
+
+---
+
+### [SOFT_RESTAURANT_AGENT_EXECUTION_GUIDE.md](./SOFT_RESTAURANT_AGENT_EXECUTION_GUIDE.md)
+**Tipo:** Guia de ejecucion paso a paso
+**Contenido:**
+- 12 fases de implementacion
+- Entregables por fase
+- Comandos de verificacion
+- Criterios de completitud
+- Troubleshooting por fase
+
+**Cuando usar:**
+- Implementar nuevas fases del agente
+- Verificar completitud de implementacion
+- Debugging de problemas
+
+---
+
+### [SOFT_RESTAURANT_LOCAL_AGENT_MASTER_SPEC.md](./SOFT_RESTAURANT_LOCAL_AGENT_MASTER_SPEC.md)
+**Tipo:** Especificacion maestra del agente
+**Contenido:**
+- Arquitectura completa del agente Windows
+- Modelo de datos
+- Flujos de sincronizacion
+- Seguridad y autenticacion
+- Monitoreo y observabilidad
 
 ---
 
@@ -305,6 +354,10 @@ Si encuentras inconsistencia entre codigo y documentacion, **la documentacion de
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 4.8.3 | 2026-01-30 | Local Agent: Schema Validation, Credentials Guide, Version Fallbacks |
+| 4.8.2 | 2026-01-28 | Restaurant Data Cache System |
+| 4.8.1 | 2026-01-26 | Local Agent Multi-Branch Support |
+| 4.8.0 | 2026-01-25 | PDF Reports System |
 | 4.7.0 | 2026-01-25 | FASE 1 - Admin Channel System Foundation |
 | 4.6.0 | 2025-12-29 | Dynamic Terminology System |
 | 4.4.0 | 2025-11-15 | Integration Hub System |
@@ -328,5 +381,5 @@ Si encuentras inconsistencia entre codigo y documentacion, **la documentacion de
 
 ---
 
-**Ultima revision:** Enero 25, 2026
-**Proxima revision recomendada:** Cuando se complete FASE 2
+**Ultima revision:** Enero 30, 2026
+**Proxima revision recomendada:** Cuando se complete FASE 2 del Admin Channel

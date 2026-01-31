@@ -946,6 +946,102 @@ validate_agent_token RPC → sync_config.store_code
 Windows Agent → SQL WHERE CodigoTienda = store_code
     ↓
 POST /api/agent/sync → sr_sales (with branch_id, NOT NULL)
+    ↓
+SoftRestaurantProcessor.processSale() [Background]
+    ↓
+restaurant_orders + restaurant_order_items (UI-ready data)
+```
+
+### Flujo de Procesamiento sr_sales → restaurant_orders (v4.8.5)
+
+**IMPORTANTE:** Los datos de Soft Restaurant se almacenan en dos niveles:
+1. **Tablas SR (datos crudos):** `sr_sales`, `sr_sale_items`, `sr_payments`
+2. **Tablas UI (datos procesados):** `restaurant_orders`, `restaurant_order_items`
+
+El `SoftRestaurantProcessor` convierte automaticamente los datos SR a formato UI.
+
+**Arquitectura del Procesamiento:**
+
+```
+sr_sales (status: 'pending')
+    │
+    ├─ [Inmediato] /api/agent/sync dispara background processing
+    │   └─ processCreatedSalesInBackground() → SoftRestaurantProcessor
+    │
+    └─ [Fallback] /api/cron/process-sr-sales cada 5 minutos
+        └─ /api/internal/sr-process → SoftRestaurantProcessor
+            │
+            ▼
+    ┌───────────────────────────────────────────┐
+    │       SoftRestaurantProcessor             │
+    │                                           │
+    │ 1. ProductMappingService                  │
+    │    - Mapea productos SR → menu items      │
+    │    - Fuzzy matching por nombre            │
+    │    - Registra productos sin mapear        │
+    │                                           │
+    │ 2. RestaurantOrderService                 │
+    │    - Crea restaurant_orders               │
+    │    - Crea restaurant_order_items          │
+    │    - Mapea table_number → table_id        │
+    │    - Mapea sale_type → order_type         │
+    │                                           │
+    │ 3. RecipeDeductionService                 │
+    │    - Explota recetas de platillos         │
+    │    - Deduce inventario automaticamente    │
+    │                                           │
+    │ 4. LowStockAlertService                   │
+    │    - Verifica niveles de stock            │
+    │    - Genera alertas si necesario          │
+    └───────────────────────────────────────────┘
+            │
+            ▼
+    sr_sales (status: 'processed', restaurant_order_id: UUID)
+    restaurant_orders (visible en Dashboard)
+    inventory_movements (deducciones registradas)
+```
+
+**Mapeo de Tipos de Orden:**
+
+| SR sale_type | TIS TIS order_type |
+|--------------|-------------------|
+| mesa, comedor, local | dine_in |
+| llevar, para llevar, pll | takeout |
+| domicilio, delivery, envio | delivery |
+| autoservicio, drive | drive_thru |
+| catering, evento, banquete | catering |
+
+**Servicios Involucrados:**
+
+| Servicio | Ubicacion | Responsabilidad |
+|----------|-----------|-----------------|
+| `SoftRestaurantProcessor` | `/src/features/integrations/services/soft-restaurant-processor.ts` | Orquesta todo el procesamiento |
+| `ProductMappingService` | Interno en el procesador | Mapea productos SR a menu items |
+| `RestaurantOrderService` | Interno en el procesador | Crea ordenes y items |
+| `RecipeDeductionService` | `/src/features/integrations/services/recipe-deduction.service.ts` | Deduce inventario |
+| `LowStockAlertService` | `/src/features/integrations/services/low-stock-alert.service.ts` | Alertas de stock bajo |
+| `SRJobQueueService` | `/src/features/integrations/services/sr-job-queue.service.ts` | Manejo de cola de procesamiento |
+
+**Invocacion del Procesador:**
+
+```typescript
+import { SoftRestaurantProcessor } from '@/src/features/integrations';
+
+const processor = new SoftRestaurantProcessor();
+const result = await processor.processSale(saleId);
+
+// Resultado
+{
+  success: true,
+  saleId: 'uuid',
+  restaurantOrderId: 'uuid', // ID de la orden creada
+  inventoryDeducted: true,
+  details: {
+    itemsMapped: 5,
+    itemsUnmapped: 1,
+    inventoryMovements: 12
+  }
+}
 ```
 
 ### Servicio: AgentManagerService

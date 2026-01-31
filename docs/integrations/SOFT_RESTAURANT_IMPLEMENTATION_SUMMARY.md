@@ -1,8 +1,9 @@
 # SoftRestaurant Integration - Implementation Summary
 
-**Date:** 2026-01-22
-**Version:** 1.0.0 (FASE 2 - BACKEND COMPLETE)
+**Date:** 2026-01-30
+**Version:** 1.1.0 (FASE 2 + Background Processing)
 **Quality Level:** Apple/Google Enterprise Grade
+**Last Updated:** 2026-01-30
 
 ## Overview
 
@@ -146,34 +147,46 @@ Successfully implemented complete backend for SoftRestaurant POS integration wit
 
 ## Architecture Summary
 
-### Two-Phase Processing
+### Two-Phase Processing (Updated v1.1.0)
 
 ```
 PHASE 1: Registration (Synchronous)
   ↓
-POST /api/soft-restaurant/webhook
-  ├── Authenticate API key
-  ├── Validate payload (18 rules)
-  ├── Check duplicate (5-min window)
-  ├── Insert sr_sales (status: pending)
-  ├── Insert sr_sale_items
-  ├── Insert sr_payments
-  ├── Create sr_sync_logs
-  └── Return 201 Created
+POST /api/agent/sync (from TIS TIS Local Agent)
+  ├── Authenticate agent token
+  ├── Validate batch payload
+  ├── Batch query existing folios (optimization)
+  ├── Insert new sr_sales (status: pending)
+  ├── Return 200 OK immediately
+  └── Fire processCreatedSalesInBackground() (non-blocking)
 
-PHASE 2: Processing (Asynchronous)
+PHASE 2: Processing (Automatic Background - v1.1.0)
   ↓
-Manual: GET/POST /api/soft-restaurant/process
-OR
-Automated: Cron job (every 5 min)
-  ├── Get pending sales
-  ├── Map products (fuzzy match)
-  ├── Explode recipes
-  ├── Deduct inventory
-  ├── Create restaurant_orders
-  ├── Update status: processed
+processCreatedSalesInBackground() runs asynchronously:
+  ├── For each created sale:
+  │     ├── ProductMappingService.mapSaleItems()
+  │     ├── RecipeDeductionService.deduceForSale()
+  │     ├── LowStockAlertService.checkAfterDeduction()
+  │     └── RestaurantOrderService.createOrderFromSale()
+  ├── Update sr_sales.status → 'processed'
   └── Log results
+
+FALLBACK: Cron job every 5 minutes
+  ↓
+POST /api/internal/sr-process
+  └── Process any pending sales that were missed
 ```
+
+**Key Improvements (v1.1.0):**
+
+1. **Immediate processing**: Sales are processed right after sync, not waiting for cron
+2. **Non-blocking response**: Agent gets response immediately, processing continues in background
+3. **Correct schema mapping**: RestaurantOrderService now uses correct `restaurant_orders` columns:
+   - `table_id` (UUID) instead of `table_number` (string)
+   - `tax_amount`, `discount_amount`, `tip_amount` (correct column names)
+   - `order_type` mapped from SR `sale_type` via `mapSRSaleTypeToOrderType()`
+   - SR-specific data stored in `metadata` JSONB
+4. **Unmapped item support**: Items without menu mapping still appear with `[SR]` prefix
 
 ### Data Flow
 
@@ -288,11 +301,15 @@ LEVEL 2: Branch Isolation
 - Low stock detection
 - Negative stock support (configurable)
 
-### ✅ Restaurant Orders
-- Automatic order creation
-- Sequential order numbers (SR-YYYYMMDD-####)
-- Status mapping (completed/paid)
-- Metadata preservation
+### ✅ Restaurant Orders (Updated v1.1.0)
+- Automatic order creation from SR sales
+- Correct schema mapping to `restaurant_orders`:
+  - `table_id` (UUID) via table lookup
+  - `order_type` mapped from SR `sale_type`
+  - `tax_amount`, `discount_amount`, `tip_amount` (correct columns)
+- SR-specific data preserved in `metadata` JSONB
+- Auto-generated `display_number` by trigger
+- Support for unmapped items with `[SR]` prefix
 
 ### ✅ Error Handling
 - Validation errors with detailed messages
@@ -352,7 +369,8 @@ LEVEL 2: Branch Isolation
 
 ### High Priority
 - [ ] Build Product Mapping UI (Integration Hub)
-- [ ] Implement automated cron processing
+- [x] ~~Implement automated cron processing~~ (DONE v1.1.0)
+- [x] ~~Implement immediate background processing~~ (DONE v1.1.0)
 - [ ] Add email alerts for failed sales
 - [ ] Create monitoring dashboard
 
@@ -367,6 +385,26 @@ LEVEL 2: Branch Isolation
 - [ ] Implement custom field mapping
 - [ ] Add sale modification support
 - [ ] Create mobile app notifications
+
+## Changelog
+
+### v1.1.0 (2026-01-30)
+- **NEW**: Automatic background processing when sales are synced
+- **NEW**: `processCreatedSalesInBackground()` function for immediate processing
+- **FIX**: `RestaurantOrderService` now uses correct `restaurant_orders` schema
+  - Changed from `table_number` (string) to `table_id` (UUID)
+  - Added `mapSRSaleTypeToOrderType()` for order type mapping
+  - Fixed column names: `tax_amount`, `discount_amount`, `tip_amount`
+  - SR-specific data moved to `metadata` JSONB
+- **NEW**: Support for unmapped items with `[SR]` prefix
+- **NEW**: Cron fallback endpoint `/api/internal/sr-process`
+
+### v1.0.0 (2026-01-22)
+- Initial implementation of SoftRestaurant integration
+- Two-phase processing architecture
+- Product mapping with fuzzy matching
+- Recipe explosion for inventory deduction
+- Restaurant order creation
 
 ---
 

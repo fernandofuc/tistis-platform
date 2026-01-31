@@ -11,8 +11,6 @@ import type {
   SRProcessingResult,
   SRSaleItemEntity,
   SRProductMappingEntity,
-  SRRecipeExplosion,
-  SRInventoryDeduction,
 } from '../types/soft-restaurant.types';
 import { RecipeDeductionService } from './recipe-deduction.service';
 import { LowStockAlertService } from './low-stock-alert.service';
@@ -273,211 +271,112 @@ class ProductMappingService {
 }
 
 // ========================================
-// INVENTORY DEDUCTION SERVICE
-// ========================================
-
-class InventoryDeductionService {
-  constructor(private supabase: SupabaseClient) {}
-
-  /**
-   * Perform recipe explosion for menu item
-   * Returns deductions to be applied
-   */
-  async explodeRecipe(
-    tenantId: string,
-    branchId: string,
-    menuItemId: string,
-    quantity: number
-  ): Promise<SRRecipeExplosion> {
-    const explosion: SRRecipeExplosion = {
-      menuItemId,
-      menuItemName: '',
-      quantitySold: quantity,
-      deductions: [],
-      totalIngredients: 0,
-      deductionsSuccessful: 0,
-      deductionsFailed: 0,
-      errors: [],
-    };
-
-    // Get menu item
-    const { data: menuItem } = await this.supabase
-      .from('restaurant_menu_items')
-      .select('name')
-      .eq('id', menuItemId)
-      .single();
-
-    if (!menuItem) {
-      explosion.errors.push(`Menu item ${menuItemId} not found`);
-      return explosion;
-    }
-
-    explosion.menuItemName = menuItem.name;
-
-    // Get recipe
-    const { data: recipe } = await this.supabase
-      .from('menu_item_recipes')
-      .select('id, yield_quantity, yield_unit')
-      .eq('menu_item_id', menuItemId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (!recipe) {
-      explosion.errors.push(`No active recipe found for ${menuItem.name}`);
-      return explosion;
-    }
-
-    // Get recipe ingredients
-    const { data: ingredients } = await this.supabase
-      .from('recipe_ingredients')
-      .select(`
-        id,
-        inventory_item_id,
-        quantity_needed,
-        unit,
-        inventory_items (
-          id,
-          name,
-          current_stock,
-          unit,
-          minimum_stock,
-          is_active
-        )
-      `)
-      .eq('recipe_id', recipe.id)
-      .eq('is_active', true);
-
-    if (!ingredients || ingredients.length === 0) {
-      explosion.errors.push(`Recipe for ${menuItem.name} has no ingredients`);
-      return explosion;
-    }
-
-    explosion.totalIngredients = ingredients.length;
-
-    // Calculate deductions
-    for (const ingredient of ingredients) {
-      const item = ingredient.inventory_items as any;
-
-      if (!item || !item.is_active) {
-        explosion.errors.push(
-          `Inventory item ${ingredient.inventory_item_id} not found or inactive`
-        );
-        explosion.deductionsFailed++;
-        continue;
-      }
-
-      const quantityPerPortion = ingredient.quantity_needed;
-      const totalDeduction = quantityPerPortion * quantity;
-
-      const deduction: SRInventoryDeduction = {
-        inventoryItemId: item.id,
-        inventoryItemName: item.name,
-        quantityToDeduct: totalDeduction,
-        unit: ingredient.unit,
-        currentStock: item.current_stock,
-        newStock: item.current_stock - totalDeduction,
-        isLowStock: item.current_stock - totalDeduction <= item.minimum_stock,
-        recipeQuantity: quantityPerPortion,
-        portionsSold: quantity,
-      };
-
-      explosion.deductions.push(deduction);
-    }
-
-    return explosion;
-  }
-
-  /**
-   * Apply inventory deductions from recipe explosion
-   */
-  async applyDeductions(
-    tenantId: string,
-    branchId: string,
-    saleId: string,
-    explosions: SRRecipeExplosion[]
-  ): Promise<number> {
-    let totalMovements = 0;
-
-    for (const explosion of explosions) {
-      for (const deduction of explosion.deductions) {
-        // Check if stock is sufficient
-        if (deduction.newStock < 0) {
-          console.warn(
-            `[Inventory] Negative stock for ${deduction.inventoryItemName}: ${deduction.newStock}`
-          );
-          // Continue anyway - allow negative stock (configurable in future)
-        }
-
-        // Update inventory item stock
-        const { error: updateError } = await this.supabase
-          .from('inventory_items')
-          .update({
-            current_stock: deduction.newStock,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', deduction.inventoryItemId)
-          .eq('tenant_id', tenantId)
-          .eq('branch_id', branchId);
-
-        if (updateError) {
-          console.error(
-            `[Inventory] Failed to update stock for ${deduction.inventoryItemName}:`,
-            updateError
-          );
-          explosion.deductionsFailed++;
-          continue;
-        }
-
-        // Create inventory movement record
-        const { error: movementError } = await this.supabase
-          .from('inventory_movements')
-          .insert({
-            tenant_id: tenantId,
-            branch_id: branchId,
-            inventory_item_id: deduction.inventoryItemId,
-            movement_type: 'sale', // or 'sr_sale'
-            quantity: -deduction.quantityToDeduct, // Negative for deduction
-            unit: deduction.unit,
-            reference_type: 'sr_sale',
-            reference_id: saleId,
-            performed_at: new Date().toISOString(),
-            notes: `Venta SR - ${explosion.menuItemName} (${deduction.portionsSold} porciones)`,
-            performed_by: null, // System
-            metadata: {
-              sr_sale_id: saleId,
-              menu_item_id: explosion.menuItemId,
-              recipe_quantity: deduction.recipeQuantity,
-              portions_sold: deduction.portionsSold,
-            },
-          });
-
-        if (movementError) {
-          console.error(
-            `[Inventory] Failed to create movement for ${deduction.inventoryItemName}:`,
-            movementError
-          );
-          explosion.deductionsFailed++;
-          continue;
-        }
-
-        explosion.deductionsSuccessful++;
-        totalMovements++;
-      }
-    }
-
-    return totalMovements;
-  }
-}
-
-// ========================================
 // RESTAURANT ORDER SERVICE
 // ========================================
+
+/**
+ * Maps Soft Restaurant sale types to TIS TIS order types.
+ * SR uses different terminology than TIS TIS.
+ */
+function mapSRSaleTypeToOrderType(
+  srSaleType: string | null | undefined
+): 'dine_in' | 'takeout' | 'delivery' | 'drive_thru' | 'catering' {
+  if (!srSaleType) return 'dine_in';
+
+  const normalized = srSaleType.toLowerCase().trim();
+
+  // Map common SR sale types
+  const typeMap: Record<string, 'dine_in' | 'takeout' | 'delivery' | 'drive_thru' | 'catering'> = {
+    // Dine in variations
+    'mesa': 'dine_in',
+    'comedor': 'dine_in',
+    'restaurante': 'dine_in',
+    'dine_in': 'dine_in',
+    'local': 'dine_in',
+    '1': 'dine_in', // SR often uses numeric codes
+    // Takeout variations
+    'llevar': 'takeout',
+    'para llevar': 'takeout',
+    'takeout': 'takeout',
+    'take_out': 'takeout',
+    'pll': 'takeout',
+    '2': 'takeout',
+    // Delivery variations
+    'domicilio': 'delivery',
+    'delivery': 'delivery',
+    'envio': 'delivery',
+    'reparto': 'delivery',
+    '3': 'delivery',
+    // Drive thru
+    'autoservicio': 'drive_thru',
+    'drive': 'drive_thru',
+    'drive_thru': 'drive_thru',
+    '4': 'drive_thru',
+    // Catering
+    'catering': 'catering',
+    'evento': 'catering',
+    'banquete': 'catering',
+    '5': 'catering',
+  };
+
+  return typeMap[normalized] || 'dine_in';
+}
 
 class RestaurantOrderService {
   constructor(private supabase: SupabaseClient) {}
 
   /**
-   * Create restaurant order from SR sale
+   * Find table_id by table_number for a branch.
+   * Returns null if not found (table lookup is optional).
+   */
+  private async findTableIdByNumber(
+    tenantId: string,
+    branchId: string,
+    tableNumber: string | null | undefined
+  ): Promise<string | null> {
+    if (!tableNumber) return null;
+
+    const { data: table } = await this.supabase
+      .from('restaurant_tables')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('branch_id', branchId)
+      .eq('table_number', tableNumber.trim())
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    return table?.id || null;
+  }
+
+  /**
+   * Get primary payment method from sr_payments.
+   * Returns the payment method with highest amount.
+   */
+  private async getPrimaryPaymentMethod(saleId: string): Promise<string | null> {
+    const { data: payments } = await this.supabase
+      .from('sr_payments')
+      .select('payment_method, amount')
+      .eq('sale_id', saleId)
+      .order('amount', { ascending: false })
+      .limit(1);
+
+    if (payments && payments.length > 0) {
+      return payments[0].payment_method;
+    }
+    return null;
+  }
+
+  /**
+   * Create restaurant order from SR sale.
+   * Maps SR sale data to TIS TIS restaurant_orders schema.
+   *
+   * IMPORTANT: This function creates a restaurant_order that the UI can display.
+   * The schema uses:
+   * - table_id (UUID) not table_number (looked up from restaurant_tables)
+   * - tax_amount, discount_amount, tip_amount (not tax, discount, tip)
+   * - display_number is auto-generated by trigger based on order_type
+   * - order_number is SERIAL (auto-increment)
+   * - All SR-specific data goes in metadata
    */
   async createOrderFromSale(
     tenantId: string,
@@ -485,126 +384,167 @@ class RestaurantOrderService {
     saleId: string,
     items: SRSaleItemEntity[]
   ): Promise<string | null> {
-    // Get sale details
-    const { data: sale } = await this.supabase
-      .from('sr_sales')
-      .select('*')
-      .eq('id', saleId)
-      .single();
+    try {
+      // Get sale details
+      const { data: sale, error: saleError } = await this.supabase
+        .from('sr_sales')
+        .select('*')
+        .eq('id', saleId)
+        .single();
 
-    if (!sale) {
-      console.error('[Order] Sale not found:', saleId);
-      return null;
-    }
+      if (saleError || !sale) {
+        console.error('[Order] Sale not found:', saleId, saleError?.message);
+        return null;
+      }
 
-    // Generate order number
-    const orderNumber = await this.generateOrderNumber(tenantId, branchId);
+      // Look up table_id from table_number
+      const tableId = await this.findTableIdByNumber(tenantId, branchId, sale.table_number);
 
-    // Create restaurant order
-    const { data: order, error: orderError } = await this.supabase
-      .from('restaurant_orders')
-      .insert({
-        tenant_id: tenantId,
-        branch_id: branchId,
-        order_number: orderNumber,
-        sr_sale_id: saleId, // Link to SR sale
-        order_type: sale.sale_type || 'dine_in',
-        status: 'completed', // SR sales are already completed
-        table_number: sale.table_number,
-        guest_count: sale.guest_count || 1,
-        subtotal: sale.subtotal_without_tax,
-        tax: sale.total_tax,
-        discount: sale.total_discounts,
-        tip: sale.total_tips,
-        total: sale.total,
-        currency: sale.currency,
-        payment_status: 'paid', // SR sales are already paid
-        payment_method: 'unknown', // Can be enriched from sr_payments
-        notes: sale.notes,
+      // Get primary payment method
+      const paymentMethod = await this.getPrimaryPaymentMethod(saleId);
+
+      // Map SR sale type to TIS TIS order type
+      const orderType = mapSRSaleTypeToOrderType(sale.sale_type);
+
+      // Build metadata with all SR-specific information
+      const metadata = {
         source: 'softrestaurant',
-        created_at: sale.opened_at,
-        updated_at: sale.closed_at || new Date().toISOString(),
-        metadata: {
-          sr_folio: sale.folio_venta,
-          sr_customer_code: sale.customer_code,
-          sr_user_code: sale.user_code,
-        },
-      })
-      .select('id')
-      .single();
+        sr_sale_id: saleId,
+        sr_folio: sale.folio_venta,
+        sr_store_code: sale.store_code,
+        sr_customer_code: sale.customer_code,
+        sr_user_code: sale.user_code,
+        sr_table_number: sale.table_number, // Keep original for reference
+        sr_guest_count: sale.guest_count,
+        sr_opened_at: sale.opened_at,
+        sr_closed_at: sale.closed_at,
+        sr_sale_type: sale.sale_type,
+        items_mapped: items.filter(i => i.mapped_menu_item_id).length,
+        items_unmapped: items.filter(i => !i.mapped_menu_item_id).length,
+        total_items: items.length,
+      };
 
-    if (orderError) {
-      console.error('[Order] Failed to create order:', orderError);
+      // Create restaurant order with correct schema columns
+      // NOTE: order_number (SERIAL) and display_number are auto-generated
+      const { data: order, error: orderError } = await this.supabase
+        .from('restaurant_orders')
+        .insert({
+          tenant_id: tenantId,
+          branch_id: branchId,
+          order_type: orderType,
+          table_id: tableId, // UUID or null (not table_number string)
+          status: 'completed', // SR sales are already completed
+          priority: 3, // Default priority
+          ordered_at: sale.opened_at || new Date().toISOString(),
+          completed_at: sale.closed_at || new Date().toISOString(),
+          subtotal: Number(sale.subtotal_without_tax) || 0,
+          tax_amount: Number(sale.total_tax) || 0,
+          discount_amount: Number(sale.total_discounts) || 0,
+          tip_amount: Number(sale.total_tips) || 0,
+          total: Number(sale.total) || 0,
+          currency: sale.currency || 'MXN',
+          payment_status: 'paid', // SR sales are already paid
+          payment_method: paymentMethod,
+          customer_notes: sale.notes,
+          internal_notes: `Importado de Soft Restaurant - Folio: ${sale.folio_venta}`,
+          metadata,
+        })
+        .select('id, display_number')
+        .single();
+
+      if (orderError) {
+        console.error('[Order] Failed to create order:', orderError.message);
+        return null;
+      }
+
+      const orderId = order.id;
+      console.log(`[Order] Created restaurant order ${order.display_number} from SR sale ${sale.folio_venta}`);
+
+      // Create order items (only mapped items can be fully created)
+      const orderItems = items
+        .filter((item) => item.mapped_menu_item_id) // Only items with menu mapping
+        .map((item, index) => ({
+          tenant_id: tenantId,
+          order_id: orderId,
+          menu_item_id: item.mapped_menu_item_id,
+          menu_item_name: item.product_name, // Snapshot of name at order time
+          quantity: Math.round(Number(item.quantity) || 1), // Must be integer
+          unit_price: Number(item.unit_price) || 0,
+          subtotal: Number(item.subtotal_without_tax) || 0,
+          // Note: restaurant_order_items doesn't have tax_amount/discount_amount columns
+          // Those are aggregated at order level
+          status: 'served', // All items are already served for completed orders
+          kitchen_station: 'main', // Default station
+          special_instructions: item.notes,
+          display_order: index,
+          metadata: {
+            sr_product_code: item.product_code,
+            sr_product_name: item.product_name,
+            sr_unit_price: item.unit_price,
+            sr_quantity: item.quantity,
+            sr_tax_amount: item.tax_amount,
+            sr_discount_amount: item.discount_amount,
+            sr_user_code: item.user_code,
+          },
+        }));
+
+      if (orderItems.length > 0) {
+        const { error: itemsError } = await this.supabase
+          .from('restaurant_order_items')
+          .insert(orderItems);
+
+        if (itemsError) {
+          console.error('[Order] Failed to create order items:', itemsError.message);
+          // Don't fail the whole operation - order was created
+        } else {
+          console.log(`[Order] Created ${orderItems.length} order items for order ${order.display_number}`);
+        }
+      }
+
+      // Also create entries for unmapped items (without menu_item_id)
+      // These will appear in the order but won't link to the menu
+      const unmappedItems = items
+        .filter((item) => !item.mapped_menu_item_id)
+        .map((item, index) => ({
+          tenant_id: tenantId,
+          order_id: orderId,
+          menu_item_id: null, // No mapping
+          menu_item_name: `[SR] ${item.product_name}`, // Mark as SR product
+          quantity: Math.round(Number(item.quantity) || 1),
+          unit_price: Number(item.unit_price) || 0,
+          subtotal: Number(item.subtotal_without_tax) || 0,
+          status: 'served',
+          kitchen_station: 'main',
+          special_instructions: `Producto SR sin mapear: ${item.product_code}`,
+          display_order: orderItems.length + index,
+          metadata: {
+            sr_unmapped: true,
+            sr_product_code: item.product_code,
+            sr_product_name: item.product_name,
+            sr_unit_price: item.unit_price,
+            sr_quantity: item.quantity,
+            sr_tax_amount: item.tax_amount,
+            sr_discount_amount: item.discount_amount,
+          },
+        }));
+
+      if (unmappedItems.length > 0) {
+        const { error: unmappedError } = await this.supabase
+          .from('restaurant_order_items')
+          .insert(unmappedItems);
+
+        if (unmappedError) {
+          console.error('[Order] Failed to create unmapped items:', unmappedError.message);
+        } else {
+          console.log(`[Order] Created ${unmappedItems.length} unmapped items for order ${order.display_number}`);
+        }
+      }
+
+      return orderId;
+    } catch (error) {
+      console.error('[Order] Unexpected error creating order:', error);
       return null;
     }
-
-    const orderId = order.id;
-
-    // Create order items
-    const orderItems = items
-      .filter((item) => item.mapped_menu_item_id) // Only mapped items
-      .map((item) => ({
-        tenant_id: tenantId,
-        branch_id: branchId,
-        order_id: orderId,
-        menu_item_id: item.mapped_menu_item_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        subtotal: item.subtotal_without_tax,
-        tax: item.tax_amount,
-        discount: item.discount_amount,
-        total: item.subtotal_without_tax + item.tax_amount - item.discount_amount,
-        modifiers: item.modifiers || [],
-        special_instructions: item.notes,
-        status: 'completed',
-        metadata: {
-          sr_product_code: item.product_code,
-          sr_product_name: item.product_name,
-        },
-      }));
-
-    if (orderItems.length > 0) {
-      const { error: itemsError } = await this.supabase
-        .from('restaurant_order_items')
-        .insert(orderItems);
-
-      if (itemsError) {
-        console.error('[Order] Failed to create order items:', itemsError);
-      }
-    }
-
-    return orderId;
-  }
-
-  /**
-   * Generate sequential order number
-   */
-  private async generateOrderNumber(
-    tenantId: string,
-    branchId: string
-  ): Promise<string> {
-    const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
-
-    // Get latest order number for today
-    const { data: latestOrder } = await this.supabase
-      .from('restaurant_orders')
-      .select('order_number')
-      .eq('tenant_id', tenantId)
-      .eq('branch_id', branchId)
-      .like('order_number', `SR-${today}-%`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let sequence = 1;
-    if (latestOrder) {
-      const parts = latestOrder.order_number.split('-');
-      if (parts.length === 3) {
-        sequence = parseInt(parts[2], 10) + 1;
-      }
-    }
-
-    return `SR-${today}-${sequence.toString().padStart(4, '0')}`;
   }
 }
 
@@ -614,14 +554,12 @@ class RestaurantOrderService {
 
 export class SoftRestaurantProcessor {
   private productMapper: ProductMappingService;
-  private inventoryDeductor: InventoryDeductionService;
   private orderService: RestaurantOrderService;
   private supabase: SupabaseClient;
 
   constructor() {
     this.supabase = createClient(supabaseUrl, supabaseServiceKey);
     this.productMapper = new ProductMappingService(this.supabase);
-    this.inventoryDeductor = new InventoryDeductionService(this.supabase);
     this.orderService = new RestaurantOrderService(this.supabase);
   }
 
