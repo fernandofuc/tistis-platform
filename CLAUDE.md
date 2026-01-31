@@ -4,7 +4,7 @@
 
 TIS TIS Platform es un sistema SaaS multi-tenant de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API, y automatizacion de procesos multi-canal. Especializado en verticales como clinicas dentales, restaurantes, y consultorios medicos.
 
-**Version:** 4.8.1
+**Version:** 4.8.4
 **Estado:** Produccion
 **Ultima actualizacion:** 30 de Enero, 2026
 
@@ -32,11 +32,13 @@ tistis-platform/
 │   │   ├── appointments/         # CRUD citas
 │   │   ├── conversations/        # Conversaciones
 │   │   ├── integrations/         # Integration Hub
-│   │   ├── agent/                # TIS TIS Local Agent (NUEVO v4.8.1)
+│   │   ├── agent/                # TIS TIS Local Agent (v4.8.3)
 │   │   │   ├── installer/        # POST: genera credenciales
 │   │   │   ├── sync/             # POST: recibe datos de sync
 │   │   │   ├── heartbeat/        # POST: registra estado
-│   │   │   └── register/         # POST: registra agente
+│   │   │   ├── register/         # POST: registra agente
+│   │   │   ├── validate-schema/  # POST: valida schema SR (NUEVO v4.8.3)
+│   │   │   └── status/           # GET: obtiene estado del agente (NUEVO v4.8.3)
 │   │   ├── reports/              # Generacion de reportes PDF (v4.8.0)
 │   │   ├── webhook/              # Webhooks multi-canal
 │   │   ├── voice-agent/          # AI Agent Voz (VAPI)
@@ -62,10 +64,12 @@ tistis-platform/
 │   │   │   ├── state/            # BusinessContext, AgentState
 │   │   │   └── services/         # langgraph-ai.service.ts
 │   │   │
-│   │   ├── integrations/         # Integration Hub + Local Agent
-│   │   │   ├── components/       # IntegrationHub, LocalAgentSetupWizard, AgentStatusCard
-│   │   │   ├── services/         # agent-manager.service.ts (singleton)
-│   │   │   └── types/            # integration.types.ts, AgentInstance, etc.
+│   │   ├── integrations/         # Integration Hub + Local Agent + SR Cloud
+│   │   │   ├── components/       # IntegrationHub, LocalAgentSetupWizard, AgentStatusCard,
+│   │   │   │                     # SchemaValidationStatus, CredentialsGuide, SRDeploymentSelector
+│   │   │   ├── services/         # agent-manager.service.ts, schema-validator.service.ts,
+│   │   │   │                     # soft-restaurant-cloud.service.ts (v4.8.4)
+│   │   │   └── types/            # integration.types.ts, schema-validation.types.ts
 │   │   │
 │   │   ├── voice-agent/          # AI Agent Voz
 │   │   │   ├── components/       # VoiceAgentConfig, TalkToAssistant
@@ -126,6 +130,8 @@ tistis-platform/
 │   │   │   └── domain.ts         # Tipos de dominio
 │   │   │
 │   │   ├── stores/               # Estado global (Zustand)
+│   │   │   ├── restaurantDataStore.ts # Cache centralizado para datos de restaurante
+│   │   │   └── index.ts          # Barrel exports
 │   │   ├── utils/                # Utilidades
 │   │   │   └── terminologyHelpers.ts # Factory functions para terminologia
 │   │   └── config/
@@ -921,6 +927,8 @@ agent_instances
 | `/api/agent/sync` | POST | Recibe datos de sincronizacion del agente |
 | `/api/agent/heartbeat` | POST | Registra estado del agente |
 | `/api/agent/register` | POST | Registra agente despues de instalacion |
+| `/api/agent/validate-schema` | POST | Valida schema de BD Soft Restaurant (v4.8.3) |
+| `/api/agent/status` | GET | Obtiene estado del agente con validacion de schema (v4.8.3) |
 
 ### Flujo de Datos Multi-Branch
 
@@ -1075,6 +1083,1140 @@ interface ValidateTokenResult {
 | `src/features/integrations/services/agent-manager.service.ts` | Servicio singleton |
 | `src/features/integrations/components/LocalAgentSetupWizard.tsx` | UI wizard |
 | `src/features/integrations/components/IntegrationHub.tsx` | Hub principal |
+
+---
+
+## TIS TIS Local Agent - Mejoras v4.8.3 (NUEVO)
+
+### Descripcion General
+
+Conjunto de mejoras criticas al TIS TIS Local Agent para Soft Restaurant que incluyen: validacion automatica de schema de base de datos, guia interactiva de credenciales SQL Server, y soporte para fallbacks por version de Soft Restaurant.
+
+### FASE 1: Sistema de Validacion de Schema
+
+Sistema que valida automaticamente la compatibilidad del schema de la base de datos Soft Restaurant antes de la primera sincronizacion. Detecta tablas faltantes, columnas requeridas y determina que funcionalidades de sincronizacion estan disponibles.
+
+#### Arquitectura del Sistema
+
+```
++------------------+     +--------------------+     +------------------+
+|  Windows Agent   |     |  TIS TIS Cloud     |     |  Dashboard UI    |
+|  SchemaValidator |     |  /api/agent/       |     |  Schema Status   |
++--------+---------+     |  validate-schema   |     +--------+---------+
+         │               +----------+---------+              │
+         │                          │                        │
+         │ 1. Query INFORMATION_    │                        │
+         │    SCHEMA tables         │                        │
+         │                          │                        │
+         │ 2. POST schema data      │                        │
+         ├─────────────────────────>│                        │
+         │                          │                        │
+         │ 3. Validation result     │ 4. Store in metadata   │
+         │<─────────────────────────│                        │
+         │                          │                        │
+         │                          │ 5. GET /api/agent/     │
+         │                          │    status              │
+         │                          │<───────────────────────│
+         │                          │                        │
+         │                          │ 6. Schema validation   │
+         │                          │    results             │
+         │                          │───────────────────────>│
+```
+
+#### Schema Esperado (12 Tablas)
+
+| Tabla | Requerida | Modulo | Descripcion |
+|-------|-----------|--------|-------------|
+| `Ventas` | Si | sales | Tabla principal de ventas/tickets |
+| `DetalleVentas` | Si | sales | Detalle de productos por venta |
+| `PagosVenta` | No | sales | Pagos asociados a ventas |
+| `FormasPago` | No | sales | Catalogo de formas de pago |
+| `Productos` | Si | menu, sales | Catalogo de productos/platillos |
+| `Categorias` | No | menu | Categorias de productos |
+| `Inventario` | No | inventory | Inventario de insumos |
+| `CategoriasInventario` | No | inventory | Categorias de inventario |
+| `Proveedores` | No | inventory | Catalogo de proveedores |
+| `Mesas` | No | tables | Configuracion de mesas |
+| `Clientes` | No | sales | Catalogo de clientes |
+| `Empleados` | No | sales | Catalogo de empleados/meseros |
+
+#### API Endpoint: POST /api/agent/validate-schema
+
+**Request Body:**
+```typescript
+{
+  agent_id: string;
+  database_name: string;
+  sql_server_version?: string;
+  tables: Array<{
+    table_name: string;
+    schema_name: string;
+    columns: Array<{
+      column_name: string;
+      data_type: string;
+      is_nullable: boolean;
+    }>;
+  }>;
+}
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  validation: {
+    validatedAt: string;
+    databaseName: string;
+    sqlServerVersion?: string;
+    srVersionDetected?: string;
+    tablesFound: number;
+    tablesMissing: number;
+    totalTablesExpected: number;
+    requiredTablesMissing: string[];
+    canSyncSales: boolean;
+    canSyncMenu: boolean;
+    canSyncInventory: boolean;
+    canSyncTables: boolean;
+    errors: string[];
+    warnings: string[];
+    tables: Array<{
+      tableName: string;
+      exists: boolean;
+      required: boolean;
+      usedFor: string[];
+      missingRequiredColumns: string[];
+      presentOptionalColumns: string[];
+    }>;
+  };
+  summary: {
+    status: 'success' | 'warning' | 'error';
+    title: string;
+    description: string;
+    features: Array<{ name: string; enabled: boolean; reason?: string }>;
+  };
+  recommendations?: string[];
+  processingTimeMs: number;
+}
+```
+
+#### API Endpoint: GET /api/agent/status
+
+**Query Parameters:**
+- `agent_id` (required): ID del agente
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  agent_id: string;
+  status: 'pending' | 'registered' | 'connected' | 'syncing' | 'error' | 'offline';
+  machine_name: string;
+  agent_version: string;
+  last_heartbeat_at: string;
+  last_sync_at: string;
+  total_records_synced: number;
+  consecutive_errors: number;
+  sync_config: {
+    sync_menu: boolean;
+    sync_inventory: boolean;
+    sync_sales: boolean;
+    sync_tables: boolean;
+  };
+  branch_id: string;
+  store_code: string;
+  schema_validation: {
+    success: boolean;
+    validated_at: string;
+    database_name: string;
+    sr_version: string;
+    tables_found: number;
+    tables_missing: number;
+    total_tables_expected: number;
+    can_sync_sales: boolean;
+    can_sync_menu: boolean;
+    can_sync_inventory: boolean;
+    can_sync_tables: boolean;
+    errors: string[];
+    warnings: string[];
+    missing_required_tables: string[];
+  } | null;
+}
+```
+
+#### Componente UI: SchemaValidationStatus
+
+Ubicacion: `/src/features/integrations/components/SchemaValidationStatus.tsx`
+
+Componente React que muestra el estado de validacion del schema en el Step 5 del LocalAgentSetupWizard.
+
+**Estados Visuales:**
+
+| Estado | Descripcion | Color |
+|--------|-------------|-------|
+| `isValidating` | Spinner con "Validando schema de base de datos..." | Azul |
+| `no validation` | "Validacion de schema pendiente" | Gris |
+| `success` | "Schema validado correctamente" con features habilitados | Verde |
+| `error` | "Validacion de schema fallida" con tablas faltantes | Rojo |
+
+**Props:**
+```typescript
+interface SchemaValidationStatusProps {
+  validation: SchemaValidationData | null;
+  isValidating: boolean;
+  onRetry?: () => void;
+}
+```
+
+#### Servicio: SchemaValidatorService (Next.js)
+
+Ubicacion: `/src/features/integrations/services/schema-validator.service.ts`
+
+Servicio singleton que valida el schema enviado por el agente contra el schema esperado de Soft Restaurant.
+
+**Metodos:**
+```typescript
+// Valida schema y retorna resultado detallado
+validateSchema(request: ValidateSchemaRequest): ValidateSchemaResponse
+
+// Genera resumen para UI
+generateSummary(validation: SchemaValidationResult): {
+  status: 'success' | 'warning' | 'error';
+  title: string;
+  description: string;
+  features: { name: string; enabled: boolean; reason?: string }[];
+}
+```
+
+#### Servicio: SchemaValidator (C# Windows Agent)
+
+Ubicacion: `/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/Database/SchemaValidator.cs`
+
+Implementacion en C# que valida el schema de SQL Server y envia los resultados al API de TIS TIS.
+
+**Metodos:**
+```csharp
+// Valida schema completo de la BD
+Task<SchemaValidationResult> ValidateSchemaAsync(CancellationToken ct);
+
+// Obtiene nombre de la base de datos
+string GetDatabaseName();
+
+// Obtiene version de SQL Server
+Task<string?> GetSqlServerVersionAsync(CancellationToken ct);
+
+// Envia resultados al API de TIS TIS
+Task<SchemaValidationApiResponse> SendValidationToApiAsync(
+    SchemaValidationResult result, CancellationToken ct);
+```
+
+#### Tipos del Schema
+
+Ubicacion: `/src/features/integrations/types/schema-validation.types.ts`
+
+**Constantes:**
+- `SR_EXPECTED_SCHEMA`: Array de 12 definiciones de tabla con columnas esperadas
+- `SR_KNOWN_VERSIONS`: Array con caracteristicas de versiones SR 10.x, 9.x, 8.x
+
+**Helper Functions:**
+```typescript
+// Tablas requeridas para un tipo de sync
+getRequiredTablesForSync(syncType: 'sales' | 'menu' | 'inventory' | 'tables')
+
+// Todas las tablas para un tipo de sync
+getTablesForSync(syncType: 'sales' | 'menu' | 'inventory' | 'tables')
+
+// Verificar si un tipo de dato coincide
+isTypeMatch(actualType: string, expectedTypes: string[]): boolean
+```
+
+### FASE 2: Guia de Credenciales SQL Server
+
+Componente interactivo que guia al usuario para obtener las credenciales de SQL Server necesarias para conectar el agente a la base de datos de Soft Restaurant.
+
+#### Componente: CredentialsGuide
+
+Ubicacion: `/src/features/integrations/components/CredentialsGuide.tsx`
+
+**Metodos de Autenticacion Soportados:**
+
+| Metodo | ID | Descripcion | Recomendado |
+|--------|-----|-------------|-------------|
+| SQL Server Authentication | `sql` | Usuario y contraseña de SQL Server | Si |
+| Windows Authentication | `windows` | Credenciales del usuario de Windows | No |
+| No se que metodo tengo | `unknown` | Guia para identificar el metodo | - |
+
+**Caracteristicas:**
+
+- Selector de tipo de autenticacion con radio buttons
+- Secciones expandibles con instrucciones detalladas
+- Bloques de codigo SQL copiables con boton de copiar
+- Scripts SQL para:
+  - Crear usuario de solo lectura para TIS TIS
+  - Encontrar el nombre de la base de datos
+  - Verificar la conexion
+- Instrucciones para Windows Authentication
+- Guia para identificar el tipo de autenticacion
+
+**Integracion en LocalAgentSetupWizard:**
+
+El componente se integra en el Step 1 (Informacion) del wizard como una seccion expandible opcional:
+
+```typescript
+// Step 1 del wizard
+<ExpandableSection
+  title="¿Necesitas ayuda con las credenciales?"
+  icon={KeyIcon}
+  defaultOpen={false}
+>
+  <CredentialsGuide compact />
+</ExpandableSection>
+```
+
+**Props:**
+```typescript
+interface CredentialsGuideProps {
+  onClose?: () => void;
+  compact?: boolean;  // Para integracion en wizard
+}
+```
+
+**Scripts SQL Incluidos:**
+
+```sql
+-- Crear usuario con permisos de solo lectura
+USE master;
+GO
+
+CREATE LOGIN TisTisAgent
+WITH PASSWORD = 'TuContrasenaSegura123!';
+GO
+
+USE SoftRestaurant;
+GO
+
+CREATE USER TisTisAgent FOR LOGIN TisTisAgent;
+EXEC sp_addrolemember 'db_datareader', 'TisTisAgent';
+GO
+```
+
+```sql
+-- Encontrar la base de datos de Soft Restaurant
+SELECT name
+FROM sys.databases
+WHERE name LIKE '%Soft%'
+   OR name LIKE '%Restaurant%'
+   OR name LIKE '%SR%';
+```
+
+### FASE 3: Fallbacks por Version de Soft Restaurant
+
+Sistema que detecta automaticamente la version de Soft Restaurant y adapta las queries SQL segun las capacidades del schema.
+
+#### Versiones Detectadas
+
+| Version | Identificador | Soportado | Caracteristicas |
+|---------|---------------|-----------|-----------------|
+| SR 10.x | `V10` | Si | Full feature set: Moneda, TipoOrden, NumeroComensales, PagosVenta |
+| SR 9.x | `V9` | Si | Sin Moneda ni TipoOrden, con NumeroComensales y PagosVenta |
+| SR 8.x | `V8` | No | Legacy - Sin NumeroComensales ni PagosVenta |
+| Unknown | `Unknown` | Si | Queries conservadoras |
+
+#### Servicio: SRVersionQueryProvider
+
+Ubicacion: `/TisTis.Agent.SoftRestaurant/src/TisTis.Agent.Core/Database/SRVersionQueryProvider.cs`
+
+**Deteccion de Version:**
+```csharp
+public static SRVersion DetectVersion(
+    bool hasMoneda,
+    bool hasTipoOrden,
+    bool hasNumeroComensales,
+    bool hasPagosVenta)
+{
+    // V10: Has all modern columns
+    if (hasMoneda && hasTipoOrden && hasNumeroComensales && hasPagosVenta)
+        return SRVersion.V10;
+
+    // V9: Missing Moneda and TipoOrden but has NumeroComensales
+    if (!hasMoneda && !hasTipoOrden && hasNumeroComensales && hasPagosVenta)
+        return SRVersion.V9;
+
+    // V8: Legacy - missing many columns
+    if (!hasNumeroComensales && !hasPagosVenta)
+        return SRVersion.V8;
+
+    return SRVersion.Unknown;
+}
+```
+
+**Queries Adaptativas:**
+
+El proveedor genera queries SQL que se adaptan automaticamente a las capacidades del schema:
+
+```csharp
+// Constructor con version y store_code para multi-sucursal
+public SRVersionQueryProvider(SRVersion version, string? storeCode = null)
+
+// Queries disponibles
+string GetVentasQuery();           // Full query con JOINs
+string GetVentasQuerySimplified(); // Sin JOINs (fallback)
+string GetProductosQuery(bool includeInactive);
+string? GetInventarioQuery();      // null si no soportado
+string? GetMesasQuery();           // null si no soportado
+string? GetPagosQuery();           // null si no soportado
+string GetDetallesQuery();
+string GetDetallesQuerySimplified();
+```
+
+**Ejemplo de Query Adaptativa:**
+```csharp
+// Para V10: Incluye todas las columnas
+var monedaColumn = _capabilities.HasMonedaColumn
+    ? "ISNULL(v.Moneda, 'MXN') AS Moneda"
+    : "'MXN' AS Moneda";
+
+var tipoOrdenColumn = _capabilities.HasTipoOrdenColumn
+    ? "ISNULL(v.TipoOrden, 1) AS TipoOrden"
+    : "1 AS TipoOrden";
+```
+
+#### Interface: ISchemaValidator Actualizada
+
+```csharp
+public class SchemaValidationResult
+{
+    // ... campos existentes ...
+
+    /// <summary>
+    /// Detected Soft Restaurant version based on schema analysis
+    /// </summary>
+    public SRVersion DetectedVersion { get; set; } = SRVersion.Unknown;
+
+    /// <summary>
+    /// Detected version as display string
+    /// </summary>
+    public string DetectedVersionDisplay => DetectedVersion switch
+    {
+        SRVersion.V10 => "SR 10.x",
+        SRVersion.V9 => "SR 9.x",
+        SRVersion.V8 => "SR 8.x",
+        _ => "Version desconocida"
+    };
+}
+```
+
+### Archivos del Sistema v4.8.3
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/features/integrations/types/schema-validation.types.ts` | Tipos y constantes del schema esperado |
+| `src/features/integrations/services/schema-validator.service.ts` | Servicio de validacion Next.js |
+| `app/api/agent/validate-schema/route.ts` | Endpoint API para validacion |
+| `app/api/agent/status/route.ts` | Endpoint para obtener estado del agente |
+| `src/features/integrations/components/SchemaValidationStatus.tsx` | UI de estado de validacion |
+| `src/features/integrations/components/CredentialsGuide.tsx` | Guia de credenciales SQL |
+| `TisTis.Agent.SoftRestaurant/.../ISchemaValidator.cs` | Interface del validador C# |
+| `TisTis.Agent.SoftRestaurant/.../SchemaValidator.cs` | Implementacion del validador C# |
+| `TisTis.Agent.SoftRestaurant/.../SRVersionQueryProvider.cs` | Proveedor de queries por version |
+
+### Flujo de Validacion Completo
+
+```
+1. Usuario completa wizard de setup
+    ↓
+2. Descarga e instala el agente Windows
+    ↓
+3. Agente se conecta a SQL Server
+    ↓
+4. SchemaValidator.cs ejecuta query en INFORMATION_SCHEMA
+    ↓
+5. Detecta version de SR basado en columnas presentes
+    ↓
+6. POST /api/agent/validate-schema con schema completo
+    ↓
+7. SchemaValidatorService valida contra SR_EXPECTED_SCHEMA
+    ↓
+8. Resultado almacenado en agent_instances.metadata
+    ↓
+9. Dashboard muestra SchemaValidationStatus en Step 5
+    ↓
+10. AgentWorker usa SRVersionQueryProvider para queries adaptadas
+```
+
+---
+
+## Soft Restaurant Cloud Integration (v4.8.4 - NUEVO)
+
+### Descripcion
+
+Soporte para Soft Restaurant Cloud (SaaS), la version hospedada por National Soft. A diferencia de SR Local que usa un agente Windows con acceso directo a SQL Server, SR Cloud se integra via API REST oficial con limitaciones significativas en las funcionalidades disponibles.
+
+### Comparacion SR Local vs SR Cloud
+
+| Caracteristica | SR Local | SR Cloud |
+|---------------|----------|----------|
+| **Base de datos** | SQL Server local | Nube (National Soft) |
+| **Menu y Productos** | Disponible | Disponible |
+| **Inventario** | Disponible | NO disponible |
+| **Ventas detalladas** | Disponible | NO disponible |
+| **Mesas/Plano** | Disponible | NO disponible |
+| **Recetas/Gramaje** | Disponible | NO disponible |
+| **Reservaciones** | Disponible | NO disponible |
+| **Metodo integracion** | TIS TIS Local Agent | API REST oficial |
+| **Conexion internet** | No requerida | Obligatoria |
+| **Tiempo offline max** | Ilimitado | 48 horas |
+| **Requiere licencia** | SQL Server | ERP/PMS National Soft |
+
+### Arquitectura del Sistema
+
+```
++-------------------+     +----------------------+     +------------------+
+|   Dashboard UI    |     |  TIS TIS Cloud API   |     |  SR Cloud API    |
+|  SRDeploymentSel  |     |  /api/integrations/  |     |  (National Soft) |
+|                   |     |  softrestaurant/     |     |                  |
++--------+----------+     |  cloud               |     +--------+---------+
+         │                +----------+-----------+              │
+         │                           │                          │
+         │ 1. Select SR Cloud        │                          │
+         ├──────────────────────────>│                          │
+         │                           │                          │
+         │ 2. Enter API Key          │                          │
+         ├──────────────────────────>│                          │
+         │                           │                          │
+         │                           │ 3. Test Connection       │
+         │                           ├─────────────────────────>│
+         │                           │                          │
+         │                           │ 4. Account Info          │
+         │                           │<─────────────────────────│
+         │                           │                          │
+         │ 5. Connection Result      │                          │
+         │<──────────────────────────│                          │
+         │                           │                          │
+         │ 6. Sync Menu              │                          │
+         ├──────────────────────────>│                          │
+         │                           │                          │
+         │                           │ 7. GET /v1/menu/items    │
+         │                           ├─────────────────────────>│
+         │                           │                          │
+         │                           │ 8. Menu items            │
+         │                           │<─────────────────────────│
+         │                           │                          │
+         │ 9. Menu synced            │                          │
+         │<──────────────────────────│                          │
+```
+
+### Tipos de Deployment
+
+```typescript
+// integration.types.ts
+
+/**
+ * Soft Restaurant deployment type
+ * - local: Traditional on-premise installation with SQL Server
+ * - cloud: Soft Restaurant Cloud (SaaS) hosted by National Soft
+ */
+export type SRDeploymentType = 'local' | 'cloud';
+
+/**
+ * SR Cloud connection status
+ */
+export type SRCloudConnectionStatus =
+  | 'pending'       // Waiting for API key configuration
+  | 'validating'    // Testing API connection
+  | 'connected'     // Successfully connected
+  | 'error'         // Connection failed
+  | 'suspended';    // Account suspended by National Soft
+```
+
+### Constante de Capacidades
+
+```typescript
+// integration.types.ts
+
+export const SR_DEPLOYMENT_CAPABILITIES: Record<SRDeploymentType, SRDeploymentCapabilities> = {
+  local: {
+    deploymentType: 'local',
+    displayName: 'Soft Restaurant Local',
+    description: 'Instalacion on-premise con SQL Server local',
+    capabilities: {
+      syncMenu: true,
+      syncInventory: true,
+      syncSales: true,
+      syncTables: true,
+      syncReservations: false,
+      syncRecipes: true,
+    },
+    integrationMethod: 'local_agent',
+    notes: [
+      'Requiere TIS TIS Local Agent instalado en el servidor',
+      'Acceso directo a SQL Server con permisos de lectura',
+      'Sincronizacion completa de datos',
+      'Funciona sin conexion a internet',
+    ],
+    supportedVersions: ['SR 10.x', 'SR 11.x', 'SR 12.x'],
+  },
+  cloud: {
+    deploymentType: 'cloud',
+    displayName: 'Soft Restaurant Cloud',
+    description: 'Version cloud hospedada por National Soft',
+    capabilities: {
+      syncMenu: true,          // Via API oficial
+      syncInventory: false,    // NO DISPONIBLE en SR Cloud actualmente
+      syncSales: false,        // Limitado via API oficial
+      syncTables: false,       // NO DISPONIBLE en SR Cloud
+      syncReservations: false, // NO DISPONIBLE en SR Cloud
+      syncRecipes: false,      // NO DISPONIBLE en SR Cloud
+    },
+    integrationMethod: 'cloud_api',
+    notes: [
+      'Usa API REST oficial de National Soft',
+      'Solo sincronizacion de menu disponible actualmente',
+      'Inventario NO disponible en SR Cloud',
+      'Requiere licencia ERP/PMS activa',
+      'Conexion a internet obligatoria',
+    ],
+    supportedVersions: ['SR Cloud'],
+  },
+};
+```
+
+### Tipos de Respuesta API SR Cloud
+
+```typescript
+// integration.types.ts
+
+export interface SRCloudConfig {
+  apiKey: string;
+  apiSecret?: string;
+  accountId?: string;
+  accountName?: string;
+  apiBaseUrl: string;  // Default: https://api.softrestaurant.com.mx
+  status: SRCloudConnectionStatus;
+  lastValidatedAt?: string;
+  syncMenuEnabled: boolean;
+  syncFrequencyMinutes: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SRCloudMenuResponse {
+  success: boolean;
+  data?: {
+    items: SRCloudMenuItem[];
+    categories: SRCloudCategory[];
+    lastUpdated: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+export interface SRCloudMenuItem {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  precio: number;
+  categoriaId: string;
+  categoriaNombre?: string;
+  activo: boolean;
+  imagen?: string;
+  modificadores?: SRCloudModifier[];
+}
+
+export interface SRCloudCategory {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  orden?: number;
+  activa: boolean;
+  imagen?: string;
+}
+
+export interface SRCloudModifier {
+  id: string;
+  nombre: string;
+  precio: number;
+  obligatorio: boolean;
+}
+```
+
+### Servicio: SoftRestaurantCloudService
+
+Ubicacion: `/src/features/integrations/services/soft-restaurant-cloud.service.ts`
+
+Servicio singleton para conectar con la API oficial de SR Cloud.
+
+**Metodos Disponibles:**
+
+```typescript
+import { getSoftRestaurantCloudService } from '@/src/features/integrations';
+
+const srCloudService = getSoftRestaurantCloudService();
+
+// Test connection with API key
+const result = await srCloudService.testConnection(apiKey, apiBaseUrl?);
+// Returns: SRCloudConnectionTestResult
+
+// Validate API key
+const { isValid, errorCode } = await srCloudService.validateApiKey(apiKey);
+
+// Fetch menu from SR Cloud
+const menuResult = await srCloudService.fetchMenu(apiKey, apiBaseUrl?);
+// Returns: SRCloudMenuResponse
+
+// Check feature availability
+const canSyncInventory = srCloudService.isFeatureAvailable('inventory');
+// Returns: false (not available in SR Cloud)
+
+// Get list of limitations
+const limitations = srCloudService.getCloudLimitations();
+// Returns: string[] with limitation descriptions
+```
+
+**Codigos de Error:**
+
+```typescript
+export const SR_CLOUD_ERROR_CODES = {
+  INVALID_API_KEY: 'INVALID_API_KEY',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+  RATE_LIMITED: 'RATE_LIMITED',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  TIMEOUT: 'TIMEOUT',
+  SERVER_ERROR: 'SERVER_ERROR',
+  INVALID_RESPONSE: 'INVALID_RESPONSE',
+  FEATURE_NOT_AVAILABLE: 'FEATURE_NOT_AVAILABLE',
+  LICENSE_EXPIRED: 'LICENSE_EXPIRED',
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+};
+```
+
+### API Endpoint: /api/integrations/softrestaurant/cloud
+
+Ubicacion: `/app/api/integrations/softrestaurant/cloud/route.ts`
+
+**POST Actions:**
+
+| Action | Descripcion | Parametros |
+|--------|-------------|------------|
+| `test_connection` | Prueba conexion con SR Cloud | `apiKey`, `apiBaseUrl?` |
+| `sync_menu` | Sincroniza menu desde SR Cloud | `apiKey`, `apiBaseUrl?`, `integrationId` |
+| `get_limitations` | Obtiene limitaciones de SR Cloud | - |
+
+**Ejemplo Request - Test Connection:**
+```typescript
+POST /api/integrations/softrestaurant/cloud
+{
+  "action": "test_connection",
+  "apiKey": "your-sr-cloud-api-key"
+}
+```
+
+**Ejemplo Response - Success:**
+```typescript
+{
+  "success": true,
+  "message": "Conexion exitosa con Soft Restaurant Cloud",
+  "status": "connected",
+  "details": {
+    "apiVersion": "v1",
+    "accountName": "Mi Restaurante",
+    "accountId": "12345",
+    "responseTimeMs": 234
+  },
+  "limitations": [
+    "Inventario NO disponible - SR Cloud no incluye modulo de inventarios",
+    "Ventas limitadas - Solo resumen basico disponible via API",
+    // ... more limitations
+  ]
+}
+```
+
+**GET - Obtener Limitaciones:**
+```typescript
+GET /api/integrations/softrestaurant/cloud
+
+Response:
+{
+  "success": true,
+  "limitations": ["..."],
+  "availableFeatures": {
+    "menu": true,
+    "inventory": false,
+    "sales": false,
+    "tables": false,
+    "reservations": false,
+    "recipes": false
+  },
+  "recommendation": "Para acceso completo a datos (inventario, ventas detalladas, mesas), recomendamos usar Soft Restaurant Local con el TIS TIS Local Agent."
+}
+```
+
+### Componente: SRDeploymentSelector
+
+Ubicacion: `/src/features/integrations/components/SRDeploymentSelector.tsx`
+
+Componente React que permite al usuario seleccionar entre SR Local y SR Cloud durante el proceso de configuracion de integracion.
+
+**Props:**
+```typescript
+interface SRDeploymentSelectorProps {
+  onSelect: (type: SRDeploymentType) => void;
+  selectedType?: SRDeploymentType;
+  showBackButton?: boolean;
+  onBack?: () => void;
+}
+```
+
+**Caracteristicas:**
+
+- Cards seleccionables para Local y Cloud
+- Badge "Recomendado" en SR Local
+- Indicador visual de funcionalidades disponibles (5/5 vs 1/5)
+- Checkmarks verdes para funciones disponibles
+- X grises tachadas para funciones no disponibles
+- Warning box con limitaciones de SR Cloud
+- Texto de ayuda para identificar tipo de instalacion
+- Botones de navegacion (Atras/Continuar)
+- Dark mode completo
+
+**Estados Visuales:**
+
+| Estado | Descripcion |
+|--------|-------------|
+| No seleccionado | Ambas tarjetas con borde gris |
+| Local seleccionado | Tarjeta Local con borde coral y fondo gradiente |
+| Cloud seleccionado | Tarjeta Cloud con borde coral, warning visible |
+
+**Flujo de Usuario:**
+
+1. Usuario llega al selector de tipo de deployment
+2. Ve dos opciones: Local (recomendado) y Cloud
+3. Puede ver funcionalidades disponibles para cada opcion
+4. Al seleccionar Cloud, ve warning con limitaciones
+5. Click en "Continuar" para proceder con la configuracion
+
+### Limitaciones de SR Cloud (Importante)
+
+Las siguientes funcionalidades NO estan disponibles cuando se usa SR Cloud:
+
+1. **Inventario** - SR Cloud no incluye modulo de inventarios en su API
+2. **Ventas Detalladas** - Solo resumen basico disponible via API
+3. **Mesas/Plano** - Funcion no incluida en SR Cloud
+4. **Reservaciones** - No soportado por API
+5. **Recetas con Gramaje** - Requiere acceso directo a SQL Server
+6. **Operacion Offline** - Requiere conexion a internet permanente
+
+**Tiempo maximo offline:** 48 horas (segun politicas de National Soft)
+
+**Requisito de licencia:** Licencia ERP/PMS activa con National Soft
+
+### Archivos del Sistema v4.8.4
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/features/integrations/types/integration.types.ts` | Tipos SRDeploymentType, SRCloudConfig, etc. |
+| `src/features/integrations/services/soft-restaurant-cloud.service.ts` | Servicio singleton SR Cloud |
+| `app/api/integrations/softrestaurant/cloud/route.ts` | API endpoint SR Cloud |
+| `src/features/integrations/components/SRDeploymentSelector.tsx` | UI selector de deployment |
+
+### Flujo de Decision de Integracion
+
+```
+Usuario quiere integrar Soft Restaurant
+    |
+    v
+SRDeploymentSelector
+    |
+    +-- Selecciona "Local" --> LocalAgentSetupWizard --> Full features
+    |
+    +-- Selecciona "Cloud" --> SRCloudConfigModal --> Menu only
+                                     |
+                                     v
+                              Enter API Key
+                                     |
+                                     v
+                              Test Connection
+                                     |
+                              +------+------+
+                              |             |
+                           Success        Error
+                              |             |
+                              v             v
+                         Sync Menu     Show Error
+                              |
+                              v
+                         Integration Active
+                         (Menu sync only)
+```
+
+### Recomendaciones para Usuarios
+
+Siempre que sea posible, recomendar SR Local por las siguientes razones:
+
+1. **Acceso completo a datos** - Inventario, ventas, mesas, recetas
+2. **Operacion offline** - No depende de internet
+3. **Sincronizacion en tiempo real** - Datos actualizados cada 5 minutos
+4. **Sin limitaciones de API** - Acceso directo a SQL Server
+
+SR Cloud solo se recomienda cuando:
+
+1. El restaurante ya usa SR Cloud exclusivamente
+2. No tienen servidor Windows para el Local Agent
+3. Solo necesitan sincronizar el menu
+
+---
+
+## Restaurant Data Cache System (v4.8.2)
+
+### Descripcion
+
+Sistema de cache centralizado para datos de restaurante que implementa el patron stale-while-revalidate. Permite navegacion instantanea entre pestanas (Mesas, Inventario, Menu, Cocina) mostrando datos cacheados mientras se refrescan en background.
+
+### Arquitectura del Sistema
+
+```
++------------------+     +----------------------+     +------------------+
+|   Restaurant     |     |  restaurantDataStore |     |   Supabase DB    |
+|   Tab Components |     |  (Zustand + Cache)   |     |                  |
++--------+---------+     +----------+-----------+     +--------+---------+
+         │                          │                          │
+         │ useCachedTables()        │                          │
+         ├─────────────────────────>│                          │
+         │                          │                          │
+         │ Cached Data (instant)    │                          │
+         │<─────────────────────────│                          │
+         │                          │                          │
+         │                          │ Check staleness          │
+         │                          │ (> 30s default)          │
+         │                          │                          │
+         │                          │ Background fetch         │
+         │                          ├─────────────────────────>│
+         │                          │                          │
+         │                          │ Fresh data               │
+         │                          │<─────────────────────────│
+         │                          │                          │
+         │ Updated Data (reactive)  │ Update cache             │
+         │<─────────────────────────│                          │
+         │                          │                          │
+```
+
+### Caracteristicas Principales
+
+| Caracteristica | Descripcion |
+|---------------|-------------|
+| **Stale-While-Revalidate** | Muestra datos cacheados inmediatamente, refresca en background si estan stale |
+| **Branch-Aware** | El cache se invalida automaticamente al cambiar de sucursal |
+| **Configurable Staleness** | Tiempo de staleness configurable (default: 30 segundos) |
+| **Real-time Compatible** | Las actualizaciones en tiempo real actualizan el cache |
+| **Memory Efficient** | Limpia cache de sucursales no utilizadas |
+
+### Store Principal: restaurantDataStore
+
+Ubicacion: `/src/shared/stores/restaurantDataStore.ts`
+
+```typescript
+import { useRestaurantDataStore, useCachedTables, useCachedInventory, useCachedMenu, useCachedKitchen } from '@/src/shared/stores';
+
+// Hooks de selector para datos cacheados
+const { data: tables, lastFetch, isStale } = useCachedTables(branchId);
+const { data: inventory } = useCachedInventory(branchId);
+const { data: menu } = useCachedMenu(branchId);
+const { data: kitchen } = useCachedKitchen(branchId);
+
+// Acceso al store completo
+const store = useRestaurantDataStore();
+
+// Limpiar todo el cache
+store.clearAllCache();
+
+// Limpiar cache de una sucursal especifica
+store.clearBranchCache(branchId);
+```
+
+### Tipos del Store
+
+```typescript
+interface CacheEntry<T> {
+  data: T;
+  lastFetch: number;        // timestamp
+  isStale: boolean;         // calculado: Date.now() - lastFetch > STALE_TIME
+}
+
+interface BranchCache {
+  tables?: CacheEntry<Table[]>;
+  inventory?: CacheEntry<InventoryItem[]>;
+  menu?: CacheEntry<MenuItem[]>;
+  kitchen?: CacheEntry<KitchenOrder[]>;
+}
+
+interface RestaurantDataState {
+  cache: Record<string, BranchCache>;  // branchId -> BranchCache
+
+  // Setters
+  setTables: (branchId: string, data: Table[]) => void;
+  setInventory: (branchId: string, data: InventoryItem[]) => void;
+  setMenu: (branchId: string, data: MenuItem[]) => void;
+  setKitchen: (branchId: string, data: KitchenOrder[]) => void;
+
+  // Getters con staleness check
+  getTables: (branchId: string) => CacheEntry<Table[]> | undefined;
+  getInventory: (branchId: string) => CacheEntry<InventoryItem[]> | undefined;
+  getMenu: (branchId: string) => CacheEntry<MenuItem[]> | undefined;
+  getKitchen: (branchId: string) => CacheEntry<KitchenOrder[]> | undefined;
+
+  // Cache management
+  clearBranchCache: (branchId: string) => void;
+  clearAllCache: () => void;
+}
+```
+
+### Hooks de Selector Disponibles
+
+| Hook | Datos | Uso |
+|------|-------|-----|
+| `useCachedTables(branchId)` | Mesas del restaurante | Vista de mesas, estado de ocupacion |
+| `useCachedInventory(branchId)` | Inventario de productos | Control de stock, alertas de bajo inventario |
+| `useCachedMenu(branchId)` | Menu y platillos | Catalogo de productos, precios |
+| `useCachedKitchen(branchId)` | Ordenes de cocina | Vista de cocina, ordenes pendientes |
+
+### Integracion en Hooks de Feature
+
+Cada hook de feature (useTables, useInventory, useMenu, useKitchen) fue actualizado para usar el cache:
+
+```typescript
+// src/features/restaurant-tables/hooks/useTables.ts
+import { useCachedTables, useRestaurantDataStore } from '@/src/shared/stores';
+
+export function useTables(branchId: string) {
+  const cached = useCachedTables(branchId);
+  const setTables = useRestaurantDataStore(state => state.setTables);
+
+  const [tables, setLocalTables] = useState<Table[]>(cached?.data || []);
+  const [isLoading, setIsLoading] = useState(!cached?.data);
+
+  useEffect(() => {
+    // Si hay cache y no esta stale, usar cache
+    if (cached?.data && !cached.isStale) {
+      setLocalTables(cached.data);
+      setIsLoading(false);
+      return;
+    }
+
+    // Si hay cache pero esta stale, mostrar cache y refrescar en background
+    if (cached?.data && cached.isStale) {
+      setLocalTables(cached.data);
+      setIsLoading(false);
+      // Background refresh (no blocking)
+      fetchTables().then(data => {
+        setTables(branchId, data);
+        setLocalTables(data);
+      });
+      return;
+    }
+
+    // Sin cache, fetch blocking
+    setIsLoading(true);
+    fetchTables().then(data => {
+      setTables(branchId, data);
+      setLocalTables(data);
+      setIsLoading(false);
+    });
+  }, [branchId, cached]);
+
+  // Real-time updates tambien actualizan el cache
+  useEffect(() => {
+    const channel = supabase
+      .channel('tables-changes')
+      .on('postgres_changes', { ... }, payload => {
+        // Update local state AND cache
+        const updated = [...tables, payload.new];
+        setLocalTables(updated);
+        setTables(branchId, updated);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [branchId]);
+
+  return { tables, isLoading, ... };
+}
+```
+
+### Configuracion de Staleness
+
+```typescript
+// En restaurantDataStore.ts
+const STALE_TIME_MS = 30 * 1000; // 30 segundos por defecto
+
+// Para cambiar el tiempo de staleness, modificar esta constante
+// o implementar configuracion por tipo de dato si es necesario
+```
+
+### Flujo de Navegacion entre Pestanas
+
+```
+Usuario en Tab "Mesas"
+    ↓
+Navega a Tab "Inventario"
+    ↓
+useCachedInventory(branchId) → Cache HIT → Datos instantaneos
+    ↓
+isStale check → true (> 30s desde ultimo fetch)
+    ↓
+Background fetch → Supabase query
+    ↓
+Cache update → UI reactivamente actualizada
+    ↓
+Usuario regresa a Tab "Mesas"
+    ↓
+useCachedTables(branchId) → Cache HIT → Datos instantaneos (< 30s)
+    ↓
+No background fetch (datos frescos)
+```
+
+### Cambio de Sucursal
+
+```
+Usuario cambia de sucursal (BranchSelector)
+    ↓
+branchId cambia
+    ↓
+Hooks detectan nuevo branchId
+    ↓
+Cache MISS para nueva sucursal
+    ↓
+Fetch inicial para nueva sucursal
+    ↓
+Cache poblado para nueva sucursal
+```
+
+### Archivos del Sistema
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/shared/stores/restaurantDataStore.ts` | Store Zustand centralizado |
+| `src/shared/stores/index.ts` | Barrel exports |
+| `src/features/restaurant-tables/hooks/useTables.ts` | Hook de mesas con cache |
+| `src/features/restaurant-inventory/hooks/useInventory.ts` | Hook de inventario con cache |
+| `src/features/restaurant-menu/hooks/useMenu.ts` | Hook de menu con cache |
+| `src/features/restaurant-kitchen/hooks/useKitchen.ts` | Hook de cocina con cache |
+
+### Beneficios de Performance
+
+| Metrica | Sin Cache | Con Cache |
+|---------|-----------|-----------|
+| **Tiempo de carga inicial** | 200-500ms | 200-500ms |
+| **Navegacion entre tabs** | 200-500ms | < 10ms |
+| **Cambio de sucursal** | 200-500ms | 200-500ms |
+| **Re-render en background** | N/A | Sin bloqueo de UI |
+
+### Consideraciones de Memoria
+
+- El cache se mantiene en memoria mientras la aplicacion esta activa
+- Se recomienda limpiar el cache al hacer logout (`clearAllCache()`)
+- Para sucursales con muchos datos, considerar implementar limpieza automatica de sucursales no visitadas en X minutos
 
 ---
 
@@ -1520,9 +2662,22 @@ Esta es la guia maestra de desarrollo. Para documentacion detallada por feature,
 - `/src/features/settings/components/AdminChannelSection.tsx` - Componente UI (FASE 6)
 - `/src/features/reports/` - Sistema de Reportes PDF (v4.8.0)
 - `/src/features/integrations/services/agent-manager.service.ts` - Servicio de gestion de agentes
+- `/src/features/integrations/services/schema-validator.service.ts` - Servicio de validacion de schema (v4.8.3)
+- `/src/features/integrations/services/soft-restaurant-cloud.service.ts` - Servicio SR Cloud API (v4.8.4)
+- `/src/features/integrations/types/schema-validation.types.ts` - Tipos del sistema de validacion (v4.8.3)
 - `/src/features/integrations/components/LocalAgentSetupWizard.tsx` - Wizard de configuracion
-- `/app/api/agent/` - Endpoints del Local Agent (installer, sync, heartbeat)
+- `/src/features/integrations/components/SchemaValidationStatus.tsx` - UI de estado de validacion (v4.8.3)
+- `/src/features/integrations/components/CredentialsGuide.tsx` - Guia de credenciales SQL (v4.8.3)
+- `/src/features/integrations/components/SRDeploymentSelector.tsx` - Selector Local vs Cloud (v4.8.4)
+- `/app/api/agent/` - Endpoints del Local Agent (installer, sync, heartbeat, validate-schema, status)
+- `/app/api/integrations/softrestaurant/cloud/` - Endpoint SR Cloud API (v4.8.4)
+- `/TisTis.Agent.SoftRestaurant/` - Codigo fuente del agente Windows C#
 - `/app/api/reports/generate/route.ts` - API endpoint de generacion
+- `/src/shared/stores/restaurantDataStore.ts` - Cache centralizado para restaurante (v4.8.2)
+- `/src/features/restaurant-tables/hooks/useTables.ts` - Hook de mesas con cache
+- `/src/features/restaurant-inventory/hooks/useInventory.ts` - Hook de inventario con cache
+- `/src/features/restaurant-menu/hooks/useMenu.ts` - Hook de menu con cache
+- `/src/features/restaurant-kitchen/hooks/useKitchen.ts` - Hook de cocina con cache
 - `/docs/API.md` - API general del proyecto
 - `/docs/INTEGRATION_GUIDE.md` - Guia de integraciones
 
@@ -1531,4 +2686,4 @@ Esta es la guia maestra de desarrollo. Para documentacion detallada por feature,
 *Este archivo es la fuente de verdad para desarrollo en TIS TIS Platform. Todas las decisiones de codigo deben alinearse con estos principios.*
 
 *Ultima actualizacion: 30 de Enero, 2026*
-*Version: 4.8.1 - Multi-branch support para TIS TIS Local Agent (Soft Restaurant)*
+*Version: 4.8.4 - Soft Restaurant Cloud Integration: API REST, Deployment Selector, SR Local vs Cloud*

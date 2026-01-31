@@ -524,6 +524,186 @@ export interface TenantExternalData {
 // ======================
 
 // ========================================
+// SR DEPLOYMENT TYPES (Local vs Cloud)
+// ========================================
+
+/**
+ * Soft Restaurant deployment type
+ * - local: Traditional on-premise installation with SQL Server
+ * - cloud: Soft Restaurant Cloud (SaaS) hosted by National Soft
+ */
+export type SRDeploymentType = 'local' | 'cloud';
+
+/**
+ * SR Cloud connection status
+ */
+export type SRCloudConnectionStatus =
+  | 'pending'       // Waiting for API key configuration
+  | 'validating'    // Testing API connection
+  | 'connected'     // Successfully connected
+  | 'error'         // Connection failed
+  | 'suspended';    // Account suspended by National Soft
+
+/**
+ * Capabilities available for each deployment type
+ * Based on National Soft documentation and API limitations
+ */
+export interface SRDeploymentCapabilities {
+  deploymentType: SRDeploymentType;
+  displayName: string;
+  description: string;
+
+  // Available features (true = available, false = not available)
+  capabilities: {
+    syncMenu: boolean;
+    syncInventory: boolean;
+    syncSales: boolean;
+    syncTables: boolean;
+    syncReservations: boolean;
+    syncRecipes: boolean;
+  };
+
+  // Integration method
+  integrationMethod: 'local_agent' | 'cloud_api' | 'webhook';
+
+  // Notes about limitations
+  notes: string[];
+
+  // Supported SR versions
+  supportedVersions: string[];
+}
+
+/**
+ * Known SR deployment configurations
+ */
+export const SR_DEPLOYMENT_CAPABILITIES: Record<SRDeploymentType, SRDeploymentCapabilities> = {
+  local: {
+    deploymentType: 'local',
+    displayName: 'Soft Restaurant Local',
+    description: 'Instalación on-premise con SQL Server local',
+    capabilities: {
+      syncMenu: true,
+      syncInventory: true,
+      syncSales: true,
+      syncTables: true,
+      syncReservations: false,  // Not implemented yet
+      syncRecipes: true,
+    },
+    integrationMethod: 'local_agent',
+    notes: [
+      'Requiere TIS TIS Local Agent instalado en el servidor',
+      'Acceso directo a SQL Server con permisos de lectura',
+      'Sincronización completa de datos',
+      'Funciona sin conexión a internet',
+    ],
+    supportedVersions: ['SR 10.x', 'SR 11.x', 'SR 12.x'],
+  },
+  cloud: {
+    deploymentType: 'cloud',
+    displayName: 'Soft Restaurant Cloud',
+    description: 'Versión cloud hospedada por National Soft',
+    capabilities: {
+      syncMenu: true,          // Via API oficial
+      syncInventory: false,    // NO DISPONIBLE en SR Cloud actualmente
+      syncSales: false,        // Limitado via API oficial
+      syncTables: false,       // NO DISPONIBLE en SR Cloud
+      syncReservations: false, // NO DISPONIBLE en SR Cloud
+      syncRecipes: false,      // NO DISPONIBLE en SR Cloud
+    },
+    integrationMethod: 'cloud_api',
+    notes: [
+      'Usa API REST oficial de National Soft',
+      'Solo sincronización de menú disponible actualmente',
+      'Inventario NO disponible en SR Cloud',
+      'Requiere licencia ERP/PMS activa',
+      'Conexión a internet obligatoria',
+    ],
+    supportedVersions: ['SR Cloud'],
+  },
+};
+
+/**
+ * SR Cloud API configuration
+ */
+export interface SRCloudConfig {
+  // API credentials
+  apiKey: string;
+  apiSecret?: string;
+
+  // Account info
+  accountId?: string;
+  accountName?: string;
+
+  // Endpoint configuration
+  apiBaseUrl: string;  // Default: https://api.softrestaurant.com.mx
+
+  // Connection status
+  status: SRCloudConnectionStatus;
+  lastValidatedAt?: string;
+
+  // Sync configuration
+  syncMenuEnabled: boolean;
+  syncFrequencyMinutes: number;
+
+  // Metadata
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * SR Cloud API response for menu items
+ */
+export interface SRCloudMenuResponse {
+  success: boolean;
+  data?: {
+    items: SRCloudMenuItem[];
+    categories: SRCloudCategory[];
+    lastUpdated: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+/**
+ * SR Cloud menu item from API
+ */
+export interface SRCloudMenuItem {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  precio: number;
+  categoriaId: string;
+  categoriaNombre?: string;
+  activo: boolean;
+  imagen?: string;
+  modificadores?: SRCloudModifier[];
+}
+
+/**
+ * SR Cloud category from API
+ */
+export interface SRCloudCategory {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  orden?: number;
+  activa: boolean;
+  imagen?: string;
+}
+
+/**
+ * SR Cloud modifier/extra
+ */
+export interface SRCloudModifier {
+  id: string;
+  nombre: string;
+  precio: number;
+  obligatorio: boolean;
+}
+
+// ========================================
 // WEBHOOK PAYLOAD TYPES (SR → TIS TIS)
 // ========================================
 

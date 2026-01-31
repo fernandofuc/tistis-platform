@@ -14,9 +14,25 @@ export {
 } from './components/SoftRestaurantConfigModal';
 export { LocalAgentSetupWizard } from './components/LocalAgentSetupWizard';
 export { AgentStatusCard } from './components/AgentStatusCard';
+export { SchemaValidationStatus, type SchemaValidationData } from './components/SchemaValidationStatus';
+export { CredentialsGuide } from './components/CredentialsGuide';
+export { SRDeploymentSelector } from './components/SRDeploymentSelector';
 
 // Types
 export * from './types/integration.types';
+export {
+  SR_EXPECTED_SCHEMA,
+  SR_KNOWN_VERSIONS,
+  getRequiredTablesForSync,
+  getTablesForSync,
+  isTypeMatch,
+  type TableDefinition,
+  type ColumnDefinition,
+  type SchemaValidationResult,
+  type ValidateSchemaRequest,
+  type ValidateSchemaResponse,
+  type SRVersionInfo,
+} from './types/schema-validation.types';
 
 // Constants
 export { SAFE_INTEGRATION_FIELDS, SENSITIVE_CREDENTIAL_FIELDS } from './constants/api-fields';
@@ -58,3 +74,19 @@ export {
   type AgentStats,
   type SyncLogEntry,
 } from './services/agent-manager.service';
+
+// Services - Schema Validator
+export {
+  getSchemaValidatorService,
+  SchemaValidatorService,
+} from './services/schema-validator.service';
+
+// Services - SR Cloud (SaaS version)
+export {
+  getSoftRestaurantCloudService,
+  SoftRestaurantCloudService,
+  SR_CLOUD_ERROR_CODES,
+  type SRCloudConnectionTestResult,
+  type SRCloudMenuSyncResult,
+  type SRCloudErrorCode,
+} from './services/soft-restaurant-cloud.service';
