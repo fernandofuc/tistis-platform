@@ -12,3 +12,17 @@ export {
   useCachedMenu,
   useCachedKitchen,
 } from './restaurantDataStore';
+
+// Dashboard Data Cache Store
+export {
+  useDashboardDataStore,
+  useCachedDashboard,
+  useCachedRestaurantDashboard,
+} from './dashboardDataStore';
+
+export type {
+  DashboardStats,
+  RestaurantStats,
+  RestaurantOrder,
+  RestaurantReservation,
+} from './dashboardDataStore';

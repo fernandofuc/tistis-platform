@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardContent, Badge, Avatar, Button } from '@/src/shared/components/ui';
@@ -15,7 +15,18 @@ import { motion } from 'framer-motion';
 import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
-import { useBranch } from '@/src/shared/stores';
+import {
+  useBranch,
+  useDashboardDataStore,
+  useCachedDashboard,
+  useCachedRestaurantDashboard,
+} from '@/src/shared/stores';
+import type {
+  DashboardStats,
+  RestaurantStats,
+  RestaurantOrder,
+  RestaurantReservation,
+} from '@/src/shared/stores';
 import { useVerticalTerminology } from '@/src/hooks/useVerticalTerminology';
 import { formatRelativeTime, formatTime, cn } from '@/src/shared/utils';
 import type { Lead, Appointment } from '@/src/shared/types';
@@ -139,31 +150,10 @@ const listItemVariants = {
 };
 
 // ======================
-// STATS DATA TYPES
+// STATS DATA TYPES - Imported from dashboardDataStore
 // ======================
-interface DashboardStats {
-  totalLeads: number;
-  hotLeads: number;
-  warmLeads: number;
-  coldLeads: number;
-  todayAppointments: number;
-  activeConversations: number;
-  escalatedConversations: number;
-}
-
-// Restaurant specific stats
-interface RestaurantStats {
-  tablesTotal: number;
-  tablesAvailable: number;
-  tablesOccupied: number;
-  tablesReserved: number;
-  todayReservations: number;
-  pendingOrders: number;
-  preparingOrders: number;
-  lowStockItems: number;
-  vipCustomersToday: number;
-  todayRevenue: number;
-}
+// DashboardStats, RestaurantStats, RestaurantOrder, RestaurantReservation
+// are now imported from '@/src/shared/stores'
 
 // ======================
 // RESTAURANT DASHBOARD COMPONENT
@@ -172,7 +162,13 @@ function RestaurantDashboard() {
   const router = useRouter();
   const { staff, tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
-  const [stats, setStats] = useState<RestaurantStats>({
+
+  // Get cached data from store
+  const cached = useCachedRestaurantDashboard(selectedBranchId);
+  const store = useDashboardDataStore();
+
+  // Local state - initialized from cache if available
+  const defaultStats: RestaurantStats = {
     tablesTotal: 0,
     tablesAvailable: 0,
     tablesOccupied: 0,
@@ -183,10 +179,15 @@ function RestaurantDashboard() {
     lowStockItems: 0,
     vipCustomersToday: 0,
     todayRevenue: 0,
-  });
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [todayReservations, setTodayReservations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  };
+
+  const [stats, setStats] = useState<RestaurantStats>(cached.stats || defaultStats);
+  const [recentOrders, setRecentOrders] = useState<RestaurantOrder[]>(cached.orders || []);
+  const [todayReservations, setTodayReservations] = useState<RestaurantReservation[]>(cached.reservations || []);
+  const [loading, setLoading] = useState(!cached.stats);
+
+  // Track first render for cache logic
+  const isFirstRender = useRef(true);
 
   // Fetch restaurant dashboard data
   const fetchRestaurantData = useCallback(async () => {
@@ -283,7 +284,7 @@ function RestaurantDashboard() {
       });
 
       // Calculate stats
-      setStats({
+      const newStats: RestaurantStats = {
         tablesTotal: activeTables.length,
         tablesAvailable: activeTables.filter((t: any) => t.status === 'available').length,
         tablesOccupied: activeTables.filter((t: any) => t.status === 'occupied').length,
@@ -294,23 +295,45 @@ function RestaurantDashboard() {
         lowStockItems,
         vipCustomersToday: vipLeads.length,
         todayRevenue: orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0),
-      });
+      };
 
-      setRecentOrders(orders.slice(0, 5));
-      setTodayReservations(reservationsResult.data || []);
+      const newOrders = orders.slice(0, 5) as RestaurantOrder[];
+      const newReservations = (reservationsResult.data || []) as RestaurantReservation[];
+
+      // Update local state
+      setStats(newStats);
+      setRecentOrders(newOrders);
+      setTodayReservations(newReservations);
+
+      // Update global cache
+      store.setRestaurantStats(newStats, selectedBranchId);
+      store.setRestaurantOrders(newOrders, selectedBranchId);
+      store.setRestaurantReservations(newReservations, selectedBranchId);
     } catch (error) {
       console.error('Error fetching restaurant data:', error);
     } finally {
       setLoading(false);
     }
-  }, [tenant?.id, selectedBranchId]);
+  }, [tenant?.id, selectedBranchId, store]);
 
+  // Initial fetch with cache support
   useEffect(() => {
-    fetchRestaurantData();
-    // Auto-refresh every 30 seconds for real-time data
-    const interval = setInterval(fetchRestaurantData, 30000);
-    return () => clearInterval(interval);
-  }, [fetchRestaurantData]);
+    if (isFirstRender.current && cached.stats) {
+      // Use cached data immediately
+      setStats(cached.stats);
+      setRecentOrders(cached.orders || []);
+      setTodayReservations(cached.reservations || []);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      // Refresh in background if stale
+      if (cached.isStale) {
+        fetchRestaurantData();
+      }
+    } else {
+      fetchRestaurantData();
+    }
+  }, [fetchRestaurantData, cached.stats, cached.orders, cached.reservations, cached.isStale]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -880,7 +903,13 @@ function DefaultDashboard() {
   const { staff, tenant } = useAuthContext();
   const { selectedBranchId, selectedBranch } = useBranch();
   const { t, vertical } = useVerticalTerminology();
-  const [stats, setStats] = useState<DashboardStats>({
+
+  // Get cached data from store
+  const cached = useCachedDashboard(selectedBranchId);
+  const store = useDashboardDataStore();
+
+  // Default stats
+  const defaultStats: DashboardStats = {
     totalLeads: 0,
     hotLeads: 0,
     warmLeads: 0,
@@ -888,10 +917,16 @@ function DefaultDashboard() {
     todayAppointments: 0,
     activeConversations: 0,
     escalatedConversations: 0,
-  });
-  const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
-  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
+  };
+
+  // Local state - initialized from cache if available
+  const [stats, setStats] = useState<DashboardStats>(cached.stats || defaultStats);
+  const [recentLeads, setRecentLeads] = useState<Lead[]>(cached.recentLeads || []);
+  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>(cached.todayAppointments || []);
+  const [loading, setLoading] = useState(!cached.stats);
+
+  // Track first render for cache logic
+  const isFirstRender = useRef(true);
 
   // ======================
   // DATA FETCHING - OPTIMIZED (Parallel Queries)
@@ -975,23 +1010,45 @@ function DefaultDashboard() {
       // Update ALL state in one batch (React 18 auto-batches, but being explicit)
       setStats(newStats);
 
-      if (!recentLeadsError && recentLeadsData) {
-        setRecentLeads(recentLeadsData as unknown as Lead[]);
-      }
+      const newLeads = (!recentLeadsError && recentLeadsData)
+        ? recentLeadsData as unknown as Lead[]
+        : [];
+      const newAppointments = (!appointmentsError && appointmentsData)
+        ? appointmentsData as unknown as Appointment[]
+        : [];
 
-      if (!appointmentsError && appointmentsData) {
-        setTodayAppointments(appointmentsData as unknown as Appointment[]);
-      }
+      setRecentLeads(newLeads);
+      setTodayAppointments(newAppointments);
+
+      // Update global cache
+      store.setDashboardStats(newStats, selectedBranchId);
+      store.setRecentLeads(newLeads, selectedBranchId);
+      store.setTodayAppointments(newAppointments, selectedBranchId);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
     }
-  }, [tenant?.id, selectedBranchId]);
+  }, [tenant?.id, selectedBranchId, store]);
 
+  // Initial fetch with cache support
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+    if (isFirstRender.current && cached.stats) {
+      // Use cached data immediately
+      setStats(cached.stats);
+      setRecentLeads(cached.recentLeads || []);
+      setTodayAppointments(cached.todayAppointments || []);
+      setLoading(false);
+      isFirstRender.current = false;
+
+      // Refresh in background if stale
+      if (cached.isStale) {
+        fetchDashboardData();
+      }
+    } else {
+      fetchDashboardData();
+    }
+  }, [fetchDashboardData, cached.stats, cached.recentLeads, cached.todayAppointments, cached.isStale]);
 
   // ======================
   // HELPERS
