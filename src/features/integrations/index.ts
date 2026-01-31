@@ -16,7 +16,6 @@ export { LocalAgentSetupWizard } from './components/LocalAgentSetupWizard';
 export { AgentStatusCard } from './components/AgentStatusCard';
 export { SchemaValidationStatus, type SchemaValidationData } from './components/SchemaValidationStatus';
 export { CredentialsGuide } from './components/CredentialsGuide';
-export { SRDeploymentSelector } from './components/SRDeploymentSelector';
 
 // Types
 export * from './types/integration.types';
@@ -80,13 +79,3 @@ export {
   getSchemaValidatorService,
   SchemaValidatorService,
 } from './services/schema-validator.service';
-
-// Services - SR Cloud (SaaS version)
-export {
-  getSoftRestaurantCloudService,
-  SoftRestaurantCloudService,
-  SR_CLOUD_ERROR_CODES,
-  type SRCloudConnectionTestResult,
-  type SRCloudMenuSyncResult,
-  type SRCloudErrorCode,
-} from './services/soft-restaurant-cloud.service';

@@ -68,14 +68,3 @@ export {
   getSchemaValidatorService,
   SchemaValidatorService,
 } from './schema-validator.service';
-
-// Soft Restaurant Cloud Service (SR Cloud SaaS)
-export {
-  getSoftRestaurantCloudService,
-  resetSoftRestaurantCloudService,  // For testing
-  SoftRestaurantCloudService,
-  SR_CLOUD_ERROR_CODES,
-  type SRCloudConnectionTestResult,
-  type SRCloudMenuSyncResult,
-  type SRCloudErrorCode,
-} from './soft-restaurant-cloud.service';
