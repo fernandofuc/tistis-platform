@@ -173,7 +173,7 @@ export const CheckItemAvailabilitySchema = z.object({
  * Obtiene promociones activas
  */
 export const GetActivePromotionsSchema = z.object({
-  vertical: z.enum(['dental', 'restaurant', 'all']).optional().default('all').describe('Vertical para filtrar promociones'),
+  vertical: z.enum(['dental', 'restaurant', 'clinic', 'all']).optional().default('all').describe('Vertical para filtrar promociones'),
 });
 
 // ======================
@@ -299,6 +299,47 @@ export const SecureCreateReservationSchema = z.object({
   branch_id: z.string().optional().describe('ID de la sucursal'),
   special_requests: z.string().optional().describe('Solicitudes especiales'),
   skip_trust_check: z.boolean().optional().default(false).describe('Saltar verificación de trust'),
+});
+
+// ======================
+// BRANCH-AWARE MESSAGING SCHEMAS (v4.9.0)
+// Herramientas para detección y routing por sucursal
+// ======================
+
+/**
+ * Schema para detect_branch_from_message
+ * Detecta si el mensaje menciona una sucursal específica
+ */
+export const DetectBranchFromMessageSchema = z.object({
+  message: z.string().describe('Mensaje del cliente a analizar para detectar menciones de sucursal'),
+});
+
+/**
+ * Schema para get_branch_disambiguation_options
+ * Obtiene opciones de sucursal para preguntar al cliente
+ */
+export const GetBranchDisambiguationOptionsSchema = z.object({
+  include_operating_hours: z.boolean().optional().default(true).describe('Incluir horarios de operación'),
+});
+
+/**
+ * Schema para update_lead_preferred_branch
+ * Actualiza la sucursal preferida del lead
+ */
+export const UpdateLeadPreferredBranchSchema = z.object({
+  branch_id: z.string().describe('ID de la sucursal seleccionada'),
+  source: z.enum(['ai_detected', 'user_selected', 'manual', 'channel_default'])
+    .optional()
+    .default('user_selected')
+    .describe('Origen de la selección'),
+});
+
+/**
+ * Schema para get_conversation_branch_context
+ * Obtiene el contexto de sucursal para la conversación actual
+ */
+export const GetConversationBranchContextSchema = z.object({
+  // No requiere parámetros - usa conversation_id del contexto
 });
 
 // ======================
@@ -616,6 +657,87 @@ export interface SecureBookingResult {
 }
 
 // ======================
+// BRANCH-AWARE MESSAGING RESPONSE TYPES (v4.9.0)
+// ======================
+
+/**
+ * Resultado de detección de sucursal en mensaje
+ */
+export interface BranchDetectionResult {
+  success: boolean;
+  branch_detected: boolean;
+  branch_id?: string;
+  branch_name?: string;
+  match_type?: 'exact' | 'partial' | 'alias' | 'city' | 'address';
+  confidence?: number;  // 0.0 to 1.0
+  multiple_matches?: boolean;
+  matches?: Array<{
+    branch_id: string;
+    branch_name: string;
+    match_type: string;
+    confidence: number;
+  }>;
+  message: string;
+}
+
+/**
+ * Opción de sucursal para desambiguación
+ */
+export interface BranchDisambiguationOption {
+  branch_id: string;
+  branch_name: string;
+  branch_address: string;
+  branch_city: string;
+  branch_phone: string | null;
+  operating_hours?: Record<string, { open: string; close: string }>;
+  is_headquarters: boolean;
+  is_lead_preferred: boolean;
+}
+
+/**
+ * Resultado de obtener opciones de desambiguación
+ */
+export interface BranchDisambiguationResult {
+  success: boolean;
+  needs_disambiguation: boolean;
+  branches: BranchDisambiguationOption[];
+  suggested_question: string;
+  message: string;
+}
+
+/**
+ * Resultado de actualizar sucursal preferida del lead
+ */
+export interface UpdateLeadBranchResult {
+  success: boolean;
+  lead_id?: string;
+  branch_id?: string;
+  branch_name?: string;
+  previous_branch_id?: string;
+  source: 'ai_detected' | 'user_selected' | 'manual' | 'channel_default';
+  message: string;
+  error?: string;
+}
+
+/**
+ * Contexto de sucursal de la conversación
+ */
+export interface ConversationBranchContext {
+  success: boolean;
+  has_branch: boolean;
+  branch_id?: string;
+  branch_name?: string;
+  branch_address?: string;
+  branch_city?: string;
+  branch_phone?: string;
+  is_headquarters?: boolean;
+  source: 'conversation' | 'lead_preference' | 'channel_connection' | 'none';
+  needs_branch_selection: boolean;
+  available_branches_count: number;
+  message: string;
+}
+
+// ======================
 // TOOL NAMES (Constants)
 // ======================
 
@@ -651,6 +773,11 @@ export const TOOL_NAMES = {
   CONVERT_HOLD_TO_BOOKING: 'convert_hold_to_booking',
   SECURE_CREATE_APPOINTMENT: 'secure_create_appointment',
   SECURE_CREATE_RESERVATION: 'secure_create_reservation',
+  // Branch-Aware Messaging tools (v4.9.0)
+  DETECT_BRANCH_FROM_MESSAGE: 'detect_branch_from_message',
+  GET_BRANCH_DISAMBIGUATION_OPTIONS: 'get_branch_disambiguation_options',
+  UPDATE_LEAD_PREFERRED_BRANCH: 'update_lead_preferred_branch',
+  GET_CONVERSATION_BRANCH_CONTEXT: 'get_conversation_branch_context',
 } as const;
 
 export type ToolName = typeof TOOL_NAMES[keyof typeof TOOL_NAMES];
@@ -691,6 +818,11 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   [TOOL_NAMES.CONVERT_HOLD_TO_BOOKING]: 'Convierte un hold activo en una reservación confirmada. Usa esta tool cuando el cliente confirme definitivamente su reservación.',
   [TOOL_NAMES.SECURE_CREATE_APPOINTMENT]: 'Crea una cita con verificación de trust integrada. Usa esta tool para dental/clínica cuando quieras crear la cita verificando el historial del cliente.',
   [TOOL_NAMES.SECURE_CREATE_RESERVATION]: 'Crea una reservación de restaurante con verificación de trust. Usa esta tool para restaurante cuando quieras reservar verificando el historial del cliente.',
+  // Branch-Aware Messaging tools (v4.9.0)
+  [TOOL_NAMES.DETECT_BRANCH_FROM_MESSAGE]: 'Detecta si el mensaje del cliente menciona una sucursal específica (por nombre, ciudad, dirección o alias). Usa esta tool cuando recibas un mensaje que podría mencionar una sucursal para determinar a cuál se refiere.',
+  [TOOL_NAMES.GET_BRANCH_DISAMBIGUATION_OPTIONS]: 'Obtiene la lista de sucursales disponibles para preguntar al cliente cuál prefiere. Usa esta tool cuando el negocio tiene múltiples sucursales y no se ha determinado cuál quiere el cliente. Genera una pregunta como "¿A cuál sucursal te gustaría acudir?"',
+  [TOOL_NAMES.UPDATE_LEAD_PREFERRED_BRANCH]: 'Actualiza la sucursal preferida del cliente en su perfil. Usa esta tool después de detectar o confirmar la sucursal que el cliente prefiere para recordarla en futuras interacciones.',
+  [TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT]: 'Obtiene el contexto actual de sucursal para la conversación. Usa esta tool para saber si ya se ha determinado la sucursal del cliente y obtener sus datos.',
 };
 
 // ======================
@@ -701,6 +833,13 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
  * Define qué tools están disponibles para cada tipo de agente
  */
 export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
+  // Supervisor agent (v4.9.0 - Branch Detection)
+  supervisor: [
+    TOOL_NAMES.DETECT_BRANCH_FROM_MESSAGE,
+    TOOL_NAMES.GET_BRANCH_DISAMBIGUATION_OPTIONS,
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
+  ],
+
   // Agentes con acceso completo
   pricing: [
     TOOL_NAMES.GET_SERVICE_INFO,
@@ -725,6 +864,10 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.RELEASE_BOOKING_HOLD,
     TOOL_NAMES.CHECK_SECURE_AVAILABILITY,
     TOOL_NAMES.CONVERT_HOLD_TO_BOOKING,
+    // Branch-Aware Messaging tools (v4.9.0)
+    TOOL_NAMES.GET_BRANCH_DISAMBIGUATION_OPTIONS,
+    TOOL_NAMES.UPDATE_LEAD_PREFERRED_BRANCH,
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
   ],
 
   booking_dental: [
@@ -742,6 +885,10 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.CHECK_SECURE_AVAILABILITY,
     TOOL_NAMES.CONVERT_HOLD_TO_BOOKING,
     TOOL_NAMES.SECURE_CREATE_APPOINTMENT,
+    // Branch-Aware Messaging tools (v4.9.0)
+    TOOL_NAMES.GET_BRANCH_DISAMBIGUATION_OPTIONS,
+    TOOL_NAMES.UPDATE_LEAD_PREFERRED_BRANCH,
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
   ],
 
   booking_restaurant: [
@@ -756,6 +903,10 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.CHECK_SECURE_AVAILABILITY,
     TOOL_NAMES.CONVERT_HOLD_TO_BOOKING,
     TOOL_NAMES.SECURE_CREATE_RESERVATION,
+    // Branch-Aware Messaging tools (v4.9.0)
+    TOOL_NAMES.GET_BRANCH_DISAMBIGUATION_OPTIONS,
+    TOOL_NAMES.UPDATE_LEAD_PREFERRED_BRANCH,
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
   ],
 
   booking_medical: [
@@ -766,16 +917,25 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_STAFF_INFO,
     TOOL_NAMES.CREATE_APPOINTMENT,
     TOOL_NAMES.UPDATE_LEAD_INFO,
+    // Branch-Aware Messaging tools (v4.9.0)
+    TOOL_NAMES.GET_BRANCH_DISAMBIGUATION_OPTIONS,
+    TOOL_NAMES.UPDATE_LEAD_PREFERRED_BRANCH,
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
   ],
 
   location: [
     TOOL_NAMES.GET_BRANCH_INFO,
     TOOL_NAMES.GET_OPERATING_HOURS,
+    // Branch-Aware Messaging tools (v4.9.0)
+    TOOL_NAMES.GET_BRANCH_DISAMBIGUATION_OPTIONS,
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
   ],
 
   hours: [
     TOOL_NAMES.GET_OPERATING_HOURS,
     TOOL_NAMES.GET_BRANCH_INFO,
+    // Branch-Aware Messaging tools (v4.9.0)
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
   ],
 
   faq: [
@@ -811,6 +971,8 @@ export const TOOLS_BY_AGENT: Record<string, ToolName[]> = {
     TOOL_NAMES.GET_BRANCH_INFO,
     // Loyalty tools (REVISIÓN 5.5) - Mencionar puntos en saludo
     TOOL_NAMES.GET_LOYALTY_BALANCE,
+    // Branch-Aware Messaging tools (v4.9.0)
+    TOOL_NAMES.GET_CONVERSATION_BRANCH_CONTEXT,
   ],
 
   escalation: [], // No tools, solo escala
@@ -914,6 +1076,11 @@ const toolDefinitions = {
   ConvertHoldToBookingSchema,
   SecureCreateAppointmentSchema,
   SecureCreateReservationSchema,
+  // Branch-Aware Messaging Schemas (v4.9.0)
+  DetectBranchFromMessageSchema,
+  GetBranchDisambiguationOptionsSchema,
+  UpdateLeadPreferredBranchSchema,
+  GetConversationBranchContextSchema,
 };
 
 export default toolDefinitions;

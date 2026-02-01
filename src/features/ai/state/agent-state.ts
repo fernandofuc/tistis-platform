@@ -35,7 +35,7 @@ export interface AgentProfileInfo {
 export interface TenantInfo {
   tenant_id: string;
   tenant_name: string;
-  // IMPORTANT: Only 'dental' and 'restaurant' are currently active
+  // IMPORTANT: Currently active verticals: dental, restaurant, clinic
   // Other verticals are planned for future releases
   vertical: 'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary';
   timezone: string;
@@ -135,6 +135,84 @@ export interface ConversationInfo {
   message_count: number;
   started_at: string;
   last_message_at: string;
+  /** Branch ID associated with this conversation (v4.9.0) */
+  branch_id?: string;
+  /** How the branch was resolved (v4.9.0) */
+  branch_resolution_source?: 'conversation' | 'lead_preference' | 'channel_connection' | 'user_selected' | 'ai_detected' | 'single_branch';
+}
+
+// =====================================================
+// BRANCH-AWARE MESSAGING CONTEXT (v4.9.0)
+// Sistema para multi-sucursal con detección inteligente
+// =====================================================
+
+/**
+ * Fuente de resolución de sucursal
+ * Define cómo se determinó la sucursal activa
+ */
+export type BranchResolutionSource =
+  | 'conversation'      // Ya estaba en la conversación
+  | 'lead_preference'   // Preferencia guardada del lead
+  | 'channel_connection' // Conexión de canal tiene sucursal por defecto
+  | 'user_selected'     // Usuario seleccionó explícitamente
+  | 'ai_detected'       // AI detectó mención en mensaje
+  | 'single_branch'     // Solo hay una sucursal
+  | 'disambiguation'    // Usuario seleccionó después de pregunta
+  | 'default';          // Se usó sucursal por defecto
+
+/**
+ * Estado de desambiguación de sucursal
+ */
+export type BranchDisambiguationState =
+  | 'not_needed'        // No se necesita (1 sucursal o ya resuelto)
+  | 'pending'           // Se necesita preguntar al usuario
+  | 'asked'             // Ya se preguntó, esperando respuesta
+  | 'resolved';         // Usuario ya seleccionó
+
+/**
+ * Contexto de sucursal para la sesión actual
+ * Maneja toda la lógica de multi-sucursal
+ */
+export interface BranchContext {
+  /** Si el tenant tiene múltiples sucursales */
+  is_multi_branch: boolean;
+
+  /** Sucursal actualmente activa para esta conversación */
+  current_branch_id?: string;
+  current_branch_name?: string;
+  current_branch_address?: string;
+  current_branch_city?: string;
+  current_branch_phone?: string;
+
+  /** Cómo se determinó la sucursal actual */
+  resolution_source?: BranchResolutionSource;
+
+  /** Nivel de confianza en la resolución (0-1) */
+  resolution_confidence?: number;
+
+  /** Estado de desambiguación */
+  disambiguation_state: BranchDisambiguationState;
+
+  /** Si la sucursal fue confirmada por el usuario */
+  user_confirmed: boolean;
+
+  /** Sucursales disponibles (solo si multi-branch) */
+  available_branches?: Array<{
+    branch_id: string;
+    branch_name: string;
+    is_preferred: boolean;
+    is_headquarters: boolean;
+  }>;
+
+  /** Sucursal preferida del lead (si existe) */
+  lead_preferred_branch_id?: string;
+  lead_preferred_branch_name?: string;
+
+  /** Timestamp de última actualización */
+  last_updated_at?: string;
+
+  /** Razón si hay error */
+  error?: string;
 }
 
 /**
@@ -149,7 +227,14 @@ export interface ExtractedData {
   // Preferencias detectadas
   preferred_date?: string;
   preferred_time?: string;
+  /** @deprecated Use extracted branch_id instead */
   preferred_branch?: string;
+  /** ID de sucursal extraído del mensaje (UUID) (v4.9.0) */
+  preferred_branch_id?: string;
+  /** Nombre de sucursal mencionado por el usuario (v4.9.0) */
+  preferred_branch_name?: string;
+  /** Confianza en la detección de sucursal (0-1) (v4.9.0) */
+  branch_detection_confidence?: number;
   preferred_staff?: string;
   is_flexible_schedule?: boolean;
 
@@ -256,7 +341,7 @@ export interface ActiveHoldInfo {
   /** Tipo de hold */
   hold_type: 'appointment' | 'reservation';
   /** Vertical del negocio */
-  vertical: 'dental' | 'restaurant';
+  vertical: 'dental' | 'restaurant' | 'clinic';
 }
 
 /**
@@ -533,7 +618,7 @@ export interface BusinessContext {
     valid_until?: string;
     conditions?: string;
     active: boolean;
-    vertical?: 'dental' | 'restaurant' | 'all';
+    vertical?: 'dental' | 'restaurant' | 'clinic' | 'all';
   }>;
 
   // =====================================================
@@ -729,6 +814,16 @@ export const TISTISAgentState = Annotation.Root({
     }),
   }),
 
+  /** Contexto de Branch-Aware Messaging (v4.9.0) */
+  branch_context: Annotation<BranchContext>({
+    reducer: (prev, next) => ({ ...prev, ...next }),
+    default: () => ({
+      is_multi_branch: false,
+      disambiguation_state: 'not_needed',
+      user_confirmed: false,
+    }),
+  }),
+
   // =====================================================
   // MENSAJE ACTUAL Y ANÁLISIS
   // =====================================================
@@ -780,7 +875,7 @@ export const TISTISAgentState = Annotation.Root({
   }),
 
   /** Vertical del negocio para routing especializado */
-  // IMPORTANT: Only 'dental' and 'restaurant' are currently active
+  // IMPORTANT: Currently active verticals: dental, restaurant, clinic
   vertical: Annotation<'dental' | 'restaurant' | 'clinic' | 'gym' | 'beauty' | 'veterinary'>({
     reducer: (_, next) => next,
     default: () => 'dental',
@@ -971,6 +1066,11 @@ export function createInitialState(): Partial<TISTISAgentStateType> {
       trust_verified: false,
       customer_confirmed: false,
     },
+    branch_context: {
+      is_multi_branch: false,
+      disambiguation_state: 'not_needed',
+      user_confirmed: false,
+    },
     current_message: '',
     channel: 'whatsapp',
     detected_intent: 'UNKNOWN',
@@ -1050,4 +1150,117 @@ export function shouldEscalate(state: TISTISAgentStateType): boolean {
 export function getProcessingTimeMs(state: TISTISAgentStateType): number {
   const startTime = new Date(state.processing_started_at).getTime();
   return Date.now() - startTime;
+}
+
+// =====================================================
+// BRANCH-AWARE MESSAGING HELPERS (v4.9.0)
+// =====================================================
+
+/**
+ * Verifica si se necesita desambiguación de sucursal
+ * Se usa en el supervisor para decidir si preguntar al usuario
+ */
+export function needsBranchDisambiguation(state: TISTISAgentStateType): boolean {
+  const branchContext = state.branch_context;
+
+  // Si no es multi-sucursal, no se necesita
+  if (!branchContext?.is_multi_branch) return false;
+
+  // Si ya está resuelto o confirmado, no se necesita
+  if (branchContext.disambiguation_state === 'resolved') return false;
+  if (branchContext.user_confirmed) return false;
+  if (branchContext.current_branch_id) return false;
+
+  // Si ya se preguntó, esperar respuesta (no volver a preguntar)
+  if (branchContext.disambiguation_state === 'asked') return false;
+
+  // En cualquier otro caso, se necesita preguntar
+  return branchContext.disambiguation_state === 'pending';
+}
+
+/**
+ * Verifica si el estado tiene contexto de sucursal válido
+ */
+export function hasBranchContext(state: TISTISAgentStateType): boolean {
+  const branchContext = state.branch_context;
+
+  // Si no es multi-sucursal, siempre hay contexto válido
+  if (!branchContext?.is_multi_branch) return true;
+
+  // Si hay sucursal actual, hay contexto
+  return !!branchContext.current_branch_id;
+}
+
+/**
+ * Obtiene el branch_id actual de la conversación
+ * Busca en múltiples fuentes con fallback
+ */
+export function getCurrentBranchId(state: TISTISAgentStateType): string | undefined {
+  // 1. Del branch_context (primario)
+  if (state.branch_context?.current_branch_id) {
+    return state.branch_context.current_branch_id;
+  }
+
+  // 2. De la conversación
+  if (state.conversation?.branch_id) {
+    return state.conversation.branch_id;
+  }
+
+  // 3. De extracted_data
+  if (state.extracted_data?.preferred_branch_id) {
+    return state.extracted_data.preferred_branch_id;
+  }
+
+  // 4. De la preferencia del lead
+  if (state.lead?.preferred_branch_id) {
+    return state.lead.preferred_branch_id;
+  }
+
+  // 5. Del pending_order (para restaurantes)
+  if (state.pending_order?.branch_id) {
+    return state.pending_order.branch_id;
+  }
+
+  // 6. Primera sucursal si solo hay una
+  if (state.business_context?.branches?.length === 1) {
+    return state.business_context.branches[0].id;
+  }
+
+  return undefined;
+}
+
+/**
+ * Determina si el tenant tiene múltiples sucursales
+ */
+export function isMultiBranch(state: TISTISAgentStateType): boolean {
+  return (state.business_context?.branches?.length ?? 0) > 1;
+}
+
+/**
+ * Actualiza el branch_context con una nueva sucursal seleccionada
+ * Retorna el objeto parcial para hacer merge con el estado
+ */
+export function createBranchContextUpdate(
+  branchId: string,
+  branchName: string,
+  source: BranchResolutionSource,
+  confidence: number = 1.0,
+  branchDetails?: {
+    address?: string;
+    city?: string;
+    phone?: string;
+  }
+): Partial<BranchContext> {
+  return {
+    current_branch_id: branchId,
+    current_branch_name: branchName,
+    current_branch_address: branchDetails?.address,
+    current_branch_city: branchDetails?.city,
+    current_branch_phone: branchDetails?.phone,
+    resolution_source: source,
+    resolution_confidence: confidence,
+    disambiguation_state: 'resolved',
+    user_confirmed: source === 'user_selected' || source === 'disambiguation',
+    last_updated_at: new Date().toISOString(),
+  };
 }

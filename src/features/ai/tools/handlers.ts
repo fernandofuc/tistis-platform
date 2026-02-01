@@ -47,6 +47,12 @@ import type {
   SecureAvailabilityResult,
   HoldConversionResult,
   SecureBookingResult,
+  // Branch-Aware Messaging types (v4.9.0)
+  BranchDetectionResult,
+  BranchDisambiguationResult,
+  BranchDisambiguationOption,
+  UpdateLeadBranchResult,
+  ConversationBranchContext,
 } from './definitions';
 import { createServerClient } from '@/src/shared/lib/supabase';
 import crypto from 'crypto';
@@ -144,6 +150,14 @@ export interface ToolContext {
   lead: TISTISAgentStateType['lead'];
   /** V7.1: Vertical del tenant para thresholds por vertical */
   vertical?: string;
+  /**
+   * v4.9.0: ID de sucursal activa para filtrado de datos
+   * Si está presente, las búsquedas de RAG y otras consultas
+   * filtrarán resultados por esta sucursal
+   */
+  branch_id?: string;
+  /** v4.9.0: Nombre de la sucursal activa */
+  branch_name?: string;
 }
 
 // ======================
@@ -537,22 +551,25 @@ export async function handleGetBusinessPolicy(
  * 5. Fallback a keywords si RAG no está disponible
  */
 export async function handleSearchKnowledgeBase(
-  params: { query: string; limit?: number },
+  params: { query: string; limit?: number; branch_id?: string },
   context: ToolContext
 ): Promise<KnowledgeBaseResult[] | { error: string }> {
-  const { business_context, tenant_id } = context;
+  const { business_context, tenant_id, branch_id: contextBranchId } = context;
   const limit = params.limit || 3;
+  // v4.9.0: Usar branch_id del parámetro o del contexto
+  const effectiveBranchId = params.branch_id || contextBranchId;
 
   // =====================================================
   // 1. INTENTAR BÚSQUEDA AVANZADA (RAG V7.2)
   // Query Enhancement + Hybrid Search + Re-ranking
+  // v4.9.0: Con filtrado por branch
   // =====================================================
   if (tenant_id) {
     try {
       const startTime = Date.now();
       const threshold = getRAGThreshold(context.vertical);
 
-      // V7.2: Usar búsqueda avanzada con Query Enhancement
+      // V7.2 + v4.9.0: Usar búsqueda avanzada con Query Enhancement y filtro de branch
       const advancedResponse = await EmbeddingService.searchKnowledgeBaseAdvanced(
         tenant_id,
         params.query,
@@ -564,18 +581,20 @@ export async function handleSearchKnowledgeBase(
           queryEnhancementConfig: {
             vertical: context.vertical as 'dental' | 'medical' | 'restaurant' | 'general',
           },
+          branchId: effectiveBranchId, // v4.9.0: Filtrar por sucursal
         }
       );
 
       const duration = Date.now() - startTime;
 
       if (advancedResponse.results.length > 0) {
-        // V7.2: Log con métricas completas
+        // V7.2 + v4.9.0: Log con métricas completas y branch
         console.log(
           `[search_knowledge_base] RAG V7.2: ${advancedResponse.results.length} results | ` +
           `semantic=${advancedResponse.metrics.semanticResults} keyword=${advancedResponse.metrics.keywordResults} | ` +
           `sufficiency=${advancedResponse.metrics.contextSufficiencyScore.toFixed(2)} | ` +
           `intent=${advancedResponse.enhancedQuery.intent} | ` +
+          `${effectiveBranchId ? `branch=${effectiveBranchId} | ` : ''}` +
           `${duration}ms`
         );
 
@@ -1213,7 +1232,7 @@ export async function handleCheckItemAvailability(
  * Obtiene promociones activas
  */
 export async function handleGetActivePromotions(
-  params: { vertical?: 'dental' | 'restaurant' | 'all' },
+  params: { vertical?: 'dental' | 'restaurant' | 'clinic' | 'all' },
   context: ToolContext
 ): Promise<Promotion[] | { error: string }> {
   const { business_context } = context;
@@ -2870,6 +2889,495 @@ export async function handleSecureCreateReservation(
 }
 
 // ======================
+// BRANCH-AWARE MESSAGING HANDLERS (v4.9.0)
+// ======================
+
+/**
+ * Handler: detect_branch_from_message
+ * Detecta menciones de sucursal en un mensaje del cliente
+ *
+ * Usa el RPC detect_branch_from_message que analiza el texto
+ * buscando coincidencias con nombres, alias, ciudades y direcciones
+ *
+ * @param params.message - Mensaje del cliente a analizar
+ * @returns Resultado de detección con branch_id, confidence, match_type
+ */
+export async function handleDetectBranchFromMessage(
+  params: { message: string },
+  context: ToolContext
+): Promise<BranchDetectionResult> {
+  const { tenant_id, business_context } = context;
+
+  if (!tenant_id) {
+    return {
+      success: false,
+      branch_detected: false,
+      message: 'No se pudo identificar el negocio',
+    };
+  }
+
+  // Si solo hay una sucursal, retornar directamente
+  if (business_context?.branches?.length === 1) {
+    const branch = business_context.branches[0];
+    return {
+      success: true,
+      branch_detected: true,
+      branch_id: branch.id,
+      branch_name: branch.name,
+      match_type: 'exact',
+      confidence: 1.0,
+      multiple_matches: false,
+      message: `Sucursal única detectada: ${branch.name}`,
+    };
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    // Llamar al RPC de detección de sucursal
+    const { data, error } = await supabase.rpc('detect_branch_from_message', {
+      p_tenant_id: tenant_id,
+      p_message: params.message,
+    });
+
+    if (error) {
+      console.error('[detect_branch_from_message] RPC error:', error);
+      return {
+        success: false,
+        branch_detected: false,
+        message: 'Error al detectar sucursal en el mensaje',
+      };
+    }
+
+    // El RPC retorna un array de matches ordenados por confidence
+    if (!data || data.length === 0) {
+      return {
+        success: true,
+        branch_detected: false,
+        multiple_matches: false,
+        message: 'No se detectó ninguna sucursal en el mensaje',
+      };
+    }
+
+    // Si hay múltiples matches con confidence similar, marcar como ambiguo
+    const topMatch = data[0];
+    const hasMultipleMatches = data.length > 1 &&
+      data[1].confidence >= topMatch.confidence * 0.8; // Umbral 80% del mejor
+
+    if (hasMultipleMatches) {
+      return {
+        success: true,
+        branch_detected: true,
+        branch_id: topMatch.branch_id,
+        branch_name: topMatch.branch_name,
+        match_type: topMatch.match_type,
+        confidence: topMatch.confidence,
+        multiple_matches: true,
+        matches: data.map((m: {
+          branch_id: string;
+          branch_name: string;
+          match_type: string;
+          confidence: number;
+        }) => ({
+          branch_id: m.branch_id,
+          branch_name: m.branch_name,
+          match_type: m.match_type,
+          confidence: m.confidence,
+        })),
+        message: `Se encontraron ${data.length} sucursales posibles, se requiere confirmación`,
+      };
+    }
+
+    // Una sola coincidencia clara
+    return {
+      success: true,
+      branch_detected: true,
+      branch_id: topMatch.branch_id,
+      branch_name: topMatch.branch_name,
+      match_type: topMatch.match_type,
+      confidence: topMatch.confidence,
+      multiple_matches: false,
+      message: `Sucursal detectada: ${topMatch.branch_name} (${Math.round(topMatch.confidence * 100)}% confianza)`,
+    };
+  } catch (error) {
+    console.error('[detect_branch_from_message] Error:', error);
+    return {
+      success: false,
+      branch_detected: false,
+      message: error instanceof Error ? error.message : 'Error al detectar sucursal',
+    };
+  }
+}
+
+/**
+ * Handler: get_branch_disambiguation_options
+ * Obtiene las opciones de sucursales para desambiguación
+ *
+ * Retorna una lista ordenada de sucursales con información completa
+ * para que el agente pueda preguntar al usuario cuál prefiere
+ *
+ * @param params.include_operating_hours - Incluir horarios de operación
+ * @returns Lista de sucursales con pregunta sugerida para el agente
+ */
+export async function handleGetBranchDisambiguationOptions(
+  params: { include_operating_hours?: boolean },
+  context: ToolContext
+): Promise<BranchDisambiguationResult> {
+  const { tenant_id, lead_id, business_context } = context;
+
+  if (!tenant_id) {
+    return {
+      success: false,
+      needs_disambiguation: false,
+      branches: [],
+      suggested_question: '',
+      message: 'No se pudo identificar el negocio',
+    };
+  }
+
+  // Si solo hay una sucursal, no se necesita desambiguación
+  if (business_context?.branches?.length === 1) {
+    return {
+      success: true,
+      needs_disambiguation: false,
+      branches: [],
+      suggested_question: '',
+      message: 'Solo hay una sucursal, no se requiere desambiguación',
+    };
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    // Llamar al RPC de opciones de desambiguación
+    const { data, error } = await supabase.rpc('get_branch_disambiguation_options', {
+      p_tenant_id: tenant_id,
+      p_lead_id: lead_id || null,
+    });
+
+    if (error) {
+      console.error('[get_branch_disambiguation_options] RPC error:', error);
+      // Fallback: usar branches del business_context
+      if (business_context?.branches) {
+        const branches: BranchDisambiguationOption[] = business_context.branches.map((b, idx) => ({
+          branch_id: b.id,
+          branch_name: b.name,
+          branch_address: b.address,
+          branch_city: b.city,
+          branch_phone: b.phone || null,
+          is_headquarters: b.is_headquarters || idx === 0,
+          is_lead_preferred: false,
+        }));
+
+        return {
+          success: true,
+          needs_disambiguation: branches.length > 1,
+          branches,
+          suggested_question: '¿A cuál sucursal te gustaría acudir?',
+          message: `Hay ${branches.length} sucursales disponibles`,
+        };
+      }
+      return {
+        success: false,
+        needs_disambiguation: false,
+        branches: [],
+        suggested_question: '',
+        message: 'Error al obtener opciones de sucursales',
+      };
+    }
+
+    if (!data || data.length === 0) {
+      return {
+        success: true,
+        needs_disambiguation: false,
+        branches: [],
+        suggested_question: '',
+        message: 'No hay sucursales configuradas para este negocio',
+      };
+    }
+
+    // Transformar respuesta del RPC a nuestro tipo
+    const branches: BranchDisambiguationOption[] = data.map((b: {
+      branch_id: string;
+      branch_name: string;
+      address?: string;
+      city?: string;
+      phone?: string;
+      is_preferred: boolean;
+      is_headquarters: boolean;
+      operating_hours?: Record<string, { open: string; close: string }>;
+    }) => ({
+      branch_id: b.branch_id,
+      branch_name: b.branch_name,
+      branch_address: b.address || '',
+      branch_city: b.city || '',
+      branch_phone: b.phone || null,
+      is_headquarters: b.is_headquarters,
+      is_lead_preferred: b.is_preferred,
+      operating_hours: params.include_operating_hours ? b.operating_hours : undefined,
+    }));
+
+    // Generar pregunta sugerida según el contexto
+    let suggestedQuestion = '¿A cuál sucursal te gustaría acudir?';
+
+    // Si hay una preferida, mencionarla
+    const preferred = branches.find(b => b.is_lead_preferred);
+    if (preferred) {
+      suggestedQuestion = `Veo que anteriormente has visitado ${preferred.branch_name}. ¿Te gustaría agendar ahí o en otra sucursal?`;
+    } else if (branches.length === 2) {
+      suggestedQuestion = `Tenemos dos sucursales: ${branches[0].branch_name} y ${branches[1].branch_name}. ¿Cuál prefieres?`;
+    } else if (branches.length <= 4) {
+      const names = branches.map(b => b.branch_name).join(', ');
+      suggestedQuestion = `Tenemos las siguientes sucursales: ${names}. ¿A cuál te gustaría acudir?`;
+    }
+
+    return {
+      success: true,
+      needs_disambiguation: branches.length > 1,
+      branches,
+      suggested_question: suggestedQuestion,
+      message: `Hay ${branches.length} sucursales disponibles`,
+    };
+  } catch (error) {
+    console.error('[get_branch_disambiguation_options] Error:', error);
+    return {
+      success: false,
+      needs_disambiguation: false,
+      branches: [],
+      suggested_question: '',
+      message: error instanceof Error ? error.message : 'Error al obtener sucursales',
+    };
+  }
+}
+
+/**
+ * Handler: update_lead_preferred_branch
+ * Actualiza la sucursal preferida del lead
+ *
+ * Se llama cuando el usuario selecciona una sucursal explícitamente
+ * o cuando el agente detecta una sucursal con alta confianza
+ *
+ * @param params.branch_id - ID de la sucursal seleccionada
+ * @param params.source - Origen de la selección (ai_detected, user_selected, manual, channel_default)
+ */
+export async function handleUpdateLeadPreferredBranch(
+  params: {
+    branch_id: string;
+    source?: 'ai_detected' | 'user_selected' | 'manual' | 'channel_default';
+  },
+  context: ToolContext
+): Promise<UpdateLeadBranchResult> {
+  const { tenant_id, lead_id, business_context } = context;
+
+  const source = params.source || 'user_selected';
+
+  if (!tenant_id) {
+    return {
+      success: false,
+      source,
+      message: 'No se pudo identificar el negocio',
+    };
+  }
+
+  if (!lead_id) {
+    return {
+      success: false,
+      source,
+      message: 'No se pudo identificar al cliente',
+    };
+  }
+
+  // Validar que el branch_id es un UUID válido
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(params.branch_id)) {
+    return {
+      success: false,
+      source,
+      message: 'ID de sucursal inválido',
+    };
+  }
+
+  // Validar que la sucursal existe en el contexto del negocio
+  const branch = business_context?.branches?.find(b => b.id === params.branch_id);
+  if (!branch) {
+    return {
+      success: false,
+      source,
+      message: 'La sucursal especificada no existe o no pertenece a este negocio',
+    };
+  }
+
+  const supabase = createServerClient();
+
+  try {
+    // Llamar al RPC de actualización
+    const { data, error } = await supabase.rpc('update_lead_preferred_branch', {
+      p_lead_id: lead_id,
+      p_branch_id: params.branch_id,
+      p_source: source,
+    });
+
+    if (error) {
+      console.error('[update_lead_preferred_branch] RPC error:', error);
+
+      // Fallback: actualización directa
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({
+          preferred_branch_id: params.branch_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', lead_id)
+        .eq('tenant_id', tenant_id);
+
+      if (updateError) {
+        return {
+          success: false,
+          source,
+          message: 'Error al actualizar la sucursal preferida',
+        };
+      }
+    }
+
+    return {
+      success: true,
+      lead_id,
+      branch_id: params.branch_id,
+      branch_name: branch.name,
+      previous_branch_id: data?.previous_branch_id,
+      source,
+      message: `Sucursal preferida actualizada a ${branch.name}`,
+    };
+  } catch (error) {
+    console.error('[update_lead_preferred_branch] Error:', error);
+    return {
+      success: false,
+      source,
+      message: error instanceof Error ? error.message : 'Error al actualizar sucursal',
+    };
+  }
+}
+
+/**
+ * Handler: get_conversation_branch_context
+ * Obtiene el contexto de sucursal para la conversación actual
+ *
+ * Implementa la lógica de fallback:
+ * 1. branch_id de la conversación
+ * 2. preferred_branch_id del lead
+ * 3. branch_id del channel_connection
+ * 4. branch principal (is_headquarters) del tenant
+ *
+ * @returns Contexto completo de sucursal con fuente de la resolución
+ */
+export async function handleGetConversationBranchContext(
+  _params: Record<string, never>, // Sin parámetros requeridos
+  context: ToolContext
+): Promise<ConversationBranchContext> {
+  const { tenant_id, lead_id, business_context } = context;
+
+  if (!tenant_id) {
+    return {
+      success: false,
+      has_branch: false,
+      source: 'none',
+      needs_branch_selection: true,
+      available_branches_count: 0,
+      message: 'No se pudo identificar el negocio',
+    };
+  }
+
+  // Si solo hay una sucursal, siempre tenemos contexto
+  if (business_context?.branches?.length === 1) {
+    const branch = business_context.branches[0];
+    return {
+      success: true,
+      has_branch: true,
+      branch_id: branch.id,
+      branch_name: branch.name,
+      branch_address: branch.address,
+      branch_city: branch.city,
+      branch_phone: branch.phone,
+      // v4.9.0 FIX: Use actual is_headquarters from DB instead of hardcoded true
+      is_headquarters: branch.is_headquarters ?? true,
+      source: 'conversation', // Single branch acts as default
+      needs_branch_selection: false,
+      available_branches_count: 1,
+      message: `Sucursal única: ${branch.name}`,
+    };
+  }
+
+  // Si no hay sucursales, no se puede determinar contexto
+  if (!business_context?.branches || business_context.branches.length === 0) {
+    return {
+      success: true,
+      has_branch: false,
+      source: 'none',
+      needs_branch_selection: true,
+      available_branches_count: 0,
+      message: 'No hay sucursales configuradas para este negocio',
+    };
+  }
+
+  const supabase = createServerClient();
+  const branchCount = business_context.branches.length;
+
+  try {
+    // Primero intentar obtener del lead si tenemos lead_id
+    // v4.9.0 FIX: Added tenant_id validation for defense-in-depth security
+    if (lead_id && tenant_id) {
+      const { data: leadData } = await supabase
+        .from('leads')
+        .select('preferred_branch_id')
+        .eq('id', lead_id)
+        .eq('tenant_id', tenant_id) // Defense-in-depth: validate tenant_id
+        .single();
+
+      if (leadData?.preferred_branch_id) {
+        const branch = business_context.branches.find(b => b.id === leadData.preferred_branch_id);
+        if (branch) {
+          // v4.9.0 FIX: Use actual is_headquarters from DB instead of inferring from name
+          return {
+            success: true,
+            has_branch: true,
+            branch_id: branch.id,
+            branch_name: branch.name,
+            branch_address: branch.address,
+            branch_city: branch.city,
+            branch_phone: branch.phone,
+            is_headquarters: branch.is_headquarters ?? false,
+            source: 'lead_preference',
+            needs_branch_selection: false,
+            available_branches_count: branchCount,
+            message: `Sucursal preferida del cliente: ${branch.name}`,
+          };
+        }
+      }
+    }
+
+    // Si hay múltiples sucursales y no hay preferencia, necesitamos desambiguación
+    return {
+      success: true,
+      has_branch: false,
+      source: 'none',
+      needs_branch_selection: true,
+      available_branches_count: branchCount,
+      message: `Hay ${branchCount} sucursales disponibles, se requiere selección del cliente`,
+    };
+  } catch (error) {
+    console.error('[get_conversation_branch_context] Error:', error);
+    return {
+      success: false,
+      has_branch: false,
+      source: 'none',
+      needs_branch_selection: true,
+      available_branches_count: branchCount,
+      message: error instanceof Error ? error.message : 'Error al obtener contexto de sucursal',
+    };
+  }
+}
+
+// ======================
 // MEJORA-1.4: ANOMALY DETECTION WRAPPER
 // ======================
 
@@ -2972,6 +3480,11 @@ export const toolHandlers = {
   convert_hold_to_booking: handleConvertHoldToBooking,
   secure_create_appointment: handleSecureCreateAppointment,
   secure_create_reservation: handleSecureCreateReservation,
+  // Branch-Aware Messaging tools (v4.9.0)
+  detect_branch_from_message: handleDetectBranchFromMessage,
+  get_branch_disambiguation_options: handleGetBranchDisambiguationOptions,
+  update_lead_preferred_branch: handleUpdateLeadPreferredBranch,
+  get_conversation_branch_context: handleGetConversationBranchContext,
 };
 
 export default toolHandlers;

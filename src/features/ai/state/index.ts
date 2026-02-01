@@ -17,8 +17,19 @@ export {
   type AgentTrace,
   type ControlFlags,
   type AgentProfileInfo,
+  // Branch-Aware Messaging types (v4.9.0)
+  type BranchContext,
+  type BranchResolutionSource,
+  type BranchDisambiguationState,
+  // Functions
   createInitialState,
   addAgentTrace,
   shouldEscalate,
   getProcessingTimeMs,
+  // Branch-Aware Messaging helpers (v4.9.0)
+  needsBranchDisambiguation,
+  hasBranchContext,
+  getCurrentBranchId,
+  isMultiBranch,
+  createBranchContextUpdate,
 } from './agent-state';

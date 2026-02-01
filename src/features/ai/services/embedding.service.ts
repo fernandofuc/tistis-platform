@@ -108,6 +108,7 @@ export interface ChunkSearchResult {
 
 /**
  * V7.2: Opciones para búsqueda avanzada
+ * v4.9.0: Agregado soporte para filtrado por branch
  */
 export interface AdvancedSearchOptions {
   /** Número máximo de resultados */
@@ -124,6 +125,12 @@ export interface AdvancedSearchOptions {
   queryEnhancementConfig?: QueryEnhancementConfig;
   /** Peso de búsqueda semántica vs keywords (0-1) */
   semanticWeight?: number;
+  /**
+   * v4.9.0: ID de sucursal para filtrar resultados
+   * Si se proporciona, solo se retornarán resultados asociados a esa sucursal
+   * o resultados globales (sin branch_id)
+   */
+  branchId?: string;
 }
 
 /**
@@ -289,12 +296,14 @@ class EmbeddingServiceClass {
   /**
    * Búsqueda semántica básica en knowledge base
    * (Mantiene compatibilidad con V7.1)
+   * v4.9.0: Agregado soporte para filtrado por branch
    */
   async searchKnowledgeBase(
     tenantId: string,
     query: string,
     limit: number = 5,
-    similarityThreshold: number = DEFAULT_SIMILARITY_THRESHOLD
+    similarityThreshold: number = DEFAULT_SIMILARITY_THRESHOLD,
+    branchId?: string
   ): Promise<SemanticSearchResult[]> {
     // 1. Generar embedding de la consulta
     const queryEmbedding = await this.generateEmbedding(query);
@@ -306,12 +315,21 @@ class EmbeddingServiceClass {
     );
 
     try {
-      const { data, error } = await supabase.rpc('search_knowledge_base_semantic', {
+      // v4.9.0: Usar RPC con filtro de branch si está disponible
+      const rpcParams: Record<string, unknown> = {
         p_tenant_id: tenantId,
         p_query_embedding: `[${queryEmbedding.embedding.join(',')}]`,
         p_limit: limit,
         p_similarity_threshold: similarityThreshold,
-      });
+      };
+
+      // Agregar filtro de branch si se proporciona
+      if (branchId) {
+        rpcParams.p_branch_id = branchId;
+        console.log(`[embedding] Filtering knowledge base by branch: ${branchId}`);
+      }
+
+      const { data, error } = await supabase.rpc('search_knowledge_base_semantic', rpcParams);
 
       if (error) {
         console.error('[embedding] Semantic search error:', error);
@@ -328,6 +346,7 @@ class EmbeddingServiceClass {
   /**
    * V7.2: Búsqueda avanzada con Query Enhancement, Hybrid Search y Re-ranking
    * Esta es la función principal recomendada para RAG en producción
+   * v4.9.0: Agregado soporte para filtrado por branch
    */
   async searchKnowledgeBaseAdvanced(
     tenantId: string,
@@ -343,24 +362,26 @@ class EmbeddingServiceClass {
       preferredCategories = [],
       queryEnhancementConfig = {},
       semanticWeight = 0.6,
+      branchId,
     } = options;
 
     // 1. Query Enhancement
     const enhancedQuery = QueryEnhancementService.enhance(query, queryEnhancementConfig);
-    console.log(`[embedding] Enhanced query: "${query}" -> "${enhancedQuery.rewritten}"`);
+    console.log(`[embedding] Enhanced query: "${query}" -> "${enhancedQuery.rewritten}"${branchId ? ` [branch: ${branchId}]` : ''}`);
 
-    // 2. Búsqueda semántica con query mejorada
+    // 2. Búsqueda semántica con query mejorada (v4.9.0: con filtro de branch)
     const semanticResults = await this.searchKnowledgeBase(
       tenantId,
       enhancedQuery.rewritten,
       limit * 2, // Obtener más resultados para re-ranking
-      similarityThreshold * 0.8 // Threshold más permisivo, re-ranking filtrará
+      similarityThreshold * 0.8, // Threshold más permisivo, re-ranking filtrará
+      branchId
     );
 
-    // 3. Hybrid Search: búsqueda por keywords en paralelo
+    // 3. Hybrid Search: búsqueda por keywords en paralelo (v4.9.0: con filtro de branch)
     let keywordResults: SemanticSearchResult[] = [];
     if (enableHybridSearch && enhancedQuery.keywords.length > 0) {
-      keywordResults = await this.searchByKeywords(tenantId, enhancedQuery.keywords, limit);
+      keywordResults = await this.searchByKeywords(tenantId, enhancedQuery.keywords, limit, branchId);
     }
 
     // 4. Combinar y deduplicar resultados
@@ -407,11 +428,13 @@ class EmbeddingServiceClass {
 
   /**
    * V7.2 + MEJORA-3.2: Búsqueda por keywords usando BM25 real
+   * v4.9.0: Agregado soporte para filtrado por branch
    */
   private async searchByKeywords(
     tenantId: string,
     keywords: string[],
-    limit: number
+    limit: number,
+    branchId?: string
   ): Promise<SemanticSearchResult[]> {
     if (keywords.length === 0) return [];
 
@@ -423,13 +446,17 @@ class EmbeddingServiceClass {
     try {
       // MEJORA-3.2: Usar BM25 real en lugar de ILIKE
       // Cast para evitar error de recursión de tipos
-      const bm25Index = await getBM25Index(supabase as unknown as Parameters<typeof getBM25Index>[0], tenantId);
+      // NOTA: BM25 es a nivel tenant. El filtrado por branch se hace post-búsqueda
+      // si se necesita granularidad por sucursal en knowledge articles
+      const bm25Index = await getBM25Index(supabase as unknown as Parameters<typeof getBM25Index>[0], tenantId, false);
       const query = keywords.join(' ');
-      const bm25Results = bm25Index.search(query, limit * 2);
+      // Si hay branchId, podríamos filtrar post-búsqueda en futuras versiones
+      // Por ahora BM25 busca todo el conocimiento del tenant
+      const bm25Results = bm25Index.search(query, branchId ? limit * 3 : limit * 2);
 
       if (bm25Results.length === 0) {
         console.log('[embedding] No BM25 results, falling back to ILIKE');
-        return this.searchByKeywordsLegacy(tenantId, keywords, limit);
+        return this.searchByKeywordsLegacy(tenantId, keywords, limit, branchId);
       }
 
       console.log('[embedding] BM25 search results:', {
@@ -472,11 +499,13 @@ class EmbeddingServiceClass {
 
   /**
    * Búsqueda legacy por keywords usando ILIKE (fallback)
+   * v4.9.0: Agregado soporte para filtrado por branch
    */
   private async searchByKeywordsLegacy(
     tenantId: string,
     keywords: string[],
-    limit: number
+    limit: number,
+    branchId?: string
   ): Promise<SemanticSearchResult[]> {
     if (keywords.length === 0) return [];
 
@@ -507,23 +536,38 @@ class EmbeddingServiceClass {
         .map((k) => `question.ilike.%${k}%,answer.ilike.%${k}%`)
         .join(',');
 
+      // v4.9.0: Construir query con filtro de branch opcional
       // Buscar en knowledge_articles
-      const { data: articles } = await supabase
+      let articlesQuery = supabase
         .from('ai_knowledge_articles')
-        .select('id, title, content, category, updated_at')
+        .select('id, title, content, category, updated_at, branch_id')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .or(articleFilters)
         .limit(limit);
 
+      // v4.9.0: Filtrar por branch (incluir globales sin branch_id)
+      if (branchId) {
+        articlesQuery = articlesQuery.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      }
+
+      const { data: articles } = await articlesQuery;
+
       // Buscar en FAQs
-      const { data: faqs } = await supabase
+      let faqsQuery = supabase
         .from('faqs')
-        .select('id, question, answer, category, updated_at')
+        .select('id, question, answer, category, updated_at, branch_id')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .or(faqFilters)
         .limit(limit);
+
+      // v4.9.0: Filtrar por branch (incluir globales sin branch_id)
+      if (branchId) {
+        faqsQuery = faqsQuery.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      }
+
+      const { data: faqs } = await faqsQuery;
 
       const results: SemanticSearchResult[] = [];
 
@@ -996,6 +1040,7 @@ class EmbeddingServiceClass {
   /**
    * MEJORA-3.1: Busca en chunks semánticos
    * Usa la tabla ai_knowledge_chunks para búsqueda más precisa
+   * v4.9.0: Agregado soporte para filtrado por branch
    */
   async searchKnowledgeChunks(
     tenantId: string,
@@ -1004,12 +1049,14 @@ class EmbeddingServiceClass {
       limit?: number;
       similarityThreshold?: number;
       sourceTypes?: string[];
+      branchId?: string;
     } = {}
   ): Promise<ChunkSearchResult[]> {
     const {
       limit = 5,
       similarityThreshold = 0.5,
       sourceTypes = null,
+      branchId,
     } = options;
 
     const supabase = createClient(
@@ -1022,13 +1069,21 @@ class EmbeddingServiceClass {
       const queryEmbedding = await this.generateEmbedding(query);
 
       // Buscar en chunks usando la función RPC
-      const { data, error } = await supabase.rpc('search_knowledge_chunks', {
+      // v4.9.0: Incluir filtro de branch si está disponible
+      const rpcParams: Record<string, unknown> = {
         p_tenant_id: tenantId,
         p_query_embedding: `[${queryEmbedding.embedding.join(',')}]`,
         p_limit: limit,
         p_similarity_threshold: similarityThreshold,
         p_source_types: sourceTypes,
-      });
+      };
+
+      if (branchId) {
+        rpcParams.p_branch_id = branchId;
+        console.log(`[embedding] Filtering chunks by branch: ${branchId}`);
+      }
+
+      const { data, error } = await supabase.rpc('search_knowledge_chunks', rpcParams);
 
       if (error) {
         console.error('[embedding] Chunk search error:', error);

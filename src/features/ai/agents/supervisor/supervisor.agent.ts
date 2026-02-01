@@ -12,7 +12,14 @@
 import {
   type TISTISAgentStateType,
   type AgentTrace,
+  type BranchContext,
+  type BranchResolutionSource,
+  type BusinessContext,
   addAgentTrace,
+  needsBranchDisambiguation,
+  isMultiBranch,
+  getCurrentBranchId,
+  createBranchContextUpdate,
 } from '../../state';
 import type { AIIntent, AISignal } from '@/src/shared/types/whatsapp';
 import {
@@ -47,6 +54,260 @@ interface SafetyAnalysisResult {
   safety: SafetyDetectionResult;
   specialEvent: SpecialEventDetectionResult;
   configCompleteness: ConfigCompleteness;
+}
+
+// ======================
+// BRANCH-AWARE MESSAGING (v4.9.0)
+// ======================
+
+/**
+ * Resultado de la detección de sucursal en mensaje
+ */
+interface BranchDetectionLocalResult {
+  detected: boolean;
+  branchId?: string;
+  branchName?: string;
+  confidence: number;
+  matchType?: 'exact' | 'partial' | 'city' | 'alias';
+  multipleMatches: boolean;
+  matchedBranches?: Array<{ id: string; name: string; confidence: number }>;
+}
+
+/**
+ * Detecta menciones de sucursal en el mensaje usando reglas locales
+ * Esta es una detección rápida rule-based antes de llamar al RPC
+ */
+function detectBranchMentionLocal(
+  message: string,
+  branches: BusinessContext['branches'] | undefined
+): BranchDetectionLocalResult {
+  if (!branches || !Array.isArray(branches) || branches.length === 0) {
+    return { detected: false, confidence: 0, multipleMatches: false };
+  }
+
+  // Si solo hay una sucursal, siempre es esa
+  if (branches.length === 1) {
+    return {
+      detected: true,
+      branchId: branches[0].id,
+      branchName: branches[0].name,
+      confidence: 1.0,
+      matchType: 'exact',
+      multipleMatches: false,
+    };
+  }
+
+  const messageLower = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const matches: Array<{ id: string; name: string; confidence: number; matchType: 'exact' | 'partial' | 'city' | 'alias' }> = [];
+
+  for (const branch of branches) {
+    const branchNameLower = branch.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const branchCityLower = (branch.city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const branchAddressLower = (branch.address || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // Búsqueda exacta por nombre
+    if (messageLower.includes(branchNameLower)) {
+      matches.push({ id: branch.id, name: branch.name, confidence: 1.0, matchType: 'exact' });
+      continue;
+    }
+
+    // Búsqueda por ciudad
+    if (branchCityLower && branchCityLower.length >= 4 && messageLower.includes(branchCityLower)) {
+      matches.push({ id: branch.id, name: branch.name, confidence: 0.8, matchType: 'city' });
+      continue;
+    }
+
+    // Búsqueda parcial por palabras del nombre
+    const nameWords = branchNameLower.split(/\s+/).filter(w => w.length >= 4);
+    for (const word of nameWords) {
+      if (messageLower.includes(word)) {
+        matches.push({ id: branch.id, name: branch.name, confidence: 0.6, matchType: 'partial' });
+        break;
+      }
+    }
+
+    // Búsqueda por palabras de la dirección (colonias, calles conocidas)
+    if (branchAddressLower) {
+      const addressWords = branchAddressLower.split(/\s+/).filter(w => w.length >= 5);
+      for (const word of addressWords) {
+        if (messageLower.includes(word)) {
+          matches.push({ id: branch.id, name: branch.name, confidence: 0.5, matchType: 'partial' });
+          break;
+        }
+      }
+    }
+  }
+
+  // Ordenar por confianza y retornar
+  matches.sort((a, b) => b.confidence - a.confidence);
+
+  if (matches.length === 0) {
+    return { detected: false, confidence: 0, multipleMatches: false };
+  }
+
+  // Si hay un match claro (confidence > 0.7 y es el único o significativamente mejor)
+  const topMatch = matches[0];
+  const hasMultipleMatches = matches.length > 1 && matches[1].confidence >= topMatch.confidence * 0.8;
+
+  return {
+    detected: true,
+    branchId: topMatch.id,
+    branchName: topMatch.name,
+    confidence: topMatch.confidence,
+    matchType: topMatch.matchType,
+    multipleMatches: hasMultipleMatches,
+    matchedBranches: hasMultipleMatches ? matches : undefined,
+  };
+}
+
+/**
+ * Determina si el intent requiere contexto de sucursal
+ * Los booking intents siempre necesitan sucursal
+ */
+function intentRequiresBranchContext(intent: AIIntent): boolean {
+  const branchRequiredIntents: AIIntent[] = [
+    'BOOK_APPOINTMENT',
+    'LOCATION',
+    'HOURS',
+  ];
+  return branchRequiredIntents.includes(intent);
+}
+
+/**
+ * Inicializa el contexto de sucursal para la sesión
+ * Se llama al inicio del supervisor para preparar el estado
+ */
+function initializeBranchContext(
+  state: TISTISAgentStateType,
+  branchDetection: BranchDetectionLocalResult
+): Partial<BranchContext> {
+  const branches = state.business_context?.branches || [];
+
+  // Si solo hay una sucursal, el contexto está resuelto
+  if (branches.length <= 1) {
+    if (branches.length === 1) {
+      return {
+        is_multi_branch: false,
+        current_branch_id: branches[0].id,
+        current_branch_name: branches[0].name,
+        current_branch_address: branches[0].address,
+        current_branch_city: branches[0].city,
+        current_branch_phone: branches[0].phone,
+        resolution_source: 'single_branch',
+        resolution_confidence: 1.0,
+        disambiguation_state: 'not_needed',
+        user_confirmed: true,
+      };
+    }
+    return {
+      is_multi_branch: false,
+      disambiguation_state: 'not_needed',
+      user_confirmed: false,
+      error: 'No hay sucursales configuradas',
+    };
+  }
+
+  // Multi-sucursal: verificar si ya tenemos contexto
+  const existingBranchId = getCurrentBranchId(state);
+  if (existingBranchId) {
+    const existingBranch = branches.find(b => b.id === existingBranchId);
+    if (existingBranch) {
+      return {
+        is_multi_branch: true,
+        current_branch_id: existingBranch.id,
+        current_branch_name: existingBranch.name,
+        current_branch_address: existingBranch.address,
+        current_branch_city: existingBranch.city,
+        current_branch_phone: existingBranch.phone,
+        resolution_source: state.lead?.preferred_branch_id === existingBranchId
+          ? 'lead_preference'
+          : state.conversation?.branch_id === existingBranchId
+            ? 'conversation'
+            : 'default',
+        resolution_confidence: 0.9,
+        disambiguation_state: 'resolved',
+        user_confirmed: false,
+        lead_preferred_branch_id: state.lead?.preferred_branch_id,
+        available_branches: branches.map(b => ({
+          branch_id: b.id,
+          branch_name: b.name,
+          is_preferred: b.id === state.lead?.preferred_branch_id,
+          is_headquarters: b.is_headquarters || false,
+        })),
+      };
+    }
+  }
+
+  // Si detectamos una sucursal en el mensaje
+  if (branchDetection.detected && !branchDetection.multipleMatches && branchDetection.confidence >= 0.7) {
+    const detectedBranch = branches.find(b => b.id === branchDetection.branchId);
+    if (detectedBranch) {
+      return {
+        is_multi_branch: true,
+        current_branch_id: detectedBranch.id,
+        current_branch_name: detectedBranch.name,
+        current_branch_address: detectedBranch.address,
+        current_branch_city: detectedBranch.city,
+        current_branch_phone: detectedBranch.phone,
+        resolution_source: 'ai_detected',
+        resolution_confidence: branchDetection.confidence,
+        disambiguation_state: branchDetection.confidence >= 0.9 ? 'resolved' : 'pending',
+        user_confirmed: false,
+        available_branches: branches.map(b => ({
+          branch_id: b.id,
+          branch_name: b.name,
+          is_preferred: b.id === state.lead?.preferred_branch_id,
+          is_headquarters: b.is_headquarters || false,
+        })),
+      };
+    }
+  }
+
+  // No se pudo resolver: marcar como pendiente de desambiguación
+  return {
+    is_multi_branch: true,
+    disambiguation_state: 'pending',
+    user_confirmed: false,
+    lead_preferred_branch_id: state.lead?.preferred_branch_id,
+    available_branches: branches.map(b => ({
+      branch_id: b.id,
+      branch_name: b.name,
+      is_preferred: b.id === state.lead?.preferred_branch_id,
+      is_headquarters: b.is_headquarters || false,
+    })),
+  };
+}
+
+/**
+ * Genera la pregunta de desambiguación de sucursal
+ */
+function generateBranchDisambiguationQuestion(
+  branches: BusinessContext['branches'] | undefined,
+  preferredBranchId?: string
+): string {
+  if (!branches || branches.length === 0) {
+    return '¿A cuál sucursal te gustaría acudir?';
+  }
+
+  // Si hay una preferida, mencionarla
+  const preferred = branches.find(b => b.id === preferredBranchId);
+  if (preferred) {
+    return `Veo que anteriormente has visitado ${preferred.name}. ¿Te gustaría agendar ahí o en otra sucursal?`;
+  }
+
+  // Si son 2 sucursales, nombrarlas
+  if (branches.length === 2) {
+    return `Tenemos dos sucursales: ${branches[0].name} y ${branches[1].name}. ¿Cuál prefieres?`;
+  }
+
+  // Si son pocas, listarlas
+  if (branches.length <= 4) {
+    const names = branches.map(b => b.name).join(', ');
+    return `Tenemos las siguientes sucursales: ${names}. ¿A cuál te gustaría acudir?`;
+  }
+
+  // Muchas sucursales: pregunta abierta
+  return `Tenemos ${branches.length} sucursales. ¿En qué zona o ciudad te gustaría agendar?`;
 }
 
 // ======================
@@ -432,6 +693,18 @@ export async function supervisorNode(
   console.log(`[Supervisor] Processing message for tenant ${state.tenant?.tenant_id}`);
 
   try {
+    // =========================================================
+    // v4.9.0: BRANCH-AWARE MESSAGING - Step 0
+    // Detectar menciones de sucursal y preparar contexto
+    // =========================================================
+    const branches = state.business_context?.branches || [];
+    const branchDetection = detectBranchMentionLocal(state.current_message, branches);
+    const branchContextUpdate = initializeBranchContext(state, branchDetection);
+
+    if (branchDetection.detected) {
+      console.log(`[Supervisor] Branch detected: ${branchDetection.branchName} (confidence: ${branchDetection.confidence})`);
+    }
+
     // 1. Detectar intención (rule-based, ultra rápido)
     let intent = detectIntentRuleBased(state.current_message);
     let learningEnhancedReason: string | null = null;
@@ -613,6 +886,9 @@ export async function supervisorNode(
 
     // 5. Determinar siguiente agente
     let nextAgent: string;
+    let branchDisambiguationNeeded = false;
+    let branchDisambiguationQuestion: string | undefined;
+
     if (escalationCheck.escalate) {
       // P25: Si es emergencia pero no crítica, ir a urgent_care primero
       if (emergencyResult.isEmergency && emergencyResult.recommendedAction === 'urgent_care') {
@@ -622,6 +898,42 @@ export async function supervisorNode(
       }
     } else {
       nextAgent = determineNextAgent(intent, state.vertical);
+
+      // =========================================================
+      // v4.9.0: BRANCH-AWARE MESSAGING - Verificar si se necesita
+      // desambiguación antes de routing a booking agents
+      // =========================================================
+      const requiresBranch = intentRequiresBranchContext(intent);
+      const isMultiBranchTenant = branches.length > 1;
+      const hasBranchContext = branchContextUpdate.current_branch_id &&
+        branchContextUpdate.disambiguation_state === 'resolved';
+
+      // Si el intent requiere sucursal, es multi-branch, y no tenemos contexto resuelto
+      if (requiresBranch && isMultiBranchTenant && !hasBranchContext) {
+        // Verificar si ya preguntamos (evitar loop)
+        const alreadyAsked = state.branch_context?.disambiguation_state === 'asked';
+
+        if (!alreadyAsked) {
+          // Necesitamos preguntar al usuario
+          branchDisambiguationNeeded = true;
+          branchDisambiguationQuestion = generateBranchDisambiguationQuestion(
+            branches,
+            state.lead?.preferred_branch_id
+          );
+
+          console.log(`[Supervisor] Branch disambiguation needed for intent: ${intent}`);
+
+          // Redirigir a branch_disambiguation agent (o manejar en general)
+          // Por ahora, el greeting/general agent manejará la pregunta
+          if (intent === 'GREETING' || intent === 'UNKNOWN') {
+            nextAgent = 'greeting';
+          } else {
+            // Para booking, necesitamos primero preguntar la sucursal
+            // El agente greeting puede manejar esto y luego redirigir
+            nextAgent = 'branch_selector';
+          }
+        }
+      }
     }
 
     // 6. Calcular score total
@@ -644,20 +956,30 @@ export async function supervisorNode(
     // 8. Crear traza del agente
     // SPRINT 3: Incluir información sobre si la intención fue mejorada por learning
     const learningTag = learningEnhancedReason ? ' [LEARNING]' : '';
+    const branchTag = branchDisambiguationNeeded ? ' [BRANCH_DISAMBIGUATION]' : (branchDetection.detected ? ' [BRANCH_DETECTED]' : '');
     const trace: AgentTrace = addAgentTrace(
       state,
       {
         agent_name: agentName,
         input_summary: `Message: "${state.current_message.substring(0, 50)}..."`,
-        output_summary: `Intent: ${intent}, Next: ${nextAgent}${emergencyResult.isEmergency ? ' [EMERGENCY]' : ''}${learningTag}`,
-        decision: `Routing to ${nextAgent} because ${intent}${emergencyResult.isEmergency ? ` (Emergency: ${emergencyResult.emergencyType})` : ''}${learningEnhancedReason ? ` (Learning: ${learningEnhancedReason})` : ''}`,
+        output_summary: `Intent: ${intent}, Next: ${nextAgent}${emergencyResult.isEmergency ? ' [EMERGENCY]' : ''}${learningTag}${branchTag}`,
+        decision: `Routing to ${nextAgent} because ${intent}${emergencyResult.isEmergency ? ` (Emergency: ${emergencyResult.emergencyType})` : ''}${learningEnhancedReason ? ` (Learning: ${learningEnhancedReason})` : ''}${branchDisambiguationNeeded ? ' (Branch disambiguation needed)' : ''}`,
         duration_ms: Date.now() - startTime,
       }
     );
 
-    console.log(`[Supervisor] Intent: ${intent}, Next agent: ${nextAgent}, Score change: ${totalScoreChange}${learningEnhancedReason ? `, Learning: ${learningEnhancedReason}` : ''}`);
+    console.log(`[Supervisor] Intent: ${intent}, Next agent: ${nextAgent}, Score change: ${totalScoreChange}${learningEnhancedReason ? `, Learning: ${learningEnhancedReason}` : ''}${branchDisambiguationNeeded ? ', Branch disambiguation needed' : ''}`);
 
-    // 9. Retornar actualizaciones al estado
+    // 9. Preparar branch context update
+    // Si se necesita desambiguación, marcar como 'asked' para evitar loop
+    const finalBranchContext: Partial<BranchContext> = branchDisambiguationNeeded
+      ? {
+          ...branchContextUpdate,
+          disambiguation_state: 'asked',
+        }
+      : branchContextUpdate;
+
+    // 10. Retornar actualizaciones al estado
     return {
       detected_intent: intent,
       detected_signals: signals,
@@ -668,20 +990,35 @@ export async function supervisorNode(
         pain_level: emergencyResult.severity > (extractedData.pain_level || 0)
           ? emergencyResult.severity
           : extractedData.pain_level,
+        // v4.9.0: Agregar datos de sucursal detectada
+        preferred_branch_id: branchDetection.detected ? branchDetection.branchId : state.extracted_data?.preferred_branch_id,
+        preferred_branch_name: branchDetection.detected ? branchDetection.branchName : state.extracted_data?.preferred_branch_name,
+        branch_detection_confidence: branchDetection.detected ? branchDetection.confidence : undefined,
       },
       current_agent: agentName,
       next_agent: nextAgent,
-      routing_reason: `Intent ${intent} detected with ${signals.length} signals`,
+      routing_reason: branchDisambiguationNeeded
+        ? `Intent ${intent} requires branch context - asking user to select branch`
+        : `Intent ${intent} detected with ${signals.length} signals`,
       score_change: totalScoreChange,
       control: {
         ...state.control,
         should_escalate: escalationCheck.escalate,
         escalation_reason: escalationCheck.reason,
         iteration_count: state.control.iteration_count + 1,
+        // v4.9.0: Agregar clarification si se necesita desambiguación
+        needs_clarification: branchDisambiguationNeeded,
+        clarification_question: branchDisambiguationQuestion,
       },
       agent_trace: [trace],
       // REVISIÓN 5.0: Agregar safety metadata al estado para uso en agentes
       safety_analysis: safetyMetadata,
+      // v4.9.0: Agregar branch context al estado
+      branch_context: {
+        ...state.branch_context,
+        ...finalBranchContext,
+        last_updated_at: new Date().toISOString(),
+      },
     };
   } catch (error) {
     console.error('[Supervisor] Error:', error);
@@ -732,6 +1069,15 @@ export function supervisorRouter(state: TISTISAgentStateType): string {
     return 'escalation';
   }
 
+  // v4.9.0: Si necesita clarificación de sucursal, redirigir apropiadamente
+  if (state.control.needs_clarification && state.branch_context?.disambiguation_state === 'asked') {
+    // Si el next_agent es branch_selector pero no existe, usar general
+    if (state.next_agent === 'branch_selector') {
+      // El agente general manejará la pregunta de sucursal
+      return 'general';
+    }
+  }
+
   // Usar el next_agent determinado por el supervisor
   return state.next_agent || 'general';
 }
@@ -746,4 +1092,9 @@ export const SupervisorAgent = {
   detectIntent: detectIntentRuleBased,
   detectSignals,
   extractData,
+  // v4.9.0: Branch-Aware Messaging exports
+  detectBranchMention: detectBranchMentionLocal,
+  intentRequiresBranch: intentRequiresBranchContext,
+  initializeBranchContext,
+  generateBranchQuestion: generateBranchDisambiguationQuestion,
 };
