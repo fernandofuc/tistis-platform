@@ -260,12 +260,14 @@ async function processIncomingMessage(message: TelegramMessage) {
       return;
     }
 
-    // 6. Procesar con message processor
+    // 6. Procesar con message processor (conectado a LangGraph)
     const result = await processAdminMessage({
       user: userContext.user,
       conversationId: userContext.conversationId,
       message: content,
       messageId: savedMessage.id,
+      channel: 'telegram',
+      conversationHistory: userContext.conversationHistory || [],
     });
 
     // 7. Guardar y enviar respuesta
@@ -279,7 +281,7 @@ async function processIncomingMessage(message: TelegramMessage) {
       result.tokens
     );
 
-    await sendTelegramMessage(chatId, result.response, result.keyboard);
+    await sendTelegramMessage(chatId, result.response, result.keyboard ?? undefined);
 
     // 8. Auditoria
     await service.logAuditAction({
@@ -335,12 +337,14 @@ async function processCallbackQuery(callback: TelegramCallbackQuery) {
       content = 'configurar notificaciones';
     }
 
-    // Procesar como mensaje normal
+    // Procesar como mensaje normal (conectado a LangGraph)
     const result = await processAdminMessage({
       user: userContext.user,
       conversationId: userContext.conversationId,
       message: content,
       messageId: callback.id,
+      channel: 'telegram',
+      conversationHistory: userContext.conversationHistory || [],
       callbackData: { action: data.split('_')[0], actionId: data },
     });
 
