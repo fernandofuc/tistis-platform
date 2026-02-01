@@ -126,9 +126,22 @@ export async function POST(
     }
 
     // Create message
+    // CRITICAL FIX: Include BOTH role and sender_type for compatibility
+    // - 'role' is required by migration 012 (NOT NULL constraint)
+    // - 'sender_type' is used by save_incoming_message RPC (migration 110)
+    // - Inbox page.tsx reads 'role' to determine message sender
+    // Mapping: user↔lead, assistant↔ai, staff↔staff, system↔system
+    const senderType = body.sender_type || 'staff';
+    const roleMap: Record<string, string> = {
+      lead: 'user',
+      ai: 'assistant',
+      staff: 'staff',
+      system: 'system',
+    };
     const messageData = {
       conversation_id: id,
-      sender_type: body.sender_type || 'staff', // 'lead', 'staff', 'ai'
+      role: roleMap[senderType] || 'staff',
+      sender_type: senderType,
       sender_id: body.sender_id || null,
       content: body.content,
       message_type: body.message_type || 'text', // 'text', 'image', 'document', 'audio'

@@ -2,11 +2,11 @@
 
 ## Descripcion del Proyecto
 
-TIS TIS Platform es un sistema SaaS multi-tenant de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API, y automatizacion de procesos multi-canal. Especializado en verticales como clinicas dentales, restaurantes, y consultorios medicos.
+TIS TIS Platform es un sistema SaaS multi-tenant de gestion empresarial con IA conversacional multi-agente, agente de voz con telefonia, WhatsApp Business API, y automatizacion de procesos multi-canal. Especializado en verticales como clinicas dentales, restaurantes, y clinicas medicas generales.
 
-**Version:** 4.8.4
+**Version:** 4.8.6
 **Estado:** Produccion
-**Ultima actualizacion:** 30 de Enero, 2026
+**Ultima actualizacion:** 31 de Enero, 2026
 
 ---
 
@@ -148,6 +148,94 @@ tistis-platform/
 │
 └── public/                       # Archivos estaticos
 ```
+
+---
+
+## Sistema de Mensajes - Campos role y sender_type (v4.8.6)
+
+### Contexto Historico
+
+La tabla `messages` tiene dos campos para identificar el tipo de remitente:
+- **`role`** (migracion 012): Campo original con valores 'user', 'assistant', 'system', 'staff'
+- **`sender_type`** (migracion 110): Campo anadido posteriormente con valores 'lead', 'ai', 'staff', 'system'
+
+### Mapeo Obligatorio
+
+| role | sender_type | Descripcion | Usado por |
+|------|-------------|-------------|-----------|
+| `user` | `lead` | Mensaje entrante del cliente/lead | Inbox (izquierda) |
+| `assistant` | `ai` | Respuesta generada por AI | Inbox (derecha) |
+| `staff` | `staff` | Mensaje enviado por staff | Inbox (derecha) |
+| `system` | `system` | Mensaje del sistema | Notificaciones |
+
+### IMPORTANTE: Insertar Siempre Ambos Campos
+
+Al insertar mensajes, SIEMPRE incluir ambos campos para garantizar compatibilidad:
+
+```typescript
+// Mensaje de AI
+await supabase.from('messages').insert({
+  conversation_id: conversationId,
+  role: 'assistant',        // REQUERIDO
+  sender_type: 'ai',        // REQUERIDO
+  content: aiResponse,
+  // ...otros campos
+});
+
+// Mensaje entrante del lead
+await supabase.from('messages').insert({
+  conversation_id: conversationId,
+  role: 'user',             // REQUERIDO
+  sender_type: 'lead',      // REQUERIDO
+  content: userMessage,
+  // ...otros campos
+});
+```
+
+### Trigger de Sincronizacion
+
+La migracion 184 incluye un trigger que sincroniza automaticamente ambos campos:
+
+```sql
+-- Si insertas solo uno, el trigger deriva el otro
+-- Pero es mejor practica insertar ambos explicitamente
+CREATE TRIGGER trigger_sync_message_role_sender_type
+    BEFORE INSERT OR UPDATE ON public.messages
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_message_role_sender_type();
+```
+
+### Tipo TypeScript Actualizado
+
+```typescript
+// src/shared/types/database.ts
+export type MessageRole = 'user' | 'assistant' | 'system' | 'staff';
+
+// Para compatibilidad en UI (especialmente Inbox)
+interface MessageWithSenderType {
+  role: MessageRole;
+  sender_type?: 'lead' | 'ai' | 'staff' | 'system';
+  // ...otros campos
+}
+
+// Helper para verificar si es mensaje del usuario
+const isUserMessage = (msg: MessageWithSenderType) => {
+  if (msg.sender_type) return msg.sender_type === 'lead';
+  return msg.role === 'user';
+};
+```
+
+### Archivos Relacionados
+
+| Archivo | Responsabilidad |
+|---------|-----------------|
+| `src/features/ai/services/ai.service.ts` | Guarda respuestas AI con role='assistant' |
+| `src/features/messaging/services/whatsapp.service.ts` | Guarda mensajes entrantes con role='user' |
+| `src/features/messaging/services/meta.service.ts` | Guarda mensajes Instagram/Facebook |
+| `src/features/messaging/services/tiktok.service.ts` | Guarda mensajes TikTok |
+| `app/(dashboard)/dashboard/inbox/page.tsx` | Lee mensajes verificando role y sender_type |
+| `supabase/migrations/184_FIX_MESSAGES_ROLE_SENDER_TYPE_SYNC.sql` | Trigger de sincronizacion |
+| `supabase/diagnostics/inbox_debug_queries.sql` | Queries para diagnosticar problemas |
 
 ---
 
@@ -314,6 +402,35 @@ const labels = getAppointmentLabels(terminology);
 ```
 Discovery API → Pricing → Checkout → Provisioning → useTenant → useVerticalTerminology → UI
 ```
+
+### Verticales Activas en Provisioning (v4.8.5)
+
+Las siguientes verticales estan habilitadas para provisioning automatico:
+
+| Vertical | Catalogo de Servicios | Servicios Incluidos | Personalizable |
+|----------|----------------------|---------------------|----------------|
+| `dental` | DENTAL_SERVICES_CATALOG | 36 servicios dentales especializados | Limitado |
+| `restaurant` | default_services (lista simple) | 5 servicios basicos | Si |
+| `clinic` | CLINIC_SERVICES_CATALOG | 15 servicios medicos genericos | **Completamente Editable** |
+
+**Nota sobre la vertical `clinic`:**
+
+La vertical `clinic` esta disenada para ser **completamente editable** por los clientes. El catalogo inicial incluye servicios genericos que funcionan para cualquier tipo de clinica (dermatologia, oftalmologia, fisioterapia, etc.):
+
+- **Consulta**: Consulta General, Especialidad, Segunda Opinion
+- **Diagnostico**: Laboratorio, Imagen, Evaluacion Completa
+- **Tratamiento**: Basico, Especializado, Terapia/Rehabilitacion
+- **Procedimiento**: Menor, Especializado, Cirugia Ambulatoria
+- **Seguimiento**: Consulta de Seguimiento, Control Periodico
+- **Urgencias**: Atencion de Urgencia
+
+Los clientes pueden:
+1. Editar nombres, precios y descripciones de los servicios existentes
+2. Agregar nuevos servicios especificos de su especialidad
+3. Eliminar servicios que no apliquen a su clinica
+4. Reorganizar categorias segun sus necesidades
+
+Archivo de configuracion: `lib/provisioning.ts` → `CLINIC_SERVICES_CATALOG`
 
 ---
 
@@ -2417,6 +2534,7 @@ plans, addons, subscriptions, clients
 | `177_ADMIN_CHANNEL_SYSTEM.sql` | Admin Channel System (B2B) |
 | `180_AGENT_INSTANCES.sql` | TIS TIS Local Agent base |
 | `181_AGENT_INSTANCES_STORE_CODE.sql` | Multi-branch store_code support |
+| `184_FIX_MESSAGES_ROLE_SENDER_TYPE_SYNC.sql` | Sincronizacion role/sender_type en messages (v4.8.6) |
 
 ### RLS (Row Level Security)
 
@@ -2781,5 +2899,5 @@ Esta es la guia maestra de desarrollo. Para documentacion detallada por feature,
 
 *Este archivo es la fuente de verdad para desarrollo en TIS TIS Platform. Todas las decisiones de codigo deben alinearse con estos principios.*
 
-*Ultima actualizacion: 30 de Enero, 2026*
-*Version: 4.8.4 - Soft Restaurant Cloud Integration: API REST, Deployment Selector, SR Local vs Cloud*
+*Ultima actualizacion: 31 de Enero, 2026*
+*Version: 4.8.6 - Fix critico: Sincronizacion role/sender_type en mensajes para Inbox*

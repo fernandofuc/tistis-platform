@@ -567,6 +567,11 @@ export async function saveMetaIncomingMessage(
     .from('messages')
     .insert({
       conversation_id: conversationId,
+      // CRITICAL FIX: Include BOTH role and sender_type for compatibility
+      // - 'role' is required by migration 012 (NOT NULL constraint)
+      // - 'sender_type' is used by save_incoming_message RPC (migration 110)
+      // - Inbox page.tsx reads 'role' to determine message sender
+      role: 'user',
       sender_type: 'lead',
       sender_id: leadId,
       content: parsedMessage.content,

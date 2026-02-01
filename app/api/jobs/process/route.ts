@@ -359,13 +359,14 @@ async function processAIResponseJob(
   }
 
   // 3. Guardar respuesta (SECURITY: Pass tenant_id to validate ownership)
+  // FIX: Pass channel parameter to use correct channel instead of hardcoded 'whatsapp'
   const responseMessageId = await saveAIResponse(conversation_id, aiResult.response, {
     intent: aiResult.intent,
     signals: aiResult.signals,
     model: usedCachedResponse ? 'cached-' + aiResult.model_used : aiResult.model_used,
     tokens: aiResult.tokens_used,
     processing_time_ms: aiResult.processing_time_ms,
-  }, tenant_id);
+  }, tenant_id, channel);
 
   // 4. Actualizar score del lead (SECURITY: Pass tenant_id to validate ownership)
   if (aiResult.signals.length > 0) {

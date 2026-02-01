@@ -82,6 +82,41 @@ const CHANNEL_FILTERS = [
 type ChannelFilterType = typeof CHANNEL_FILTERS[number]['key'];
 
 // ======================
+// MESSAGE ROLE HELPER
+// Determines if a message is from the user/lead
+// Supports both 'role' (migration 012) and 'sender_type' (migration 110)
+// ======================
+interface MessageWithSenderType extends Message {
+  sender_type?: 'lead' | 'ai' | 'staff' | 'system';
+}
+
+/**
+ * Determines if a message is from the user/lead.
+ *
+ * COMPATIBILITY: Supports both 'role' and 'sender_type' fields:
+ * - 'role' is the original field (migration 012): 'user' | 'assistant' | 'system' | 'staff'
+ * - 'sender_type' was added in migration 110: 'lead' | 'ai' | 'staff' | 'system'
+ *
+ * Mapping:
+ * - role='user' ↔ sender_type='lead' (incoming message from lead/customer)
+ * - role='assistant' ↔ sender_type='ai' (AI response)
+ * - role='staff' ↔ sender_type='staff' (staff message)
+ * - role='system' ↔ sender_type='system' (system message)
+ */
+function isUserMessage(message: MessageWithSenderType): boolean {
+  // Primary: Check role field (preferred, per original schema)
+  if (message.role === 'user') return true;
+  if (message.role === 'assistant' || message.role === 'staff' || message.role === 'system') return false;
+
+  // Fallback: Check sender_type field (for messages inserted via RPC or legacy code)
+  if (message.sender_type === 'lead') return true;
+  if (message.sender_type === 'ai' || message.sender_type === 'staff' || message.sender_type === 'system') return false;
+
+  // Default: Treat as user message if no role info available
+  return true;
+}
+
+// ======================
 // COMPONENT
 // ======================
 export default function InboxPage() {
@@ -665,7 +700,8 @@ export default function InboxPage() {
               <div className="flex-1 overflow-y-auto bg-gradient-to-b from-slate-50/50 to-white">
                 <div className="max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
                   {messages.map((message) => {
-                    const isUser = message.role === 'user';
+                    // Use helper function for compatibility with both role and sender_type
+                    const isUser = isUserMessage(message as MessageWithSenderType);
 
                     return (
                       <div

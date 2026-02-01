@@ -519,6 +519,11 @@ async function saveIncomingMessageFallback(
     .from('messages')
     .insert({
       conversation_id: conversationId,
+      // CRITICAL FIX: Include BOTH role and sender_type for compatibility
+      // - 'role' is required by migration 012 (NOT NULL constraint)
+      // - 'sender_type' is used by save_incoming_message RPC (migration 110)
+      // - Inbox page.tsx reads 'role' to determine message sender
+      role: 'user',
       sender_type: 'lead',
       sender_id: leadId,
       content: parsedMessage.content,
@@ -1123,11 +1128,11 @@ async function processIncomingMessage(
     console.log(`[WhatsApp] Conversation ${conversation.id} was auto-reopened by new message`);
   }
 
-  // 5. AI Learning: Solo para verticales soportadas (dental y restaurant)
+  // 5. AI Learning: Solo para verticales soportadas (dental, restaurant, clinic)
   // Variables para pasar contexto al AI job
   let detectedHighPriorityAction: string | null = null;
 
-  if (context.tenant_vertical === 'dental' || context.tenant_vertical === 'restaurant') {
+  if (context.tenant_vertical === 'dental' || context.tenant_vertical === 'restaurant' || context.tenant_vertical === 'clinic') {
     // 5a. Procesar patrones de ALTA PRIORIDAD en tiempo real
     // Detecta urgencias, quejas, objeciones ANTES de que la IA responda
     // NO consume tokens de LLM - solo usa regex

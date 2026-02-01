@@ -1088,12 +1088,19 @@ export async function generateAIResponse(
 /**
  * Guarda la respuesta AI como mensaje
  * SECURITY: tenantId required to prevent cross-tenant writes
+ *
+ * @param conversationId - ID de la conversación
+ * @param response - Contenido de la respuesta AI
+ * @param metadata - Metadatos adicionales (intent, signals, tokens, etc.)
+ * @param tenantId - ID del tenant para validación de seguridad
+ * @param channel - Canal de comunicación (whatsapp, instagram, facebook, tiktok, webchat)
  */
 export async function saveAIResponse(
   conversationId: string,
   response: string,
   metadata: Record<string, unknown>,
-  tenantId?: string
+  tenantId?: string,
+  channel: string = 'whatsapp' // Default para backwards compatibility
 ): Promise<string> {
   const supabase = createServerClient();
 
@@ -1116,10 +1123,15 @@ export async function saveAIResponse(
     .from('messages')
     .insert({
       conversation_id: conversationId,
+      // CRITICAL FIX: Include BOTH role and sender_type for compatibility
+      // - 'role' is required by migration 012 (NOT NULL constraint)
+      // - 'sender_type' is used by save_incoming_message RPC (migration 110)
+      // - Inbox page.tsx reads 'role' to determine message sender
+      role: 'assistant',
       sender_type: 'ai',
       content: response,
       message_type: 'text',
-      channel: 'whatsapp',
+      channel, // FIX: Use dynamic channel instead of hardcoded 'whatsapp'
       status: 'pending', // Pendiente de envío
       metadata,
     })

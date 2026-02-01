@@ -169,10 +169,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Save message to database first
+    // CRITICAL FIX: Include BOTH role and sender_type for compatibility
+    // - 'role' is required by migration 012 (NOT NULL constraint)
+    // - 'sender_type' is used by save_incoming_message RPC (migration 110)
+    // - Inbox page.tsx reads 'role' to determine message sender
     const { data: message, error: msgError } = await supabase
       .from('messages')
       .insert({
         conversation_id: body.conversation_id,
+        role: 'staff',
         sender_type: 'staff',
         content: body.content,
         message_type: body.message_type || 'text',
