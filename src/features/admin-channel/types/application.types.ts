@@ -454,6 +454,98 @@ export interface AdminChannelUserWithTenant {
 }
 
 // =====================================================
+// BUSINESS CONTEXT TYPES (from get_tenant_ai_context RPC)
+// =====================================================
+
+/**
+ * Información de servicio del negocio.
+ */
+export interface AdminServiceInfo {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | null;
+  durationMinutes: number | null;
+  category: string | null;
+  isPopular: boolean;
+  isActive: boolean;
+}
+
+/**
+ * Información de sucursal del negocio.
+ */
+export interface AdminBranchInfo {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  hours: Record<string, { open: string; close: string }> | null;
+  isMain: boolean;
+}
+
+/**
+ * FAQ del negocio.
+ */
+export interface AdminFAQInfo {
+  id: string;
+  question: string;
+  answer: string;
+  category: string | null;
+}
+
+/**
+ * Promoción activa del negocio.
+ */
+export interface AdminPromotionInfo {
+  id: string;
+  title: string;
+  description: string | null;
+  discountType: 'percentage' | 'fixed' | 'bundle';
+  discountValue: number;
+  validFrom: string | null;
+  validTo: string | null;
+  conditions: string | null;
+}
+
+/**
+ * Documento de base de conocimiento.
+ */
+export interface AdminKnowledgeDocInfo {
+  id: string;
+  title: string;
+  content: string;
+  type: string;
+}
+
+/**
+ * Contexto de negocio completo cargado desde get_tenant_ai_context RPC.
+ * Proporciona toda la información del negocio a los handlers.
+ */
+export interface AdminBusinessContext {
+  /** Servicios del negocio */
+  services: AdminServiceInfo[];
+  /** Sucursales */
+  branches: AdminBranchInfo[];
+  /** FAQs */
+  faqs: AdminFAQInfo[];
+  /** Promociones activas */
+  promotions: AdminPromotionInfo[];
+  /** Documentos de conocimiento */
+  knowledgeDocs: AdminKnowledgeDocInfo[];
+  /** Configuración de IA */
+  aiConfig: {
+    systemPrompt: string;
+    model: string;
+    temperature: number;
+    responseStyle: string;
+    maxResponseLength: number;
+    autoEscalateKeywords: string[];
+  } | null;
+  /** Timestamp de carga */
+  loadedAt: Date;
+}
+
+// =====================================================
 // LANGGRAPH CONTEXT & ANALYTICS TYPES
 // =====================================================
 
@@ -476,6 +568,8 @@ export interface AdminChannelContext {
   channel: AdminChannelType;
   /** Contexto de conversación previo */
   conversationContext: AdminConversationContext | null;
+  /** Contexto de negocio (servicios, FAQs, sucursales, promociones) */
+  businessContext: AdminBusinessContext | null;
 }
 
 /**

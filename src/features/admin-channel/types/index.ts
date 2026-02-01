@@ -85,6 +85,13 @@ export type {
   // LangGraph types
   AdminChannelContext,
   AdminAnalyticsReport,
+  // Business context types (from get_tenant_ai_context RPC)
+  AdminBusinessContext,
+  AdminServiceInfo,
+  AdminBranchInfo,
+  AdminFAQInfo,
+  AdminPromotionInfo,
+  AdminKnowledgeDocInfo,
 } from './application.types';
 
 // =====================================================
