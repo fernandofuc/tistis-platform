@@ -11,56 +11,18 @@ import type { AdminChannelStateType } from '../state';
 import type { AdminExecutedAction, AdminChannelType } from '../../types';
 import { getConfigService } from '../../services/config.service';
 import type { ServiceData, StaffData, PromotionData, HoursData } from '../../services/config.service';
+import {
+  validateUUID,
+  extractString,
+  extractNumber,
+  extractBoolean,
+} from '../../utils/helpers';
 
 // =====================================================
 // CONSTANTS
 // =====================================================
 
 const LOG_PREFIX = '[AdminChannel/Confirm]';
-
-// UUID validation regex for security
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function validateUUID(value: string, fieldName: string): void {
-  if (!UUID_REGEX.test(value)) {
-    throw new Error(`Invalid ${fieldName} format: not a valid UUID`);
-  }
-}
-
-// =====================================================
-// TYPE-SAFE EXTRACTORS
-// =====================================================
-
-/**
- * Safely extract string from unknown value
- */
-function extractString(value: unknown, fallback = ''): string {
-  if (typeof value === 'string') return value;
-  if (value === null || value === undefined) return fallback;
-  return String(value);
-}
-
-/**
- * Safely extract number from unknown value
- */
-function extractNumber(value: unknown, fallback = 0): number {
-  if (typeof value === 'number' && !Number.isNaN(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = parseFloat(value);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  return fallback;
-}
-
-/**
- * Safely extract boolean from unknown value
- */
-function extractBoolean(value: unknown, fallback = false): boolean {
-  if (typeof value === 'boolean') return value;
-  if (value === 'true' || value === '1') return true;
-  if (value === 'false' || value === '0') return false;
-  return fallback;
-}
 
 // =====================================================
 // CONFIRM HANDLER NODE

@@ -10,6 +10,7 @@
 import 'server-only';
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { validateUUID, escapeLikePattern, withTimeout } from '../utils/helpers';
 
 // =====================================================
 // CONSTANTS
@@ -17,43 +18,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const LOG_PREFIX = '[AdminChannel/Config]';
 
-// UUID validation regex for security
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // Timeout for database operations (10 seconds)
 const DB_TIMEOUT_MS = 10000;
-
-// =====================================================
-// VALIDATION HELPERS
-// =====================================================
-
-function validateUUID(value: string, fieldName: string): void {
-  if (!UUID_REGEX.test(value)) {
-    throw new Error(`Invalid ${fieldName} format: not a valid UUID`);
-  }
-}
-
-/**
- * Escape special characters for LIKE/ILIKE patterns to prevent SQL injection
- * Characters % and _ have special meaning in LIKE patterns
- */
-function escapeLikePattern(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')  // Escape backslash first
-    .replace(/%/g, '\\%')    // Escape percent
-    .replace(/_/g, '\\_');   // Escape underscore
-}
-
-async function withTimeout<T>(
-  promiseLike: PromiseLike<T>,
-  timeoutMs: number,
-  operation: string
-): Promise<T> {
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`${operation} timeout after ${timeoutMs}ms`)), timeoutMs)
-  );
-  return Promise.race([Promise.resolve(promiseLike), timeoutPromise]);
-}
 
 // =====================================================
 // TYPES

@@ -11,6 +11,7 @@ import 'server-only';
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { AdminAnalyticsReport } from '../types';
+import { validateUUID } from '../utils/helpers';
 
 // =====================================================
 // CONSTANTS
@@ -18,17 +19,8 @@ import type { AdminAnalyticsReport } from '../types';
 
 const LOG_PREFIX = '[AdminChannel/Analytics]';
 
-// UUID validation regex
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // Valid verticals
 const VALID_VERTICALS = ['dental', 'clinic', 'restaurant', 'beauty', 'gym', 'veterinary', 'general'];
-
-function validateUUID(value: string, fieldName: string): void {
-  if (!UUID_REGEX.test(value)) {
-    throw new Error(`Invalid ${fieldName} format: not a valid UUID`);
-  }
-}
 
 function validateVertical(value: string): string {
   if (!VALID_VERTICALS.includes(value)) {

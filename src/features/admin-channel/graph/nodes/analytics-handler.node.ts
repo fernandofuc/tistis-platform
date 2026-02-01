@@ -11,6 +11,7 @@ import type { AdminChannelStateType } from '../state';
 import type { AdminAnalyticsReport, AdminIntent, AdminExecutedAction } from '../../types';
 import { getAnalyticsService } from '../../services/analytics.service';
 import { formatReportForChannel } from '../../utils/report-formatter';
+import { withTimeout } from '../../utils/helpers';
 
 // =====================================================
 // CONSTANTS
@@ -20,21 +21,6 @@ const LOG_PREFIX = '[AdminChannel/Analytics]';
 
 // Timeout for analytics queries (15 seconds - reports can be slow)
 const ANALYTICS_TIMEOUT_MS = 15000;
-
-// =====================================================
-// TIMEOUT HELPER
-// =====================================================
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  operation: string
-): Promise<T> {
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`${operation} timeout after ${timeoutMs}ms`)), timeoutMs)
-  );
-  return Promise.race([promise, timeoutPromise]);
-}
 
 // =====================================================
 // ANALYTICS HANDLER NODE

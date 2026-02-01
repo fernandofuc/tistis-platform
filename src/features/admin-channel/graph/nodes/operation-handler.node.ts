@@ -8,8 +8,9 @@
  */
 
 import type { AdminChannelStateType } from '../state';
-import type { AdminIntent, AdminChannelType, AdminExecutedAction } from '../../types';
+import type { AdminChannelType, AdminExecutedAction } from '../../types';
 import { createClient } from '@supabase/supabase-js';
+import { validateUUID, withTimeout } from '../../utils/helpers';
 
 // =====================================================
 // CONSTANTS
@@ -17,32 +18,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const LOG_PREFIX = '[AdminChannel/Operation]';
 
-// UUID validation regex for security
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // Timeout for database operations (10 seconds)
 const DB_TIMEOUT_MS = 10000;
-
-// =====================================================
-// VALIDATION HELPERS
-// =====================================================
-
-function validateUUID(value: string, fieldName: string): void {
-  if (!UUID_REGEX.test(value)) {
-    throw new Error(`Invalid ${fieldName} format: not a valid UUID`);
-  }
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  operation: string
-): Promise<T> {
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`${operation} timeout after ${timeoutMs}ms`)), timeoutMs)
-  );
-  return Promise.race([promise, timeoutPromise]);
-}
 
 // =====================================================
 // OPERATION HANDLER NODE
@@ -170,14 +147,28 @@ async function handleInventoryCheck(
   try {
     const supabase = getSupabaseClient();
 
-    // Query productos con bajo stock
-    const { data: lowStock, error } = await supabase
-      .from('products')
-      .select('name, stock_quantity, min_stock_alert')
-      .eq('tenant_id', tenantId)
-      .lt('stock_quantity', supabase.rpc('get_min_stock', { tenant: tenantId }))
-      .order('stock_quantity', { ascending: true })
-      .limit(10);
+    // Query productos con bajo stock - compara stock_quantity con min_stock_alert directamente
+    // Usamos RPC para obtener productos donde stock < min_stock en una sola query
+    const { data: lowStock, error } = await withTimeout(
+      supabase
+        .from('inventory_items')
+        .select('name, current_stock, min_stock')
+        .eq('tenant_id', tenantId)
+        .not('min_stock', 'is', null)
+        .order('current_stock', { ascending: true })
+        .limit(20)
+        .then((result) => {
+          // Filtrar en cliente los productos con stock bajo
+          if (result.data) {
+            result.data = result.data.filter(
+              (item) => (item.current_stock || 0) <= (item.min_stock || 0)
+            ).slice(0, 10);
+          }
+          return result;
+        }),
+      DB_TIMEOUT_MS,
+      'Low stock query'
+    );
 
     if (error) {
       console.error(`${LOG_PREFIX} Inventory query error:`, error);
@@ -194,7 +185,7 @@ async function handleInventoryCheck(
     response += `${lowStock.length} productos necesitan reposición:\n\n`;
 
     lowStock.forEach((item, i) => {
-      response += `${i + 1}. ${item.name}: ${item.stock_quantity} unidades\n`;
+      response += `${i + 1}. ${item.name}: ${item.current_stock || 0} unidades\n`;
     });
 
     const keyboard = isTelegram

@@ -8,8 +8,9 @@
  */
 
 import type { AdminChannelStateType } from '../state';
-import type { AdminIntent, AdminChannelType, AdminExecutedAction } from '../../types';
+import type { AdminChannelType, AdminExecutedAction } from '../../types';
 import { createClient } from '@supabase/supabase-js';
+import { validateUUID, withTimeout } from '../../utils/helpers';
 
 // =====================================================
 // CONSTANTS
@@ -17,31 +18,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const LOG_PREFIX = '[AdminChannel/Notification]';
 
-// UUID validation regex for security
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function validateUUID(value: string, fieldName: string): void {
-  if (!UUID_REGEX.test(value)) {
-    throw new Error(`Invalid ${fieldName} format: not a valid UUID`);
-  }
-}
-
 // Timeout for database operations
 const DB_TIMEOUT_MS = 10000;
-
-async function withTimeout<T>(
-  promiseLike: PromiseLike<T>,
-  timeoutMs: number,
-  operation: string
-): Promise<T> {
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(
-      () => reject(new Error(`${operation} timeout after ${timeoutMs}ms`)),
-      timeoutMs
-    )
-  );
-  return Promise.race([Promise.resolve(promiseLike), timeoutPromise]);
-}
 
 // =====================================================
 // NOTIFICATION HANDLER NODE

@@ -58,20 +58,13 @@ import {
   fromAdminChannelMessage,
 } from '../types';
 
+import { validateUUID } from '../utils/helpers';
+
 // =====================================================
 // SERVICE LOGGING PREFIX
 // =====================================================
 
 const LOG_PREFIX = '[Admin Channel]';
-
-// UUID validation regex for security
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function validateUUID(value: string, fieldName: string): void {
-  if (!UUID_REGEX.test(value)) {
-    throw new Error(`Invalid ${fieldName} format: not a valid UUID`);
-  }
-}
 
 // =====================================================
 // USER MANAGEMENT
@@ -978,6 +971,7 @@ async function getFullUserContext(
   conversationId: string;
   tenantId: string;
   isNewConversation: boolean;
+  conversationHistory: Array<{ role: string; content: string }>;
 } | null> {
   // Obtener usuario
   const user =
@@ -995,11 +989,19 @@ async function getFullUserContext(
     return null;
   }
 
+  // Obtener historial de conversacion para contexto de LangGraph
+  const recentMessages = await getRecentMessages(convResult.conversationId, 10);
+  const conversationHistory = recentMessages.map((msg) => ({
+    role: msg.role,
+    content: msg.content,
+  }));
+
   return {
     user,
     conversationId: convResult.conversationId,
     tenantId: user.tenantId,
     isNewConversation: convResult.isNew,
+    conversationHistory,
   };
 }
 

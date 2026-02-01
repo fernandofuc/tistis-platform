@@ -11,6 +11,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { AdminChannelStateType } from '../state';
 import type { AdminIntent, AdminChannelContext } from '../../types';
+import { AI_MODELS, OPENAI_CONFIG } from '@/src/shared/config/ai-models';
 
 // =====================================================
 // CONFIGURATION
@@ -18,10 +19,15 @@ import type { AdminIntent, AdminChannelContext } from '../../types';
 
 const LOG_PREFIX = '[AdminChannel/Supervisor]';
 
+/**
+ * Modelo para detección de intents en Admin Channel.
+ * Usa GPT-5 Mini para balance óptimo entre velocidad y precisión.
+ * @see ai-models.ts para configuración centralizada
+ */
 const model = new ChatOpenAI({
-  modelName: 'gpt-4o-mini',
+  modelName: AI_MODELS.GPT_5_MINI,
   temperature: 0.1,
-  maxTokens: 500,
+  maxTokens: OPENAI_CONFIG.defaultMaxTokens,
 });
 
 // =====================================================
