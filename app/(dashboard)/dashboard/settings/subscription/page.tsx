@@ -14,7 +14,7 @@ import { PageWrapper } from '@/src/features/dashboard';
 import { useAuthContext } from '@/src/features/auth';
 import { supabase } from '@/src/shared/lib/supabase';
 import { cn } from '@/src/shared/utils';
-import { ArrowRight, Shield, Check, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { ArrowRight, Shield, Check, CheckCircle, XCircle, Loader2, Clock } from 'lucide-react';
 
 // Import centralized plan config - SINGLE SOURCE OF TRUTH
 import { PLAN_CONFIG, getPlanConfig, calculateBranchCostPesos } from '@/src/shared/config/plans';
@@ -32,6 +32,8 @@ interface DashboardPlanDisplay {
   features: string[];
   maxBranches: number;
   popular?: boolean;
+  /** Indica si el plan está próximamente disponible (bloqueado visualmente) */
+  comingSoon?: boolean;
 }
 
 // Plans for dashboard display (Growth is now the top tier, Enterprise is custom)
@@ -81,6 +83,7 @@ const DASHBOARD_PLANS: DashboardPlanDisplay[] = [
       'Hasta 20 sucursales',
     ],
     maxBranches: PLAN_CONFIG.growth.branchLimit,
+    comingSoon: true, // Plan bloqueado visualmente - próximamente disponible
   },
 ];
 
@@ -686,51 +689,73 @@ export default function SubscriptionPage() {
             {DASHBOARD_PLANS.map((plan) => {
               const isCurrentPlan = currentPlan === plan.id;
               const isPlanUpgrade = isUpgrade(plan.id);
+              const isComingSoon = plan.comingSoon === true;
 
               return (
                 <Card
                   key={plan.id}
                   variant="bordered"
                   className={cn(
-                    'relative transition-all',
-                    isCurrentPlan && 'ring-2 ring-[#7C5CFC] bg-[#7C5CFC]/5',
-                    plan.popular && !isCurrentPlan && 'ring-2 ring-[#C23350]'
+                    'relative transition-all overflow-hidden',
+                    isCurrentPlan && !isComingSoon && 'ring-2 ring-[#7C5CFC] bg-[#7C5CFC]/5',
+                    plan.popular && !isCurrentPlan && !isComingSoon && 'ring-2 ring-[#C23350]'
                   )}
                 >
-                  {plan.popular && !isCurrentPlan && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  {/* Overlay "Próximamente" - Diseño elegante tipo Apple/Google */}
+                  {isComingSoon && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/85 dark:bg-slate-900/85 backdrop-blur-[2px] rounded-xl">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                          <Clock className="w-6 h-6 text-slate-400" />
+                        </div>
+                        <span className="px-4 py-1.5 bg-slate-800 dark:bg-slate-700 text-white text-sm font-semibold rounded-full shadow-lg">
+                          Próximamente
+                        </span>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 text-center max-w-[160px] mt-1">
+                          Estamos perfeccionando esta experiencia
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {plan.popular && !isCurrentPlan && !isComingSoon && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
                       <Badge className="bg-[#C23350] text-white">Recomendado</Badge>
                     </div>
                   )}
-                  {isCurrentPlan && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  {isCurrentPlan && !isComingSoon && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
                       <Badge className="bg-[#7C5CFC] text-white">Plan Actual</Badge>
                     </div>
                   )}
 
                   <CardContent className="pt-6">
-                    <div className="text-center mb-4">
-                      <h4 className="text-xl font-bold text-gray-900">{plan.name}</h4>
-                      <p className="text-sm text-gray-500">{plan.subtitle}</p>
+                    <div className={cn("text-center mb-4", isComingSoon && "opacity-40")}>
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100">{plan.name}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{plan.subtitle}</p>
                     </div>
 
-                    <div className="text-center mb-6">
+                    <div className={cn("text-center mb-6", isComingSoon && "opacity-40")}>
                       <span className="text-3xl font-bold text-[#7C5CFC]">
                         {formatPrice(plan.price)}
                       </span>
-                      <span className="text-gray-500">/mes</span>
+                      <span className="text-gray-500 dark:text-gray-400">/mes</span>
                     </div>
 
-                    <ul className="space-y-2 mb-6">
+                    <ul className={cn("space-y-2 mb-6", isComingSoon && "opacity-40")}>
                       {plan.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                        <li key={idx} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300">
                           <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                           {feature}
                         </li>
                       ))}
                     </ul>
 
-                    {isCurrentPlan ? (
+                    {isComingSoon ? (
+                      <Button variant="outline" disabled className="w-full min-h-[44px] opacity-40">
+                        No disponible
+                      </Button>
+                    ) : isCurrentPlan ? (
                       <Button variant="outline" disabled className="w-full min-h-[44px]">
                         Plan Actual
                       </Button>

@@ -74,6 +74,8 @@ interface PlanDisplay {
   conversationsLabel: string;
   supportLevel: string;
   icon: React.ReactNode;
+  /** Indica si el plan está próximamente disponible (bloqueado visualmente) */
+  comingSoon?: boolean;
 }
 
 // Planes simplificados para display - Features diferenciadas por vertical
@@ -132,6 +134,7 @@ const PLANS_DISPLAY: PlanDisplay[] = [
       'Soporte 24/7 dedicado',
       'Hasta 20 sucursales',
     ],
+    comingSoon: true, // Plan bloqueado visualmente - próximamente disponible
   },
 ];
 
@@ -209,31 +212,54 @@ function PlanCard({
   const nextBranchPrice = getNextBranchPrice(plan.id, branches);
   const totalPrice = plan.monthlyPrice + branchCost;
 
+  // Estado "Próximamente" - bloqueo visual elegante
+  const isComingSoon = plan.comingSoon === true;
+
   return (
     <motion.div
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.4 }}
-      onClick={onSelect}
+      onClick={isComingSoon ? undefined : onSelect}
       className={`
-        relative rounded-xl sm:rounded-2xl p-4 sm:p-6 cursor-pointer transition-all duration-300
-        ${isSelected
-          ? 'bg-white ring-2 ring-tis-coral shadow-xl scale-[1.01] sm:scale-[1.02]'
-          : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg active:bg-slate-50'
+        relative rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all duration-300
+        ${isComingSoon
+          ? 'bg-white border border-slate-200 cursor-default'
+          : isSelected
+            ? 'bg-white ring-2 ring-tis-coral shadow-xl scale-[1.01] sm:scale-[1.02] cursor-pointer'
+            : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg active:bg-slate-50 cursor-pointer'
         }
-        ${plan.highlighted && !isSelected ? 'border-tis-coral/30' : ''}
+        ${plan.highlighted && !isSelected && !isComingSoon ? 'border-tis-coral/30' : ''}
       `}
     >
+      {/* Overlay "Próximamente" - Diseño elegante tipo Apple/Google */}
+      {isComingSoon && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl sm:rounded-2xl bg-white/80 backdrop-blur-[2px]">
+          {/* Badge Próximamente */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+              <Clock className="w-6 h-6 text-slate-400" />
+            </div>
+            <span className="px-4 py-1.5 bg-slate-800 text-white text-sm font-semibold rounded-full shadow-lg">
+              Próximamente
+            </span>
+            <p className="text-xs text-slate-500 text-center max-w-[180px] mt-1">
+              Estamos perfeccionando esta experiencia para ti
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Badge "Popular" o "Prueba Gratuita" */}
-      {plan.highlighted && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+      {plan.highlighted && !isComingSoon && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
           <span className="px-3 py-1 bg-gradient-to-r from-tis-coral to-tis-pink text-white text-xs font-semibold rounded-full">
             Mas Popular
           </span>
         </div>
       )}
-      {plan.id === 'starter' && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+      {plan.id === 'starter' && !isComingSoon && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
           <span className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-semibold rounded-full shadow-lg">
             🎉 Prueba Gratis 10 Días
           </span>
@@ -241,10 +267,10 @@ function PlanCard({
       )}
 
       {/* Header del plan */}
-      <div className="mb-4 sm:mb-6">
+      <div className={`mb-4 sm:mb-6 ${isComingSoon ? 'opacity-40' : ''}`}>
         <div className={`
           w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center mb-3 sm:mb-4
-          ${isSelected ? 'bg-tis-coral text-white' : 'bg-slate-100 text-slate-600'}
+          ${isSelected && !isComingSoon ? 'bg-tis-coral text-white' : 'bg-slate-100 text-slate-600'}
         `}>
           {plan.icon}
         </div>
@@ -254,22 +280,22 @@ function PlanCard({
       </div>
 
       {/* Precio */}
-      <div className="mb-4 sm:mb-6">
+      <div className={`mb-4 sm:mb-6 ${isComingSoon ? 'opacity-40' : ''}`}>
         <div className="flex items-baseline gap-1">
           <span className="text-3xl sm:text-4xl font-bold text-slate-800">
             ${totalPrice.toLocaleString()}
           </span>
           <span className="text-slate-400 text-sm sm:text-base">/mes</span>
         </div>
-        {branchCost > 0 && (
+        {branchCost > 0 && !isComingSoon && (
           <p className="text-xs text-slate-400 mt-1">
             Incluye {branches} sucursales (+${branchCost.toLocaleString()}/mes)
           </p>
         )}
       </div>
 
-      {/* Selector de sucursales */}
-      {plan.branchLimit > 1 && isSelected && (
+      {/* Selector de sucursales - NO mostrar si es comingSoon */}
+      {plan.branchLimit > 1 && isSelected && !isComingSoon && (
         <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-slate-700">Sucursales</span>
@@ -312,13 +338,13 @@ function PlanCard({
       )}
 
       {/* Features - Combinadas: generales + verticales */}
-      <ul className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+      <ul className={`space-y-2 sm:space-y-3 mb-4 sm:mb-6 ${isComingSoon ? 'opacity-40' : ''}`}>
         {/* Features específicas de la vertical primero */}
         {verticalFeatures.map((feature, index) => (
           <li key={`vertical-${index}`} className="flex items-start gap-3">
             <div className={`
               w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5
-              ${isSelected ? 'bg-tis-coral/10 text-tis-coral' : 'bg-slate-100 text-slate-400'}
+              ${isSelected && !isComingSoon ? 'bg-tis-coral/10 text-tis-coral' : 'bg-slate-100 text-slate-400'}
             `}>
               <Check className="w-3 h-3" />
             </div>
@@ -330,7 +356,7 @@ function PlanCard({
           <li key={`general-${index}`} className="flex items-start gap-3">
             <div className={`
               w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5
-              ${isSelected ? 'bg-tis-coral/10 text-tis-coral' : 'bg-slate-100 text-slate-400'}
+              ${isSelected && !isComingSoon ? 'bg-tis-coral/10 text-tis-coral' : 'bg-slate-100 text-slate-400'}
             `}>
               <Check className="w-3 h-3" />
             </div>
@@ -342,12 +368,14 @@ function PlanCard({
       {/* Indicador de selección */}
       <div className={`
         w-full py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-center font-medium transition-all text-sm sm:text-base min-h-[44px] flex items-center justify-center
-        ${isSelected
-          ? 'bg-tis-coral text-white'
-          : 'bg-slate-100 text-slate-600'
+        ${isComingSoon
+          ? 'bg-slate-100 text-slate-400 opacity-40'
+          : isSelected
+            ? 'bg-tis-coral text-white'
+            : 'bg-slate-100 text-slate-600'
         }
       `}>
-        {isSelected ? 'Seleccionado' : 'Seleccionar plan'}
+        {isComingSoon ? 'No disponible' : isSelected ? 'Seleccionado' : 'Seleccionar plan'}
       </div>
     </motion.div>
   );
